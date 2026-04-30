@@ -54,9 +54,11 @@ import {
 } from "./musicLibrary.mjs";
 import { normalizeTrackMoodsList } from "./trackMoods.mjs";
 import {
+  mergeAndWriteUserStateWithRevision,
   mergeUserStateForPut,
   readUserState,
-  writeUserState,
+  stripClientControlledKeysFromPutPatch,
+  writeUserTrackMoodsWithCAS,
 } from "./userState.mjs";
 import { resolveYtdlpPath } from "./ytdlpPath.mjs";
 import {
@@ -516,6 +518,18 @@ function isLocalRequest(req) {
   );
 }
 
+function buildConfigPayload(req) {
+  const local = isLocalRequest(req);
+  const snap = getConfigSnapshot(local);
+  snap.libraryRootWritable = Boolean(local && !snap.lockedByEnv);
+  if (!local && isLibraryRootConfigured()) {
+    const root = getMusicRoot();
+    if (root)
+      snap.libraryRootLabel = path.basename(path.resolve(String(root)));
+  }
+  return snap;
+}
+
 function actLog(req, entry) {
   const accountId = accountIdFromReq(req);
   return appendActivityLog({
@@ -829,7 +843,7 @@ app.post(
 );
 
 app.get("/api/config", (req, res) => {
-  return sendOk(res, getConfigSnapshot(isLocalRequest(req)));
+  return sendOk(res, buildConfigPayload(req));
 });
 
 app.put("/api/config", async (req, res) => {
@@ -837,6 +851,14 @@ app.put("/api/config", async (req, res) => {
     const body = req.body || {};
     let did = false;
     if (body.musicRoot != null) {
+      if (!isLocalRequest(req)) {
+        return sendError(
+          res,
+          403,
+          "Library folder can only be set from the machine running the server (local access).",
+          { details: { code: "LIBRARY_ROOT_REMOTE_FORBIDDEN" } },
+        );
+      }
       const next = String(body.musicRoot).trim();
       if (!next) {
         return sendError(
@@ -857,7 +879,7 @@ app.put("/api/config", async (req, res) => {
     if (!did) {
       return sendError(res, 400, "No valid config fields in request body");
     }
-    return sendOk(res, getConfigSnapshot(isLocalRequest(req)));
+    return sendOk(res, buildConfigPayload(req));
   } catch (error) {
     if (error?.code === "ENV_LOCKED") return sendError(res, 403, error.message);
     return sendError(res, 400, String(error?.message || error));
@@ -939,6 +961,8 @@ app.delete("/api/accounts/:id", async (req, res) => {
     if (error?.code === "ACCOUNT_NOT_FOUND")
       return sendError(res, 404, error.message);
     if (error?.code === "LAST_ACCOUNT")
+      return sendError(res, 400, error.message);
+    if (error?.code === "DEFAULT_ACCOUNT_LOCKED")
       return sendError(res, 400, error.message);
     return sendError(res, 400, String(error?.message || error));
   }
@@ -1120,18 +1144,86 @@ app.put("/api/user-state", async (req, res) => {
   try {
     const accId = accountIdFromReq(req);
     const root = getMusicRoot();
-    const prev = await readUserState(root, accId);
-    const raw = req.body?.state ?? req.body;
-    if (raw == null || typeof raw !== "object" || Array.isArray(raw)) {
+    const expectedRevision = Number(req.body?.expectedRevision);
+    if (!Number.isFinite(expectedRevision) || expectedRevision < 1) {
+      return sendError(res, 400, "expectedRevision (positive number) is required");
+    }
+    const nested = req.body?.state;
+    let rawPatch = nested ?? req.body ?? {};
+    if (
+      nested == null &&
+      rawPatch &&
+      typeof rawPatch === "object" &&
+      !Array.isArray(rawPatch)
+    ) {
+      const { expectedRevision: _er, ...rest } = rawPatch;
+      void _er;
+      rawPatch = rest;
+    }
+    if (
+      rawPatch == null ||
+      typeof rawPatch !== "object" ||
+      Array.isArray(rawPatch)
+    ) {
       return sendError(res, 400, "Invalid state: expected a JSON object");
     }
-    const payload = mergeUserStateForPut(prev, raw);
-    const state = await writeUserState(root, payload, accId);
-    for (const ev of diffUserStatePlaylistsAndSettings(prev, state)) {
+    const prevPeek = await readUserState(root, accId);
+    const state = await mergeAndWriteUserStateWithRevision(
+      root,
+      accId,
+      expectedRevision,
+      (fresh) =>
+        mergeUserStateForPut(
+          fresh,
+          stripClientControlledKeysFromPutPatch(rawPatch),
+        ),
+    );
+    for (const ev of diffUserStatePlaylistsAndSettings(prevPeek, state)) {
       void actLog(req, ev);
     }
     return sendOk(res, state);
   } catch (error) {
+    if (error?.code === "USER_STATE_REVISION_CONFLICT") {
+      return sendError(res, 409, "USER_STATE_REVISION_CONFLICT", {
+        code: "REVISION_CONFLICT",
+        currentState: error.currentState,
+      });
+    }
+    console.error(error);
+    return sendError(res, 500, String(error?.message || error));
+  }
+});
+
+app.patch("/api/user-state/settings", async (req, res) => {
+  try {
+    const accId = accountIdFromReq(req);
+    const root = getMusicRoot();
+    const expectedRevision = Number(req.body?.expectedRevision);
+    if (!Number.isFinite(expectedRevision) || expectedRevision < 1) {
+      return sendError(res, 400, "expectedRevision (positive number) is required");
+    }
+    const rawPatch = req.body?.settings;
+    if (rawPatch == null || typeof rawPatch !== "object" || Array.isArray(rawPatch)) {
+      return sendError(res, 400, "Invalid settings patch: expected settings object");
+    }
+    const prevPeek = await readUserState(root, accId);
+    const state = await mergeAndWriteUserStateWithRevision(
+      root,
+      accId,
+      expectedRevision,
+      (fresh) => mergeUserStateForPut(fresh, { settings: rawPatch }),
+    );
+    for (const ev of diffUserStatePlaylistsAndSettings(prevPeek, state)) {
+      void actLog(req, ev);
+    }
+    return sendOk(res, state);
+  } catch (error) {
+    if (error?.code === "USER_STATE_REVISION_CONFLICT") {
+      return sendError(res, 409, "USER_STATE_REVISION_CONFLICT", {
+        code: "REVISION_CONFLICT",
+        currentState: error.currentState,
+      });
+    }
     console.error(error);
     return sendError(res, 500, String(error?.message || error));
   }
@@ -1942,6 +2034,7 @@ app.post("/api/album-info/fetch", async (req, res) => {
       folder: albumPath,
       detail: "MusicBrainz / release metadata",
     });
+    await invalidateLibraryIndexCache(root);
     return res.json({ ok: true, albumPath, meta: payload });
   } catch (error) {
     return sendError(res, 500, String(error?.message || error));
@@ -1982,6 +2075,7 @@ app.post("/api/album-info/save", async (req, res) => {
       folder: albumPath,
       detail: Object.keys(safe).join(", "),
     });
+    await invalidateLibraryIndexCache(root);
     return sendOk(res, { albumPath, meta });
   } catch (error) {
     return sendError(res, 500, String(error?.message || error));
@@ -2059,6 +2153,7 @@ app.post("/api/track-info/fetch", async (req, res) => {
       folder: albumRel,
       detail: fileName,
     });
+    await invalidateLibraryIndexCache(root);
     const fileMs = await getAudioFileDurationMs(fullTrackPath);
     const metaOut = {
       ...json[fileName],
@@ -2118,21 +2213,17 @@ app.post("/api/track-info/save", async (req, res) => {
     if (Object.keys(safe).length) {
       meta = await saveTrackManualMeta(albumDir, fileName, safe);
     }
+    let moods = [];
     if (hasMood) {
-      const prevState = await readUserState(root, accId);
       const list = normalizeTrackMoodsList(
         Object.prototype.hasOwnProperty.call(patch, "moods")
           ? patch.moods
           : null,
         Object.prototype.hasOwnProperty.call(patch, "mood") ? patch.mood : null
       );
-      const tm = { ...prevState.trackMoods };
-      if (!list.length) delete tm[relPath];
-      else tm[relPath] = list;
-      await writeUserState(root, { ...prevState, trackMoods: tm }, accId);
+      const merged = await writeUserTrackMoodsWithCAS(root, accId, relPath, list);
+      moods = merged.trackMoods?.[relPath] ?? [];
     }
-    const st = await readUserState(root, accId);
-    const moods = st.trackMoods?.[relPath] || [];
     void actLog(req, {
       kind: "library",
       action: "track_metadata_save",
@@ -2141,6 +2232,7 @@ app.post("/api/track-info/save", async (req, res) => {
         hasMood ? ", moods" : ""
       }`,
     });
+    await invalidateLibraryIndexCache(root);
     return res.json({ ok: true, relPath, meta: { ...meta, moods } });
   } catch (error) {
     return sendError(res, 500, String(error?.message || error));
@@ -2168,6 +2260,7 @@ app.post("/api/track-info/prune-orphans", async (req, res) => {
           .slice(0, 12)
           .join(", ")}${r.removed.length > 12 ? "…" : ""}`,
       });
+      await invalidateLibraryIndexCache(root);
     }
     return sendOk(res, { albumPath, removed: r.removed, written: r.written });
   } catch (error) {
@@ -2234,6 +2327,7 @@ app.post("/api/studio/genre-auto-apply", async (req, res) => {
           errors.length ? `, ${errors.length} error(s)` : ""
         }`,
       });
+      await invalidateLibraryIndexCache(root);
     }
     return sendOk(res, {
       ok,
@@ -2261,6 +2355,7 @@ app.post("/api/studio/sanitize-track-titles", async (req, res) => {
           folder: null,
           detail: `library (${n} file${n === 1 ? "" : "s"})`,
         });
+        await invalidateLibraryIndexCache(root);
       }
       return sendOk(res, data);
     }
@@ -2284,6 +2379,7 @@ app.post("/api/studio/sanitize-track-titles", async (req, res) => {
         folder: albumPath,
         detail: `album (${n} file${n === 1 ? "" : "s"})`,
       });
+      await invalidateLibraryIndexCache(root);
     }
     return sendOk(res, { ...r, albumPath });
   } catch (error) {
