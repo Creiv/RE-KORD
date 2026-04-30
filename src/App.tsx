@@ -7,7 +7,6 @@ import {
   useMemo,
   useRef,
   useState,
-  useSyncExternalStore,
 } from "react";
 import type {
   ChangeEvent,
@@ -112,11 +111,7 @@ import { IT } from "./i18n/it";
 import { translate } from "./i18n/translate";
 import {
   eligibleTracksForIntelligentRandom,
-  getExcludedAlbums,
-  getExcludedTracks,
-  getTrackExclusionEpoch,
   isTrackAlbumShuffleExcluded,
-  subscribeTrackExclusionEpoch,
 } from "./lib/randomExclusions";
 import { buildSmartRandomQueue } from "./lib/smartShuffle";
 import {
@@ -444,14 +439,16 @@ function TrackListRow({
   const user = useUserState();
   const { t } = useI18n();
   const openTrackMetaEdit = useOpenTrackMetaEdit();
-  useSyncExternalStore(
-    subscribeTrackExclusionEpoch,
-    getTrackExclusionEpoch,
-    getTrackExclusionEpoch
+  const exAlbums = useMemo(
+    () => new Set(user.state.shuffleExcludedAlbumIds),
+    [user.state.shuffleExcludedAlbumIds]
   );
-  const exAlbums = getExcludedAlbums();
+  const excludedTracksMemo = useMemo(
+    () => new Set(user.state.shuffleExcludedTrackRelPaths),
+    [user.state.shuffleExcludedTrackRelPaths]
+  );
   const albumShuffleExcluded = isTrackAlbumShuffleExcluded(track, exAlbums);
-  const trackShuffleExcluded = getExcludedTracks().has(track.relPath);
+  const trackShuffleExcluded = excludedTracksMemo.has(track.relPath);
   const shuffleExcluded = albumShuffleExcluded || trackShuffleExcluded;
   const inQ = p.isTrackInQueue(track.relPath);
   const fav = user.isFavorite(track.relPath);
@@ -819,9 +816,16 @@ function LibraryGenreExcludeChips({
   index: LibraryIndex;
 }) {
   const { t } = useI18n();
+  const user = useUserState();
+  const excludedAlbums = useMemo(
+    () => new Set(user.state.shuffleExcludedAlbumIds),
+    [user.state.shuffleExcludedAlbumIds]
+  );
+  const excludedTracks = useMemo(
+    () => new Set(user.state.shuffleExcludedTrackRelPaths),
+    [user.state.shuffleExcludedTrackRelPaths]
+  );
   const tracks = tracksInGenreByKey(libraryIndex, genreKey);
-  const excludedAlbums = getExcludedAlbums();
-  const excludedTracks = getExcludedTracks();
   const albumIds = new Set(tracks.map((t) => t.albumId));
   let nAl = 0;
   for (const aid of albumIds) {
@@ -911,8 +915,15 @@ function LibraryArtistExcludeChips({
   index: LibraryIndex;
 }) {
   const { t } = useI18n();
-  const excludedAlbums = getExcludedAlbums();
-  const excludedTracks = getExcludedTracks();
+  const user = useUserState();
+  const excludedAlbums = useMemo(
+    () => new Set(user.state.shuffleExcludedAlbumIds),
+    [user.state.shuffleExcludedAlbumIds]
+  );
+  const excludedTracks = useMemo(
+    () => new Set(user.state.shuffleExcludedTrackRelPaths),
+    [user.state.shuffleExcludedTrackRelPaths]
+  );
   let nAl = 0;
   for (const aid of artist.albums) {
     const al = index.albums.find((a) => a.id === aid);
@@ -1048,8 +1059,15 @@ function LibraryAlbumExcludeChips({
   variant?: "card" | "hero";
 }) {
   const { t } = useI18n();
-  const excludedAlbums = getExcludedAlbums();
-  const excludedTracks = getExcludedTracks();
+  const user = useUserState();
+  const excludedAlbums = useMemo(
+    () => new Set(user.state.shuffleExcludedAlbumIds),
+    [user.state.shuffleExcludedAlbumIds]
+  );
+  const excludedTracks = useMemo(
+    () => new Set(user.state.shuffleExcludedTrackRelPaths),
+    [user.state.shuffleExcludedTrackRelPaths]
+  );
   const key = albumExclusionKey(album);
   const fullAl = excludedAlbums.has(key);
   const nTrIndiv = album.tracks.filter((rel) => excludedTracks.has(rel)).length;
@@ -1304,10 +1322,13 @@ function DashboardView({
   const p = usePlayer();
   const user = useUserState();
   const playFromLibraryCard = useLibraryCardPlayback(index?.tracks);
-  useSyncExternalStore(
-    subscribeTrackExclusionEpoch,
-    getTrackExclusionEpoch,
-    getTrackExclusionEpoch
+  const exAlbumsRand = useMemo(
+    () => new Set(user.state.shuffleExcludedAlbumIds),
+    [user.state.shuffleExcludedAlbumIds]
+  );
+  const exTracksRand = useMemo(
+    () => new Set(user.state.shuffleExcludedTrackRelPaths),
+    [user.state.shuffleExcludedTrackRelPaths]
   );
   const {
     ref: updatedAlbumsGridRef,
@@ -1342,8 +1363,8 @@ function DashboardView({
     if (!index) return;
     const eligible = eligibleTracksForIntelligentRandom(
       index,
-      getExcludedAlbums(),
-      getExcludedTracks()
+      exAlbumsRand,
+      exTracksRand
     );
     if (!eligible.length) return;
     const recentRelPaths = new Set(
@@ -1580,19 +1601,21 @@ function ListenView({
   const user = useUserState();
   const { t } = useI18n();
   const openTrackMetaEdit = useOpenTrackMetaEdit();
-  useSyncExternalStore(
-    subscribeTrackExclusionEpoch,
-    getTrackExclusionEpoch,
-    getTrackExclusionEpoch
+  const exAlbums = useMemo(
+    () => new Set(user.state.shuffleExcludedAlbumIds),
+    [user.state.shuffleExcludedAlbumIds]
+  );
+  const exTracksSet = useMemo(
+    () => new Set(user.state.shuffleExcludedTrackRelPaths),
+    [user.state.shuffleExcludedTrackRelPaths]
   );
   const cur = p.current;
   const playFromLibraryCard = useLibraryCardPlayback(index.tracks);
-  const exAlbums = getExcludedAlbums();
   const albumShuffleExcluded = cur
     ? isTrackAlbumShuffleExcluded(cur, exAlbums)
     : false;
   const trackShuffleExcluded = cur
-    ? getExcludedTracks().has(cur.relPath)
+    ? exTracksSet.has(cur.relPath)
     : false;
   const shuffleExcluded = albumShuffleExcluded || trackShuffleExcluded;
   const playCount = cur ? user.getTrackPlayCount(cur.relPath) : 0;
@@ -1606,8 +1629,8 @@ function ListenView({
   const runRandomIntelligent = () => {
     const eligible = eligibleTracksForIntelligentRandom(
       index,
-      getExcludedAlbums(),
-      getExcludedTracks()
+      exAlbums,
+      exTracksSet
     );
     if (!eligible.length) return;
     const recentRelPaths = new Set(
@@ -1869,12 +1892,13 @@ function LibraryView({
     () => new Set(user.state.shuffleExcludedAlbumIds),
     [user.state.shuffleExcludedAlbumIds]
   );
-  const trackExclusionEpoch = useSyncExternalStore(
-    subscribeTrackExclusionEpoch,
-    getTrackExclusionEpoch,
-    getTrackExclusionEpoch
+  const excludedTracks = useMemo(
+    () => new Set(user.state.shuffleExcludedTrackRelPaths),
+    [user.state.shuffleExcludedTrackRelPaths]
   );
-  const [selectedGenreKey, setSelectedGenreKey] = useState<string | null>(null);
+  const [selectedGenreKey, setSelectedGenreKey] = useState<string | null>(
+    null
+  );
   const [moodFilterIds, setMoodFilterIds] = useState<TrackMoodId[]>([]);
   const [moodMatchMode, setMoodMatchMode] = useState<"any" | "all">("any");
   const normalizedQuery = query.trim().toLowerCase();
@@ -1956,15 +1980,14 @@ function LibraryView({
 
   const artistShuffleEligible = useMemo(() => {
     if (!artist) return [] as LibraryTrackIndex[];
-    const ex = getExcludedTracks();
     const rels = new Set(artistAlbums.flatMap((al) => al.tracks));
     return index.tracks.filter(
       (t) =>
         rels.has(t.relPath) &&
-        !ex.has(t.relPath) &&
+        !excludedTracks.has(t.relPath) &&
         !isTrackAlbumShuffleExcluded(t, excludedAlbums)
     );
-  }, [artist, artistAlbums, index.tracks, excludedAlbums, trackExclusionEpoch]);
+  }, [artist, artistAlbums, index.tracks, excludedAlbums, excludedTracks]);
 
   const artistCoverById = useMemo(
     () => buildRandomArtistCoverMap(index),
@@ -2063,26 +2086,26 @@ function LibraryView({
 
   const genreShuffleEligible = useMemo(() => {
     if (!selectedGenreKey) return [] as LibraryTrackIndex[];
-    const ex = getExcludedTracks();
     return tracksInSelectedGenre.filter(
       (tr) =>
-        !ex.has(tr.relPath) && !isTrackAlbumShuffleExcluded(tr, excludedAlbums)
+        !excludedTracks.has(tr.relPath) &&
+        !isTrackAlbumShuffleExcluded(tr, excludedAlbums)
     );
   }, [
     selectedGenreKey,
     tracksInSelectedGenre,
+    excludedTracks,
     excludedAlbums,
-    trackExclusionEpoch,
   ]);
 
   const genreToolbarBulkAllExcluded = useMemo(() => {
     if (!tracksInSelectedGenre.length) return false;
-    const exT = getExcludedTracks();
-    const exA = getExcludedAlbums();
     return tracksInSelectedGenre.every(
-      (tr) => exT.has(tr.relPath) || isTrackAlbumShuffleExcluded(tr, exA)
+      (tr) =>
+        excludedTracks.has(tr.relPath) ||
+        isTrackAlbumShuffleExcluded(tr, excludedAlbums)
     );
-  }, [tracksInSelectedGenre, trackExclusionEpoch, excludedAlbums]);
+  }, [tracksInSelectedGenre, excludedTracks, excludedAlbums]);
 
   const selectedGenreAlbumCount =
     selectedGenreKey != null
@@ -2186,26 +2209,26 @@ function LibraryView({
 
   const moodShuffleEligible = useMemo(() => {
     if (moodFilterIds.length === 0) return [] as LibraryTrackIndex[];
-    const ex = getExcludedTracks();
     return tracksMatchingMoodFilter.filter(
       (tr) =>
-        !ex.has(tr.relPath) && !isTrackAlbumShuffleExcluded(tr, excludedAlbums)
+        !excludedTracks.has(tr.relPath) &&
+        !isTrackAlbumShuffleExcluded(tr, excludedAlbums)
     );
   }, [
     moodFilterIds.length,
     tracksMatchingMoodFilter,
+    excludedTracks,
     excludedAlbums,
-    trackExclusionEpoch,
   ]);
 
   const moodToolbarBulkAllExcluded = useMemo(() => {
     if (!tracksMatchingMoodFilter.length) return false;
-    const exT = getExcludedTracks();
-    const exA = getExcludedAlbums();
     return tracksMatchingMoodFilter.every(
-      (tr) => exT.has(tr.relPath) || isTrackAlbumShuffleExcluded(tr, exA)
+      (tr) =>
+        excludedTracks.has(tr.relPath) ||
+        isTrackAlbumShuffleExcluded(tr, excludedAlbums)
     );
-  }, [tracksMatchingMoodFilter, trackExclusionEpoch, excludedAlbums]);
+  }, [tracksMatchingMoodFilter, excludedTracks, excludedAlbums]);
 
   const searchResults = useMemo(() => {
     if (!normalizedQuery) return null;
@@ -2251,7 +2274,7 @@ function LibraryView({
     const eligible = eligibleTracksForIntelligentRandom(
       index,
       excludedAlbums,
-      getExcludedTracks()
+      excludedTracks
     );
     if (!eligible.length) return;
     const recentRelPaths = new Set(
@@ -3360,6 +3383,7 @@ function PlaylistsViewNew({
                   />
                   <div className="section-head__tools">
                     <input
+                      key={`rename-${activePlaylist.id}-${activePlaylist.name}`}
                       className="ghost-input compact playlist-rename-input"
                       defaultValue={activePlaylist.name}
                       onBlur={(event) =>
@@ -3901,6 +3925,8 @@ function SettingsView({
   const user = useUserState();
   const { t, locale, setLocale } = useI18n();
   const [libLocked, setLibLocked] = useState(false);
+  const [libraryRootWritable, setLibraryRootWritable] = useState(true);
+  const [libraryRootLabel, setLibraryRootLabel] = useState<string | null>(null);
   const [libraryPath, setLibraryPath] = useState("");
   const [libraryBusy, setLibraryBusy] = useState(false);
   const [libraryErr, setLibraryErr] = useState<string | null>(null);
@@ -3939,6 +3965,12 @@ function SettingsView({
     Promise.all([fetchConfig(), fetchAccounts()])
       .then(([c, a]) => {
         setLibLocked(c.lockedByEnv);
+        setLibraryRootWritable(c.libraryRootWritable !== false);
+        setLibraryRootLabel(
+          typeof c.libraryRootLabel === "string" && c.libraryRootLabel.trim()
+            ? c.libraryRootLabel.trim()
+            : null,
+        );
         setAccounts(a);
         const selected = getSelectedAccountId() || a.defaultAccountId;
         setSelectedAccountIdState(selected);
@@ -4002,7 +4034,9 @@ function SettingsView({
     if (!id || id === selectedAccountId) return;
     setSelectedAccountId(id);
     setSelectedAccountIdState(id);
-    window.location.replace(new URL("/", window.location.href).href);
+    const url = new URL("/", window.location.href);
+    url.searchParams.set("accountId", id);
+    window.location.replace(url.toString());
   };
 
   const runKordBackup = () => {
@@ -4043,6 +4077,7 @@ function SettingsView({
   };
 
   const removeAccount = (id: string) => {
+    if (id === accounts?.defaultAccountId) return;
     const account = accounts?.accounts.find((item) => item.id === id) || null;
     const name = account?.name || id;
     if (!window.confirm(t("accounts.removeConfirm", { name }))) return;
@@ -4097,7 +4132,14 @@ function SettingsView({
                   <button
                     type="button"
                     className="btn secondary"
-                    disabled={accountBusy || accounts.accounts.length <= 1}
+                    title={
+                      account.id === accounts.defaultAccountId
+                        ? t("accounts.removeDisabledDefault")
+                        : undefined
+                    }
+                    disabled={
+                      accountBusy || account.id === accounts.defaultAccountId
+                    }
                     onClick={() => removeAccount(account.id)}
                   >
                     {t("accounts.remove")}
@@ -4266,57 +4308,87 @@ function SettingsView({
               <h2>{t("settings.libraryHeading")}</h2>
             </div>
           </div>
-          <p className="subtle sm">{t("settings.libraryRootLead")}</p>
-          {libraryErr ? (
-            <p className="subtle sm warnline">{libraryErr}</p>
-          ) : null}
-          {libLocked ? (
-            <p className="subtle sm">
-              {t("settings.libLocked", {
-                path: libraryPath || "—",
-              })}
-            </p>
+          {!libraryRootWritable ? (
+            libLocked ? (
+              <p className="subtle sm">
+                {t("settings.libLocked", {
+                  path:
+                    libraryPath.trim() ||
+                    libraryRootLabel ||
+                    "—",
+                })}
+              </p>
+            ) : (
+              <>
+                <p className="subtle sm">{t("settings.libraryReadOnlyLead")}</p>
+                {libraryRootLabel ? (
+                  <p className="subtle sm">
+                    {t("settings.libraryReadOnlyFolder", {
+                      name: libraryRootLabel,
+                    })}
+                  </p>
+                ) : (
+                  <p className="subtle sm">
+                    {t("settings.libraryRemoteUnsetLead")}
+                  </p>
+                )}
+              </>
+            )
           ) : (
-            <div
-              className="row gap flex-wrap"
-              style={{ alignItems: "flex-end" }}
-            >
-              <label className="flex1" style={{ minWidth: "12rem" }}>
-                <span className="sr-only">{t("settings.libPathAria")}</span>
-                <input
-                  type="text"
-                  className="ghost-input w-full"
-                  value={libraryPath}
-                  onChange={(event) => setLibraryPath(event.target.value)}
-                  placeholder={t("settings.libPathPh")}
-                  autoComplete="off"
-                  aria-label={t("settings.libPathAria")}
-                />
-              </label>
-              <button
-                type="button"
-                className="btn"
-                disabled={libraryBusy || !libraryPath.trim()}
-                onClick={() => {
-                  setLibraryErr(null);
-                  setLibraryBusy(true);
-                  saveAppConfig({ musicRoot: libraryPath.trim() })
-                    .then(() => {
-                      window.location.replace(
-                        new URL("/", window.location.href).href,
-                      );
-                    })
-                    .catch((e: unknown) =>
-                      setLibraryErr(
-                        e instanceof Error ? e.message : String(e),
-                      ),
-                    )
-                    .finally(() => setLibraryBusy(false));
-                }}
-              >
-                {libraryBusy ? t("settings.saving") : t("settings.saveReload")}
-              </button>
-            </div>
+            <>
+              <p className="subtle sm">{t("settings.libraryRootLead")}</p>
+              {libraryErr ? (
+                <p className="subtle sm warnline">{libraryErr}</p>
+              ) : null}
+              {libLocked ? (
+                <p className="subtle sm">
+                  {t("settings.libLocked", {
+                    path: libraryPath || "—",
+                  })}
+                </p>
+              ) : (
+                <div
+                  className="row gap flex-wrap"
+                  style={{ alignItems: "flex-end" }}
+                >
+                  <label className="flex1" style={{ minWidth: "12rem" }}>
+                    <span className="sr-only">{t("settings.libPathAria")}</span>
+                    <input
+                      type="text"
+                      className="ghost-input w-full"
+                      value={libraryPath}
+                      onChange={(event) => setLibraryPath(event.target.value)}
+                      placeholder={t("settings.libPathPh")}
+                      autoComplete="off"
+                      aria-label={t("settings.libPathAria")}
+                    />
+                  </label>
+                  <button
+                    type="button"
+                    className="btn"
+                    disabled={libraryBusy || !libraryPath.trim()}
+                    onClick={() => {
+                      setLibraryErr(null);
+                      setLibraryBusy(true);
+                      saveAppConfig({ musicRoot: libraryPath.trim() })
+                        .then(() => {
+                          window.location.replace(
+                            new URL("/", window.location.href).href,
+                          );
+                        })
+                        .catch((e: unknown) =>
+                          setLibraryErr(
+                            e instanceof Error ? e.message : String(e),
+                          ),
+                        )
+                        .finally(() => setLibraryBusy(false));
+                    }}
+                  >
+                    {libraryBusy ? t("settings.saving") : t("settings.saveReload")}
+                  </button>
+                </div>
+              )}
+            </>
           )}
         </section>
       )}
@@ -4505,10 +4577,13 @@ function PlayerDock({
   const p = usePlayer();
   const user = useUserState();
   const { t } = useI18n();
-  useSyncExternalStore(
-    subscribeTrackExclusionEpoch,
-    getTrackExclusionEpoch,
-    getTrackExclusionEpoch
+  const exAlbums = useMemo(
+    () => new Set(user.state.shuffleExcludedAlbumIds),
+    [user.state.shuffleExcludedAlbumIds]
+  );
+  const exTracksSet = useMemo(
+    () => new Set(user.state.shuffleExcludedTrackRelPaths),
+    [user.state.shuffleExcludedTrackRelPaths]
   );
   const percent = p.duration > 0 ? (p.currentTime / p.duration) * 100 : 0;
   const cur = p.current;
@@ -4516,12 +4591,11 @@ function PlayerDock({
   const [castState, setCastState] = useState<
     "connecting" | "connected" | "disconnected"
   >("disconnected");
-  const exAlb = getExcludedAlbums();
   const albumShuffleExcluded = Boolean(
-    cur && isTrackAlbumShuffleExcluded(cur, exAlb)
+    cur && isTrackAlbumShuffleExcluded(cur, exAlbums)
   );
   const trackShuffleExcluded = Boolean(
-    cur && getExcludedTracks().has(cur.relPath)
+    cur && exTracksSet.has(cur.relPath)
   );
   const shuffleExcluded = albumShuffleExcluded || trackShuffleExcluded;
   const openListenFromTopBar = (event: ReactMouseEvent<HTMLDivElement>) => {
@@ -4884,14 +4958,15 @@ function Shell() {
   const refresh = useCallback(() => {
     setLoading(true);
     return Promise.all([fetchLibraryIndex(), fetchDashboard()])
-      .then(([libraryData, dashboardData]) => {
+      .then(async ([libraryData, dashboardData]) => {
         setIndex(libraryData);
         setDashboard(dashboardData);
         setError(null);
+        await user.syncUserStateFromServer();
       })
       .catch((err: unknown) => setError(String(err)))
       .finally(() => setLoading(false));
-  }, []);
+  }, [user.syncUserStateFromServer]);
 
   const refreshQuiet = useCallback(() => {
     void Promise.all([fetchLibraryIndex(), fetchDashboard()])
@@ -4902,6 +4977,22 @@ function Shell() {
       })
       .catch((err: unknown) => setError(String(err)));
   }, []);
+
+  const refreshAfterAlbumMetaSaved = refreshQuiet;
+
+  const refreshAfterTrackMetaSaved = useCallback(() => {
+    return Promise.all([
+      fetchLibraryIndex(),
+      fetchDashboard(),
+      user.syncUserStateFromServer(),
+    ])
+      .then(([libraryData, dashboardData]) => {
+        setIndex(libraryData);
+        setDashboard(dashboardData);
+        setError(null);
+      })
+      .catch((err: unknown) => setError(String(err)));
+  }, [user.syncUserStateFromServer]);
 
   useEffect(() => {
     let debouncePlaybackSync: ReturnType<typeof setTimeout> | undefined;
@@ -5268,8 +5359,11 @@ function Shell() {
   })();
 
   return (
-    <TrackMetaEditProvider genreOptions={libraryGenreOptions} onSaved={refresh}>
-      <AlbumMetaEditProvider onSaved={refresh}>
+    <TrackMetaEditProvider
+      genreOptions={libraryGenreOptions}
+      onSaved={refreshAfterTrackMetaSaved}
+    >
+      <AlbumMetaEditProvider onSaved={refreshAfterAlbumMetaSaved}>
         <div className="app-shell">
           <div className="main-shell">
             <header className="topbar2 topbar2--toolbar" role="banner">
@@ -5490,14 +5584,19 @@ function Shell() {
 
 function LibraryRootGate({ children }: { children: React.ReactNode }) {
   const [phase, setPhase] = useState<"load" | "ok" | "need">("load");
+  const [libraryRootWritable, setLibraryRootWritable] = useState(true);
   const route = parseRoute();
   useEffect(() => {
     fetchConfig()
       .then((c) => {
+        setLibraryRootWritable(c.libraryRootWritable !== false);
         if (c.lockedByEnv || c.libraryRootConfigured) setPhase("ok");
         else setPhase("need");
       })
-      .catch(() => setPhase("need"));
+      .catch(() => {
+        setLibraryRootWritable(true);
+        setPhase("need");
+      });
   }, []);
   if (phase === "load") {
     const table =
@@ -5525,14 +5624,24 @@ function LibraryRootGate({ children }: { children: React.ReactNode }) {
       >
         <section className="surface-card">
           <h2>{translate(table, "gate.libraryRequiredTitle", undefined)}</h2>
-          <p className="subtle sm">{translate(table, "gate.libraryRequiredLead", undefined)}</p>
-          <button
-            type="button"
-            className="btn"
-            onClick={() => window.location.assign("/settings")}
-          >
-            {translate(table, "gate.openSettings", undefined)}
-          </button>
+          <p className="subtle sm">
+            {translate(
+              table,
+              libraryRootWritable
+                ? "gate.libraryRequiredLead"
+                : "gate.libraryRequiredLeadRemote",
+              undefined,
+            )}
+          </p>
+          {libraryRootWritable ? (
+            <button
+              type="button"
+              className="btn"
+              onClick={() => window.location.assign("/settings")}
+            >
+              {translate(table, "gate.openSettings", undefined)}
+            </button>
+          ) : null}
         </section>
       </div>
     );

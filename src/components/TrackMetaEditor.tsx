@@ -5,6 +5,7 @@ import {
   useContext,
   useEffect,
   useId,
+  useRef,
   useState,
   type CSSProperties,
   type FormEvent,
@@ -74,6 +75,10 @@ function addGenreToken(
   return [...current, t];
 }
 
+function trackMoodsSignature(ids: TrackMoodId[]): string {
+  return [...ids].slice().sort().join("\u0001");
+}
+
 function TrackMetaEditorModal({
   track,
   genreOptions,
@@ -95,17 +100,20 @@ function TrackMetaEditorModal({
   const [busy, setBusy] = useState(false);
   const [deleteBusy, setDeleteBusy] = useState(false);
   const [err, setErr] = useState<string | null>(null);
+  const initialMoodsSigRef = useRef("");
   const p = usePlayer();
   const { stripUserStateForRelPaths } = useUserState();
 
   useEffect(() => {
     if (!track) return;
-    const timer = window.setTimeout(() => {
+    const timer =     window.setTimeout(() => {
       const m = track.meta;
+      const im = parseTrackMoods(m ?? undefined);
       setTitle(track.title);
       setReleaseDate(toDateInputValue(m?.releaseDate ?? null));
       setGenres(parseTrackGenres(m?.genre));
-      setMoods(parseTrackMoods(m ?? undefined));
+      setMoods(im);
+      initialMoodsSigRef.current = trackMoodsSignature(im);
       setNewGenre("");
       setErr(null);
     }, 0);
@@ -140,12 +148,15 @@ function TrackMetaEditorModal({
       setBusy(true);
       setErr(null);
       try {
-        await saveTrackInfoManual(track.relPath, {
+        const patch = {
           title: title.trim() === "" ? null : title.trim(),
           releaseDate: releaseDate.trim() === "" ? null : releaseDate.trim(),
           genre: serializeTrackGenres(genres),
-          moods: moods.length ? moods : null,
-        });
+          ...(trackMoodsSignature(moods) !== initialMoodsSigRef.current
+            ? { moods: moods.length ? moods : [] }
+            : {}),
+        };
+        await saveTrackInfoManual(track.relPath, patch);
         await Promise.resolve(onSaved());
         onClose();
       } catch (er: unknown) {

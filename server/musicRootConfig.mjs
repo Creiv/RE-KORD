@@ -509,6 +509,11 @@ export async function deleteAccount(id) {
     err.code = "ACCOUNT_NOT_FOUND";
     throw err;
   }
+  if (accountId === getDefaultAccountId()) {
+    const err = new Error("Cannot remove the default account");
+    err.code = "DEFAULT_ACCOUNT_LOCKED";
+    throw err;
+  }
   if (state.accounts.length <= 1) {
     const err = new Error("Keep at least one account");
     err.code = "LAST_ACCOUNT";

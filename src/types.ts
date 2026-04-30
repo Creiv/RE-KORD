@@ -111,6 +111,7 @@ export type QueueState = {
 
 export type UserStateV1 = {
   version: 1;
+  revision?: number;
   favorites: string[];
   recent: EnrichedTrack[];
   trackPlayCounts: Record<string, number>;

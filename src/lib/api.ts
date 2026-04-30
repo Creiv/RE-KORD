@@ -4,6 +4,7 @@ import type {
   LibraryIndex,
   LibraryResponse,
   LibrarySelectionV1,
+  UserSettings,
   UserStateV1,
 } from "../types"
 
@@ -11,6 +12,44 @@ type Wrapped<T> = { ok: boolean; data: T; error: string | null }
 const SESSION_ACCOUNT_STORAGE_KEY = "kord-session-account-id"
 const LEGACY_ACTIVE_ACCOUNT_STORAGE_KEY = "kord-active-account-id"
 let accountBootstrapPromise: Promise<string | null> | null = null
+
+export class UserStateRevisionConflict extends Error {
+  readonly currentState: UserStateV1
+  constructor(currentState: UserStateV1) {
+    super("USER_STATE_REVISION_CONFLICT")
+    this.name = "UserStateRevisionConflict"
+    this.currentState = currentState
+  }
+}
+
+async function unwrapUserStateMutation(response: Response): Promise<UserStateV1> {
+  const parsed = (await response.json()) as
+    | Wrapped<UserStateV1>
+    | {
+        error?: string
+        details?: { code?: string; currentState?: UserStateV1 }
+      }
+  if (response.status === 409) {
+    const detail = parsed && typeof parsed === "object" ? (parsed as { details?: { currentState?: UserStateV1 } }).details : undefined
+    const cur = detail?.currentState
+    if (cur && typeof cur === "object") {
+      throw new UserStateRevisionConflict(cur)
+    }
+    throw new Error("USER_STATE_REVISION_CONFLICT")
+  }
+  if (!response.ok) {
+    if (parsed && typeof parsed === "object" && "error" in parsed && typeof (parsed as { error?: string }).error === "string") {
+      throw new Error((parsed as { error: string }).error)
+    }
+    throw new Error("Request failed")
+  }
+  const json = parsed as Wrapped<UserStateV1>
+  if ("ok" in json && "data" in json) {
+    if (!json.ok) throw new Error(json.error || "Request failed")
+    return json.data
+  }
+  return parsed as UserStateV1
+}
 
 async function unwrap<T>(response: Response): Promise<T> {
   const json = (await response.json()) as T | Wrapped<T> | { error?: string }
@@ -216,20 +255,43 @@ export async function fetchUserState(): Promise<UserStateV1> {
   return unwrap<UserStateV1>(response)
 }
 
-export async function saveUserState(state: UserStateV1): Promise<UserStateV1> {
+export async function patchUserSettings(
+  expectedRevision: number,
+  patch: Partial<UserSettings>,
+): Promise<UserStateV1> {
   await ensureSelectedAccountId()
+  const response = await apiFetch("/api/user-state/settings", {
+    method: "PATCH",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ expectedRevision, settings: patch }),
+  })
+  return unwrapUserStateMutation(response)
+}
+
+export async function saveUserState(state: UserStateV1, omitPlaylists = false): Promise<UserStateV1> {
+  await ensureSelectedAccountId()
+  const { settings: _drop, ...rest } = state
+  void _drop
+  const patch: Record<string, unknown> = { ...rest }
+  if (omitPlaylists) delete patch.playlists
+  const exp =
+    typeof state.revision === "number" && Number.isFinite(state.revision) && state.revision >= 1
+      ? Math.floor(state.revision)
+      : 1
   const response = await apiFetch("/api/user-state", {
     method: "PUT",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ state }),
+    body: JSON.stringify({ expectedRevision: exp, state: patch }),
   })
-  return unwrap<UserStateV1>(response)
+  return unwrapUserStateMutation(response)
 }
 
 export type AppConfig = {
   musicRoot?: string | null
   lockedByEnv: boolean
   libraryRootConfigured?: boolean
+  libraryRootWritable?: boolean
+  libraryRootLabel?: string | null
   serverPort: number
   devClientPort: number
   lanAccessUrl: string | null

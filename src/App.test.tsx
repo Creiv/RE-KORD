@@ -150,6 +150,7 @@ function mockApi() {
           data: {
             lockedByEnv: false,
             libraryRootConfigured: true,
+            libraryRootWritable: true,
             serverPort: 3001,
             devClientPort: 5173,
             lanAccessUrl: null,

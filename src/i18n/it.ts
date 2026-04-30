@@ -62,6 +62,8 @@ export const IT: Record<string, string> = {
   "gate.libraryRequiredTitle": "Cartella libreria obbligatoria",
   "gate.libraryRequiredLead":
     "Scegli su questo server la cartella madre della musica (Impostazioni). Tutti i dati e gli account sono salvati lì dentro, nella cartella .kord/.",
+  "gate.libraryRequiredLeadRemote":
+    "Questo server KORD non ha ancora una cartella libreria configurata. Impostala sulla macchina che esegue il server: apri KORD in localhost (oppure MUSIC_ROOT / music-root.config.json nella cartella del server). Da browser remoto non è possibile scegliere il percorso.",
   "gate.openSettings": "Apri Impostazioni",
   "loading.dashboard": "Sto preparando la dashboard della collezione…",
   "empty.noData": "Nessun dato disponibile.",
@@ -315,6 +317,11 @@ export const IT: Record<string, string> = {
   "settings.libraryHeading": "Cartella libreria (root)",
   "settings.libraryRootLead":
     "Percorso assoluto della cartella che contiene la musica e la cartella .kord.",
+  "settings.libraryReadOnlyLead":
+    "La cartella libreria è definita sul server. Da questo browser puoi usare la libreria ma non modificare il percorso.",
+  "settings.libraryReadOnlyFolder": "Cartella libreria sul server: {{name}}",
+  "settings.libraryRemoteUnsetLead":
+    "Su questo server non è ancora configurata alcuna cartella libreria. Usa le Impostazioni sulla macchina che ospita KORD (accesso locale) oppure la configurazione d'avvio del server.",
   "settings.libLocked": "Attiva: {{path}} (bloccata da variabile d'ambiente)",
   "settings.libPathAria": "Percorso cartella musica",
   "settings.libPathPh": "/percorso/assoluto",
@@ -386,6 +393,8 @@ export const IT: Record<string, string> = {
   "accounts.remove": "Rimuovi",
   "accounts.removeConfirm":
     "Rimuovere l’account “{{name}}”? I file musicali non verranno eliminati, ma la sessione e lo stato locale dell’account verranno rimossi.",
+  "accounts.removeDisabledDefault":
+    "L’account predefinito non può essere eliminato. Crea prima un altro account se ti serve un profilo separato.",
   "accounts.createEyebrow": "Nuovo profilo",
   "accounts.createHeading": "Account e cartella",
   "accounts.newNameAria": "Nome nuovo account",

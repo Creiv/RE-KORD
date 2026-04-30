@@ -4,7 +4,13 @@ import os from "os"
 import path from "path"
 import { describe, expect, it } from "vitest"
 import { kordAccountUserStatePath } from "./kordDataStore.mjs"
-import { readUserState, writeUserState } from "./userState.mjs"
+import {
+  mergeUserStateForPut,
+  readUserState,
+  stripSettingsFromUserStatePatch,
+  writeUserState,
+  defaultUserState,
+} from "./userState.mjs"
 
 describe("userState", () => {
   it("writes and rereads sanitized user state", async () => {
@@ -65,5 +71,19 @@ describe("userState", () => {
     expect(reloaded.playlists).toHaveLength(1)
     expect(state.trackPlayCounts).toEqual({ "artist/album/song.mp3": 3 })
     expect(reloaded.trackPlayCounts).toEqual({ "artist/album/song.mp3": 3 })
+  })
+
+  it("merge PUT dopo strip non sovrascrive le impostazioni", () => {
+    const prev = defaultUserState()
+    prev.settings = { ...prev.settings, theme: "sunset" }
+    prev.favorites = ["a.mp3"]
+    const raw = {
+      favorites: [],
+      settings: { theme: "ocean" },
+      playlists: [],
+    }
+    const merged = mergeUserStateForPut(prev, stripSettingsFromUserStatePatch(raw))
+    expect(merged.settings.theme).toBe("sunset")
+    expect(merged.favorites).toEqual([])
   })
 })

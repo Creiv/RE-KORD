@@ -1,7 +1,7 @@
 import fs from "fs/promises"
 import { existsSync } from "fs"
 import path from "path"
-import { kordAccountUserStatePath } from "./kordDataStore.mjs"
+import { atomicWriteFileUtf8, kordAccountUserStatePath } from "./kordDataStore.mjs"
 import { CONFIG_FILE } from "./musicRootConfig.mjs"
 
 /** Serie di readUserState sulla stessa coppia (library, account): evita race sulla migrazione lazy. */
@@ -140,6 +140,7 @@ function sanitizeShuffleIdList(raw) {
 export function defaultUserState() {
   return {
     version: 1,
+    revision: 1,
     favorites: [],
     recent: [],
     trackPlayCounts: {},
@@ -153,6 +154,54 @@ export function defaultUserState() {
     shuffleExcludedTrackRelPaths: [],
     trackMoods: {},
   }
+}
+
+function sanitizeStoredRevision(raw) {
+  const n = Number(raw)
+  if (!Number.isFinite(n) || n < 1) return 1
+  return Math.min(Math.floor(n), Number.MAX_SAFE_INTEGER)
+}
+
+/** Revisione ottimistic locking sullo stato utente (≥ 1). */
+export function currentRevision(prev) {
+  return sanitizeStoredRevision(prev?.revision)
+}
+
+export function stripRevisionFromPatch(patch) {
+  if (!isObj(patch) || Array.isArray(patch)) return patch
+  const { revision: _r, ...rest } = patch
+  void _r
+  return rest
+}
+
+/** Rimuove `settings` dal payload PUT: le impostazioni si aggiornano solo via PATCH dedicata. */
+export function stripSettingsFromUserStatePatch(patch) {
+  if (!isObj(patch) || Array.isArray(patch)) return patch
+  const { settings: _s, ...rest } = patch
+  void _s
+  return rest
+}
+
+export function stripClientControlledKeysFromPutPatch(patch) {
+  return stripRevisionFromPatch(stripSettingsFromUserStatePatch(patch))
+}
+
+export async function mergeAndWriteUserStateWithRevision(musicRoot, accountId, expectedRevision, buildMergedFromPrevFresh) {
+  const prevFresh = await readUserState(musicRoot, accountId)
+  const cur = currentRevision(prevFresh)
+  const exp = Number(expectedRevision)
+  if (!Number.isFinite(exp) || exp !== cur) {
+    const err = new Error("USER_STATE_REVISION_CONFLICT")
+    err.code = "USER_STATE_REVISION_CONFLICT"
+    err.currentState = prevFresh
+    throw err
+  }
+  const merged = buildMergedFromPrevFresh(prevFresh)
+  const sanitized = sanitizeUserState({
+    ...merged,
+    revision: cur + 1,
+  })
+  return writeUserStatePersist(musicRoot, sanitized, accountId)
 }
 
 export function mergeUserStateForPut(prev, patch) {
@@ -186,9 +235,11 @@ export function sanitizeUserState(input) {
   const queueTracks = Array.isArray(src.queue?.tracks)
     ? src.queue.tracks.map((track) => sanitizeTrack(track)).filter(Boolean)
     : []
+  const revSrc = Object.prototype.hasOwnProperty.call(src, "revision") ? src.revision : base.revision
   return {
     ...base,
     version: 1,
+    revision: sanitizeStoredRevision(revSrc),
     favorites: uniqStrings(src.favorites),
     recent: Array.isArray(src.recent)
       ? src.recent.map((track) => sanitizeTrack(track)).filter(Boolean).slice(0, 30)
@@ -240,55 +291,62 @@ function filePathWpp(musicRoot) {
   return path.join(musicRoot, ".wpp", "user-state.v1.json")
 }
 
-async function readStateFile(fp) {
-  const raw = await fs.readFile(fp, "utf8")
-  return sanitizeUserState(JSON.parse(raw))
+async function readJsonUserStateFile(fp, maxAttempts = 5) {
+  let lastErr
+  for (let i = 0; i < maxAttempts; i += 1) {
+    try {
+      const raw = await fs.readFile(fp, "utf8")
+      if (!raw || !String(raw).trim()) throw new Error("empty user-state file")
+      return sanitizeUserState(JSON.parse(raw))
+    } catch (e) {
+      lastErr = e
+      if (i < maxAttempts - 1) {
+        await new Promise((r) => setTimeout(r, 20 + i * 35))
+      }
+    }
+  }
+  if (lastErr && process.env.KORD_VERBOSE) {
+    console.warn("[kord] user-state read failed:", fp, lastErr?.message ?? lastErr)
+  }
+  return null
 }
 
 async function readUserStateImpl(musicRoot, accountId = null) {
   if (!musicRoot) return defaultUserState()
   const kordAcc = kordAccountUserStatePath(musicRoot, accountId)
-  if (kordAcc && existsSync(kordAcc)) {
-    try {
-      return await readStateFile(kordAcc)
-    } catch {
-      return defaultUserState()
-    }
-  }
   const accountPath = filePathAccountLegacy(accountId)
-  if (accountPath && existsSync(accountPath)) {
-    try {
-      return await readStateFile(accountPath)
-    } catch {
-      return defaultUserState()
-    }
+  const legacyKord = filePathKord(musicRoot)
+  const legacyWpp = filePathWpp(musicRoot)
+
+  let state =
+    kordAcc && existsSync(kordAcc) ? await readJsonUserStateFile(kordAcc) : null
+  if (!state && accountPath && existsSync(accountPath)) {
+    state = await readJsonUserStateFile(accountPath)
   }
-  const p = filePathKord(musicRoot)
-  const legacy = filePathWpp(musicRoot)
-  const use = existsSync(p) ? p : existsSync(legacy) ? legacy : null
-  if (!use) {
-    const state = defaultUserState()
-    if (accountId && safeAccountId(accountId) !== "default") {
+  const legacyFp = existsSync(legacyKord)
+    ? legacyKord
+    : existsSync(legacyWpp)
+      ? legacyWpp
+      : null
+  if (!state && legacyFp) {
+    state = await readJsonUserStateFile(legacyFp)
+    if (state && accountId && safeAccountId(accountId) !== "default") {
       state.migratedLegacy = true
+    }
+    if (state && kordAcc) {
+      await atomicWriteFileUtf8(kordAcc, JSON.stringify(state, null, 2))
+    } else if (state && accountPath) {
+      await atomicWriteFileUtf8(accountPath, JSON.stringify(state, null, 2))
     }
     return state
   }
-  try {
-    const state = await readStateFile(use)
-    if (accountId && safeAccountId(accountId) !== "default") {
-      state.migratedLegacy = true
-    }
-    if (kordAcc) {
-      await fs.mkdir(path.dirname(kordAcc), { recursive: true })
-      await fs.writeFile(kordAcc, JSON.stringify(state, null, 2), "utf8")
-    } else if (accountPath) {
-      await fs.mkdir(path.dirname(accountPath), { recursive: true })
-      await fs.writeFile(accountPath, JSON.stringify(state, null, 2), "utf8")
-    }
-    return state
-  } catch {
-    return defaultUserState()
+  if (state) return state
+
+  const empty = defaultUserState()
+  if (accountId && safeAccountId(accountId) !== "default") {
+    empty.migratedLegacy = true
   }
+  return empty
 }
 
 export async function readUserState(musicRoot, accountId = null) {
@@ -301,7 +359,7 @@ export async function readUserState(musicRoot, accountId = null) {
   return await next
 }
 
-export async function writeUserState(musicRoot, input, accountId = null) {
+async function writeUserStatePersist(musicRoot, sanitizedState, accountId = null) {
   if (!musicRoot) {
     const e = new Error("Library not configured")
     e.code = "LIBRARY_NOT_CONFIGURED"
@@ -309,8 +367,38 @@ export async function writeUserState(musicRoot, input, accountId = null) {
   }
   const kordAcc = kordAccountUserStatePath(musicRoot, accountId)
   const fp = kordAcc || filePathAccountLegacy(accountId) || filePathKord(musicRoot)
-  await fs.mkdir(path.dirname(fp), { recursive: true })
-  const state = sanitizeUserState(input)
-  await fs.writeFile(fp, JSON.stringify(state, null, 2), "utf8")
-  return state
+  await atomicWriteFileUtf8(fp, JSON.stringify(sanitizedState, null, 2))
+  return sanitizedState
 }
+
+/** Scrittura server-side monotona (test, merge mood retry). Bump revision da disco. */
+export async function writeUserState(musicRoot, input, accountId = null) {
+  const prev = await readUserState(musicRoot, accountId)
+  const sanitized = sanitizeUserState(input)
+  sanitized.revision = currentRevision(prev) + 1
+  return writeUserStatePersist(musicRoot, sanitized, accountId)
+}
+
+export async function writeUserTrackMoodsWithCAS(musicRoot, accountId, relPath, moodsList, maxRetries = 8) {
+  for (let attempt = 0; attempt < maxRetries; attempt += 1) {
+    try {
+      const prev = await readUserState(musicRoot, accountId)
+      const exp = currentRevision(prev)
+      const list = moodsList ?? []
+      return await mergeAndWriteUserStateWithRevision(musicRoot, accountId, exp, (fresh) => {
+        const tm = { ...(fresh.trackMoods || {}) }
+        if (!list.length) delete tm[relPath]
+        else tm[relPath] = list.map(String).filter(Boolean)
+        return {
+          ...fresh,
+          trackMoods: sanitizeTrackMoodsMap(tm),
+        }
+      })
+    } catch (e) {
+      if (e?.code !== "USER_STATE_REVISION_CONFLICT") throw e
+      if (attempt === maxRetries - 1) throw e
+      await new Promise((r) => setTimeout(r, 20 + attempt * 30))
+    }
+  }
+}
+

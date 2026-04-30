@@ -58,6 +58,8 @@ export const EN: Record<string, string> = {
   "gate.libraryRequiredTitle": "Library folder required",
   "gate.libraryRequiredLead":
     "Choose the root folder for your music on this server (Settings). All library data and accounts are stored inside that folder, under .kord/.",
+  "gate.libraryRequiredLeadRemote":
+    "This KORD server does not have a music library folder configured yet. Set it on the machine that runs the server: open KORD via localhost (or edit MUSIC_ROOT / server music-root.config.json on that host). Remote browsers cannot choose the folder path.",
   "gate.openSettings": "Open Settings",
   "loading.dashboard": "Preparing your collection dashboard…",
   "empty.noData": "No data available.",
@@ -306,6 +308,11 @@ export const EN: Record<string, string> = {
   "settings.libraryHeading": "Library root folder",
   "settings.libraryRootLead":
     "Absolute path to the folder that contains your audio files and the .kord data directory.",
+  "settings.libraryReadOnlyLead":
+    "The library folder is defined on the server. This browser can use the library but cannot change its path.",
+  "settings.libraryReadOnlyFolder": "Library folder on server: {{name}}",
+  "settings.libraryRemoteUnsetLead":
+    "No library folder is configured on this server yet. Use Settings from the server PC (local access) or configure the server environment.",
   "settings.libLocked": "Active: {{path}} (locked by environment variable)",
   "settings.libPathAria": "Music folder path",
   "settings.libPathPh": "/absolute/path",
@@ -376,6 +383,8 @@ export const EN: Record<string, string> = {
   "accounts.remove": "Remove",
   "accounts.removeConfirm":
     "Remove account “{{name}}”? Music files will not be deleted, but this account’s session and local state will be removed.",
+  "accounts.removeDisabledDefault":
+    "The default account cannot be removed. Create another account first if you need a separate profile.",
   "accounts.createEyebrow": "New profile",
   "accounts.createHeading": "Account and folder",
   "accounts.newNameAria": "New account name",
