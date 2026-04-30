@@ -9,7 +9,12 @@ import {
   useRef,
   useState,
 } from "react";
-import { fetchUserState, saveUserState } from "../lib/api";
+import {
+  fetchUserState,
+  patchUserSettings,
+  saveUserState,
+  UserStateRevisionConflict,
+} from "../lib/api";
 import { readLegacyLocalShuffleMigrated, clearLegacyLocalShuffle } from "../lib/legacyShuffleLocal";
 import { fmtDate } from "../lib/metaFormat";
 import { randomUUID } from "../lib/randomUUID";
@@ -111,6 +116,13 @@ function normalizeSettings(raw: Partial<UserSettings>): UserSettings {
 }
 
 function normalizeUserState(s: UserStateV1): UserStateV1 {
+  const revRaw = s.revision;
+  const revision =
+    typeof revRaw === "number" &&
+    Number.isFinite(revRaw) &&
+    revRaw >= 1
+      ? Math.floor(revRaw)
+      : 1;
   const rawCounts = s.trackPlayCounts || {};
   const trackPlayCounts = Object.fromEntries(
     Object.entries(rawCounts).filter(
@@ -120,6 +132,7 @@ function normalizeUserState(s: UserStateV1): UserStateV1 {
   ) as Record<string, number>;
   return {
     ...s,
+    revision,
     trackPlayCounts,
     settings: normalizeSettings(s.settings),
     shuffleExcludedAlbumIds: uniqStrings(s.shuffleExcludedAlbumIds || []),
@@ -132,6 +145,7 @@ function normalizeUserState(s: UserStateV1): UserStateV1 {
 function defaultUserState(): UserStateV1 {
   return {
     version: 1,
+    revision: 1,
     favorites: [],
     recent: [],
     trackPlayCounts: {},
@@ -265,6 +279,7 @@ type UserStateContextValue = {
     indexAfter: LibraryIndex,
     folderRelPrefix: string
   ) => void;
+  syncUserStateFromServer: () => Promise<void>;
 };
 
 const UserStateContext = createContext<UserStateContextValue | null>(null);
@@ -276,14 +291,18 @@ export function UserStateProvider({ children }: { children: React.ReactNode }) {
   const [error, setError] = useState<string | null>(null);
   const [selectedPlaylist, setSelectedPlaylist] = useState<string | null>(null);
   const dirtyRef = useRef(false);
+  const playlistDirtyRef = useRef(false);
   const hydratedRef = useRef(false);
   const saveSeqRef = useRef(0);
+  const stateRef = useRef(state);
+  stateRef.current = state;
 
   useEffect(() => {
     let active = true;
     fetchUserState()
       .then((remote) => {
         if (!active) return;
+        if (!remote.migratedLegacy) playlistDirtyRef.current = true;
         let merged = normalizeUserState(mergeLegacy(remote));
         const fromLocal = readLegacyLocalShuffleMigrated();
         if (fromLocal.albumKeys.length > 0 || fromLocal.trackPaths.length > 0) {
@@ -312,6 +331,7 @@ export function UserStateProvider({ children }: { children: React.ReactNode }) {
       .catch((err: unknown) => {
         if (!active) return;
         const fallback = mergeLegacy(defaultUserState());
+        playlistDirtyRef.current = true;
         setState(fallback);
         setError(String(err));
         setReady(true);
@@ -338,14 +358,29 @@ export function UserStateProvider({ children }: { children: React.ReactNode }) {
     const timer = window.setTimeout(() => {
       setSaving(true);
       const seq = ++saveSeqRef.current;
-      saveUserState(state)
-        .then((next) => {
+      const omitPlaylists = !playlistDirtyRef.current;
+      saveUserState(state, omitPlaylists)
+        .then((saved) => {
           if (seq !== saveSeqRef.current) return;
-          setState(normalizeUserState(next));
+          setState((prev) => ({
+            ...normalizeUserState(saved),
+            settings: normalizeSettings(prev.settings),
+          }));
           setError(null);
           dirtyRef.current = false;
+          if (!omitPlaylists) playlistDirtyRef.current = false;
         })
         .catch((err: unknown) => {
+          if (err instanceof UserStateRevisionConflict) {
+            setState((prev) => ({
+              ...normalizeUserState(err.currentState),
+              settings: normalizeSettings(prev.settings),
+            }));
+            setError(null);
+            dirtyRef.current = false;
+            playlistDirtyRef.current = false;
+            return;
+          }
           setError(String(err));
         })
         .finally(() => {
@@ -367,19 +402,49 @@ export function UserStateProvider({ children }: { children: React.ReactNode }) {
   const persistNow = useCallback((next: UserStateV1) => {
     const seq = ++saveSeqRef.current;
     setSaving(true);
-    saveUserState(next)
+    const omitPlaylists = !playlistDirtyRef.current;
+    saveUserState(next, omitPlaylists)
       .then((saved) => {
         if (seq !== saveSeqRef.current) return;
-        setState(normalizeUserState(saved));
+        setState({
+          ...normalizeUserState(saved),
+          settings: normalizeSettings(next.settings),
+        });
         setError(null);
         dirtyRef.current = false;
+        if (!omitPlaylists) playlistDirtyRef.current = false;
       })
       .catch((err: unknown) => {
         if (seq !== saveSeqRef.current) return;
+        if (err instanceof UserStateRevisionConflict) {
+          setState((prev) => ({
+            ...normalizeUserState(err.currentState),
+            settings: normalizeSettings(prev.settings),
+          }));
+          setError(null);
+          dirtyRef.current = false;
+          playlistDirtyRef.current = false;
+          return;
+        }
         setError(err instanceof Error ? err.message : String(err));
       })
       .finally(() => {
         if (seq === saveSeqRef.current) setSaving(false);
+      });
+  }, []);
+
+  const syncUserStateFromServer = useCallback(() => {
+    saveSeqRef.current += 1;
+    return fetchUserState()
+      .then((remote) => {
+        const merged = normalizeUserState(mergeLegacy(remote));
+        dirtyRef.current = false;
+        playlistDirtyRef.current = false;
+        setState(merged);
+        setError(null);
+      })
+      .catch((err: unknown) => {
+        setError(String(err));
       });
   }, []);
 
@@ -391,6 +456,7 @@ export function UserStateProvider({ children }: { children: React.ReactNode }) {
       dirtyRef.current = true;
       setState((prev) => {
         const next = updater(prev);
+        if (next.playlists !== prev.playlists) playlistDirtyRef.current = true;
         if (options?.immediate) {
           window.setTimeout(() => persistNow(next), 0);
         }
@@ -594,12 +660,44 @@ export function UserStateProvider({ children }: { children: React.ReactNode }) {
 
   const updateSettings = useCallback(
     (patch: Partial<UserSettings>) => {
-      commit((prev) => ({
+      const seq = ++saveSeqRef.current;
+      const exp =
+        typeof stateRef.current.revision === "number" &&
+        Number.isFinite(stateRef.current.revision) &&
+        stateRef.current.revision >= 1
+          ? Math.floor(stateRef.current.revision)
+          : 1;
+      setState((prev) => ({
         ...prev,
-        settings: { ...prev.settings, ...patch },
+        settings: normalizeSettings({ ...prev.settings, ...patch }),
       }));
+      setSaving(true);
+      patchUserSettings(exp, patch)
+        .then((saved) => {
+          if (seq !== saveSeqRef.current) return;
+          setState((prev) => ({
+            ...normalizeUserState(saved),
+            settings: normalizeSettings(prev.settings),
+          }));
+          setError(null);
+        })
+        .catch((err: unknown) => {
+          if (seq !== saveSeqRef.current) return;
+          if (err instanceof UserStateRevisionConflict) {
+            setState((prev) => ({
+              ...normalizeUserState(err.currentState),
+              settings: normalizeSettings(prev.settings),
+            }));
+            setError(null);
+            return;
+          }
+          setError(err instanceof Error ? err.message : String(err));
+        })
+        .finally(() => {
+          if (seq === saveSeqRef.current) setSaving(false);
+        });
     },
-    [commit]
+    []
   );
 
   const createPlaylist = useCallback(
@@ -769,6 +867,7 @@ export function UserStateProvider({ children }: { children: React.ReactNode }) {
       rehydrateShuffleExclusionsFromIndex,
       stripUserStateForRelPaths,
       remapUserStateAfterDownloadReplace,
+      syncUserStateFromServer,
     }),
     [
       addTrackToPlaylist,
@@ -795,6 +894,7 @@ export function UserStateProvider({ children }: { children: React.ReactNode }) {
       toggleShuffleExcludedAlbum,
       toggleShuffleExcludedTrack,
       stripUserStateForRelPaths,
+      syncUserStateFromServer,
       updateSettings,
     ]
   );
