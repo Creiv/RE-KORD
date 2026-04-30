@@ -195,6 +195,45 @@ export type LibraryIndex = {
   stats: LibraryStats;
 };
 
+export type LibraryOverview = {
+  musicRoot?: string;
+  artists: LibraryArtistIndex[];
+  stats: LibraryStats;
+};
+
+export type LibraryArtistDetail = {
+  artist: LibraryArtistIndex;
+  albums: LibraryAlbumIndex[];
+  tracks: LibraryTrackIndex[];
+};
+
+export type LibraryAlbumDetail = {
+  album: LibraryAlbumIndex;
+  tracks: LibraryTrackIndex[];
+};
+
+export type LibrarySearchResult = {
+  artists: LibraryArtistIndex[];
+  albums: LibraryAlbumIndex[];
+  tracks: LibraryTrackIndex[];
+};
+
+export type LibraryEntityDelta = {
+  albumPath?: string;
+  relPath?: string;
+  coverRelPath?: string | null;
+  coverVersion?: number;
+  album?: Partial<LibraryAlbumIndex> & { relPath?: string };
+  track?: Partial<LibraryTrackIndex> & { relPath: string };
+  deleted?: string[];
+  deletedFolder?: string;
+  affectedAlbums?: string[];
+};
+
+export type UserStatePatch = Partial<Omit<UserStateV1, "version" | "revision" | "settings">> & {
+  settings?: Partial<UserSettings>;
+};
+
 export type DashboardAlert = {
   id: string;
   label: string;
@@ -227,6 +266,7 @@ export type CatalogArtistEntry = {
   name: string;
   albumCount: number;
   trackCount: number;
+  coverRelPath?: string | null;
   relAlbums: CatalogAlbumEntry[];
 };
 

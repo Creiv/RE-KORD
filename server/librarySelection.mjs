@@ -182,14 +182,20 @@ export function filterLibraryIndexBySelection(index, selection, accountId) {
   }
 }
 
-export function buildCatalogFromIndex(index) {
+export function buildCatalogFromIndex(index, options = {}) {
+  const summary = options.summary === true
+  const artistId = typeof options.artistId === "string" ? options.artistId.trim() : ""
+  const artists = artistId
+    ? index.artists.filter((a) => a.id === artistId || a.name === artistId)
+    : index.artists
   return {
-    artists: index.artists.map((a) => ({
+    artists: artists.map((a) => ({
       id: a.id,
       name: a.name,
       albumCount: a.albumCount,
       trackCount: a.trackCount,
-      relAlbums: (a.albums || [])
+      coverRelPath: a.coverRelPath || null,
+      relAlbums: summary ? [] : (a.albums || [])
         .map((albumId) => index.albums.find((al) => al.id === albumId))
         .filter(Boolean)
         .map((album) => ({

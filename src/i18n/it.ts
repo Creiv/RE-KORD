@@ -458,11 +458,11 @@ export const IT: Record<string, string> = {
   "tools.studioHeroTitle": "Libreria e import",
   "tools.studioPaneEyebrow": "Navigazione",
   "tools.studioPaneAria": "Sezioni Studio",
-  "tools.studioTabCatalog": "La mia libreria",
+  "tools.studioTabCatalog": "Scopri",
   "tools.studioTabDownload": "Download",
   "tools.studioTabMeta": "Metadati",
   "tools.studioTabCovers": "Copertine",
-  "tools.catalogTitle": "La mia libreria e catalogo",
+  "tools.catalogTitle": "Scopri",
   "tools.catalogDesc":
     "Aggiungi artisti o singoli album dalla libreria globale del server alla tua raccolta personale.",
   "tools.catalogReload": "Aggiorna elenco",
@@ -476,6 +476,7 @@ export const IT: Record<string, string> = {
   "tools.catalogRemoveAlbum": "Rimuovi album",
   "tools.catalogTabArtists": "Artisti",
   "tools.catalogTabAlbums": "Album",
+  "tools.catalogBackArtists": "Artisti",
   "tools.catalogViewAria": "Vista catalogo",
   "tools.catalogBrowseHint":
     "Le card luminose compaiono nella tua libreria; quelle attenuate sono sul disco ma non nella vista attuale. Bordo in evidenza = selezionato per questo account. Usa Aggiungi / Rimuovi per aggiornare la selezione.",
