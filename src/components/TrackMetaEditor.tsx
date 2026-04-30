@@ -26,7 +26,7 @@ import {
   type TrackMoodId,
 } from "../lib/trackMoods";
 import { TrackMoodGlyph } from "./TrackMoodGlyph";
-import type { EnrichedTrack } from "../types";
+import type { EnrichedTrack, LibraryEntityDelta } from "../types";
 import { UiClose } from "./KordUiIcons";
 
 const TrackMetaEditContext = createContext<(track: EnrichedTrack) => void>(
@@ -88,7 +88,7 @@ function TrackMetaEditorModal({
   track: EnrichedTrack | null;
   genreOptions: readonly string[];
   onClose: () => void;
-  onSaved: () => void;
+  onSaved: (delta?: LibraryEntityDelta) => void | Promise<void>;
 }) {
   const { t } = useI18n();
   const pickId = useId();
@@ -156,8 +156,23 @@ function TrackMetaEditorModal({
             ? { moods: moods.length ? moods : [] }
             : {}),
         };
-        await saveTrackInfoManual(track.relPath, patch);
-        await Promise.resolve(onSaved());
+        const saved = await saveTrackInfoManual(track.relPath, patch);
+        await Promise.resolve(
+          onSaved({
+            relPath: saved.relPath,
+            track:
+              saved.track ??
+              ({
+                relPath: saved.relPath,
+                title:
+                  typeof patch.title === "string" && patch.title.trim()
+                    ? patch.title.trim()
+                    : track.title,
+                meta: saved.meta as EnrichedTrack["meta"],
+              } satisfies LibraryEntityDelta["track"]),
+            album: saved.album,
+          })
+        );
         onClose();
       } catch (er: unknown) {
         setErr(er instanceof Error ? er.message : String(er));
@@ -174,14 +189,14 @@ function TrackMetaEditorModal({
     setDeleteBusy(true);
     setErr(null);
     try {
-      const { deleted } = await deleteAudioRelPaths([track.relPath]);
+      const { deleted, affectedAlbums } = await deleteAudioRelPaths([track.relPath]);
       if (!deleted.length) {
         setErr(t("trackMeta.deleteFailed"));
         return;
       }
       for (const rel of deleted) p.removeFromQueueByRelPath(rel);
       stripUserStateForRelPaths(deleted);
-      await Promise.resolve(onSaved());
+      await Promise.resolve(onSaved({ deleted, affectedAlbums }));
       onClose();
     } catch (er: unknown) {
       setErr(er instanceof Error ? er.message : String(er));
@@ -356,7 +371,7 @@ export function TrackMetaEditProvider({
 }: {
   children: React.ReactNode;
   genreOptions: readonly string[];
-  onSaved: () => void | Promise<void>;
+  onSaved: (delta?: LibraryEntityDelta) => void | Promise<void>;
 }) {
   const [track, setTrack] = useState<EnrichedTrack | null>(null);
   const open = useCallback((tr: EnrichedTrack) => setTrack(tr), []);

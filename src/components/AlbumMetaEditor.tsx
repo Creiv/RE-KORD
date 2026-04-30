@@ -11,7 +11,7 @@ import { deleteAlbumFolder, saveAlbumInfoManual } from "../lib/api";
 import { useI18n } from "../i18n/useI18n";
 import { usePlayer } from "../context/PlayerContext";
 import { useUserState } from "../context/UserStateContext";
-import type { LibraryAlbumIndex } from "../types";
+import type { LibraryAlbumIndex, LibraryEntityDelta } from "../types";
 
 const AlbumMetaEditContext = createContext<(album: LibraryAlbumIndex) => void>(
   () => {},
@@ -37,7 +37,7 @@ function AlbumMetaEditorModal({
 }: {
   album: LibraryAlbumIndex | null;
   onClose: () => void;
-  onSaved: () => void | Promise<void>;
+  onSaved: (delta?: LibraryEntityDelta) => void | Promise<void>;
 }) {
   const { t } = useI18n();
   const [title, setTitle] = useState("");
@@ -68,13 +68,13 @@ function AlbumMetaEditorModal({
       setBusy(true);
       setErr(null);
       try {
-        await saveAlbumInfoManual(album.relPath, {
+        const saved = await saveAlbumInfoManual(album.relPath, {
           title: title.trim() === "" ? null : title.trim(),
           releaseDate: releaseDate.trim() === "" ? null : releaseDate.trim(),
           label: label.trim() === "" ? null : label.trim(),
           country: country.trim() === "" ? null : country.trim(),
         });
-        await Promise.resolve(onSaved());
+        await Promise.resolve(onSaved({ albumPath: saved.albumPath, album: saved.album }));
         onClose();
       } catch (error: unknown) {
         setErr(error instanceof Error ? error.message : String(error));
@@ -100,14 +100,14 @@ function AlbumMetaEditorModal({
     setDeleteBusy(true);
     setErr(null);
     try {
-      const { deleted } = await deleteAlbumFolder(album.relPath);
+      const { deleted, deletedFolder, affectedAlbums } = await deleteAlbumFolder(album.relPath);
       if (!deleted.length) {
         setErr(t("albumMeta.deleteFailed"));
         return;
       }
       for (const rel of deleted) p.removeFromQueueByRelPath(rel);
       stripUserStateForRelPaths(deleted);
-      await Promise.resolve(onSaved());
+      await Promise.resolve(onSaved({ deleted, deletedFolder, affectedAlbums }));
       onClose();
     } catch (error: unknown) {
       setErr(error instanceof Error ? error.message : String(error));
@@ -214,7 +214,7 @@ export function AlbumMetaEditProvider({
   onSaved,
 }: {
   children: React.ReactNode;
-  onSaved: () => void | Promise<void>;
+  onSaved: (delta?: LibraryEntityDelta) => void | Promise<void>;
 }) {
   const [album, setAlbum] = useState<LibraryAlbumIndex | null>(null);
   const open = useCallback((item: LibraryAlbumIndex) => setAlbum(item), []);

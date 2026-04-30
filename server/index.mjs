@@ -55,6 +55,7 @@ import {
 import { normalizeTrackMoodsList } from "./trackMoods.mjs";
 import {
   mergeAndWriteUserStateWithRevision,
+  mergeAndWriteUserStatePatch,
   mergeUserStateForPut,
   readUserState,
   stripClientControlledKeysFromPutPatch,
@@ -719,6 +720,68 @@ async function getFilteredIndexForAccount(accountId) {
   return mergeTrackMoodsIntoIndex(filt, state.trackMoods);
 }
 
+function libraryOverviewFromIndex(index) {
+  return {
+    musicRoot: index.musicRoot || "",
+    artists: index.artists,
+    stats: index.stats,
+  };
+}
+
+function libraryArtistDetailFromIndex(index, artistId) {
+  const artist = index.artists.find((a) => a.id === artistId || a.name === artistId);
+  if (!artist) return null;
+  const albumIds = new Set(artist.albums || []);
+  const albums = index.albums.filter((album) => albumIds.has(album.id));
+  const trackRelPaths = new Set(albums.flatMap((album) => album.tracks || []));
+  const tracks = index.tracks.filter((track) => trackRelPaths.has(track.relPath));
+  return { artist, albums, tracks };
+}
+
+function libraryAlbumDetailFromIndex(index, relPathOrId) {
+  const key = String(relPathOrId || "").trim();
+  const album = index.albums.find(
+    (item) => item.relPath === key || item.id === key || item.name === key,
+  );
+  if (!album) return null;
+  const rels = new Set(album.tracks || []);
+  const tracks = index.tracks.filter((track) => rels.has(track.relPath));
+  return { album, tracks };
+}
+
+function searchLibraryIndex(index, query) {
+  const q = String(query || "").trim().toLowerCase();
+  if (!q) return { artists: [], albums: [], tracks: [] };
+  const trackGenreIncludes = (track) => String(track?.meta?.genre || "").toLowerCase().includes(q);
+  const artists = index.artists
+    .filter((artist) => {
+      if (String(artist.name || "").toLowerCase().includes(q)) return true;
+      return index.tracks.some((track) => track.artist === artist.name && trackGenreIncludes(track));
+    })
+    .slice(0, 50);
+  const albums = index.albums
+    .filter((album) => {
+      if (String(album.name || "").toLowerCase().includes(q)) return true;
+      if (String(album.artist || "").toLowerCase().includes(q)) return true;
+      return (album.tracks || []).some((rel) => {
+        const track = index.tracks.find((item) => item.relPath === rel);
+        return trackGenreIncludes(track);
+      });
+    })
+    .slice(0, 80);
+  const tracks = index.tracks
+    .filter((track) => {
+      return (
+        String(track.title || "").toLowerCase().includes(q) ||
+        String(track.artist || "").toLowerCase().includes(q) ||
+        String(track.album || "").toLowerCase().includes(q) ||
+        trackGenreIncludes(track)
+      );
+    })
+    .slice(0, 150);
+  return { artists, albums, tracks };
+}
+
 function albumFolderFromRelPath(relPath) {
   const parts = String(relPath || "")
     .split("/")
@@ -991,12 +1054,84 @@ app.get("/api/library-index", async (req, res) => {
   }
 });
 
+app.get("/api/library-overview", async (req, res) => {
+  try {
+    const accountId = accountIdFromReq(req);
+    const index = await getFilteredIndexForAccount(accountId);
+    res.set("Cache-Control", "no-store, must-revalidate");
+    return sendOk(res, libraryOverviewFromIndex(index));
+  } catch (error) {
+    console.error(error);
+    return sendError(res, 500, String(error?.message || error));
+  }
+});
+
+app.get("/api/library-artists/:id", async (req, res) => {
+  try {
+    const accountId = accountIdFromReq(req);
+    const index = await getFilteredIndexForAccount(accountId);
+    const id = decodeURIComponent(String(req.params.id || ""));
+    const detail = libraryArtistDetailFromIndex(index, id);
+    if (!detail) return sendError(res, 404, "Artist not found");
+    res.set("Cache-Control", "no-store, must-revalidate");
+    return sendOk(res, detail);
+  } catch (error) {
+    console.error(error);
+    return sendError(res, 500, String(error?.message || error));
+  }
+});
+
+app.get("/api/library-albums", async (req, res) => {
+  try {
+    const accountId = accountIdFromReq(req);
+    const index = await getFilteredIndexForAccount(accountId);
+    const key = String(req.query.relPath || req.query.id || req.query.album || "").trim();
+    const detail = libraryAlbumDetailFromIndex(index, key);
+    if (!detail) return sendError(res, 404, "Album not found");
+    res.set("Cache-Control", "no-store, must-revalidate");
+    return sendOk(res, detail);
+  } catch (error) {
+    console.error(error);
+    return sendError(res, 500, String(error?.message || error));
+  }
+});
+
+app.get("/api/library-search", async (req, res) => {
+  try {
+    const accountId = accountIdFromReq(req);
+    const index = await getFilteredIndexForAccount(accountId);
+    res.set("Cache-Control", "no-store, must-revalidate");
+    return sendOk(res, searchLibraryIndex(index, req.query.q));
+  } catch (error) {
+    console.error(error);
+    return sendError(res, 500, String(error?.message || error));
+  }
+});
+
+app.post("/api/library/tracks/resolve", async (req, res) => {
+  try {
+    const accountId = accountIdFromReq(req);
+    const index = await getFilteredIndexForAccount(accountId);
+    const rels = Array.isArray(req.body?.relPaths)
+      ? req.body.relPaths.map((item) => String(item || "")).filter(Boolean)
+      : [];
+    const wanted = new Set(rels);
+    res.set("Cache-Control", "no-store, must-revalidate");
+    return sendOk(res, { tracks: index.tracks.filter((track) => wanted.has(track.relPath)) });
+  } catch (error) {
+    console.error(error);
+    return sendError(res, 500, String(error?.message || error));
+  }
+});
+
 app.get("/api/catalog", async (req, res) => {
   try {
     const root = getMusicRoot();
     const index = await getLibraryIndex(root);
+    const summary = String(req.query.summary || "") === "1";
+    const artistId = String(req.query.artistId || "").trim();
     res.set("Cache-Control", "no-store, must-revalidate");
-    return sendOk(res, buildCatalogFromIndex(index));
+    return sendOk(res, buildCatalogFromIndex(index, { summary, artistId }));
   } catch (error) {
     console.error(error);
     return sendError(res, 500, String(error?.message || error));
@@ -1136,6 +1271,45 @@ app.get("/api/user-state", async (req, res) => {
     const state = await readUserState(getMusicRoot(), accountIdFromReq(req));
     return sendOk(res, state);
   } catch (error) {
+    return sendError(res, 500, String(error?.message || error));
+  }
+});
+
+app.patch("/api/user-state", async (req, res) => {
+  try {
+    const accId = accountIdFromReq(req);
+    const root = getMusicRoot();
+    const nested = req.body?.state ?? req.body?.patch;
+    let rawPatch = nested ?? req.body ?? {};
+    if (
+      nested == null &&
+      rawPatch &&
+      typeof rawPatch === "object" &&
+      !Array.isArray(rawPatch)
+    ) {
+      const { expectedRevision: _er, ...rest } = rawPatch;
+      void _er;
+      rawPatch = rest;
+    }
+    if (
+      rawPatch == null ||
+      typeof rawPatch !== "object" ||
+      Array.isArray(rawPatch)
+    ) {
+      return sendError(res, 400, "Invalid state patch: expected a JSON object");
+    }
+    const prevPeek = await readUserState(root, accId);
+    const state = await mergeAndWriteUserStatePatch(
+      root,
+      accId,
+      rawPatch,
+    );
+    for (const ev of diffUserStatePlaylistsAndSettings(prevPeek, state)) {
+      void actLog(req, ev);
+    }
+    return sendOk(res, state);
+  } catch (error) {
+    console.error(error);
     return sendError(res, 500, String(error?.message || error));
   }
 });
@@ -1878,7 +2052,10 @@ app.post("/api/fs/delete-audio-relpaths", async (req, res) => {
       deleted.push(rel.replaceAll(path.sep, "/"));
     }
     await invalidateLibraryIndexCache(root);
-    return sendOk(res, { deleted });
+    return sendOk(res, {
+      deleted,
+      affectedAlbums: [...new Set(deleted.map((rel) => albumFolderFromRelPath(rel)).filter(Boolean))],
+    });
   } catch (error) {
     return sendError(res, 500, String(error?.message || error));
   }
@@ -1924,6 +2101,7 @@ app.post("/api/fs/delete-album-folder", async (req, res) => {
     return sendOk(res, {
       deleted,
       deletedFolder: albumPath.replaceAll(path.sep, "/"),
+      affectedAlbums: [albumPath.replaceAll(path.sep, "/")],
     });
   } catch (error) {
     return sendError(res, 500, String(error?.message || error));
@@ -2001,7 +2179,13 @@ app.post("/api/artwork/apply", async (req, res) => {
       detail: path.basename(dest),
     });
     await invalidateLibraryIndexCache(root);
-    return sendOk(res, { saved: path.basename(dest), albumPath, abs: dest });
+    return sendOk(res, {
+      saved: path.basename(dest),
+      albumPath,
+      abs: dest,
+      coverRelPath: `${albumPath}/${path.basename(dest)}`.replaceAll(path.sep, "/"),
+      coverVersion: Date.now(),
+    });
   } catch (error) {
     return sendError(res, 500, String(error?.message || error));
   }
@@ -2076,7 +2260,23 @@ app.post("/api/album-info/save", async (req, res) => {
       detail: Object.keys(safe).join(", "),
     });
     await invalidateLibraryIndexCache(root);
-    return sendOk(res, { albumPath, meta });
+    return sendOk(res, {
+      albumPath,
+      meta,
+      album: {
+        relPath: albumPath,
+        name: meta?.title && String(meta.title).trim() ? String(meta.title).trim() : path.basename(albumPath),
+        title: meta?.title ?? null,
+        releaseDate: meta?.releaseDate ?? null,
+        label: meta?.label ?? null,
+        country: meta?.country ?? null,
+        musicbrainzReleaseId: meta?.musicbrainzReleaseId ?? null,
+        expectedTrackCount:
+          typeof meta?.expectedTrackCount === "number" ? meta.expectedTrackCount : null,
+        expectedTracks: Array.isArray(meta?.expectedTracks) ? meta.expectedTracks : null,
+        hasAlbumMeta: true,
+      },
+    });
   } catch (error) {
     return sendError(res, 500, String(error?.message || error));
   }
@@ -2233,7 +2433,23 @@ app.post("/api/track-info/save", async (req, res) => {
       }`,
     });
     await invalidateLibraryIndexCache(root);
-    return res.json({ ok: true, relPath, meta: { ...meta, moods } });
+    const title =
+      meta?.title && String(meta.title).trim()
+        ? String(meta.title).trim()
+        : patch?.title && String(patch.title).trim()
+          ? String(patch.title).trim()
+          : null;
+    return res.json({
+      ok: true,
+      relPath,
+      meta: { ...meta, moods },
+      track: {
+        relPath,
+        ...(title ? { title } : {}),
+        meta: { ...meta, moods },
+      },
+      album: { relPath: albumRel },
+    });
   } catch (error) {
     return sendError(res, 500, String(error?.message || error));
   }

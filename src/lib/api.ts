@@ -1,10 +1,16 @@
 import type {
   DashboardPayload,
   LibraryCatalogResponse,
+  LibraryAlbumDetail,
+  LibraryArtistDetail,
+  LibraryEntityDelta,
   LibraryIndex,
+  LibraryOverview,
   LibraryResponse,
+  LibrarySearchResult,
   LibrarySelectionV1,
   UserSettings,
+  UserStatePatch,
   UserStateV1,
 } from "../types"
 
@@ -172,13 +178,19 @@ async function ensureSelectedAccountId(): Promise<string | null> {
   return accountBootstrapPromise
 }
 
-export function mediaUrl(relPath: string) {
+export function mediaUrl(relPath: string, baseUrl?: string | null) {
   const path = `/media/${relPath
     .split("/")
     .map((segment) => encodeURIComponent(segment))
     .join("/")}`
   const id = getSelectedAccountId()
-  return id ? `${path}?${new URLSearchParams({ accountId: id })}` : path
+  const withAccount = id ? `${path}?${new URLSearchParams({ accountId: id })}` : path
+  if (!baseUrl) return withAccount
+  try {
+    return new URL(withAccount, baseUrl).href
+  } catch {
+    return withAccount
+  }
 }
 
 export function coverUrlForTrackRelPath(relPath: string) {
@@ -201,6 +213,44 @@ export async function fetchLibraryIndex(): Promise<LibraryIndex> {
   return unwrap<LibraryIndex>(response)
 }
 
+export async function fetchLibraryOverview(): Promise<LibraryOverview> {
+  await ensureSelectedAccountId()
+  const response = await apiFetch("/api/library-overview", { cache: "no-store" })
+  return unwrap<LibraryOverview>(response)
+}
+
+export async function fetchLibraryArtistDetail(artistId: string): Promise<LibraryArtistDetail> {
+  await ensureSelectedAccountId()
+  const response = await apiFetch(
+    `/api/library-artists/${encodeURIComponent(artistId)}`,
+    { cache: "no-store" },
+  )
+  return unwrap<LibraryArtistDetail>(response)
+}
+
+export async function fetchLibraryAlbumDetail(relPath: string): Promise<LibraryAlbumDetail> {
+  await ensureSelectedAccountId()
+  const response = await apiFetch("/api/library-albums", { cache: "no-store" }, { relPath })
+  return unwrap<LibraryAlbumDetail>(response)
+}
+
+export async function searchLibrary(q: string): Promise<LibrarySearchResult> {
+  await ensureSelectedAccountId()
+  const response = await apiFetch("/api/library-search", { cache: "no-store" }, { q })
+  return unwrap<LibrarySearchResult>(response)
+}
+
+export async function resolveLibraryTracks(relPaths: string[]): Promise<{ tracks: LibraryIndex["tracks"] }> {
+  await ensureSelectedAccountId()
+  const response = await apiFetch("/api/library/tracks/resolve", {
+    method: "POST",
+    cache: "no-store",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ relPaths }),
+  })
+  return unwrap<{ tracks: LibraryIndex["tracks"] }>(response)
+}
+
 export async function fetchLibraryIndexForAccount(accountId: string): Promise<LibraryIndex> {
   const response = await apiFetch(
     `/api/accounts/${encodeURIComponent(accountId)}/library-index`,
@@ -209,9 +259,12 @@ export async function fetchLibraryIndexForAccount(accountId: string): Promise<Li
   return unwrap<LibraryIndex>(response)
 }
 
-export async function fetchLibraryCatalog(): Promise<LibraryCatalogResponse> {
+export async function fetchLibraryCatalog(opts: { summary?: boolean; artistId?: string } = {}): Promise<LibraryCatalogResponse> {
   await ensureSelectedAccountId()
-  const response = await apiFetch("/api/catalog", { cache: "no-store" })
+  const query: Record<string, string> = {}
+  if (opts.summary) query.summary = "1"
+  if (opts.artistId) query.artistId = opts.artistId
+  const response = await apiFetch("/api/catalog", { cache: "no-store" }, query)
   return unwrap<LibraryCatalogResponse>(response)
 }
 
@@ -264,6 +317,16 @@ export async function patchUserSettings(
     method: "PATCH",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ expectedRevision, settings: patch }),
+  })
+  return unwrapUserStateMutation(response)
+}
+
+export async function patchUserState(patch: UserStatePatch): Promise<UserStateV1> {
+  await ensureSelectedAccountId()
+  const response = await apiFetch("/api/user-state", {
+    method: "PATCH",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ state: patch }),
   })
   return unwrapUserStateMutation(response)
 }
@@ -797,24 +860,24 @@ export async function clearDownloadDestAudioFiles(
 
 export async function deleteAudioRelPaths(
   relPaths: string[],
-): Promise<{ deleted: string[] }> {
+): Promise<{ deleted: string[]; affectedAlbums?: string[] }> {
   const response = await apiFetch("/api/fs/delete-audio-relpaths", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ relPaths }),
   })
-  return unwrap<{ deleted: string[] }>(response)
+  return unwrap<{ deleted: string[]; affectedAlbums?: string[] }>(response)
 }
 
 export async function deleteAlbumFolder(
   albumPath: string,
-): Promise<{ deleted: string[]; deletedFolder: string }> {
+): Promise<{ deleted: string[]; deletedFolder: string; affectedAlbums?: string[] }> {
   const response = await apiFetch("/api/fs/delete-album-folder", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ albumPath }),
   })
-  return unwrap<{ deleted: string[]; deletedFolder: string }>(response)
+  return unwrap<{ deleted: string[]; deletedFolder: string; affectedAlbums?: string[] }>(response)
 }
 
 export type ArtworkHit = {
@@ -845,13 +908,13 @@ export async function searchArtwork(
 export async function applyArtwork(
   albumPath: string,
   imageUrl: string,
-): Promise<void> {
+): Promise<LibraryEntityDelta & { saved: string; abs?: string }> {
   const response = await apiFetch("/api/artwork/apply", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ albumPath, imageUrl }),
   })
-  await unwrap<{ saved: string }>(response)
+  return unwrap<LibraryEntityDelta & { saved: string; abs?: string }>(response)
 }
 
 export async function createMusicSubdir(
@@ -924,13 +987,13 @@ export async function fetchAlbumInfo(
 export async function saveAlbumInfoManual(
   albumPath: string,
   patch: AlbumMetaSavePatch,
-): Promise<{ albumPath: string; meta: Record<string, unknown> }> {
+): Promise<{ albumPath: string; meta: Record<string, unknown>; album?: LibraryEntityDelta["album"] }> {
   const response = await apiFetch("/api/album-info/save", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ albumPath, patch }),
   })
-  const data = await unwrap<{ albumPath: string; meta: Record<string, unknown> }>(
+  const data = await unwrap<{ albumPath: string; meta: Record<string, unknown>; album?: LibraryEntityDelta["album"] }>(
     response,
   )
   return data
@@ -974,14 +1037,14 @@ export type TrackMetaSavePatch = {
 export async function saveTrackInfoManual(
   relPath: string,
   patch: TrackMetaSavePatch,
-): Promise<{ ok: true; relPath: string; meta: Record<string, unknown> }> {
+): Promise<{ ok: true; relPath: string; meta: Record<string, unknown>; track?: LibraryEntityDelta["track"]; album?: LibraryEntityDelta["album"] }> {
   const response = await apiFetch("/api/track-info/save", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ relPath, patch }),
   })
   const json = (await response.json()) as
-    | { ok: true; relPath: string; meta: Record<string, unknown> }
+    | { ok: true; relPath: string; meta: Record<string, unknown>; track?: LibraryEntityDelta["track"]; album?: LibraryEntityDelta["album"] }
     | { error?: string }
   if (!response.ok)
     throw new Error(
@@ -989,7 +1052,7 @@ export async function saveTrackInfoManual(
         ? json.error || "Failed to save track metadata"
         : "Failed to save track metadata",
     )
-  return json as { ok: true; relPath: string; meta: Record<string, unknown> }
+  return json as { ok: true; relPath: string; meta: Record<string, unknown>; track?: LibraryEntityDelta["track"]; album?: LibraryEntityDelta["album"] }
 }
 
 export async function pruneOrphanTrackMetaForAlbum(

@@ -8,16 +8,39 @@ export type GenreAutoAssignment = {
   /** Valore da passare a save `genre` (un solo genere canonico). */
   genreSerialized: string
   source: GenreAutoSource
+  support: number
+  total: number
+  confidence: number
 }
 
 type VoteRow = { key: string; label: string; n: number }
+
+function genreKey(label: string): string {
+  const raw = label
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .toLowerCase()
+    .replace(/&/g, " and ")
+    .replace(/\+/g, " and ")
+    .replace(/[^a-z0-9]+/g, " ")
+    .trim()
+    .replace(/\s+/g, " ")
+  if (!raw) return ""
+  if (raw === "rnb" || raw === "r n b" || raw === "r and b" || raw === "rhythm and blues")
+    return "r&b"
+  if (raw === "hiphop" || raw === "hip hop") return "hip hop"
+  if (raw === "drum n bass" || raw === "drum and bass" || raw === "dnb") return "drum and bass"
+  if (raw === "synth pop" || raw === "synthpop") return "synth pop"
+  return raw
+}
 
 function addGenreTokensToCounts(
   raw: string | null | undefined,
   into: Map<string, VoteRow>,
 ) {
   for (const g of parseTrackGenres(raw)) {
-    const key = g.toLowerCase()
+    const key = genreKey(g)
+    if (!key) continue
     const prev = into.get(key)
     if (prev) prev.n += 1
     else into.set(key, { key, label: g, n: 1 })
@@ -28,7 +51,8 @@ function buildGlobalGenreSupport(index: LibraryIndex): Map<string, number> {
   const m = new Map<string, number>()
   for (const t of index.tracks) {
     for (const g of parseTrackGenres(t.meta?.genre)) {
-      const k = g.toLowerCase()
+      const k = genreKey(g)
+      if (!k) continue
       m.set(k, (m.get(k) ?? 0) + 1)
     }
   }
@@ -57,6 +81,34 @@ function pickWinner(
       best = v
   }
   return best
+}
+
+function shouldTrustWinner(source: GenreAutoSource, winner: VoteRow, totalTagged: number): boolean {
+  if (totalTagged <= 0) return false
+  const confidence = winner.n / totalTagged
+  if (source === "album") {
+    return confidence === 1 || winner.n >= 2 || confidence >= 0.67
+  }
+  return confidence === 1 || (winner.n >= 2 && confidence >= 0.6)
+}
+
+function assignmentForTrack(
+  t: LibraryTrackIndex,
+  winner: VoteRow,
+  source: GenreAutoSource,
+  totalTagged: number,
+): GenreAutoAssignment | null {
+  const genreSerialized = serializeTrackGenres([winner.label])
+  if (!genreSerialized) return null
+  const confidence = totalTagged > 0 ? winner.n / totalTagged : 0
+  return {
+    relPath: t.relPath,
+    genreSerialized,
+    source,
+    support: winner.n,
+    total: totalTagged,
+    confidence,
+  }
 }
 
 export type GenreAutoScope = "missing" | "all"
@@ -95,16 +147,13 @@ export function computeGenreAutoAssignments(
     for (const t of tagged) addGenreTokensToCounts(t.meta?.genre, counts)
     const winner = pickWinner(counts, global)
     if (!winner) continue
-    const genreSerialized = serializeTrackGenres([winner.label])
-    if (!genreSerialized) continue
+    if (!shouldTrustWinner("album", winner, tagged.length)) continue
     const targets = scope === "all" ? tracks : empty
     if (!targets.length) continue
     for (const t of targets) {
-      out.push({
-        relPath: t.relPath,
-        genreSerialized,
-        source: "album",
-      })
+      const row = assignmentForTrack(t, winner, "album", tagged.length)
+      if (!row) continue
+      out.push(row)
       albumAssigned.add(t.relPath)
     }
   }
@@ -133,14 +182,10 @@ export function computeGenreAutoAssignments(
     for (const t of tagged) addGenreTokensToCounts(t.meta?.genre, counts)
     const winner = pickWinner(counts, global)
     if (!winner) continue
-    const genreSerialized = serializeTrackGenres([winner.label])
-    if (!genreSerialized) continue
+    if (!shouldTrustWinner("artist", winner, tagged.length)) continue
     for (const t of targets) {
-      out.push({
-        relPath: t.relPath,
-        genreSerialized,
-        source: "artist",
-      })
+      const row = assignmentForTrack(t, winner, "artist", tagged.length)
+      if (row) out.push(row)
     }
   }
 

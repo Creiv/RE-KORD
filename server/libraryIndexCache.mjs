@@ -2,6 +2,7 @@ import fs from "fs/promises";
 import { existsSync } from "fs";
 import path from "path";
 import { buildLibraryIndex } from "./musicLibrary.mjs";
+import { atomicWriteFileUtf8 } from "./kordDataStore.mjs";
 
 const CACHE_FILENAME = "library-index.v1.cache.json";
 const SCHEMA_VERSION = 1;
@@ -59,7 +60,6 @@ export async function writeLibraryIndexCache(musicRoot, index) {
     const dir = path.join(musicRoot, ".kord");
     await fs.mkdir(dir, { recursive: true });
     const p = cacheFilePath(musicRoot);
-    const tmp = `${p}.${process.pid}.${Date.now()}.tmp`;
     const payload = JSON.stringify(
       {
         schemaVersion: SCHEMA_VERSION,
@@ -69,8 +69,7 @@ export async function writeLibraryIndexCache(musicRoot, index) {
       null,
       0,
     );
-    await fs.writeFile(tmp, payload, "utf8");
-    await fs.rename(tmp, p);
+    await atomicWriteFileUtf8(p, payload);
   } catch (e) {
     console.warn("[kord] library index cache write failed:", e?.message || e);
   }

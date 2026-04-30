@@ -61,16 +61,70 @@ export async function readJsonFile(fp) {
   }
 }
 
+const writeChains = new Map()
+
+function sleep(ms) {
+  return new Promise((resolve) => setTimeout(resolve, ms))
+}
+
+function isRetryableAtomicWriteError(error) {
+  const code = String(error?.code || "")
+  return code === "EPERM" || code === "EBUSY" || code === "ENOTEMPTY" || code === "EACCES"
+}
+
+async function cleanupTmpFile(tmp) {
+  try {
+    await fsp.unlink(tmp)
+  } catch {
+    /* ignore */
+  }
+}
+
 /**
- * Scrittura atomica: file temp nella stessa directory poi rename.
+ * Scrittura atomica e serializzata per target: file temp nella stessa directory poi rename.
+ *
+ * Su Windows / cartelle sincronizzate / antivirus il rename può fallire
+ * temporaneamente con EPERM o EBUSY anche quando il percorso è valido. Ritentare
+ * evita di perdere salvataggi utente per lock brevi sul file JSON.
  */
 export async function atomicWriteFileUtf8(targetPath, contents) {
-  const dir = path.dirname(targetPath)
-  await fsp.mkdir(dir, { recursive: true })
-  const base = path.basename(targetPath)
-  const tmp = path.join(dir, `.${base}.${process.pid}.${Date.now()}.tmp`)
-  await fsp.writeFile(tmp, contents, "utf8")
-  await fsp.rename(tmp, targetPath)
+  const key = path.resolve(targetPath)
+  const prev = writeChains.get(key) ?? Promise.resolve()
+  const next = prev
+    .catch(() => {})
+    .then(async () => {
+      const dir = path.dirname(targetPath)
+      await fsp.mkdir(dir, { recursive: true })
+      const base = path.basename(targetPath)
+      let lastError
+      for (let attempt = 0; attempt < 8; attempt += 1) {
+        const tmp = path.join(
+          dir,
+          `.${base}.${process.pid}.${Date.now()}.${attempt}.tmp`,
+        )
+        try {
+          await fsp.writeFile(tmp, contents, "utf8")
+          await fsp.rename(tmp, targetPath)
+          return
+        } catch (error) {
+          lastError = error
+          await cleanupTmpFile(tmp)
+          if (!isRetryableAtomicWriteError(error) || attempt === 7) break
+          await sleep(35 + attempt * 55)
+        }
+      }
+      const msg = lastError?.message || String(lastError || "unknown error")
+      const err = new Error(`Failed to persist JSON file ${targetPath}: ${msg}`)
+      err.code = lastError?.code
+      err.cause = lastError
+      throw err
+    })
+  writeChains.set(key, next)
+  try {
+    return await next
+  } finally {
+    if (writeChains.get(key) === next) writeChains.delete(key)
+  }
 }
 
 export async function ensureKordSchemaFile(libraryRoot) {

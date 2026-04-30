@@ -6,6 +6,7 @@ import { describe, expect, it } from "vitest"
 import { kordAccountUserStatePath } from "./kordDataStore.mjs"
 import {
   mergeUserStateForPut,
+  mergeAndWriteUserStatePatch,
   readUserState,
   stripSettingsFromUserStatePatch,
   writeUserState,
@@ -85,5 +86,28 @@ describe("userState", () => {
     const merged = mergeUserStateForPut(prev, stripSettingsFromUserStatePatch(raw))
     expect(merged.settings.theme).toBe("sunset")
     expect(merged.favorites).toEqual([])
+  })
+
+  it("PATCH server-side mergea su stato fresco senza expectedRevision", async () => {
+    const musicRoot = await fs.mkdtemp(path.join(os.tmpdir(), "kord-user-state-patch-"))
+    await writeUserState(
+      musicRoot,
+      {
+        ...defaultUserState(),
+        favorites: ["old.mp3"],
+        settings: { ...defaultUserState().settings, theme: "sunset" },
+      },
+      "patchacct",
+    )
+
+    const saved = await mergeAndWriteUserStatePatch(musicRoot, "patchacct", {
+      favorites: ["new.mp3"],
+      settings: { locale: "it" },
+    })
+
+    expect(saved.favorites).toEqual(["new.mp3"])
+    expect(saved.settings.theme).toBe("sunset")
+    expect(saved.settings.locale).toBe("it")
+    expect(saved.revision).toBe(3)
   })
 })

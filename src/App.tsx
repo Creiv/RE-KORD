@@ -122,6 +122,7 @@ import {
   type EnrichedTrack,
   type LibraryAlbumIndex,
   type LibraryArtistIndex,
+  type LibraryEntityDelta,
   type LibraryIndex,
   type LibraryResponse,
   type LibraryTrackIndex,
@@ -305,6 +306,124 @@ function clientLegacyLibrary(
   };
 }
 
+function recomputeLibraryStats(index: LibraryIndex): LibraryIndex {
+  const stats = {
+    artistCount: index.artists.length,
+    albumCount: index.albums.length,
+    trackCount: index.tracks.length,
+    favoriteCapableCount: index.tracks.length,
+    albumsWithoutCover: index.albums.filter((album) => !album.loose && !album.hasCover).length,
+    albumsWithoutMeta: index.albums.filter((album) => !album.loose && !album.hasAlbumMeta).length,
+    tracksWithoutMeta: index.tracks.filter(
+      (track) => !parseTrackGenres(track.meta?.genre).length && !track.meta?.releaseDate
+    ).length,
+    looseAlbumCount: index.albums.filter((album) => album.loose).length,
+  };
+  return { ...index, stats };
+}
+
+function applyLibraryDeltaToIndex(
+  prev: LibraryIndex | null,
+  delta: LibraryEntityDelta
+): LibraryIndex | null {
+  if (!prev) return prev;
+  let next = prev;
+  if (delta.deleted?.length) {
+    const deleted = new Set(delta.deleted);
+    const deletedFolder = delta.deletedFolder || "";
+    const albums = next.albums
+      .filter((album) => album.relPath !== deletedFolder)
+      .map((album) => ({
+        ...album,
+        tracks: album.tracks.filter((rel) => !deleted.has(rel)),
+        trackCount: album.tracks.filter((rel) => !deleted.has(rel)).length,
+      }))
+      .filter((album) => album.trackCount > 0);
+    const albumIds = new Set(albums.map((album) => album.id));
+    const artists = next.artists
+      .map((artist) => ({
+        ...artist,
+        albums: artist.albums.filter((albumId) => albumIds.has(albumId)),
+      }))
+      .filter((artist) => artist.albums.length > 0)
+      .map((artist) => {
+        const artistAlbums = albums.filter((album) => artist.albums.includes(album.id));
+        return {
+          ...artist,
+          albumCount: artistAlbums.length,
+          trackCount: artistAlbums.reduce((sum, album) => sum + album.trackCount, 0),
+          coverRelPath: artistAlbums.find((album) => album.coverRelPath)?.coverRelPath || null,
+        };
+      });
+    next = recomputeLibraryStats({
+      ...next,
+      artists,
+      albums,
+      tracks: next.tracks.filter((track) => !deleted.has(track.relPath)),
+    });
+  }
+  if (delta.albumPath && delta.coverRelPath) {
+    const coverRelPath = delta.coverRelPath;
+    const now = Date.now();
+    const albumPrefix = `${delta.albumPath}/`;
+    next = {
+      ...next,
+      albums: next.albums.map((album) =>
+        album.relPath === delta.albumPath
+          ? { ...album, coverRelPath, hasCover: true, updatedAt: now }
+          : album
+      ),
+      tracks: next.tracks.map((track) =>
+        track.relPath.startsWith(albumPrefix) ? { ...track, updatedAt: now } : track
+      ),
+      artists: next.artists.map((artist) => {
+        const ownsAlbum = next.albums.some(
+          (album) => album.relPath === delta.albumPath && album.artistId === artist.id
+        );
+        return ownsAlbum ? { ...artist, coverRelPath: coverRelPath || artist.coverRelPath } : artist;
+      }),
+    };
+  }
+  if (delta.album?.relPath) {
+    const patch = delta.album;
+    next = {
+      ...next,
+      albums: next.albums.map((album) =>
+        album.relPath === patch.relPath
+          ? {
+              ...album,
+              ...patch,
+              name: patch.name || patch.title || album.name,
+              hasAlbumMeta: patch.hasAlbumMeta ?? album.hasAlbumMeta,
+            }
+          : album
+      ),
+      tracks: next.tracks.map((track) =>
+        track.albumMeta && track.albumId === next.albums.find((album) => album.relPath === patch.relPath)?.id
+          ? { ...track, album: patch.name || patch.title || track.album }
+          : track
+      ),
+    };
+  }
+  if (delta.track?.relPath) {
+    const patch = delta.track;
+    next = {
+      ...next,
+      tracks: next.tracks.map((track) =>
+        track.relPath === patch.relPath
+          ? {
+              ...track,
+              ...patch,
+              title: patch.title || track.title,
+              meta: { ...(track.meta || {}), ...(patch.meta || {}) } as TrackMeta,
+            }
+          : track
+      ),
+    };
+  }
+  return recomputeLibraryStats(next);
+}
+
 function enrichedFromPlaylistItem(
   tr: UserPlaylist["tracks"][number],
   byPath: Map<string, EnrichedTrack> | null
@@ -394,7 +513,13 @@ function TrackRowArt({ relPath }: { relPath: string }) {
   );
 }
 
-function PlayerBarTrackArtInner({ relPath }: { relPath: string }) {
+function PlayerBarTrackArtInner({
+  relPath,
+  version,
+}: {
+  relPath: string;
+  version?: number | null;
+}) {
   const [failed, setFailed] = useState(false);
   if (failed) {
     return (
@@ -403,19 +528,31 @@ function PlayerBarTrackArtInner({ relPath }: { relPath: string }) {
       </div>
     );
   }
+  const base = coverUrlForTrackRelPath(relPath);
+  const src =
+    version && Number.isFinite(version)
+      ? `${base}${base.includes("?") ? "&" : "?"}v=${Math.floor(version)}`
+      : base;
   return (
     <CoverImg
       priority
       className="player-bar2__art"
-      src={coverUrlForTrackRelPath(relPath)}
+      src={src}
       alt=""
       onError={() => setFailed(true)}
     />
   );
 }
 
-function PlayerBarTrackArt({ relPath }: { relPath: string }) {
-  return <PlayerBarTrackArtInner key={relPath} relPath={relPath} />;
+function PlayerBarTrackArt({ relPath, version }: { relPath: string; version?: number | null }) {
+  const cacheKey = version && Number.isFinite(version) ? Math.floor(version) : null;
+  return (
+    <PlayerBarTrackArtInner
+      key={`${relPath}:${cacheKey ?? ""}`}
+      relPath={relPath}
+      version={version}
+    />
+  );
 }
 
 function TrackListRow({
@@ -600,10 +737,14 @@ function AlbumCover({
   compact?: boolean;
 }) {
   if (album.coverRelPath) {
+    const base = coverUrlForAlbumRelPath(album.relPath);
+    const src = album.updatedAt
+      ? `${base}${base.includes("?") ? "&" : "?"}v=${Math.floor(album.updatedAt)}`
+      : base;
     return (
       <CoverImg
         className={`album-cover ${compact ? "is-compact" : ""}`}
-        src={coverUrlForAlbumRelPath(album.relPath)}
+        src={src}
         alt=""
       />
     );
@@ -1648,7 +1789,7 @@ function ListenView({
     listenQueueStart,
     listenQueueStart + 6
   );
-  const recentTracks = user.state.recent.slice(0, 5);
+  const recentTracks = user.state.recent.slice(0, 6);
   return (
     <div className="view-stack">
       <section className="listen-stage">
@@ -4591,6 +4732,7 @@ function PlayerDock({
   const [castState, setCastState] = useState<
     "connecting" | "connected" | "disconnected"
   >("disconnected");
+  const [castBaseUrl, setCastBaseUrl] = useState<string | null>(null);
   const albumShuffleExcluded = Boolean(
     cur && isTrackAlbumShuffleExcluded(cur, exAlbums)
   );
@@ -4612,6 +4754,20 @@ function PlayerDock({
 
   const castEffectGenRef = useRef(0);
   const castRemoteCleanupRef = useRef<(() => void) | null>(null);
+
+  useEffect(() => {
+    let active = true;
+    fetchConfig()
+      .then((cfg) => {
+        if (active) setCastBaseUrl(cfg.lanAccessUrl || null);
+      })
+      .catch(() => {
+        if (active) setCastBaseUrl(null);
+      });
+    return () => {
+      active = false;
+    };
+  }, []);
 
   useEffect(() => {
     const myGen = ++castEffectGenRef.current;
@@ -4652,12 +4808,17 @@ function PlayerDock({
 
   const openCastPicker = async () => {
     const audio = p.audioRef.current as RemotePlaybackAudio | null;
+    if (!audio) {
+      window.alert(t("player.castUnsupported"));
+      return;
+    }
     const remote = audio?.remote;
     if (!remote?.prompt) {
       window.alert(t("player.castUnsupported"));
       return;
     }
     try {
+      if (cur) await p.prepareRemotePlayback(castBaseUrl);
       await remote.prompt();
       setCastState(remote.state || "disconnected");
     } catch (error) {
@@ -4682,7 +4843,10 @@ function PlayerDock({
             <div className="player-bar2__track">
               <div className="player-bar2__art-hit">
                 {cur ? (
-                  <PlayerBarTrackArt relPath={cur.relPath} />
+                  <PlayerBarTrackArt
+                    relPath={cur.relPath}
+                    version={(cur as LibraryTrackIndex).updatedAt}
+                  />
                 ) : (
                   <div className="player-bar2__art fallback">
                     <UiMusicNote className="player-bar2__art-fallback-ic" />
@@ -4978,21 +5142,46 @@ function Shell() {
       .catch((err: unknown) => setError(String(err)));
   }, []);
 
-  const refreshAfterAlbumMetaSaved = refreshQuiet;
+  const applyLibraryDelta = useCallback(
+    (delta: LibraryEntityDelta, reconcile = true) => {
+      setIndex((prev) => applyLibraryDeltaToIndex(prev, delta));
+      if (reconcile) refreshQuiet();
+    },
+    [refreshQuiet]
+  );
 
-  const refreshAfterTrackMetaSaved = useCallback(() => {
-    return Promise.all([
-      fetchLibraryIndex(),
-      fetchDashboard(),
-      user.syncUserStateFromServer(),
-    ])
-      .then(([libraryData, dashboardData]) => {
-        setIndex(libraryData);
-        setDashboard(dashboardData);
-        setError(null);
-      })
-      .catch((err: unknown) => setError(String(err)));
-  }, [user.syncUserStateFromServer]);
+  const refreshAfterAlbumMetaSaved = useCallback(
+    (delta?: LibraryEntityDelta) => {
+      if (delta) {
+        applyLibraryDelta(delta);
+        return;
+      }
+      refreshQuiet();
+    },
+    [applyLibraryDelta, refreshQuiet]
+  );
+
+  const refreshAfterTrackMetaSaved = useCallback(
+    (delta?: LibraryEntityDelta) => {
+      if (delta) {
+        applyLibraryDelta(delta);
+        void user.syncUserStateFromServer();
+        return;
+      }
+      return Promise.all([
+        fetchLibraryIndex(),
+        fetchDashboard(),
+        user.syncUserStateFromServer(),
+      ])
+        .then(([libraryData, dashboardData]) => {
+          setIndex(libraryData);
+          setDashboard(dashboardData);
+          setError(null);
+        })
+        .catch((err: unknown) => setError(String(err)));
+    },
+    [applyLibraryDelta, user.syncUserStateFromServer]
+  );
 
   useEffect(() => {
     let debouncePlaybackSync: ReturnType<typeof setTimeout> | undefined;
@@ -5283,6 +5472,7 @@ function Shell() {
               library={legacyLibrary}
               libraryIndex={index}
               onRefreshLibrary={refresh}
+              onLibraryDelta={(delta) => applyLibraryDelta(delta)}
             />
           </div>
         );

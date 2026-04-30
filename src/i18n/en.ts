@@ -448,11 +448,11 @@ export const EN: Record<string, string> = {
   "tools.studioHeroTitle": "Library tools",
   "tools.studioPaneEyebrow": "Navigate",
   "tools.studioPaneAria": "Studio sections",
-  "tools.studioTabCatalog": "My library",
+  "tools.studioTabCatalog": "Discover",
   "tools.studioTabDownload": "Download",
   "tools.studioTabMeta": "Metadata",
   "tools.studioTabCovers": "Covers",
-  "tools.catalogTitle": "My library & catalog",
+  "tools.catalogTitle": "Discover",
   "tools.catalogDesc":
     "Add artists or albums from the server’s global library to your personal collection.",
   "tools.catalogReload": "Refresh list",
@@ -466,6 +466,7 @@ export const EN: Record<string, string> = {
   "tools.catalogRemoveAlbum": "Remove album",
   "tools.catalogTabArtists": "Artists",
   "tools.catalogTabAlbums": "Albums",
+  "tools.catalogBackArtists": "Artists",
   "tools.catalogViewAria": "Catalog view",
   "tools.catalogBrowseHint":
     "Bright cards appear in your library; dimmed items are on disk but not in your current library view. Accent border = selected for this account. Use Add / Remove to update your selection.",
