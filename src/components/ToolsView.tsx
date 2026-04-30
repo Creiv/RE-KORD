@@ -37,11 +37,11 @@ import type {
 import { fmtDate } from "../lib/metaFormat";
 import { albumFolderFromTrackRelPath } from "../lib/trackPaths";
 import type {
-  CatalogAlbumEntry,
   CatalogArtistEntry,
   LibArtist,
   LibTrack,
   LibraryCatalogResponse,
+  LibraryEntityDelta,
   LibraryIndex,
   LibraryResponse,
   LibrarySelectionV1,
@@ -64,6 +64,7 @@ import {
   type DlVideoMode,
 } from "../lib/youtubeUrl";
 import {
+  UiChevronLeft,
   UiChevronRight,
   UiDownload,
   UiGraphicEq,
@@ -76,6 +77,7 @@ type P = {
   library: LibraryResponse | null;
   libraryIndex: LibraryIndex | null;
   onRefreshLibrary: () => void;
+  onLibraryDelta?: (delta: LibraryEntityDelta) => void;
 };
 
 function sourceLabel(s: string | undefined): string {
@@ -164,6 +166,7 @@ function indexHasAlbum(index: LibraryIndex | null, relPath: string) {
 }
 
 function catalogArtistCoverRel(ar: CatalogArtistEntry): string | null {
+  if (ar.coverRelPath?.trim()) return ar.coverRelPath;
   const c = ar.relAlbums.find((x) => x.coverRelPath);
   if (c?.coverRelPath) return c.coverRelPath;
   return ar.relAlbums[0]?.relPath ?? null;
@@ -251,7 +254,7 @@ function DlDestUpIcon() {
   );
 }
 
-export function ToolsView({ library, libraryIndex, onRefreshLibrary }: P) {
+export function ToolsView({ library, libraryIndex, onRefreshLibrary, onLibraryDelta }: P) {
   const p = usePlayer();
   const { t, sortLocale } = useI18n();
   const {
@@ -355,9 +358,8 @@ export function ToolsView({ library, libraryIndex, onRefreshLibrary }: P) {
   const [catalogBusy, setCatalogBusy] = useState(false);
   const [catalogErr, setCatalogErr] = useState<string | null>(null);
   const [catalogMsg, setCatalogMsg] = useState<string | null>(null);
-  const [catalogBrowse, setCatalogBrowse] = useState<"artists" | "albums">(
-    "artists",
-  );
+  const [catalogArtistDetail, setCatalogArtistDetail] =
+    useState<CatalogArtistEntry | null>(null);
   const [artQuery, setArtQuery] = useState("");
   const [artRes, setArtRes] = useState<ArtworkHit[]>([]);
   const [newDirName, setNewDirName] = useState("");
@@ -630,7 +632,8 @@ export function ToolsView({ library, libraryIndex, onRefreshLibrary }: P) {
   const loadCatalogPane = useCallback(() => {
     setCatalogBusy(true);
     setCatalogErr(null);
-    Promise.all([fetchLibraryCatalog(), fetchMyLibrarySelection()])
+    setCatalogArtistDetail(null);
+    Promise.all([fetchLibraryCatalog({ summary: true }), fetchMyLibrarySelection()])
       .then(([cat, sel]) => {
         setCatalogData(cat);
         setMySelection(sel);
@@ -645,6 +648,29 @@ export function ToolsView({ library, libraryIndex, onRefreshLibrary }: P) {
       .finally(() => setCatalogBusy(false));
   }, [t]);
 
+  const openCatalogArtist = useCallback(
+    (artistId: string) => {
+      setCatalogBusy(true);
+      setCatalogErr(null);
+      fetchLibraryCatalog({ artistId })
+        .then((cat) => {
+          const detail =
+            cat.artists.find((artist) => artist.id === artistId) ??
+            catalogData?.artists.find((artist) => artist.id === artistId) ??
+            cat.artists[0] ??
+            null;
+          setCatalogArtistDetail(detail);
+        })
+        .catch((e) => {
+          setCatalogErr(
+            t("tools.catalogErr", { e: String((e as Error)?.message || e) }),
+          );
+        })
+        .finally(() => setCatalogBusy(false));
+    },
+    [catalogData?.artists, t],
+  );
+
   useEffect(() => {
     if (studioPane !== "catalog") return;
     loadCatalogPane();
@@ -652,9 +678,16 @@ export function ToolsView({ library, libraryIndex, onRefreshLibrary }: P) {
 
   const afterCatalogPatch = useCallback(() => {
     setCatalogMsg(t("tools.catalogUpdated"));
-    loadCatalogPane();
+    if (catalogArtistDetail) {
+      void fetchLibraryCatalog({ artistId: catalogArtistDetail.id })
+        .then((cat) => setCatalogArtistDetail(cat.artists[0] ?? null))
+        .catch(() => {});
+      void fetchMyLibrarySelection().then(setMySelection).catch(() => {});
+    } else {
+      loadCatalogPane();
+    }
     onRefreshLibrary();
-  }, [loadCatalogPane, onRefreshLibrary, t]);
+  }, [catalogArtistDetail, loadCatalogPane, onRefreshLibrary, t]);
 
   const addArtistCatalog = useCallback(
     (artistId: string) => {
@@ -734,31 +767,6 @@ export function ToolsView({ library, libraryIndex, onRefreshLibrary }: P) {
     },
     [afterCatalogPatch, t],
   );
-
-  const catalogAlbumsFlat = useMemo(() => {
-    if (!catalogData) return [];
-    const rows: (CatalogAlbumEntry & {
-      artistId: string;
-      artistName: string;
-    })[] = [];
-    for (const ar of catalogData.artists) {
-      for (const al of ar.relAlbums) {
-        rows.push({
-          ...al,
-          artistId: ar.id,
-          artistName: ar.name,
-        });
-      }
-    }
-    rows.sort((a, b) => {
-      const c = a.artistName.localeCompare(b.artistName, sortLocale, {
-        numeric: true,
-      });
-      if (c !== 0) return c;
-      return a.name.localeCompare(b.name, sortLocale, { numeric: true });
-    });
-    return rows;
-  }, [catalogData, sortLocale]);
 
   const useCurrentForArt = () => {
     if (p.current) {
@@ -1062,6 +1070,9 @@ export function ToolsView({ library, libraryIndex, onRefreshLibrary }: P) {
       t("tools.genreAutoLine", {
         path: row.relPath,
         genre: row.genreSerialized,
+        support: String(row.support),
+        total: String(row.total),
+        confidence: String(Math.round(row.confidence * 100)),
         source:
           row.source === "album"
             ? t("tools.genreAutoSourceAlbum")
@@ -1601,9 +1612,10 @@ export function ToolsView({ library, libraryIndex, onRefreshLibrary }: P) {
     }
     setArtBusy(true);
     applyArtwork(albumForCover, imageUrl)
-      .then(() => {
+      .then((delta) => {
         setLog((x) => x + t("tools.coverSaved", { path: albumForCover }));
-        onRefreshLibrary();
+        if (onLibraryDelta) onLibraryDelta(delta);
+        else onRefreshLibrary();
       })
       .catch((e) => setLog((x) => x + t("tools.coverErr", { e })))
       .finally(() => setArtBusy(false));
@@ -1718,35 +1730,107 @@ export function ToolsView({ library, libraryIndex, onRefreshLibrary }: P) {
                 </p>
                 {catalogData ? (
                   <>
-                    <div
-                      className="studio-catalog-view-toggle section-nav-tabs"
-                      role="tablist"
-                      aria-label={t("tools.catalogViewAria")}
-                    >
-                      <button
-                        type="button"
-                        role="tab"
-                        aria-selected={catalogBrowse === "artists"}
-                        className={`section-nav-tab${
-                          catalogBrowse === "artists" ? " is-on" : ""
-                        }`}
-                        onClick={() => setCatalogBrowse("artists")}
-                      >
-                        {t("tools.catalogTabArtists")}
-                      </button>
-                      <button
-                        type="button"
-                        role="tab"
-                        aria-selected={catalogBrowse === "albums"}
-                        className={`section-nav-tab${
-                          catalogBrowse === "albums" ? " is-on" : ""
-                        }`}
-                        onClick={() => setCatalogBrowse("albums")}
-                      >
-                        {t("tools.catalogTabAlbums")}
-                      </button>
-                    </div>
-                    {catalogBrowse === "artists" ? (
+                    {catalogArtistDetail ? (
+                      <>
+                        <div className="section-head section-head--page-toolbar">
+                          <div className="page-toolbar__lead page-toolbar__lead--backrow">
+                            <button
+                              type="button"
+                              className="page-toolbar-back-ic"
+                              onClick={() => setCatalogArtistDetail(null)}
+                              aria-label={t("tools.catalogBackArtists")}
+                            >
+                              <UiChevronLeft
+                                aria-hidden
+                                className="page-toolbar-back-ic__ic"
+                              />
+                            </button>
+                            <div className="page-toolbar__textcol">
+                              <p className="eyebrow">{t("tools.catalogTabAlbums")}</p>
+                              <h2>{catalogArtistDetail.name}</h2>
+                            </div>
+                          </div>
+                        </div>
+                        <div className="studio-catalog-grid">
+                          {catalogArtistDetail.relAlbums.map((al) => {
+                            const inIndex = indexHasAlbum(
+                              libraryIndex,
+                              al.relPath,
+                            );
+                            const sel = selectionHasAlbum(
+                              mySelection,
+                              al.relPath,
+                              catalogArtistDetail.id,
+                            );
+                            const coverPath =
+                              al.coverRelPath?.trim() || al.relPath;
+                            const trU =
+                              al.trackCount === 1
+                                ? t("library.unitTrack")
+                                : t("library.unitTrackPlural");
+                            return (
+                              <div
+                                key={al.relPath}
+                                className={`studio-catalog-card album-card${
+                                  inIndex ? "" : " studio-catalog-card--dim"
+                                }${sel ? " studio-catalog-card--selected" : ""}`}
+                              >
+                                <div className="studio-catalog-card__media" aria-hidden>
+                                  {coverPath ? (
+                                    <CoverImg
+                                      className="artist-card__cover studio-catalog-card__img"
+                                      src={coverUrlForAlbumRelPath(coverPath)}
+                                      alt=""
+                                    />
+                                  ) : (
+                                    <div className="artist-card__badge">
+                                      {initialsCatalog(al.name)}
+                                    </div>
+                                  )}
+                                </div>
+                                <div className="studio-catalog-card__body">
+                                  <div className="album-card__title">
+                                    {al.name}
+                                  </div>
+                                  <div className="album-card__meta">
+                                    {catalogArtistDetail.name} · {al.trackCount} {trU}
+                                  </div>
+                                  <div className="studio-catalog-card__actions">
+                                    {sel ? (
+                                      <button
+                                        type="button"
+                                        className="btn danger sm"
+                                        disabled={
+                                          catalogBusy || mySelection?.includeAll
+                                        }
+                                        onClick={() =>
+                                          removeAlbumCatalog(al.relPath)
+                                        }
+                                      >
+                                        {t("tools.catalogRemoveLibrary")}
+                                      </button>
+                                    ) : (
+                                      <button
+                                        type="button"
+                                        className="btn sm"
+                                        disabled={
+                                          catalogBusy || mySelection?.includeAll
+                                        }
+                                        onClick={() =>
+                                          addAlbumCatalog(al.relPath)
+                                        }
+                                      >
+                                        {t("tools.catalogAddLibrary")}
+                                      </button>
+                                    )}
+                                  </div>
+                                </div>
+                              </div>
+                            );
+                          })}
+                        </div>
+                      </>
+                    ) : (
                       <div className="studio-catalog-grid">
                         {catalogData.artists.map((ar) => {
                           const coverRel = catalogArtistCoverRel(ar);
@@ -1763,9 +1847,18 @@ export function ToolsView({ library, libraryIndex, onRefreshLibrary }: P) {
                           return (
                             <div
                               key={ar.id}
+                              role="button"
+                              tabIndex={0}
                               className={`studio-catalog-card artist-card${
                                 inIndex ? "" : " studio-catalog-card--dim"
                               }${sel ? " studio-catalog-card--selected" : ""}`}
+                              onClick={() => openCatalogArtist(ar.id)}
+                              onKeyDown={(event) => {
+                                if (event.key === "Enter" || event.key === " ") {
+                                  event.preventDefault();
+                                  openCatalogArtist(ar.id);
+                                }
+                              }}
                             >
                               <div className="studio-catalog-card__media" aria-hidden>
                                 {coverRel ? (
@@ -1795,7 +1888,10 @@ export function ToolsView({ library, libraryIndex, onRefreshLibrary }: P) {
                                       disabled={
                                         catalogBusy || mySelection?.includeAll
                                       }
-                                      onClick={() => removeArtistCatalog(ar.id)}
+                                      onClick={(event) => {
+                                        event.stopPropagation();
+                                        removeArtistCatalog(ar.id);
+                                      }}
                                     >
                                       {t("tools.catalogRemoveLibrary")}
                                     </button>
@@ -1806,86 +1902,10 @@ export function ToolsView({ library, libraryIndex, onRefreshLibrary }: P) {
                                       disabled={
                                         catalogBusy || mySelection?.includeAll
                                       }
-                                      onClick={() => addArtistCatalog(ar.id)}
-                                    >
-                                      {t("tools.catalogAddLibrary")}
-                                    </button>
-                                  )}
-                                </div>
-                              </div>
-                            </div>
-                          );
-                        })}
-                      </div>
-                    ) : (
-                      <div className="studio-catalog-grid">
-                        {catalogAlbumsFlat.map((al) => {
-                          const inIndex = indexHasAlbum(
-                            libraryIndex,
-                            al.relPath,
-                          );
-                          const sel = selectionHasAlbum(
-                            mySelection,
-                            al.relPath,
-                            al.artistId,
-                          );
-                          const coverPath =
-                            al.coverRelPath?.trim() || al.relPath;
-                          const trU =
-                            al.trackCount === 1
-                              ? t("library.unitTrack")
-                              : t("library.unitTrackPlural");
-                          return (
-                            <div
-                              key={al.relPath}
-                              className={`studio-catalog-card album-card${
-                                inIndex ? "" : " studio-catalog-card--dim"
-                              }${sel ? " studio-catalog-card--selected" : ""}`}
-                            >
-                              <div className="studio-catalog-card__media" aria-hidden>
-                                {coverPath ? (
-                                  <CoverImg
-                                    className="artist-card__cover studio-catalog-card__img"
-                                    src={coverUrlForAlbumRelPath(coverPath)}
-                                    alt=""
-                                  />
-                                ) : (
-                                  <div className="artist-card__badge">
-                                    {initialsCatalog(al.name)}
-                                  </div>
-                                )}
-                              </div>
-                              <div className="studio-catalog-card__body">
-                                <div className="album-card__title">
-                                  {al.name}
-                                </div>
-                                <div className="album-card__meta">
-                                  {al.artistName} · {al.trackCount} {trU}
-                                </div>
-                                <div className="studio-catalog-card__actions">
-                                  {sel ? (
-                                    <button
-                                      type="button"
-                                      className="btn danger sm"
-                                      disabled={
-                                        catalogBusy || mySelection?.includeAll
-                                      }
-                                      onClick={() =>
-                                        removeAlbumCatalog(al.relPath)
-                                      }
-                                    >
-                                      {t("tools.catalogRemoveLibrary")}
-                                    </button>
-                                  ) : (
-                                    <button
-                                      type="button"
-                                      className="btn sm"
-                                      disabled={
-                                        catalogBusy || mySelection?.includeAll
-                                      }
-                                      onClick={() =>
-                                        addAlbumCatalog(al.relPath)
-                                      }
+                                      onClick={(event) => {
+                                        event.stopPropagation();
+                                        addArtistCatalog(ar.id);
+                                      }}
                                     >
                                       {t("tools.catalogAddLibrary")}
                                     </button>

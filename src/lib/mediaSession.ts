@@ -19,7 +19,13 @@ export function setMediaSessionMetadata(
     navigator.mediaSession.metadata = null
     return
   }
-  const cover = toAbsoluteUrl(coverUrlForTrackRelPath(track.relPath))
+  const version = (track as EnrichedTrack & { updatedAt?: number | null }).updatedAt
+  const baseCover = coverUrlForTrackRelPath(track.relPath)
+  const cover = toAbsoluteUrl(
+    version
+      ? `${baseCover}${baseCover.includes("?") ? "&" : "?"}v=${Math.floor(version)}`
+      : baseCover,
+  )
   navigator.mediaSession.metadata = new MediaMetadata({
     title: track.title,
     artist: track.artist,

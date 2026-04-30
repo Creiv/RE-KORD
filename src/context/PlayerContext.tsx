@@ -61,6 +61,7 @@ type Ctx = {
   toggleFavorite: (relPath: string) => void;
   isFavorite: (relPath: string) => boolean;
   resyncTracksFromIndex: (index: LibraryIndex) => void;
+  prepareRemotePlayback: (baseUrl: string | null) => Promise<void>;
 };
 
 const PlayerContext = createContext<Ctx | null>(null);
@@ -541,6 +542,33 @@ export function PlayerProvider({ children }: { children: React.ReactNode }) {
     setCurrent((c) => (c ? byPath.get(c.relPath) ?? c : c));
   }, []);
 
+  const prepareRemotePlayback = useCallback(
+    async (baseUrl: string | null) => {
+      if (!current || !baseUrl) return;
+      const audio = audioRef.current;
+      if (!audio) return;
+      const nextSrc = mediaUrl(current.relPath, baseUrl);
+      if (audio.src === nextSrc) return;
+      const wasPlaying = !audio.paused;
+      const at = Number.isFinite(audio.currentTime) ? audio.currentTime : 0;
+      audio.src = nextSrc;
+      audio.load();
+      try {
+        audio.currentTime = at;
+      } catch {
+        /* metadata may not be ready yet */
+      }
+      if (wasPlaying) {
+        try {
+          await audio.play();
+        } catch {
+          /* the Cast picker can still be opened by the caller */
+        }
+      }
+    },
+    [current],
+  );
+
   const next = useCallback(() => {
     if (!queue.length) return;
     const nextIndex = pickNextIndex(
@@ -710,6 +738,7 @@ export function PlayerProvider({ children }: { children: React.ReactNode }) {
       toggleFavorite: user.toggleFavorite,
       isFavorite: user.isFavorite,
       resyncTracksFromIndex,
+      prepareRemotePlayback,
     }),
     [
       addToQueue,
@@ -728,6 +757,7 @@ export function PlayerProvider({ children }: { children: React.ReactNode }) {
       play,
       playAlbum,
       playTrack,
+      prepareRemotePlayback,
       prev,
       queue,
       removeFromQueue,
@@ -748,7 +778,7 @@ export function PlayerProvider({ children }: { children: React.ReactNode }) {
   return (
     <PlayerContext.Provider value={value}>
       {children}
-      <audio ref={audioRef} hidden preload="metadata" />
+      <audio ref={audioRef} hidden preload="metadata" crossOrigin="anonymous" />
     </PlayerContext.Provider>
   );
 }

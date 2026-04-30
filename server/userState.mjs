@@ -204,6 +204,19 @@ export async function mergeAndWriteUserStateWithRevision(musicRoot, accountId, e
   return writeUserStatePersist(musicRoot, sanitized, accountId)
 }
 
+export async function mergeAndWriteUserStatePatch(musicRoot, accountId, patch) {
+  const prevFresh = await readUserState(musicRoot, accountId)
+  const merged = mergeUserStateForPut(
+    prevFresh,
+    stripRevisionFromPatch(isObj(patch) && !Array.isArray(patch) ? patch : {}),
+  )
+  const sanitized = sanitizeUserState({
+    ...merged,
+    revision: currentRevision(prevFresh) + 1,
+  })
+  return writeUserStatePersist(musicRoot, sanitized, accountId)
+}
+
 export function mergeUserStateForPut(prev, patch) {
   if (!isObj(patch) || Array.isArray(patch)) return prev
   if (Object.keys(patch).length === 0) return prev
@@ -401,4 +414,3 @@ export async function writeUserTrackMoodsWithCAS(musicRoot, accountId, relPath, 
     }
   }
 }
-
