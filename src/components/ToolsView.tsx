@@ -79,7 +79,7 @@ import { CoverImg } from "./CoverImg";
 type P = {
   library: LibraryResponse | null;
   libraryIndex: LibraryIndex | null;
-  onRefreshLibrary: () => void;
+  onRefreshLibrary: () => void | Promise<void>;
   onLibraryDelta?: (delta: LibraryEntityDelta) => void;
 };
 

@@ -113,7 +113,35 @@ const THEME_MODES = new Set([
   "tangerine",
   "carmine",
   "prism",
+  "custom",
 ])
+
+const DEFAULT_CUSTOM_THEME = {
+  bg: "#08111d",
+  section: "#121f31",
+  accent: "#ff8f5c",
+  accent2: "#64d4ff",
+}
+
+function sanitizeHexColor(raw, fallback) {
+  if (typeof raw !== "string") return fallback
+  const s = raw.trim()
+  if (/^#[0-9a-f]{6}$/i.test(s)) return s.toLowerCase()
+  if (/^#[0-9a-f]{3}$/i.test(s)) {
+    return `#${s[1]}${s[1]}${s[2]}${s[2]}${s[3]}${s[3]}`.toLowerCase()
+  }
+  return fallback
+}
+
+function sanitizeCustomTheme(raw) {
+  const src = isObj(raw) ? raw : {}
+  return {
+    bg: sanitizeHexColor(src.bg, DEFAULT_CUSTOM_THEME.bg),
+    section: sanitizeHexColor(src.section, DEFAULT_CUSTOM_THEME.section),
+    accent: sanitizeHexColor(src.accent, DEFAULT_CUSTOM_THEME.accent),
+    accent2: sanitizeHexColor(src.accent2, DEFAULT_CUSTOM_THEME.accent2),
+  }
+}
 
 function sanitizeSettings(settings) {
   const src = isObj(settings) ? settings : {}
@@ -130,6 +158,7 @@ function sanitizeSettings(settings) {
     sas === "name" || sas === "plays" || sas === "date" ? sas : "date"
   return {
     theme: THEME_MODES.has(src.theme) ? src.theme : "midnight",
+    customTheme: sanitizeCustomTheme(src.customTheme),
     vizMode: (() => {
       let m = src.vizMode === "soft" ? "signals" : src.vizMode
       if (m === "horizon") m = "embers"
