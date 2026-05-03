@@ -4447,6 +4447,10 @@ function SettingsView({
             <ThemePicker
               value={user.state.settings.theme}
               onChange={(theme) => user.updateSettings({ theme })}
+              customTheme={user.state.settings.customTheme}
+              onCustomThemeChange={(customTheme) =>
+                user.updateSettings({ theme: "custom", customTheme })
+              }
             />
           </div>
           <label className="setting-card">
@@ -5302,9 +5306,6 @@ function Shell() {
 
   const refreshLibrary = useCallback(
     (mode: "manual" | "background" = "manual") => {
-      if (mode === "background" && backgroundRefreshRef.current) {
-        return backgroundRefreshRef.current;
-      }
       const seq = ++refreshSeqRef.current;
       if (mode === "manual") setLoading(true);
       const task = Promise.all([fetchLibraryIndex(), fetchDashboard()])
@@ -5336,7 +5337,7 @@ function Shell() {
   );
 
   const refreshBackground = useCallback(() => {
-    void refreshLibrary("background");
+    return refreshLibrary("background");
   }, [refreshLibrary]);
 
   const applyLibraryDelta = useCallback(
@@ -5584,6 +5585,11 @@ function Shell() {
   );
 
   const currentView = (() => {
+    if (route.section === "settings") {
+      return (
+        <SettingsView onOpenSection={(section) => navigate({ section })} />
+      );
+    }
     if (loading && !index)
       return <KordSplashLoader />;
     if (error && !index)
@@ -5690,10 +5696,6 @@ function Shell() {
             tracks={user.state.recent}
             libraryTracks={index.tracks}
           />
-        );
-      case "settings":
-        return (
-          <SettingsView onOpenSection={(section) => navigate({ section })} />
         );
       case "statistics":
         return (

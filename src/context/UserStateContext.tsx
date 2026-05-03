@@ -18,6 +18,7 @@ import { fmtDate } from "../lib/metaFormat";
 import { randomUUID } from "../lib/randomUUID";
 import { bumpTrackExclusionEpoch, setShuffleExclusionSnapshot } from "../lib/randomExclusions";
 import { normalizeShuffleAlbumKeysWithIndex } from "../lib/shuffleExclusionKeys";
+import { DEFAULT_CUSTOM_THEME } from "../lib/themeCatalog";
 import {
   applyRemapToUserState,
   applyStripToUserStateForPathsOnly,
@@ -27,6 +28,7 @@ import {
   APP_LOCALES,
   THEME_MODES,
   type AppLocale,
+  type CustomThemeSettings,
   type EnrichedTrack,
   type LibraryIndex,
   type QueueState,
@@ -53,6 +55,7 @@ const WPP_STORAGE = {
 function defaultSettings(): UserSettings {
   return {
     theme: "midnight",
+    customTheme: DEFAULT_CUSTOM_THEME,
     vizMode: "bars",
     restoreSession: true,
     defaultTab: "dashboard",
@@ -60,6 +63,25 @@ function defaultSettings(): UserSettings {
     libBrowse: "artists",
     libOverviewSort: "name",
     artistAlbumSort: "date",
+  };
+}
+
+function normalizeHexColor(raw: unknown, fallback: string): string {
+  if (typeof raw !== "string") return fallback;
+  const s = raw.trim();
+  if (/^#[0-9a-f]{6}$/i.test(s)) return s.toLowerCase();
+  if (/^#[0-9a-f]{3}$/i.test(s)) {
+    return `#${s[1]}${s[1]}${s[2]}${s[2]}${s[3]}${s[3]}`.toLowerCase();
+  }
+  return fallback;
+}
+
+function normalizeCustomTheme(raw: Partial<CustomThemeSettings> | undefined): CustomThemeSettings {
+  return {
+    bg: normalizeHexColor(raw?.bg, DEFAULT_CUSTOM_THEME.bg),
+    section: normalizeHexColor(raw?.section, DEFAULT_CUSTOM_THEME.section),
+    accent: normalizeHexColor(raw?.accent, DEFAULT_CUSTOM_THEME.accent),
+    accent2: normalizeHexColor(raw?.accent2, DEFAULT_CUSTOM_THEME.accent2),
   };
 }
 
@@ -88,6 +110,7 @@ function normalizeSettings(raw: Partial<UserSettings>): UserSettings {
       (THEME_MODES as readonly string[]).includes(raw.theme as string)
         ? (raw.theme as ThemeMode)
         : "midnight",
+    customTheme: normalizeCustomTheme(raw.customTheme),
     vizMode: (() => {
       const legacy = raw.vizMode as string | undefined;
       let m: typeof raw.vizMode = raw.vizMode;
@@ -114,6 +137,127 @@ function normalizeSettings(raw: Partial<UserSettings>): UserSettings {
     libOverviewSort,
     artistAlbumSort,
   };
+}
+
+function hexToRgb(hex: string): { r: number; g: number; b: number } {
+  const h = normalizeHexColor(hex, "#000000").slice(1);
+  return {
+    r: parseInt(h.slice(0, 2), 16),
+    g: parseInt(h.slice(2, 4), 16),
+    b: parseInt(h.slice(4, 6), 16),
+  };
+}
+
+function rgbaFromHex(hex: string, alpha: number): string {
+  const c = hexToRgb(hex);
+  return `rgba(${c.r}, ${c.g}, ${c.b}, ${alpha})`;
+}
+
+function mixHex(a: string, b: string, t: number): string {
+  const ca = hexToRgb(a);
+  const cb = hexToRgb(b);
+  const ch = (n: number) => Math.max(0, Math.min(255, Math.round(n))).toString(16).padStart(2, "0");
+  return `#${ch(ca.r * (1 - t) + cb.r * t)}${ch(ca.g * (1 - t) + cb.g * t)}${ch(ca.b * (1 - t) + cb.b * t)}`;
+}
+
+const CUSTOM_THEME_VARS = [
+  "--bg",
+  "--surface",
+  "--surface2",
+  "--surface3",
+  "--border",
+  "--border-strong",
+  "--accent",
+  "--accent2",
+  "--focus-ring",
+  "--page-glow-1",
+  "--page-glow-2",
+  "--page-lg-1",
+  "--page-lg-2",
+  "--page-lg-3",
+  "--shell-glow-1",
+  "--shell-lg-1",
+  "--shell-lg-2",
+  "--topbar-bg",
+  "--surface-elev-a",
+  "--surface-elev-b",
+  "--hero-rg-1",
+  "--hero-rg-2",
+  "--hero-lg-1",
+  "--hero-lg-2",
+  "--art-empty-1",
+  "--art-empty-2",
+  "--badge-1",
+  "--badge-2",
+  "--album-fb-1",
+  "--album-fb-2",
+  "--listen-viz-bg",
+  "--glass-1",
+  "--glass-2",
+  "--nav-active-cool",
+  "--segmented-1",
+  "--segmented-2",
+  "--chip-on",
+  "--codebox-bg",
+  "--textarea-bg",
+  "--player-art-fb",
+  "--dirlist-hover-bg",
+  "--meta-strip-bg",
+  "--ghost-input-bg",
+] as const;
+
+function clearCustomThemeVars(root: HTMLElement) {
+  for (const name of CUSTOM_THEME_VARS) root.style.removeProperty(name);
+}
+
+function applyCustomThemeVars(root: HTMLElement, theme: CustomThemeSettings) {
+  const bg = theme.bg;
+  const section = theme.section;
+  const accent = theme.accent;
+  const accent2 = theme.accent2;
+  root.style.setProperty("--bg", bg);
+  root.style.setProperty("--surface", rgbaFromHex(mixHex(bg, section, 0.58), 0.88));
+  root.style.setProperty("--surface2", rgbaFromHex(section, 0.94));
+  root.style.setProperty("--surface3", rgbaFromHex(mixHex(section, accent2, 0.16), 0.96));
+  root.style.setProperty("--border", rgbaFromHex(mixHex(accent2, "#ffffff", 0.2), 0.2));
+  root.style.setProperty("--border-strong", rgbaFromHex(mixHex(accent2, "#ffffff", 0.18), 0.36));
+  root.style.setProperty("--accent", accent);
+  root.style.setProperty("--accent2", accent2);
+  root.style.setProperty("--focus-ring", `color-mix(in srgb, ${accent2} 72%, white 18%)`);
+  root.style.setProperty("--page-glow-1", rgbaFromHex(accent, 0.14));
+  root.style.setProperty("--page-glow-2", rgbaFromHex(accent2, 0.12));
+  root.style.setProperty("--page-lg-1", mixHex(bg, "#000000", 0.26));
+  root.style.setProperty("--page-lg-2", bg);
+  root.style.setProperty("--page-lg-3", mixHex(bg, section, 0.28));
+  root.style.setProperty("--shell-glow-1", rgbaFromHex(accent, 0.07));
+  root.style.setProperty("--shell-lg-1", rgbaFromHex(mixHex(bg, "#000000", 0.18), 0.98));
+  root.style.setProperty("--shell-lg-2", bg);
+  root.style.setProperty("--topbar-bg", rgbaFromHex(mixHex(bg, "#000000", 0.2), 0.86));
+  root.style.setProperty("--surface-elev-a", rgbaFromHex(mixHex(section, bg, 0.18), 0.94));
+  root.style.setProperty("--surface-elev-b", rgbaFromHex(mixHex(bg, section, 0.22), 0.97));
+  root.style.setProperty("--hero-rg-1", rgbaFromHex(accent, 0.14));
+  root.style.setProperty("--hero-rg-2", rgbaFromHex(accent2, 0.12));
+  root.style.setProperty("--hero-lg-1", rgbaFromHex(mixHex(section, bg, 0.12), 0.94));
+  root.style.setProperty("--hero-lg-2", rgbaFromHex(mixHex(bg, section, 0.18), 0.97));
+  root.style.setProperty("--art-empty-1", rgbaFromHex(accent, 0.22));
+  root.style.setProperty("--art-empty-2", rgbaFromHex(accent2, 0.16));
+  root.style.setProperty("--badge-1", rgbaFromHex(accent, 0.24));
+  root.style.setProperty("--badge-2", rgbaFromHex(accent2, 0.18));
+  root.style.setProperty("--album-fb-1", rgbaFromHex(accent, 0.26));
+  root.style.setProperty("--album-fb-2", rgbaFromHex(accent2, 0.18));
+  root.style.setProperty("--listen-viz-bg", rgbaFromHex(mixHex(bg, "#000000", 0.34), 0.94));
+  root.style.setProperty("--glass-1", rgbaFromHex(mixHex(section, bg, 0.24), 0.9));
+  root.style.setProperty("--glass-2", rgbaFromHex(mixHex(bg, section, 0.2), 0.94));
+  root.style.setProperty("--nav-active-cool", rgbaFromHex(accent2, 0.09));
+  root.style.setProperty("--segmented-1", rgbaFromHex(accent, 0.11));
+  root.style.setProperty("--segmented-2", rgbaFromHex(accent2, 0.08));
+  root.style.setProperty("--chip-on", rgbaFromHex(accent, 0.11));
+  root.style.setProperty("--codebox-bg", rgbaFromHex(mixHex(bg, "#000000", 0.35), 0.95));
+  root.style.setProperty("--textarea-bg", rgbaFromHex(mixHex(bg, "#000000", 0.25), 0.95));
+  root.style.setProperty("--player-art-fb", rgbaFromHex(accent2, 0.08));
+  root.style.setProperty("--dirlist-hover-bg", rgbaFromHex(accent2, 0.07));
+  root.style.setProperty("--meta-strip-bg", rgbaFromHex(accent2, 0.06));
+  root.style.setProperty("--ghost-input-bg", rgbaFromHex("#ffffff", 0.045));
 }
 
 function normalizeUserState(s: UserStateV1): UserStateV1 {
@@ -188,6 +332,11 @@ function mergeUserStatePatches(a: UserStatePatch, b: UserStatePatch): UserStateP
     };
   }
   return compactUserStatePatch(next);
+}
+
+function isLibraryRequiredError(err: unknown): boolean {
+  const msg = err instanceof Error ? err.message : String(err);
+  return /Library folder not configured|LIBRARY_REQUIRED|Set it in server Settings/i.test(msg);
 }
 
 function applyUserStatePatchLocal(
@@ -422,9 +571,14 @@ export function UserStateProvider({ children }: { children: React.ReactNode }) {
         const fallback = mergeLegacy(defaultUserState());
         playlistDirtyRef.current = true;
         setState(fallback);
-        setError(String(err));
+        setError(isLibraryRequiredError(err) ? null : String(err));
         setReady(true);
         hydratedRef.current = true;
+        if (isLibraryRequiredError(err)) {
+          dirtyRef.current = false;
+          pendingPatchRef.current = {};
+          return;
+        }
         dirtyRef.current = true;
         pendingPatchRef.current = mergeUserStatePatches(
           pendingPatchRef.current,
@@ -516,8 +670,14 @@ export function UserStateProvider({ children }: { children: React.ReactNode }) {
   }, [flushPendingPatch, ready, state]);
 
   useEffect(() => {
-    document.documentElement.dataset.theme = state.settings.theme;
-  }, [state.settings.theme]);
+    const root = document.documentElement;
+    root.dataset.theme = state.settings.theme;
+    if (state.settings.theme === "custom") {
+      applyCustomThemeVars(root, state.settings.customTheme ?? DEFAULT_CUSTOM_THEME);
+    } else {
+      clearCustomThemeVars(root);
+    }
+  }, [state.settings.customTheme, state.settings.theme]);
 
   useEffect(() => {
     document.documentElement.lang =
@@ -535,6 +695,12 @@ export function UserStateProvider({ children }: { children: React.ReactNode }) {
         );
         const hasLocalUnsaved = Object.keys(localUnsaved).length > 0;
         setState((prev) => {
+          if (
+            !hasLocalUnsaved &&
+            Number(mergedRemote.revision || 1) < Number(prev.revision || 1)
+          ) {
+            return prev;
+          }
           if (!hasLocalUnsaved) return mergedRemote;
           const preserved = applyUserStatePatchLocal(mergedRemote, localUnsaved);
           return {

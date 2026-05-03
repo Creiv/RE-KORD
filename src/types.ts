@@ -83,6 +83,7 @@ export const THEME_MODES = [
   "tangerine",
   "carmine",
   "prism",
+  "custom",
 ] as const;
 export type ThemeMode = (typeof THEME_MODES)[number];
 export type VizMode =
@@ -101,8 +102,16 @@ export type LibraryBrowseMode = "artists" | "genres" | "moods";
 export type LibraryOverviewSortMode = "name" | "plays";
 export type ArtistAlbumSortMode = "date" | "name" | "plays";
 
+export type CustomThemeSettings = {
+  bg: string;
+  section: string;
+  accent: string;
+  accent2: string;
+};
+
 export type UserSettings = {
   theme: ThemeMode;
+  customTheme?: CustomThemeSettings;
   vizMode: VizMode;
   restoreSession: boolean;
   defaultTab: string;

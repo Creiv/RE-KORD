@@ -2012,13 +2012,14 @@ app.post("/api/download", async (req, res) => {
       appendRollingCapped(stderrAcc, chunk, YTDLP_ROLL_LOG_CAP_CHARS);
       emitProgressIfNew();
     });
-    child.on("close", (code) => {
+    child.on("close", async (code) => {
       removeDisconnectListeners();
       const reg = activeYtdlpDownloads.get(downloadId);
       const cancelled = Boolean(reg?.userCancelled);
       if (reg?.killTimer) clearTimeout(reg.killTimer);
       activeYtdlpDownloads.delete(downloadId);
       resultCode = code ?? -1;
+      let postDownloadError = null;
       if (resultCode === 0) {
         const folder =
           outputDirForLog && outputDirForLog.length > 0
@@ -2031,10 +2032,13 @@ app.post("/api/download", async (req, res) => {
           folder,
           detail: u,
         });
-        void (async () => {
+        try {
           await invalidateLibraryIndex(root);
           await attachStudioDownloadToLibrarySelection(req, root, outputDirForLog);
-        })();
+        } catch (error) {
+          postDownloadError = error;
+          console.error("[kord] post-download library refresh:", error?.message || error);
+        }
       }
       const combined = `${stderrAcc.buffer}\n${stdoutAcc.buffer}`;
       const ot = trimLogForNdjson(stdoutAcc);
@@ -2061,6 +2065,9 @@ app.post("/api/download", async (req, res) => {
             stderrTotalChars: oe.totalChars,
             code: resultCode,
             progress,
+            postDownloadError: postDownloadError
+              ? String(postDownloadError?.message || postDownloadError)
+              : null,
             musicRoot: root,
             command,
             ...itemSummary,
@@ -2675,14 +2682,15 @@ app.post("/api/track-info/save", async (req, res) => {
         : patch?.title && String(patch.title).trim()
           ? String(patch.title).trim()
           : null;
+    const metaOut = hasMood ? { ...meta, moods } : meta;
     return res.json({
       ok: true,
       relPath,
-      meta: { ...meta, moods },
+      meta: metaOut,
       track: {
         relPath,
         ...(title ? { title } : {}),
-        meta: { ...meta, moods },
+        meta: metaOut,
       },
       album: { relPath: albumRel },
     });
