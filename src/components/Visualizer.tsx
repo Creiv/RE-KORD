@@ -559,7 +559,7 @@ export function Visualizer({ mode }: { mode: VizMode }) {
         gl.addColorStop(0.5, rgba(mid, 0.98));
         gl.addColorStop(1, rgba(pal.accent, 0.62));
         ctx.strokeStyle = gl;
-        ctx.lineWidth = narrowOsc ? 2.1 : 1.75;
+        ctx.lineWidth = expanded ? 3.35 : narrowOsc ? 3.25 : 2.85;
         ctx.stroke();
         return;
       }
@@ -667,7 +667,7 @@ export function Visualizer({ mode }: { mode: VizMode }) {
         gl.addColorStop(0.5, rgba(mid, 1));
         gl.addColorStop(1, rgba(pal.accent, 0.84));
         ctx.strokeStyle = gl;
-        ctx.lineWidth = (narrowOsc ? 2.1 : 1.75) * 1.12;
+        ctx.lineWidth = expanded ? 3.55 : narrowOsc ? 3.45 : 3.05;
         ctx.stroke();
         return;
       }
