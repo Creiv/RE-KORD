@@ -4819,7 +4819,14 @@ function SettingsView({
   const [libraryPath, setLibraryPath] = useState("");
   const [libraryBusy, setLibraryBusy] = useState(false);
   const [libraryErr, setLibraryErr] = useState<string | null>(null);
-  const [serverLocalAccess, setServerLocalAccess] = useState(false);
+  const [serverLocalAccess, setServerLocalAccess] = useState(() => {
+    try {
+      const host = String(window.location.hostname || "").toLowerCase();
+      return host === "localhost" || host === "127.0.0.1" || host === "::1";
+    } catch {
+      return false;
+    }
+  });
   const [youtubeCookiesConfigured, setYoutubeCookiesConfigured] =
     useState(false);
   const [youtubeCookiesWritable, setYoutubeCookiesWritable] = useState(false);
@@ -5099,7 +5106,7 @@ function SettingsView({
       .finally(() => setRemoteAccessBusy(false));
   };
 
-  const refreshRemoteState = () => {
+  const refreshRemoteState = useCallback(() => {
     fetchRemoteAccessState()
       .then((s) => {
         setRemoteAccess(s);
@@ -5108,7 +5115,7 @@ function SettingsView({
       .catch((e: unknown) =>
         setRemoteAccessErr(e instanceof Error ? e.message : String(e))
       );
-  };
+  }, []);
 
   const toggleRemoteAccess = () => {
     setRemoteAccessErr(null);
@@ -5127,15 +5134,21 @@ function SettingsView({
   };
 
   useEffect(() => {
-    if (isKordClientEmbed) return;
     const timer = window.setInterval(() => {
       refreshRemoteState();
     }, 5000);
     return () => window.clearInterval(timer);
-  }, [isKordClientEmbed]);
+  }, [refreshRemoteState]);
+
+  const isRemoteViewer = !serverLocalAccess;
+  const isNetworkControlAllowed = serverLocalAccess && !isKordClientEmbed;
 
   return (
-    <div className="dashboard-grid settings-page">
+    <div
+      className={`dashboard-grid settings-page${
+        isRemoteViewer ? " settings-page--remote" : ""
+      }`}
+    >
       <section className="surface-card">
         <div className="section-head section-head--page-toolbar">
           <div>
@@ -5483,128 +5496,140 @@ function SettingsView({
           ) : null}
         </section>
       ) : null}
-      {isKordClientEmbed ? null : (
-        <section className="surface-card settings-network-section">
-          <div className="section-head section-head--page-toolbar">
-            <div>
-              <p className="eyebrow">{t("settings.networkEyebrow")}</p>
-              <h2>{t("settings.networkHeading")}</h2>
-            </div>
+      <section className="surface-card settings-network-section">
+        <div className="section-head section-head--page-toolbar">
+          <div>
+            <p className="eyebrow">{t("settings.networkEyebrow")}</p>
+            <h2>{t("settings.networkHeading")}</h2>
           </div>
-          <div className="settings-network-section__body">
-            <div className="settings-network-main">
-              {lanAccessUrl ? (
-                <p className="subtle sm">
-                  {t("settings.networkUrlHint", { url: lanAccessUrl })}
-                </p>
-              ) : (
-                <p className="subtle sm">{t("settings.networkNoUrl")}</p>
-              )}
-              <div
-                className="row gap"
-                style={{
-                  marginTop: "0.5rem",
-                  flexDirection: "row",
-                  alignItems: "flex-start",
-                  flexWrap: "wrap",
-                }}
-              >
-                <button
-                  type="button"
-                  className="btn secondary sm"
-                  disabled={remoteAccessBusy}
-                  onMouseEnter={() => setRemoteLoginHover(true)}
-                  onMouseLeave={() => setRemoteLoginHover(false)}
-                  onClick={() => {
-                    if (remoteAccess?.cloudflareLoggedIn) {
-                      logoutRemoteCloudflareLogin();
-                    } else {
-                      runRemoteCloudflareLogin();
-                    }
+        </div>
+        <div className="settings-network-section__body">
+          <div className="settings-network-main">
+            {lanAccessUrl ? (
+              <p className="subtle sm">
+                {t("settings.networkUrlHint", { url: lanAccessUrl })}
+              </p>
+            ) : (
+              <p className="subtle sm">{t("settings.networkNoUrl")}</p>
+            )}
+            {isNetworkControlAllowed ? (
+              <>
+                <div
+                  className="row gap"
+                  style={{
+                    marginTop: "0.5rem",
+                    flexDirection: "row",
+                    alignItems: "flex-start",
+                    flexWrap: "wrap",
                   }}
-                  style={
-                    remoteAccess?.cloudflareLoggedIn
-                      ? {
-                          minWidth: "11.5rem",
-                          backgroundColor: remoteLoginHover
-                            ? "#c62828"
-                            : "#2e7d32",
-                          color: "#fff",
-                          borderColor: remoteLoginHover ? "#c62828" : "#2e7d32",
-                        }
-                      : { minWidth: "11.5rem" }
-                  }
                 >
-                  {remoteAccess?.cloudflareLoggedIn
-                    ? remoteLoginHover
-                      ? t("settings.remoteLogout")
-                      : t("settings.remoteLoginDone")
-                    : t("settings.remoteLogin")}
-                </button>
-                <button
-                  type="button"
-                  className="btn sm"
-                  disabled={remoteAccessBusy}
-                  onMouseEnter={() => setRemoteShareHover(true)}
-                  onMouseLeave={() => setRemoteShareHover(false)}
-                  onClick={toggleRemoteAccess}
-                  style={
-                    remoteAccess?.status === "starting"
-                      ? {
-                          minWidth: "11.5rem",
-                          background: "#f0be67",
-                          color: "#1a1a1a",
-                          border: "1px solid #f0be67",
-                        }
+                  <button
+                    type="button"
+                    className="btn secondary sm"
+                    disabled={remoteAccessBusy}
+                    onMouseEnter={() => setRemoteLoginHover(true)}
+                    onMouseLeave={() => setRemoteLoginHover(false)}
+                    onClick={() => {
+                      if (remoteAccess?.cloudflareLoggedIn) {
+                        logoutRemoteCloudflareLogin();
+                      } else {
+                        runRemoteCloudflareLogin();
+                      }
+                    }}
+                    style={
+                      remoteAccess?.cloudflareLoggedIn
+                        ? {
+                            minWidth: "11.5rem",
+                            backgroundColor: remoteLoginHover
+                              ? "#c62828"
+                              : "#2e7d32",
+                            color: "#fff",
+                            borderColor: remoteLoginHover
+                              ? "#c62828"
+                              : "#2e7d32",
+                          }
+                        : { minWidth: "11.5rem" }
+                    }
+                  >
+                    {remoteAccess?.cloudflareLoggedIn
+                      ? remoteLoginHover
+                        ? t("settings.remoteLogout")
+                        : t("settings.remoteLoginDone")
+                      : t("settings.remoteLogin")}
+                  </button>
+                  <button
+                    type="button"
+                    className="btn sm"
+                    disabled={remoteAccessBusy}
+                    onMouseEnter={() => setRemoteShareHover(true)}
+                    onMouseLeave={() => setRemoteShareHover(false)}
+                    onClick={toggleRemoteAccess}
+                    style={
+                      remoteAccess?.status === "starting"
+                        ? {
+                            minWidth: "11.5rem",
+                            background: "#f0be67",
+                            color: "#1a1a1a",
+                            border: "1px solid #f0be67",
+                          }
+                        : remoteAccess?.status === "running"
+                        ? {
+                            minWidth: "11.5rem",
+                            background: remoteShareHover
+                              ? "#c62828"
+                              : "#2e7d32",
+                            color: "#fff",
+                            border: `1px solid ${
+                              remoteShareHover ? "#c62828" : "#2e7d32"
+                            }`,
+                          }
+                        : { minWidth: "11.5rem" }
+                    }
+                  >
+                    {remoteAccess?.status === "starting"
+                      ? "Starting"
                       : remoteAccess?.status === "running"
-                      ? {
-                          minWidth: "11.5rem",
-                          background: remoteShareHover ? "#c62828" : "#2e7d32",
-                          color: "#fff",
-                          border: `1px solid ${
-                            remoteShareHover ? "#c62828" : "#2e7d32"
-                          }`,
-                        }
-                      : { minWidth: "11.5rem" }
-                  }
-                >
-                  {remoteAccess?.status === "starting"
-                    ? "Starting"
-                    : remoteAccess?.status === "running"
-                    ? remoteShareHover
-                      ? t("settings.remoteStopSharing")
-                      : t("settings.remoteShared")
-                    : t("settings.remoteStart")}
-                </button>
-              </div>
-              {remoteAccess?.publicUrl ? (
-                <p className="subtle sm">
-                  {t("settings.remoteUrl", { url: remoteAccess.publicUrl })}
-                </p>
-              ) : null}
-              {remoteAccessErr || remoteAccess?.error ? (
-                <p className="subtle sm warnline">
-                  {remoteAccessErr || remoteAccess?.error}
-                </p>
-              ) : null}
-            </div>
-            {remoteAccess?.publicUrl ? (
-              <div className="settings-network-qr">
-                <img
-                  className="settings-network-qr__img"
-                  src={`https://api.qrserver.com/v1/create-qr-code/?size=220x220&data=${encodeURIComponent(
-                    remoteAccess.publicUrl
-                  )}`}
-                  alt={t("settings.remoteQrAlt", {
-                    url: remoteAccess.publicUrl,
-                  })}
-                  loading="lazy"
-                />
-              </div>
+                      ? remoteShareHover
+                        ? t("settings.remoteStopSharing")
+                        : t("settings.remoteShared")
+                      : t("settings.remoteStart")}
+                  </button>
+                </div>
+                {remoteAccess?.publicUrl ? (
+                  <p className="subtle sm">
+                    {t("settings.remoteUrl", { url: remoteAccess.publicUrl })}
+                  </p>
+                ) : null}
+              </>
+            ) : remoteAccess?.publicUrl ? (
+              <p className="subtle sm">
+                {t("settings.remoteUrl", { url: remoteAccess.publicUrl })}
+              </p>
+            ) : (
+              <p className="subtle sm">{t("settings.remoteNotShared")}</p>
+            )}
+            {remoteAccessErr || remoteAccess?.error ? (
+              <p className="subtle sm warnline">
+                {remoteAccessErr || remoteAccess?.error}
+              </p>
             ) : null}
           </div>
-        </section>
-      )}
+          {remoteAccess?.publicUrl ? (
+            <div className="settings-network-qr">
+              <img
+                className="settings-network-qr__img"
+                src={`https://api.qrserver.com/v1/create-qr-code/?size=220x220&data=${encodeURIComponent(
+                  remoteAccess.publicUrl
+                )}`}
+                alt={t("settings.remoteQrAlt", {
+                  url: remoteAccess.publicUrl,
+                })}
+                loading="lazy"
+              />
+            </div>
+          ) : null}
+        </div>
+      </section>
       {isKordClientEmbed ? null : (
         <section
           className="surface-card settings-activity-section"

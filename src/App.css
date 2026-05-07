@@ -1606,6 +1606,10 @@
   .settings-page .settings-network-section {
     grid-column: 2 / 3;
   }
+
+  .settings-page.settings-page--remote .settings-network-section {
+    grid-column: 1 / -1;
+  }
 }
 
 .settings-network-section__body {
@@ -1636,36 +1640,38 @@
 }
 
 .settings-network-qr__img {
-  width: 124px;
-  height: 124px;
+  width: clamp(96px, 36vw, 160px);
+  height: clamp(96px, 36vw, 160px);
   display: block;
   border-radius: 0.45rem;
 }
 
 @media (min-width: 901px) {
   .settings-network-section {
-    position: relative;
+    --settings-network-qr-size: clamp(112px, 9vw, 168px);
   }
 
   .settings-network-section__body {
-    display: block;
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto;
+    align-items: start;
+    gap: 0.75rem;
     min-height: 0;
   }
 
-  .settings-network-section .section-head {
-    padding-right: 152px;
-  }
-
-  .settings-network-main {
-    padding-right: 152px;
-  }
-
   .settings-network-qr {
-    position: absolute;
-    top: 1.2rem;
-    right: 1.2rem;
     margin-top: 0;
-    align-self: auto;
+    align-self: start;
+    justify-self: end;
+  }
+
+  .settings-network-qr__img {
+    width: auto;
+    height: auto;
+    object-fit: contain;
+    max-width: var(--settings-network-qr-size);
+    max-height: var(--settings-network-qr-size);
+    aspect-ratio: 1 / 1;
   }
 }
 
@@ -6808,6 +6814,11 @@
 
 .listen-recent-panel__lead {
   align-items: flex-start;
+}
+
+.listen-queue-panel .section-head.library-genre-tracklist-headrow {
+  /* Keep the same title-to-content spacing as other panels (e.g. Recent). */
+  margin-bottom: 0.75rem;
 }
 
 .listen-recent-panel__head .listen-recent-panel__nav {
