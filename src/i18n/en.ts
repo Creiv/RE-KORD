@@ -392,6 +392,7 @@ export const EN: Record<string, string> = {
   "settings.remoteShared": "Server shared",
   "settings.remoteStopSharing": "Stop sharing",
   "settings.remoteUrl": "Public URL: {{url}}",
+  "settings.remoteNotShared": "Not shared online.",
   "settings.remoteQrAlt": "QR code to open {{url}}",
   "settings.shortcutsEyebrow": "Shortcuts",
   "settings.shortcutsHeading": "Quick use",
