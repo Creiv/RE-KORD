@@ -4088,7 +4088,7 @@
 
 .player-dock2 {
   position: fixed;
-  left: 0;
+  left: var(--side-w, 0px);
   right: 0;
   bottom: 0;
   z-index: 20;
