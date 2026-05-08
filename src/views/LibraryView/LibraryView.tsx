@@ -104,6 +104,9 @@ export default function LibraryView({
   const { t, sortLocale } = useI18n();
   const { confirm: appConfirm } = useAppConfirm();
   const openAlbumMetaEdit = useOpenAlbumMetaEdit();
+  const endSearchForBrowse = useCallback(() => {
+    if (showSearchBar) onSearchBarClose();
+  }, [showSearchBar, onSearchBarClose]);
   const { libBrowse, libOverviewSort, artistAlbumSort } = user.state.settings;
   const [mode, setMode] = useState<"all" | "artists" | "albums" | "tracks">(
     "all"
@@ -1092,9 +1095,7 @@ export default function LibraryView({
 
   return (
     <div className="view-stack library-view">
-      {!route.artist && !route.album && showSearchBar
-        ? renderLibrarySearchHero()
-        : null}
+      {showSearchBar ? renderLibrarySearchHero() : null}
       <section className="surface-card surface-card--toolbar-only">
         <div className="section-head section-head--page-toolbar">
           {selectedGenreKey ? (
@@ -1102,7 +1103,10 @@ export default function LibraryView({
               <button
                 type="button"
                 className="page-toolbar-back-ic"
-                onClick={() => setSelectedGenreKey(null)}
+                onClick={() => {
+                  endSearchForBrowse();
+                  setSelectedGenreKey(null);
+                }}
                 aria-label={t("library.backGenresAria")}
               >
                 <UiChevronLeft
@@ -1139,6 +1143,7 @@ export default function LibraryView({
                       user.state.settings.libBrowse === "artists" ? " is-on" : ""
                     }`}
                     onClick={() => {
+                      endSearchForBrowse();
                       user.updateSettings({ libBrowse: "artists" });
                       setSelectedGenreKey(null);
                       setMoodFilterIds([]);
@@ -1152,6 +1157,7 @@ export default function LibraryView({
                       user.state.settings.libBrowse === "genres" ? " is-on" : ""
                     }`}
                     onClick={() => {
+                      endSearchForBrowse();
                       user.updateSettings({ libBrowse: "genres" });
                       setSelectedGenreKey(null);
                       setMoodFilterIds([]);
@@ -1165,6 +1171,7 @@ export default function LibraryView({
                       user.state.settings.libBrowse === "moods" ? " is-on" : ""
                     }`}
                     onClick={() => {
+                      endSearchForBrowse();
                       user.updateSettings({ libBrowse: "moods" });
                       setSelectedGenreKey(null);
                     }}
@@ -1441,7 +1448,10 @@ export default function LibraryView({
                 <button
                   type="button"
                   className="text-btn library-mood-clear"
-                  onClick={() => setMoodFilterIds([])}
+                  onClick={() => {
+                    endSearchForBrowse();
+                    setMoodFilterIds([]);
+                  }}
                 >
                   {t("library.moodClearFilter")}
                 </button>
@@ -1470,6 +1480,7 @@ export default function LibraryView({
                     title={t(`trackMeta.mood.${id}`)}
                     onClick={() => {
                       if (disabled) return;
+                      endSearchForBrowse();
                       setMoodFilterIds((prev) =>
                         prev.includes(id)
                           ? prev.filter((x) => x !== id)
@@ -1558,7 +1569,10 @@ export default function LibraryView({
                   albumSlots={genreCoverByKey.get("__none__") ?? []}
                   index={index}
                   muted
-                  onOpen={() => setSelectedGenreKey("__none__")}
+                  onOpen={() => {
+                    endSearchForBrowse();
+                    setSelectedGenreKey("__none__");
+                  }}
                 />
               ) : null}
               {sortedGenreBrowseList.map((g) => (
@@ -1572,7 +1586,10 @@ export default function LibraryView({
                   trackCount={g.count}
                   albumSlots={genreCoverByKey.get(g.key) ?? []}
                   index={index}
-                  onOpen={() => setSelectedGenreKey(g.key)}
+                  onOpen={() => {
+                    endSearchForBrowse();
+                    setSelectedGenreKey(g.key);
+                  }}
                 />
               ))}
             </div>

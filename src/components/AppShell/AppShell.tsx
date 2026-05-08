@@ -320,21 +320,32 @@ export function AppShell() {
     prevSectionForSearchRef.current = route.section;
   }, [route.section]);
 
-  const ensureLibrarySectionForSearch = useCallback(() => {
-    if (route.section !== "libreria") {
-      navigate({ section: "libreria", artist: null, album: null });
-    }
-  }, [navigate, route.section]);
-
-  const openLibrarySearch = useCallback(() => {
-    setLibrarySearchBarOpen(true);
-    ensureLibrarySectionForSearch();
-  }, [ensureLibrarySectionForSearch]);
-
   const closeLibrarySearch = useCallback(() => {
     setSearch("");
     setLibrarySearchBarOpen(false);
   }, []);
+
+  /** Home libreria senza artista/album; resetta anche filtri overview (tick). */
+  const goLibraryRootForBrowse = useCallback(() => {
+    if (route.section !== "libreria") {
+      setLibraryHomeTick((n) => n + 1);
+      navigate({ section: "libreria", artist: null, album: null });
+      return;
+    }
+    if (route.artist != null || route.album != null) {
+      setLibraryHomeTick((n) => n + 1);
+      navigate({ section: "libreria", artist: null, album: null });
+    }
+  }, [navigate, route.section, route.artist, route.album]);
+
+  const ensureLibrarySectionForSearch = useCallback(() => {
+    goLibraryRootForBrowse();
+  }, [goLibraryRootForBrowse]);
+
+  const openLibrarySearch = useCallback(() => {
+    setLibrarySearchBarOpen(true);
+    goLibraryRootForBrowse();
+  }, [goLibraryRootForBrowse]);
 
   const toggleLibrarySearchBar = useCallback(() => {
     if (librarySearchBarOpen) {
@@ -354,7 +365,7 @@ export function AppShell() {
       }
     });
     return () => window.cancelAnimationFrame(id);
-  }, [librarySearchBarOpen, route.section]);
+  }, [librarySearchBarOpen, route.section, route.artist, route.album]);
 
   useEffect(() => {
     const handler = (event: KeyboardEvent) => {
@@ -454,14 +465,14 @@ export function AppShell() {
   const goAppSection = useCallback(
     (section: AppSection) => {
       if (section === "libreria") {
-        setSearch("");
+        closeLibrarySearch();
         setLibraryHomeTick((n) => n + 1);
       }
       startTransition(() => {
         navigate({ section });
       });
     },
-    [navigate]
+    [navigate, closeLibrarySearch]
   );
 
   const navToSection = useCallback(
@@ -469,14 +480,18 @@ export function AppShell() {
     [navigate]
   );
   const navToLibraryArtist = useCallback(
-    (artist: string) =>
-      navigate({ section: "libreria", artist: artist || null, album: null }),
-    [navigate]
+    (artist: string) => {
+      closeLibrarySearch();
+      navigate({ section: "libreria", artist: artist || null, album: null });
+    },
+    [navigate, closeLibrarySearch]
   );
   const navToLibraryAlbum = useCallback(
-    (artist: string, album: string) =>
-      navigate({ section: "libreria", artist, album }),
-    [navigate]
+    (artist: string, album: string) => {
+      closeLibrarySearch();
+      navigate({ section: "libreria", artist, album });
+    },
+    [navigate, closeLibrarySearch]
   );
   const navToPlaylist = useCallback(
     (id: string | null) => navigate({ section: "playlists", playlist: id }),
@@ -487,10 +502,10 @@ export function AppShell() {
     [navigate]
   );
   const onLibraryHome = useCallback(() => {
-    setSearch("");
+    closeLibrarySearch();
     setLibraryHomeTick((n) => n + 1);
     navigate({ section: "libreria" });
-  }, [navigate]);
+  }, [navigate, closeLibrarySearch]);
 
   const currentView = (() => {
     if (route.section === "settings") {
@@ -644,10 +659,12 @@ export function AppShell() {
                 loading={loading}
                 syncTapAnim={syncTapAnim}
                 toolsBusy={toolsActivity.toolsAnyBusy}
+                librarySearchBarOpen={librarySearchBarOpen}
                 collapsed={sidebarCollapsed}
                 onNavigate={navToSection}
                 onSync={onSyncButtonClick}
                 onLibraryHome={onLibraryHome}
+                onToggleSearch={toggleLibrarySearchBar}
                 onToggleCollapse={toggleSidebar}
               />
             ) : null}
