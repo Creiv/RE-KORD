@@ -1,6 +1,6 @@
 import { memo, useCallback } from "react";
 import { useI18n } from "../../../i18n/useI18n";
-import { KordNavIcon } from "../../KordUiIcons";
+import { KordNavIcon, UiSearch } from "../../KordUiIcons";
 import { KordBrandLogo } from "../../KordBrandLogo";
 import { AccountBadge } from "../../AccountBadge/AccountBadge";
 import { NAV_DEF } from "../../../lib/routing";
@@ -12,10 +12,12 @@ interface SideBarProps {
   loading: boolean;
   syncTapAnim: boolean;
   toolsBusy: boolean;
+  librarySearchBarOpen: boolean;
   collapsed: boolean;
   onNavigate: (section: AppSection) => void;
   onSync: () => void;
   onLibraryHome: () => void;
+  onToggleSearch: () => void;
   onToggleCollapse: () => void;
 }
 
@@ -24,10 +26,12 @@ export const SideBar = memo(function SideBar({
   loading,
   syncTapAnim,
   toolsBusy,
+  librarySearchBarOpen,
   collapsed,
   onNavigate,
   onSync,
   onLibraryHome,
+  onToggleSearch,
   onToggleCollapse,
 }: SideBarProps) {
   const { t } = useI18n();
@@ -168,6 +172,33 @@ export const SideBar = memo(function SideBar({
               <svg viewBox="0 0 24 24" fill="currentColor" aria-hidden>
                 <path d="M12 4V1L8 5l4 4V6c3.31 0 6 2.69 6 6 0 1.01-.25 1.97-.7 2.8l1.46 1.46C19.54 15.03 20 13.57 20 12c0-4.42-3.58-8-8-8zm0 14c-3.31 0-6-2.69-6-6 0-1.01.25-1.97.7-2.8L5.24 7.74C4.46 8.97 4 10.43 4 12c0 4.42 3.58 8 8 8v3l4-4-4-4v3z" />
               </svg>
+            </span>
+          </button>
+          <button
+            type="button"
+            className={[
+              "ghost-btn ghost-btn--toolbar topbar2__search-btn",
+              librarySearchBarOpen ? "is-on" : "",
+            ]
+              .filter(Boolean)
+              .join(" ")}
+            onClick={onToggleSearch}
+            title={
+              librarySearchBarOpen
+                ? t("topbar.closeSearch")
+                : t("topbar.openSearch")
+            }
+            aria-label={
+              librarySearchBarOpen
+                ? t("topbar.closeSearch")
+                : t("topbar.openSearch")
+            }
+            aria-controls={
+              activeSection === "libreria" ? "library-search-input" : undefined
+            }
+          >
+            <span className="topbar2__search-btn-ic" aria-hidden>
+              <UiSearch />
             </span>
           </button>
           {!collapsed && (

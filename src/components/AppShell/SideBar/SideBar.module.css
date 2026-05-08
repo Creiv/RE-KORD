@@ -254,7 +254,10 @@
 }
 
 .collapsed .footer {
-  justify-content: center;
+  flex-direction: column;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 0.35rem;
   padding-left: 0.4rem;
   padding-right: 0.4rem;
 }
@@ -267,8 +270,10 @@
 }
 
 .collapsed .footerActions {
+  flex-direction: column;
   margin-left: 0;
   justify-content: center;
+  width: 100%;
 }
 
 @media (max-width: 768px) {
