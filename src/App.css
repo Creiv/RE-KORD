@@ -19,7 +19,6 @@
 .track-row__badges,
 .album-card__meta,
 .album-tracklist-expected,
-.artist-card__meta,
 .player-bar2__meta span,
 .player-bar2__times,
 .shortcut-list .shortcut-row__desc,
@@ -715,8 +714,6 @@
 
 /* Card libreria (artisti, album, generi), righe brano e playlist: vetro + bordo accent */
 .track-row,
-.artist-card,
-.album-card,
 .playlist-row {
   border: 1px solid color-mix(in srgb, var(--accent) 22%, var(--border) 78%);
   background: color-mix(in srgb, var(--surface2) 68%, transparent);
@@ -1329,6 +1326,75 @@
   opacity: 0.9;
   border-style: solid;
   border-color: color-mix(in srgb, var(--muted) 42%, var(--border) 58%);
+}
+
+/* Studio → Scopri: tile come libreria; azioni sotto la riga copertina+testo */
+.library-list-tile.studio-catalog-list-tile {
+  cursor: default;
+  flex-direction: column;
+  align-items: stretch;
+  gap: 0.65rem;
+}
+
+.library-list-tile.studio-catalog-list-tile:hover {
+  transform: none;
+}
+
+.studio-catalog-list-tile__top {
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  gap: 0.95rem;
+  width: 100%;
+  min-width: 0;
+}
+
+.studio-catalog-list-tile__main {
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  gap: 0.95rem;
+  width: 100%;
+  min-width: 0;
+  margin: 0;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  font: inherit;
+  color: inherit;
+  text-align: left;
+  border-radius: 8px;
+  cursor: pointer;
+}
+
+.studio-catalog-list-tile__main:focus-visible {
+  outline: 2px solid var(--focus-ring);
+  outline-offset: 2px;
+}
+
+.studio-catalog-list-tile__actions {
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+  width: 100%;
+  align-self: stretch;
+}
+
+.studio-catalog-list-tile__actions .btn {
+  width: 100%;
+  justify-content: center;
+}
+
+.studio-catalog-list-tile--dim:not(.studio-catalog-list-tile--selected) {
+  opacity: 0.52;
+  filter: grayscale(0.2);
+}
+
+.studio-catalog-list-tile--selected {
+  border-color: color-mix(in srgb, var(--accent) 55%, var(--border-strong) 45%);
+  box-shadow:
+    0 0 0 2px color-mix(in srgb, var(--accent) 38%, transparent),
+    0 6px 22px color-mix(in srgb, var(--bg) 58%, transparent);
 }
 
 .hero-card {
@@ -2438,15 +2504,6 @@
   font-weight: 700;
 }
 
-.artist-card__title,
-.album-card__title {
-  font-weight: 700;
-  min-width: 0;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-}
-
 .track-row__actions {
   display: flex;
   flex-wrap: wrap;
@@ -2630,58 +2687,6 @@
 
 .library-view .genre-browse-wrap > .panel-empty {
   text-align: center;
-}
-
-.artist-card,
-.album-card {
-  border-radius: calc(var(--radius-lg) + 6px);
-  padding: 1rem;
-  text-align: left;
-  transition: border-color 0.16s ease, box-shadow 0.16s ease,
-    transform 0.18s ease;
-  display: flex;
-  flex-direction: column;
-  align-items: stretch;
-  height: 100%;
-  min-height: 0;
-  box-sizing: border-box;
-}
-
-.artist-card:hover,
-.album-card:hover {
-  border-color: color-mix(in srgb, var(--accent) 42%, var(--border) 58%);
-  box-shadow:
-    0 0 0 1px color-mix(in srgb, var(--accent) 18%, transparent),
-    0 20px 48px color-mix(in srgb, var(--bg) 70%, transparent);
-  transform: translateY(-3px);
-}
-
-.artist-card {
-  gap: 0.7rem;
-}
-
-.artist-card__cover,
-.artist-card__badge {
-  flex-shrink: 0;
-}
-
-.artist-card__text,
-.album-card__text {
-  flex: 1 1 auto;
-  min-width: 0;
-  width: 100%;
-  display: flex;
-  flex-direction: column;
-  align-items: stretch;
-  justify-content: flex-start;
-  gap: 0.2rem;
-  min-height: 0;
-}
-
-.album-card .album-cover {
-  flex-shrink: 0;
-  align-self: center;
-  width: 100%;
 }
 
 .lib-meta-badges {
@@ -2971,40 +2976,6 @@
 .track-row__title-lead .lib-meta-chip {
   flex: 0 0 auto;
   align-self: center;
-}
-
-.artist-card__badge,
-.artist-card__cover {
-  width: 100%;
-  aspect-ratio: 1;
-  border-radius: 22px;
-}
-
-.artist-card__badge {
-  display: grid;
-  place-items: center;
-  background: linear-gradient(135deg, var(--badge-1), var(--badge-2));
-  font-weight: 800;
-  font-family: "Space Grotesk", sans-serif;
-  font-size: clamp(1.75rem, 2.4vw, 2.85rem);
-  border: 1px solid color-mix(in srgb, var(--accent) 14%, var(--border) 86%);
-  box-shadow:
-    0 10px 28px color-mix(in srgb, var(--bg) 78%, transparent),
-    0 0 0 1px color-mix(in srgb, var(--accent) 10%, transparent);
-}
-
-.artist-card__cover {
-  object-fit: cover;
-  background: var(--surface3);
-  border: 1px solid color-mix(in srgb, var(--accent) 18%, var(--border) 82%);
-  box-shadow:
-    0 10px 28px color-mix(in srgb, var(--bg) 78%, transparent),
-    0 0 0 1px color-mix(in srgb, var(--accent) 12%, transparent);
-}
-
-.album-card {
-  display: grid;
-  gap: 0.7rem;
 }
 
 .album-cover {
@@ -4660,7 +4631,7 @@
   flex-direction: column;
   gap: 0.75rem;
   margin-top: 0;
-  max-width: min(40rem, 100%);
+  max-width: min(48rem, 100%);
   padding: 0.85rem 1rem;
   border-radius: var(--radius-md);
   background: color-mix(in srgb, var(--surface-elev-a) 42%, var(--bg));
@@ -4668,9 +4639,24 @@
   box-sizing: border-box;
 }
 
-.studio-catalog-filters input[type="search"] {
+.studio-catalog-filters__toolbar {
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  gap: 0.65rem;
+  flex-wrap: wrap;
   width: 100%;
   min-width: 0;
+}
+
+.studio-catalog-filters__toolbar .btn {
+  flex-shrink: 0;
+}
+
+.studio-catalog-filters__search {
+  flex: 1 1 12rem;
+  min-width: 0;
+  width: auto;
 }
 
 .studio-catalog-filters__check {
@@ -4696,108 +4682,6 @@
 .studio-catalog-filter-empty {
   margin: 0;
   padding: 0.5rem 0 0.15rem;
-}
-
-.studio-catalog-grid {
-  display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(12rem, 1fr));
-  gap: 1rem;
-  margin-top: 0;
-}
-
-.studio-catalog-card {
-  display: flex;
-  flex-direction: column;
-  gap: 0.65rem;
-  padding: 0.9rem;
-  border-radius: var(--radius-lg);
-  text-align: left;
-  min-width: 0;
-  box-sizing: border-box;
-  border: 1px solid color-mix(in srgb, var(--border) 75%, transparent);
-  background: color-mix(in srgb, var(--surface-elev-b) 28%, transparent);
-  transition: border-color 0.15s ease, box-shadow 0.15s ease;
-}
-
-.studio-catalog-card.artist-card {
-  cursor: pointer;
-}
-
-.studio-catalog-card:focus-visible {
-  outline: 2px solid color-mix(in srgb, var(--accent) 55%, transparent);
-  outline-offset: 2px;
-}
-
-.studio-catalog-card .artist-card__title,
-.studio-catalog-card .album-card__title {
-  font-size: 0.98rem;
-  font-weight: 650;
-  letter-spacing: -0.02em;
-}
-
-.studio-catalog-card .artist-card__meta,
-.studio-catalog-card .album-card__meta {
-  font-size: 0.78rem;
-  color: var(--muted);
-  line-height: 1.35;
-}
-
-.studio-catalog-card__media {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  flex-shrink: 0;
-  width: 100%;
-}
-
-.studio-catalog-card__img {
-  width: 100%;
-  aspect-ratio: 1;
-  object-fit: cover;
-  border-radius: var(--radius-md);
-}
-
-.studio-catalog-card .artist-card__badge {
-  width: 100%;
-  aspect-ratio: 1;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  font-size: 1.35rem;
-  font-weight: 750;
-  border-radius: var(--radius-md);
-}
-
-.studio-catalog-card--dim:not(.studio-catalog-card--selected) {
-  opacity: 0.52;
-  filter: grayscale(0.2);
-}
-
-.studio-catalog-card--selected {
-  border-color: color-mix(in srgb, var(--accent) 55%, var(--border-strong) 45%);
-  box-shadow: 0 0 0 2px color-mix(in srgb, var(--accent) 38%, transparent),
-    var(--shadow-elev-2);
-}
-
-.studio-catalog-card__body {
-  display: flex;
-  flex-direction: column;
-  gap: 0.35rem;
-  flex: 1;
-  min-width: 0;
-}
-
-.studio-catalog-card__actions {
-  margin-top: auto;
-  padding-top: 0.6rem;
-  display: flex;
-  flex-wrap: wrap;
-  gap: 0.35rem;
-}
-
-.studio-catalog-card__actions .btn {
-  flex: 1 1 auto;
-  min-width: 0;
 }
 
 .tools-meta .studio-meta-split {
