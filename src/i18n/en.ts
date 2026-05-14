@@ -162,9 +162,24 @@ export const EN: Record<string, string> = {
   "trackRow.lyricsPlain": "Lyrics available (non-LRC)",
   "trackRow.lyricsMissing": "No lyrics available",
   "trackRow.excludeTitle": "Exclude from smart shuffle",
+  "trackRow.excludeActiveTitle": "Excluded from smart shuffle",
   "trackRow.excludeLockedByAlbumTitle":
     "Album excluded from shuffle: turn off album exclusion to change individual tracks",
   "trackRow.excludeLockedByAlbumAria": "Shuffle exclusion locked by album",
+  "trackRow.overflowMenuTitle": "More track actions",
+  "trackRow.overflowMenuAria": "Open track actions menu",
+  "trackRow.overflowEdit": "Edit",
+  "trackRow.playlistTitle": "Playlists",
+  "trackRow.playlistAria": "Add or remove this track from playlists",
+  "trackRow.playlistPickerAria": "Playlists: add or remove this track",
+  "trackRow.playlistPickerEmpty":
+    "No playlists yet. Create one from the Playlists section.",
+  "trackRow.playlistAddTo": "Add to playlist “{{name}}”",
+  "trackRow.playlistRemoveFrom": "Remove from playlist “{{name}}”",
+  "trackRow.playlistInList": "In playlist",
+  "trackRow.playlistNotInList": "Add",
+  "trackRow.playlistAddHint": "Click to add the track to this playlist",
+  "trackRow.playlistRemoveHint": "Click to remove the track from this playlist",
   "badges.track": "Track",
   "badges.album": "Album",
   "library.metaFileStatusAria": "File metadata status",
@@ -236,7 +251,8 @@ export const EN: Record<string, string> = {
   "dashboard.mixPlayRandom": "Shuffle play",
   "dashboard.mixPickHint":
     "Pick at least one genre and/or mood to start intelligent shuffle over just those tracks.",
-  "dashboard.mixFallbackHint": "Or open the Listen tab:",
+  "dashboard.mixFallbackHint":
+    "Listen turns on when the current pick contains at least one track.",
   "dashboard.mixNoGenresHint":
     "No genres in metadata yet — tag them from the Library or Studio.",
   "dashboard.mixNTracks": "{{n}} tracks in this pick",

@@ -216,6 +216,7 @@ export function defaultUserState() {
     shuffleExcludedAlbumIds: [],
     shuffleExcludedTrackRelPaths: [],
     trackMoods: {},
+    playlistsMigrated: false,
   }
 }
 
@@ -341,6 +342,7 @@ export function sanitizeUserState(input) {
     trackMoods: sanitizeTrackMoodsMap(src.trackMoods),
     migratedLegacy: src.migratedLegacy === true,
     trackMoodsMigrated: src.trackMoodsMigrated === true,
+    playlistsMigrated: src.playlistsMigrated === true,
   }
 }
 

@@ -3,14 +3,21 @@ import {
   useCallback,
   useEffect,
   useMemo,
+  useRef,
   useState,
 } from "react";
 import type { CSSProperties, RefObject } from "react";
+import { createPortal } from "react-dom";
 import { usePlayer } from "../../context/PlayerContext";
 import { useUserState } from "../../context/UserStateContext";
 import { useAppConfirm } from "../../context/AppConfirmContext";
 import { useI18n } from "../../i18n/useI18n";
 import { useLibraryCardPlayback } from "../../hooks/useLibraryCardPlayback";
+import {
+  popoverPlacementStyle,
+  usePopoverLayerAnchored,
+  type PopoverLayerOptions,
+} from "../../hooks/usePopoverLayerAnchored";
 import { useOpenAlbumMetaEdit } from "../../components/AlbumMetaEditor";
 import { TrackMetaEditGlyph } from "../../components/TrackMetaEditor";
 import { AlbumTracklistExpectedMeta } from "../../components/AlbumTracklistExpectedMeta";
@@ -66,6 +73,12 @@ import type {
   LibraryTrackIndex,
 } from "../../types";
 import type { RouteState } from "../../lib/routing";
+
+/** Stima `min-width` lista generi (16rem + margine) per il flip orizzontale sotto il +. */
+const ALBUM_GENRE_POPOVER_PLACEMENT_OPTS: PopoverLayerOptions = {
+  alignMinWidthPx: 268,
+  edgeMarginPx: 8,
+};
 
 interface LibraryViewProps {
   index: LibraryIndex;
@@ -205,6 +218,19 @@ export default function LibraryView({
   const [albumGenrePickerOpen, setAlbumGenrePickerOpen] = useState(false);
   const [albumGenreBusy, setAlbumGenreBusy] = useState(false);
   const [albumGenreErr, setAlbumGenreErr] = useState<string | null>(null);
+  const albumGenreAnchorRef = useRef<HTMLDivElement | null>(null);
+  const albumGenreMenuRef = useRef<HTMLDivElement | null>(null);
+  const closeAlbumGenrePicker = useCallback(
+    () => setAlbumGenrePickerOpen(false),
+    []
+  );
+  const albumGenrePlacement = usePopoverLayerAnchored(
+    albumGenrePickerOpen,
+    albumGenreAnchorRef,
+    closeAlbumGenrePicker,
+    albumGenreMenuRef,
+    ALBUM_GENRE_POPOVER_PLACEMENT_OPTS
+  );
 
   const albumTrackGenres = useMemo(() => {
     const byLower = new Map<string, string>();
@@ -921,7 +947,7 @@ export default function LibraryView({
                     </span>
                   ))}
                   {albumGenreOptions.length > 0 ? (
-                    <div className="meta-edit-genre-add">
+                    <div className="meta-edit-genre-add" ref={albumGenreAnchorRef}>
                       <button
                         type="button"
                         className="meta-edit-genre-chip meta-edit-genre-chip--add"
@@ -937,25 +963,30 @@ export default function LibraryView({
                           aria-hidden
                         />
                       </button>
-                      {albumGenrePickerOpen ? (
-                        <div
-                          className="meta-edit-genre-option-list"
-                          role="listbox"
-                        >
-                          {albumGenreOptions.map((g) => (
-                            <button
-                              key={g}
-                              type="button"
-                              className="meta-edit-genre-option-item"
-                              onClick={() => {
-                                void addAlbumGenreBySelection(g);
-                              }}
+                      {albumGenrePickerOpen
+                        ? createPortal(
+                            <div
+                              ref={albumGenreMenuRef}
+                              className="meta-edit-genre-option-list popover-layer-fixed"
+                              role="listbox"
+                              style={popoverPlacementStyle(albumGenrePlacement)}
                             >
-                              {g}
-                            </button>
-                          ))}
-                        </div>
-                      ) : null}
+                              {albumGenreOptions.map((g) => (
+                                <button
+                                  key={g}
+                                  type="button"
+                                  className="meta-edit-genre-option-item"
+                                  onClick={() => {
+                                    void addAlbumGenreBySelection(g);
+                                  }}
+                                >
+                                  {g}
+                                </button>
+                              ))}
+                            </div>,
+                            document.body
+                          )
+                        : null}
                     </div>
                   ) : null}
                 </div>
@@ -990,6 +1021,7 @@ export default function LibraryView({
                 track={track}
                 listIndex={trIndex + 1}
                 showTrackBadgeRow
+                trackActionsMode="album"
                 onPlay={() => p.playTrack(track, albumTracks, trIndex)}
               />
             ))}
