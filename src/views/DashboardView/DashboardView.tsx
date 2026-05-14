@@ -1,10 +1,9 @@
-import { useCallback, useMemo } from "react";
-import { usePlayer } from "../../context/PlayerContext";
+import { useMemo } from "react";
+import { DashboardMixCard } from "../../components/DashboardMixCard";
 import { useUserState } from "../../context/UserStateContext";
 import { useLibraryCardPlayback } from "../../hooks/useLibraryCardPlayback";
 import { useMatchMedia } from "../../hooks/useMatchMedia";
 import { useDashboardUpdatedAlbumsGrid } from "../../hooks/useDashboardUpdatedAlbumsGrid";
-import { useDashboardSessionQueueVisibleCount } from "../../hooks/useDashboardSessionQueueVisibleCount";
 import { useI18n } from "../../i18n/useI18n";
 import { TrackListRow } from "../../components/AppSharedUi";
 import { AlbumListTile } from "../../components/library";
@@ -13,10 +12,7 @@ import {
   UiAutorenew,
   UiBuild,
   UiFavorite,
-  UiPlayCircle,
 } from "../../components/KordUiIcons";
-import { eligibleTracksForIntelligentRandom } from "../../lib/randomExclusions";
-import { buildSmartRandomQueue } from "../../lib/smartShuffle";
 import type { AppSection, DashboardPayload, LibraryIndex } from "../../types";
 interface DashboardViewProps {
   dashboard: DashboardPayload | null;
@@ -32,19 +28,11 @@ export default function DashboardView({
   onOpenSection,
 }: DashboardViewProps) {
   const { t } = useI18n();
-  const p = usePlayer();
   const user = useUserState();
   const playFromLibraryCard = useLibraryCardPlayback(index?.tracks);
-  const exAlbumsRand = useMemo(
-    () => new Set(user.state.shuffleExcludedAlbumIds),
-    [user.state.shuffleExcludedAlbumIds]
-  );
-  const exTracksRand = useMemo(
-    () => new Set(user.state.shuffleExcludedTrackRelPaths),
-    [user.state.shuffleExcludedTrackRelPaths]
-  );
+  const isDashboardMobileLayout = useMatchMedia("(max-width: 900px)");
   const { ref: updatedAlbumsGridRef, maxItems: updatedAlbumsMax } =
-    useDashboardUpdatedAlbumsGrid();
+    useDashboardUpdatedAlbumsGrid(isDashboardMobileLayout);
   const favoriteTracksSorted = useMemo(
     () =>
       [...(dashboard?.favoriteTracks || [])].sort(
@@ -55,38 +43,6 @@ export default function DashboardView({
       ),
     [dashboard?.favoriteTracks, user.state.trackPlayCounts]
   );
-
-  const isDashboardMobileLayout = useMatchMedia("(max-width: 900px)");
-  const continueListeningList = p.queue;
-  const { bodyRef: sessionBodyRef, visibleCount: sessionVisibleCount } =
-    useDashboardSessionQueueVisibleCount(
-      continueListeningList.length,
-      isDashboardMobileLayout,
-      updatedAlbumsGridRef
-    );
-  const sessionTracksVisible = useMemo(
-    () => continueListeningList.slice(0, sessionVisibleCount),
-    [continueListeningList, sessionVisibleCount]
-  );
-
-  const runRandomIntelligent = useCallback(() => {
-    if (!index) return;
-    const eligible = eligibleTracksForIntelligentRandom(
-      index,
-      exAlbumsRand,
-      exTracksRand
-    );
-    if (!eligible.length) return;
-    const recentRelPaths = new Set(
-      user.state.recent.slice(0, 48).map((trk) => trk.relPath)
-    );
-    const shuffled = buildSmartRandomQueue(eligible, {
-      currentRelPath: p.current?.relPath,
-      currentArtist: p.current?.artist,
-      recentRelPaths,
-    });
-    p.playTrack(shuffled[0], shuffled, 0, { preserveQueueOrder: true });
-  }, [index, exAlbumsRand, exTracksRand, user.state.recent, p]);
 
   if (!dashboard || !index)
     return <div className="panel-empty">{t("loading.dashboard")}</div>;
@@ -138,55 +94,7 @@ export default function DashboardView({
       </section>
 
       <section className="dashboard-grid">
-        <section className="surface-card dashboard-session-card">
-          <div className="section-head section-head--page-toolbar">
-            <SectionHeadLead
-              eyebrow={t("dashboard.sessionEyebrow")}
-              title={t("dashboard.sessionHeading")}
-              icon={<UiPlayCircle className="section-head__ic" />}
-            />
-            <button
-              type="button"
-              className="text-btn"
-              onClick={() => onOpenSection("queue")}
-            >
-              {t("dashboard.openQueue")}
-            </button>
-          </div>
-          <div
-            ref={sessionBodyRef}
-            className={
-              continueListeningList.length === 0
-                ? "dashboard-session-body dashboard-session-body--empty"
-                : "dashboard-session-body"
-            }
-          >
-            {continueListeningList.length === 0 ? (
-              <div className="panel-empty panel-empty--actions">
-                <p>{t("listen.queueEmpty")}</p>
-                <button
-                  type="button"
-                  className="ghost-btn"
-                  onClick={runRandomIntelligent}
-                >
-                  {t("listen.smartShuffle")}
-                </button>
-              </div>
-            ) : (
-              <div className="list-stack">
-                {sessionTracksVisible.map((track, i) => (
-                  <TrackListRow
-                    key={track.relPath}
-                    track={track}
-                    listIndex={i + 1}
-                    active={i === p.currentIndex}
-                    onPlay={() => p.playTrack(track, p.queue, i)}
-                  />
-                ))}
-              </div>
-            )}
-          </div>
-        </section>
+        <DashboardMixCard index={index} onOpenSection={onOpenSection} />
 
         <section className="surface-card">
           <div className="section-head section-head--page-toolbar">
@@ -213,7 +121,6 @@ export default function DashboardView({
                 <AlbumListTile
                   key={album.id}
                   album={album}
-                  showArtistLine
                   onOpen={() => onOpenAlbum(album.artistId, album.name)}
                 />
               ))}

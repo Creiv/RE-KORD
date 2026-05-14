@@ -10,6 +10,7 @@ import {
 } from "react";
 import { mediaUrl } from "../lib/api";
 import { enrichTrack } from "../lib/enrichTrack";
+import { isTrackAlbumShuffleExcluded } from "../lib/randomExclusions";
 import {
   type MediaSessionBridge,
   registerMediaSessionActions,
@@ -172,7 +173,20 @@ export function PlayerProvider({ children }: { children: React.ReactNode }) {
       void delta;
       return;
     },
+    toggleShuffle: () => {
+      return;
+    },
+    cycleRepeat: () => {
+      return;
+    },
+    toggleFavoriteCurrent: () => {
+      return;
+    },
+    toggleExcludeCurrent: () => {
+      return;
+    },
   });
+  const currentRef = useRef<EnrichedTrack | null>(null);
   const lastMediaPosAtRef = useRef(0);
   const lastMediaRelPathRef = useRef<string | null>(null);
   const halfListenCountedRef = useRef(false);
@@ -186,6 +200,10 @@ export function PlayerProvider({ children }: { children: React.ReactNode }) {
   useEffect(() => {
     shuffleRef.current = shuffle;
   }, [shuffle]);
+
+  useEffect(() => {
+    currentRef.current = current;
+  }, [current]);
 
   useEffect(() => {
     const audio = audioRef.current;
@@ -654,8 +672,39 @@ export function PlayerProvider({ children }: { children: React.ReactNode }) {
         const nextT = a.currentTime + d;
         seek(Math.max(0, nextT));
       },
+      toggleShuffle: () => {
+        setShuffle(!shuffleRef.current);
+      },
+      cycleRepeat: () => {
+        setRepeat((r) =>
+          r === "off" ? "all" : r === "all" ? "one" : "off",
+        );
+      },
+      toggleFavoriteCurrent: () => {
+        const cur = currentRef.current;
+        if (!cur) return;
+        user.toggleFavorite(cur.relPath);
+      },
+      toggleExcludeCurrent: () => {
+        const cur = currentRef.current;
+        if (!cur) return;
+        const exAlbums = new Set(user.state.shuffleExcludedAlbumIds);
+        if (isTrackAlbumShuffleExcluded(cur, exAlbums)) return;
+        user.toggleShuffleExcludedTrack(cur.relPath);
+      },
     };
-  }, [play, pause, next, prev, seek]);
+  }, [
+    play,
+    pause,
+    next,
+    prev,
+    seek,
+    setShuffle,
+    setRepeat,
+    user.toggleFavorite,
+    user.toggleShuffleExcludedTrack,
+    user.state.shuffleExcludedAlbumIds,
+  ]);
 
   useEffect(() => {
     return registerMediaSessionActions(() => mediaBridgeRef.current);

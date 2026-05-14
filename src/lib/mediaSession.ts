@@ -71,6 +71,51 @@ export type MediaSessionBridge = {
   prev: () => void
   seek: (timeSec: number) => void
   seekBy: (deltaSec: number) => void
+  /** Riproduzione casuale (se l’UA espone l’azione, spesso non standard). */
+  toggleShuffle: () => void
+  /** Ciclo off → tutti → uno (se l’UA espone l’azione, spesso non standard). */
+  cycleRepeat: () => void
+  /** Preferito sul brano corrente. */
+  toggleFavoriteCurrent: () => void
+  /** Escludi/include il brano dalla shuffle globale. */
+  toggleExcludeCurrent: () => void
+}
+
+/** Azioni non incluse nel tipo TS DOM ma accettate da alcuni browser / WebView. */
+const EXPERIMENTAL_SHUFFLE_ALIASES = [
+  "toggleshuffle",
+  "shuffle",
+] as const
+
+const EXPERIMENTAL_REPEAT_ALIASES = [
+  "switchrepeatmode",
+  "repeat",
+  "setrepeatmode",
+  "togglerepeat",
+] as const
+
+const EXPERIMENTAL_FAVORITE_ALIASES = [
+  "togglelike",
+  "like",
+  "favorite",
+  "togglefavorite",
+] as const
+
+const EXPERIMENTAL_EXCLUDE_ALIASES = [
+  "toggleshuffleexclude",
+  "toggleexcludetrack",
+] as const
+
+function trySetActionHandler(
+  ms: MediaSession,
+  action: string,
+  handler: MediaSessionActionHandler | null,
+): void {
+  try {
+    ms.setActionHandler(action as MediaSessionAction, handler)
+  } catch {
+    /* */
+  }
 }
 
 export function registerMediaSessionActions(
@@ -139,6 +184,24 @@ export function registerMediaSessionActions(
     /* */
   }
 
+  const toggleShuffle = () => run(() => getBridge().toggleShuffle())
+  const cycleRepeat = () => run(() => getBridge().cycleRepeat())
+  const toggleFavorite = () => run(() => getBridge().toggleFavoriteCurrent())
+  const toggleExclude = () => run(() => getBridge().toggleExcludeCurrent())
+
+  for (const a of EXPERIMENTAL_SHUFFLE_ALIASES) {
+    trySetActionHandler(ms, a, toggleShuffle)
+  }
+  for (const a of EXPERIMENTAL_REPEAT_ALIASES) {
+    trySetActionHandler(ms, a, cycleRepeat)
+  }
+  for (const a of EXPERIMENTAL_FAVORITE_ALIASES) {
+    trySetActionHandler(ms, a, toggleFavorite)
+  }
+  for (const a of EXPERIMENTAL_EXCLUDE_ALIASES) {
+    trySetActionHandler(ms, a, toggleExclude)
+  }
+
   return () => {
     safe("play", null)
     safe("pause", null)
@@ -158,6 +221,18 @@ export function registerMediaSessionActions(
       ms.setActionHandler(seekforw, null)
     } catch {
       /* */
+    }
+    for (const a of EXPERIMENTAL_SHUFFLE_ALIASES) {
+      trySetActionHandler(ms, a, null)
+    }
+    for (const a of EXPERIMENTAL_REPEAT_ALIASES) {
+      trySetActionHandler(ms, a, null)
+    }
+    for (const a of EXPERIMENTAL_FAVORITE_ALIASES) {
+      trySetActionHandler(ms, a, null)
+    }
+    for (const a of EXPERIMENTAL_EXCLUDE_ALIASES) {
+      trySetActionHandler(ms, a, null)
     }
   }
 }
