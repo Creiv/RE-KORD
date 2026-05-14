@@ -162,7 +162,7 @@ export const TrackListRow = memo(function TrackListRow({
   showTrackBadgeRow?: boolean;
   /** Posizione nella lista (1-based). */
   listIndex?: number;
-  /** Disabilita auto-focus/scroll quando la riga è attiva. */
+  /** Disabilita lo scroll automatico della riga quando diventa quella attiva. */
   autoFocusActive?: boolean;
 }) {
   const p = usePlayer();
@@ -199,7 +199,6 @@ export const TrackListRow = memo(function TrackListRow({
       ? active
       : Boolean(p.current && p.current.relPath === track.relPath);
   const rowRef = useRef<HTMLDivElement | null>(null);
-  const mainBtnRef = useRef<HTMLButtonElement | null>(null);
   const prevActiveRef = useRef(false);
   useLayoutEffect(() => {
     if (!autoFocusActive || !rowActive || prevActiveRef.current) {
@@ -213,7 +212,6 @@ export const TrackListRow = memo(function TrackListRow({
         inline: "nearest",
         behavior: "smooth",
       });
-      mainBtnRef.current?.focus({ preventScroll: true });
     });
     return () => window.cancelAnimationFrame(raf);
   }, [rowActive, autoFocusActive]);
@@ -239,7 +237,6 @@ export const TrackListRow = memo(function TrackListRow({
       </span>
       <TrackRowArt relPath={track.relPath} />
       <button
-        ref={mainBtnRef}
         type="button"
         className="track-row__main"
         onClick={onPlay}

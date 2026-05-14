@@ -120,7 +120,7 @@ export default function ListenView({ index, onOpenSection }: ListenViewProps) {
 
   const lrcScrollRef = useRef<HTMLDivElement>(null);
   const lrcCurrentLineRef = useRef<HTMLParagraphElement | null>(null);
-  const vizFocusRef = useRef<HTMLDivElement | null>(null);
+  const vizScrollRef = useRef<HTMLDivElement | null>(null);
 
   useEffect(() => {
     const timer = window.setTimeout(() => {
@@ -157,8 +157,7 @@ export default function ListenView({ index, onOpenSection }: ListenViewProps) {
   useLayoutEffect(() => {
     if (!cur?.relPath) return;
     const raf = window.requestAnimationFrame(() => {
-      vizFocusRef.current?.focus({ preventScroll: true });
-      vizFocusRef.current?.scrollIntoView({
+      vizScrollRef.current?.scrollIntoView({
         block: "center",
         inline: "nearest",
         behavior: "smooth",
@@ -327,7 +326,7 @@ export default function ListenView({ index, onOpenSection }: ListenViewProps) {
               </div>
             </div>
           </div>
-          <div className="listen-stage__viz" ref={vizFocusRef} tabIndex={-1}>
+          <div className="listen-stage__viz" ref={vizScrollRef}>
             <Visualizer mode={user.state.settings.vizMode} />
           </div>
         </section>
