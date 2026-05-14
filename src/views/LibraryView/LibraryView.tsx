@@ -219,7 +219,7 @@ export default function LibraryView({
   const [albumGenreBusy, setAlbumGenreBusy] = useState(false);
   const [albumGenreErr, setAlbumGenreErr] = useState<string | null>(null);
   const albumGenreAnchorRef = useRef<HTMLDivElement | null>(null);
-  const albumGenreMenuRef = useRef<HTMLDivElement | null>(null);
+  const albumGenreMenuRef = useRef<HTMLUListElement | null>(null);
   const closeAlbumGenrePicker = useCallback(
     () => setAlbumGenrePickerOpen(false),
     []
@@ -965,25 +965,35 @@ export default function LibraryView({
                       </button>
                       {albumGenrePickerOpen
                         ? createPortal(
-                            <div
+                            <ul
                               ref={albumGenreMenuRef}
-                              className="meta-edit-genre-option-list popover-layer-fixed"
-                              role="listbox"
+                              className="track-row__overflow-menu meta-edit-genre-option-list popover-layer-fixed"
+                              role="menu"
                               style={popoverPlacementStyle(albumGenrePlacement)}
                             >
                               {albumGenreOptions.map((g) => (
-                                <button
-                                  key={g}
-                                  type="button"
-                                  className="meta-edit-genre-option-item"
-                                  onClick={() => {
-                                    void addAlbumGenreBySelection(g);
-                                  }}
-                                >
-                                  {g}
-                                </button>
+                                <li key={g} role="presentation">
+                                  <button
+                                    type="button"
+                                    role="menuitem"
+                                    className="track-row__overflow-item meta-edit-genre-option-item"
+                                    onClick={() => {
+                                      void addAlbumGenreBySelection(g);
+                                    }}
+                                  >
+                                    <span
+                                      className="track-row__overflow-item-glyph track-row__ic-glyph--svg"
+                                      aria-hidden
+                                    >
+                                      <UiStyle />
+                                    </span>
+                                    <span className="track-row__overflow-item-label">
+                                      {g}
+                                    </span>
+                                  </button>
+                                </li>
                               ))}
-                            </div>,
+                            </ul>,
                             document.body
                           )
                         : null}
