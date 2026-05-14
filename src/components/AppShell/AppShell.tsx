@@ -322,13 +322,14 @@ export function AppShell() {
   }, []);
 
   useEffect(() => {
-    if (!index) return;
+    if (!index || !user.ready) return;
     p.resyncTracksFromIndex(index);
     user.rehydrateTrackListsFromLibrary(index);
     user.rehydrateShuffleExclusionsFromIndex(index);
   }, [
     index,
     p.resyncTracksFromIndex,
+    user.ready,
     user.rehydrateTrackListsFromLibrary,
     user.rehydrateShuffleExclusionsFromIndex,
   ]);

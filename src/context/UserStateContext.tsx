@@ -409,6 +409,7 @@ function defaultUserState(): UserStateV1 {
     shuffleExcludedAlbumIds: [],
     shuffleExcludedTrackRelPaths: [],
     migratedLegacy: false,
+    playlistsMigrated: false,
   };
 }
 
@@ -492,6 +493,7 @@ function userStateToPatch(state: UserStateV1, omitPlaylists = false): UserStateP
     trackMoods: state.trackMoods,
     migratedLegacy: state.migratedLegacy,
     trackMoodsMigrated: state.trackMoodsMigrated,
+    playlistsMigrated: state.playlistsMigrated,
   });
 }
 
@@ -561,8 +563,19 @@ function legacyImport(): Partial<UserStateV1> {
 }
 
 function mergeLegacy(remote: UserStateV1): UserStateV1 {
-  if (remote.migratedLegacy) return remote;
   const legacy = legacyImport();
+  const legacyPlaylists = (legacy.playlists as UserPlaylist[]) || [];
+  if (remote.migratedLegacy && remote.playlistsMigrated) return remote;
+  if (remote.migratedLegacy) {
+    return {
+      ...remote,
+      playlists:
+        remote.playlists.length > 0 || legacyPlaylists.length === 0
+          ? remote.playlists
+          : legacyPlaylists,
+      playlistsMigrated: true,
+    };
+  }
   return {
     ...remote,
     favorites: uniqStrings([
@@ -578,13 +591,14 @@ function mergeLegacy(remote: UserStateV1): UserStateV1 {
     playlists:
       remote.playlists.length > 0
         ? remote.playlists
-        : (legacy.playlists as UserPlaylist[]) || [],
+        : legacyPlaylists,
     settings: normalizeSettings({
       ...remote.settings,
       ...(legacy.settings || {}),
       defaultTab: remote.settings?.defaultTab || "dashboard",
     }),
     migratedLegacy: true,
+    playlistsMigrated: true,
   };
 }
 
@@ -652,8 +666,14 @@ export function UserStateProvider({ children }: { children: React.ReactNode }) {
       if (!active) return;
       clearRetry();
 
-      if (!remote.migratedLegacy) playlistDirtyRef.current = true;
       let merged = normalizeUserState(mergeLegacy(remote));
+      if (
+        !remote.migratedLegacy ||
+        merged.playlistsMigrated !== remote.playlistsMigrated ||
+        merged.playlists !== remote.playlists
+      ) {
+        playlistDirtyRef.current = true;
+      }
 
       const fromLocal = readLegacyLocalShuffleMigrated();
       if (fromLocal.albumKeys.length > 0 || fromLocal.trackPaths.length > 0) {
@@ -674,7 +694,9 @@ export function UserStateProvider({ children }: { children: React.ReactNode }) {
       const needsInitialPersist =
         fromLocal.albumKeys.length > 0 ||
         fromLocal.trackPaths.length > 0 ||
-        !remote.migratedLegacy;
+        !remote.migratedLegacy ||
+        merged.playlistsMigrated !== remote.playlistsMigrated ||
+        merged.playlists !== remote.playlists;
       if (needsInitialPersist) {
         pendingPatchRef.current = mergeUserStatePatches(
           pendingPatchRef.current,
@@ -933,6 +955,7 @@ export function UserStateProvider({ children }: { children: React.ReactNode }) {
 
   const rehydrateTrackListsFromLibrary = useCallback(
     (libraryIndex: LibraryIndex) => {
+      if (!hydratedRef.current) return;
       const byPath = new Map(
         libraryIndex.tracks.map((t) => [t.relPath, t])
       );
@@ -959,6 +982,7 @@ export function UserStateProvider({ children }: { children: React.ReactNode }) {
 
   const rehydrateShuffleExclusionsFromIndex = useCallback(
     (libraryIndex: LibraryIndex) => {
+      if (!hydratedRef.current) return;
       commit(
         (prev) => {
           const next = normalizeShuffleAlbumKeysWithIndex(

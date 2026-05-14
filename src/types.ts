@@ -154,6 +154,7 @@ export type UserStateV1 = {
   migratedLegacy?: boolean;
   trackMoods?: Record<string, string[]>;
   trackMoodsMigrated?: boolean;
+  playlistsMigrated?: boolean;
 };
 
 export type LibraryArtistIndex = {

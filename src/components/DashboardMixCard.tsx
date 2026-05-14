@@ -321,32 +321,23 @@ export function DashboardMixCard({
         </div>
 
         <div className="dashboard-mix-footer">
-          {!hasFilter ? (
-            <>
-              <p className="subtle sm">{t("dashboard.mixFallbackHint")}</p>
-              <button
-                type="button"
-                className="primary-btn"
-                onClick={() => onOpenSection("ascolta")}
-              >
-                {t("nav.listen")}
-              </button>
-            </>
-          ) : (
-            <>
-              <p className="subtle sm dashboard-mix-footer__count">
-                {t("dashboard.mixNTracks", { n: shuffleEligible.length })}
-              </p>
-              <button
-                type="button"
-                className="primary-btn"
-                disabled={shuffleEligible.length === 0}
-                onClick={playMixShuffle}
-              >
-                {t("dashboard.mixPlayRandom")}
-              </button>
-            </>
-          )}
+          <p
+            className={`subtle sm${
+              hasFilter ? " dashboard-mix-footer__count" : ""
+            }`}
+          >
+            {hasFilter
+              ? t("dashboard.mixNTracks", { n: shuffleEligible.length })
+              : t("dashboard.mixFallbackHint")}
+          </p>
+          <button
+            type="button"
+            className="primary-btn"
+            disabled={shuffleEligible.length === 0}
+            onClick={playMixShuffle}
+          >
+            {t("nav.listen")}
+          </button>
         </div>
       </div>
     </section>

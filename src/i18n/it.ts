@@ -164,9 +164,27 @@ export const IT: Record<string, string> = {
   "trackRow.lyricsPlain": "Lyrics presenti (non LRC)",
   "trackRow.lyricsMissing": "Lyrics non presenti",
   "trackRow.excludeTitle": "Escludi da random",
+  "trackRow.excludeActiveTitle": "Escluso da random",
   "trackRow.excludeLockedByAlbumTitle":
     "Album escluso dalla random: togli il blocco dall’album per modificare i singoli brani",
   "trackRow.excludeLockedByAlbumAria": "Esclusione random bloccata dall’album",
+  "trackRow.overflowMenuTitle": "Altre azioni sul brano",
+  "trackRow.overflowMenuAria": "Apri il menu delle altre azioni sul brano",
+  "trackRow.overflowEdit": "Modifica",
+  "trackRow.playlistTitle": "Playlist",
+  "trackRow.playlistAria":
+    "Scegli le playlist in cui aggiungere o da cui rimuovere il brano",
+  "trackRow.playlistPickerAria": "Playlist: aggiungi o rimuovi il brano",
+  "trackRow.playlistPickerEmpty":
+    "Non hai playlist. Creane una dalla sezione Playlist.",
+  "trackRow.playlistAddTo": "Aggiungi alla playlist «{{name}}»",
+  "trackRow.playlistRemoveFrom": "Rimuovi dalla playlist «{{name}}»",
+  "trackRow.playlistInList": "Presente",
+  "trackRow.playlistNotInList": "Aggiungi",
+  "trackRow.playlistAddHint":
+    "Clicca per aggiungere il brano a questa playlist",
+  "trackRow.playlistRemoveHint":
+    "Clicca per rimuovere il brano da questa playlist",
   "badges.track": "Brano",
   "badges.album": "Album",
   "library.metaFileStatusAria": "Stato metadati file",
@@ -241,7 +259,8 @@ export const IT: Record<string, string> = {
   "dashboard.mixPlayRandom": "Riproduci in random",
   "dashboard.mixPickHint":
     "Seleziona almeno un genere oppure uno o più mood: partirà uno shuffle intelligente solo su quei brani.",
-  "dashboard.mixFallbackHint": "Oppure apri la scheda Ascolta:",
+  "dashboard.mixFallbackHint":
+    "Ascolta si attiva quando la selezione contiene almeno un brano.",
   "dashboard.mixNoGenresHint":
     "Nessun genere nei metadati: assegnalo dalla libreria o dallo Studio.",
   "dashboard.mixNTracks": "{{n}} brani nella selezione",

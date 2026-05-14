@@ -1,12 +1,23 @@
 import {
+  Children,
+  cloneElement,
+  isValidElement,
   memo,
+  useCallback,
+  useEffect,
   useLayoutEffect,
   useMemo,
   useRef,
+  useState,
+  type ButtonHTMLAttributes,
   type CSSProperties,
-  type ReactNode,
+  type MouseEvent as ReactMouseEvent,
   type PointerEvent as ReactPointerEvent,
+  type ReactElement,
+  type ReactNode,
+  type RefObject,
 } from "react";
+import { createPortal } from "react-dom";
 import { usePlayer } from "../context/PlayerContext";
 import { useUserState } from "../context/UserStateContext";
 import { useI18n } from "../i18n/useI18n";
@@ -26,13 +37,21 @@ import { CoverImg } from "./CoverImg";
 import { ExcludeShuffleIcon } from "./ExcludeShuffleIcon";
 import { TrackMetaEditGlyph, useOpenTrackMetaEdit } from "./TrackMetaEditor";
 import { TrackMoodGlyph } from "./TrackMoodGlyph";
+import { useMatchMedia } from "../hooks/useMatchMedia";
+import {
+  popoverPlacementStyle,
+  usePopoverLayerAnchored,
+  type PopoverLayerOptions,
+} from "../hooks/usePopoverLayerAnchored";
 import {
   UiAdd,
   UiFavorite,
   UiLyrics,
+  UiMoreVert,
   UiMusicNote,
   UiPlayArrow,
   UiQueueMusic,
+  UiRemove,
 } from "./KordUiIcons";
 import type {
   EnrichedTrack,
@@ -148,6 +167,155 @@ export function PlayerBarTrackArt({
   );
 }
 
+/** Su mobile compatto `extraActions` non sono inline; voci equivalenti nel menu ⋯ */
+function trackRowExtraActionsAsOverflowItems(
+  extraActions: ReactNode | undefined,
+  close: () => void
+): ReactNode {
+  if (extraActions == null) return null;
+  const els = Children.toArray(extraActions).filter(
+    (
+      n
+    ): n is ReactElement<
+      ButtonHTMLAttributes<HTMLButtonElement> & { title?: unknown }
+    > => isValidElement(n)
+  );
+  return els.map((el, i) => {
+    const p = el.props;
+    const labelFromTitle =
+      typeof p.title === "string" && p.title.trim().length > 0
+        ? p.title.trim()
+        : "";
+    const labelFromAria =
+      typeof p["aria-label"] === "string" &&
+      p["aria-label"].trim().length > 0
+        ? p["aria-label"].trim()
+        : "";
+    const menuLabel = labelFromTitle || labelFromAria;
+    const prevClass =
+      typeof p.className === "string" ? p.className.trim() : "";
+    const mergedClass = `${prevClass} track-row__overflow-item`.trim();
+    const origClick = p.onClick;
+    return (
+      <li role="presentation" key={el.key ?? `tr-ex-${i}`}>
+        {cloneElement(el, {
+          role: "menuitem",
+          type: "button",
+          className: mergedClass,
+          onClick: (ev: ReactMouseEvent<HTMLButtonElement>) => {
+            origClick?.(ev);
+            if (!ev.defaultPrevented) close();
+          },
+          children: (
+            <>
+              <span
+                className="track-row__overflow-item-glyph track-row__ic-glyph--svg"
+                aria-hidden
+              >
+                {p.children}
+              </span>
+              {menuLabel ? (
+                <span className="track-row__overflow-item-label">
+                  {menuLabel}
+                </span>
+              ) : null}
+            </>
+          ),
+        })}
+      </li>
+    );
+  });
+}
+
+const TRACK_ROW_PLAYLIST_POPOVER_OPTS: PopoverLayerOptions = {
+  alignMinWidthPx: 276,
+  edgeMarginPx: 8,
+};
+
+/** Pannello playlist: toggle aggiungi / rimuovi brano per ogni playlist. */
+const TrackRowPlaylistPopover = memo(function TrackRowPlaylistPopover({
+  track,
+  open,
+  onRequestClose,
+  anchorRef,
+}: {
+  track: EnrichedTrack;
+  open: boolean;
+  onRequestClose: () => void;
+  anchorRef: RefObject<HTMLDivElement | null>;
+}) {
+  const user = useUserState();
+  const { t } = useI18n();
+  const panelRef = useRef<HTMLDivElement | null>(null);
+  const placement = usePopoverLayerAnchored(
+    open,
+    anchorRef,
+    onRequestClose,
+    panelRef,
+    TRACK_ROW_PLAYLIST_POPOVER_OPTS
+  );
+  const playlists = user.state.playlists;
+
+  if (!open) return null;
+
+  return createPortal(
+    <div
+      ref={panelRef}
+      className="track-row__playlist-popover popover-layer-fixed"
+      style={popoverPlacementStyle(placement)}
+      role="dialog"
+      aria-label={t("trackRow.playlistPickerAria")}
+    >
+      {playlists.length === 0 ? (
+        <p className="track-row__playlist-popover-empty subtle sm">
+          {t("trackRow.playlistPickerEmpty")}
+        </p>
+      ) : (
+        <ul className="track-row__playlist-popover-list">
+          {playlists.map((pl) => {
+            const inPl = pl.tracks.some((x) => x.relPath === track.relPath);
+            return (
+              <li key={pl.id}>
+                <button
+                  type="button"
+                  className={`track-row__playlist-popover-item${
+                    inPl ? " is-on" : ""
+                  }`}
+                  title={
+                    inPl
+                      ? t("trackRow.playlistRemoveHint")
+                      : t("trackRow.playlistAddHint")
+                  }
+                  aria-label={
+                    inPl
+                      ? t("trackRow.playlistRemoveFrom", { name: pl.name })
+                      : t("trackRow.playlistAddTo", { name: pl.name })
+                  }
+                  onClick={() =>
+                    inPl
+                      ? user.removeTrackFromPlaylist(pl.id, track.relPath)
+                      : user.addTrackToPlaylist(pl.id, track)
+                  }
+                >
+                  <span className="track-row__playlist-popover-item__name">
+                    {pl.name}
+                  </span>
+                  <span className="track-row__playlist-popover-item__state">
+                    {inPl
+                      ? t("trackRow.playlistInList")
+                      : t("trackRow.playlistNotInList")}
+                  </span>
+                </button>
+              </li>
+            );
+          })}
+        </ul>
+      )}
+    </div>,
+    document.body
+  );
+});
+
 export const TrackListRow = memo(function TrackListRow({
   track,
   active,
@@ -157,6 +325,7 @@ export const TrackListRow = memo(function TrackListRow({
   showTrackBadgeRow = false,
   listIndex,
   autoFocusActive = true,
+  trackActionsMode,
 }: {
   track: EnrichedTrack;
   /** If omitted, row is active when it matches the current track (`relPath`). Queue uses explicit index. */
@@ -170,6 +339,11 @@ export const TrackListRow = memo(function TrackListRow({
   listIndex?: number;
   /** Disabilita lo scroll automatico della riga quando diventa quella attiva. */
   autoFocusActive?: boolean;
+  /**
+   * `album`: coda / preferiti / modifica / blocca random come pulsanti sempre visibili.
+   * Omit (default): only favorites + ⋯ menu for queue / meta / shuffle block (+ extraActions).
+   */
+  trackActionsMode?: "album";
 }) {
   const p = usePlayer();
   const user = useUserState();
@@ -186,6 +360,15 @@ export const TrackListRow = memo(function TrackListRow({
   const albumShuffleExcluded = isTrackAlbumShuffleExcluded(track, exAlbums);
   const trackShuffleExcluded = excludedTracksMemo.has(track.relPath);
   const shuffleExcluded = albumShuffleExcluded || trackShuffleExcluded;
+  const albumToolbar = trackActionsMode === "album";
+  const favInOverflowMenu =
+    useMatchMedia("(max-width: 768px)") && !albumToolbar;
+  const excludeOverflowMenuLabel =
+    albumShuffleExcluded
+      ? t("trackRow.excludeTitle")
+      : shuffleExcluded
+      ? t("trackRow.excludeActiveTitle")
+      : t("trackRow.excludeTitle");
   const inQ = p.isTrackInQueue(track.relPath);
   const fav = user.isFavorite(track.relPath);
   const playCount = user.getTrackPlayCount(track.relPath);
@@ -206,6 +389,33 @@ export const TrackListRow = memo(function TrackListRow({
       : Boolean(p.current && p.current.relPath === track.relPath);
   const rowRef = useRef<HTMLDivElement | null>(null);
   const prevActiveRef = useRef(false);
+  const [overflowOpen, setOverflowOpen] = useState(false);
+  const overflowRef = useRef<HTMLDivElement | null>(null);
+  const overflowMenuRef = useRef<HTMLUListElement | null>(null);
+  const closeOverflow = useCallback(() => setOverflowOpen(false), []);
+  const overflowPlacement = usePopoverLayerAnchored(
+    overflowOpen,
+    overflowRef,
+    closeOverflow,
+    overflowMenuRef
+  );
+
+  const [playlistPickerOpen, setPlaylistPickerOpen] = useState(false);
+  const playlistAnchorRef = useRef<HTMLDivElement | null>(null);
+
+  useEffect(() => {
+    setOverflowOpen(false);
+    setPlaylistPickerOpen(false);
+  }, [track.relPath]);
+
+  useEffect(() => {
+    if (overflowOpen) setPlaylistPickerOpen(false);
+  }, [overflowOpen]);
+
+  useEffect(() => {
+    if (playlistPickerOpen) setOverflowOpen(false);
+  }, [playlistPickerOpen]);
+
   useLayoutEffect(() => {
     if (!autoFocusActive || !rowActive || prevActiveRef.current) {
       prevActiveRef.current = rowActive;
@@ -299,98 +509,356 @@ export const TrackListRow = memo(function TrackListRow({
           <span className="track-row__badges">{infoLine}</span>
         ) : null}
       </button>
-      <div className="track-row__actions">
-        {inQ ? (
-          <button
-            type="button"
-            className="track-row__in-coda"
-            onClick={() => p.removeFromQueueByRelPath(track.relPath)}
-            title={t("trackRow.removeQueueTitle")}
-            aria-label={t("trackRow.removeQueueAria")}
-          >
-            <span className="track-row__in-coda__label track-row__in-coda__label--idle">
-              {t("trackRow.inQueueIdle")}
-            </span>
-            <span className="track-row__in-coda__label track-row__in-coda__label--act">
-              {t("trackRow.inQueueAct")}
-            </span>
-          </button>
-        ) : (
-          <button
-            type="button"
-            className="track-row__ic track-row__ic--queue"
-            onClick={() => p.addToQueue(track)}
-            title={t("trackRow.addQueueTitle")}
-            aria-label={t("trackRow.addQueueAria")}
-          >
-            <span
-              className="track-row__ic-glyph track-row__ic-glyph--svg"
-              aria-hidden
+      <div
+        className={`track-row__actions${
+          albumToolbar ? "" : " track-row__actions--compact-tools"
+        }`}
+      >
+        {albumToolbar ? (
+          <>
+            {inQ ? (
+              <button
+                type="button"
+                className="track-row__in-coda"
+                onClick={() => p.removeFromQueueByRelPath(track.relPath)}
+                title={t("trackRow.removeQueueTitle")}
+                aria-label={t("trackRow.removeQueueAria")}
+              >
+                <span className="track-row__in-coda__label track-row__in-coda__label--idle">
+                  {t("trackRow.inQueueIdle")}
+                </span>
+                <span className="track-row__in-coda__label track-row__in-coda__label--act">
+                  {t("trackRow.inQueueAct")}
+                </span>
+              </button>
+            ) : (
+              <button
+                type="button"
+                className="track-row__ic track-row__ic--queue"
+                onClick={() => p.addToQueue(track)}
+                title={t("trackRow.addQueueTitle")}
+                aria-label={t("trackRow.addQueueAria")}
+              >
+                <span
+                  className="track-row__ic-glyph track-row__ic-glyph--svg"
+                  aria-hidden
+                >
+                  <UiAdd />
+                </span>
+              </button>
+            )}
+            <button
+              type="button"
+              className={`track-row__ic track-row__ic--fav ${fav ? "is-on" : ""}`}
+              onClick={() => user.toggleFavorite(track.relPath)}
+              title={t("trackRow.favTitle")}
+              aria-pressed={fav}
+              aria-label={t("trackRow.favAria")}
             >
-              <UiAdd />
-            </span>
-          </button>
+              <span
+                className="track-row__ic-glyph track-row__ic-glyph--svg"
+                aria-hidden
+              >
+                <UiFavorite />
+              </span>
+            </button>
+            <div className="track-row__playlist-anchor" ref={playlistAnchorRef}>
+              <button
+                type="button"
+                className={`track-row__ic track-row__ic--playlist${
+                  playlistPickerOpen ? " is-on" : ""
+                }`}
+                aria-expanded={playlistPickerOpen}
+                aria-haspopup="dialog"
+                title={t("trackRow.playlistTitle")}
+                aria-label={t("trackRow.playlistAria")}
+                onClick={(ev) => {
+                  ev.stopPropagation();
+                  setPlaylistPickerOpen((o) => !o);
+                }}
+              >
+                <span
+                  className="track-row__ic-glyph track-row__ic-glyph--svg"
+                  aria-hidden
+                >
+                  <UiQueueMusic />
+                </span>
+              </button>
+            </div>
+            <button
+              type="button"
+              className="track-row__ic track-row__ic--meta"
+              onClick={(ev) => {
+                ev.stopPropagation();
+                openTrackMetaEdit(track);
+              }}
+              title={t("trackRow.editMetaTitle")}
+              aria-label={t("trackRow.editMetaAria")}
+            >
+              <span className="track-row__ic-glyph track-row__ic-glyph--svg">
+                <TrackMetaEditGlyph />
+              </span>
+            </button>
+            <button
+              type="button"
+              className={`track-row__ic track-row__ic--exclude ${
+                shuffleExcluded ? "is-on" : ""
+              }`}
+              disabled={albumShuffleExcluded}
+              title={
+                albumShuffleExcluded
+                  ? t("trackRow.excludeLockedByAlbumTitle")
+                  : t("trackRow.excludeTitle")
+              }
+              onClick={() => {
+                if (albumShuffleExcluded) return;
+                user.toggleShuffleExcludedTrack(track.relPath);
+              }}
+              aria-pressed={shuffleExcluded}
+              aria-label={
+                albumShuffleExcluded
+                  ? t("trackRow.excludeLockedByAlbumAria")
+                  : t("trackRow.excludeTitle")
+              }
+            >
+              <span
+                className="track-row__ic-glyph track-row__ic-glyph--svg"
+                aria-hidden
+              >
+                <ExcludeShuffleIcon />
+              </span>
+            </button>
+            {extraActions}
+          </>
+        ) : (
+          <>
+            {!favInOverflowMenu ? (
+              <button
+                type="button"
+                className={`track-row__ic track-row__ic--fav ${fav ? "is-on" : ""}`}
+                onClick={() => user.toggleFavorite(track.relPath)}
+                title={t("trackRow.favTitle")}
+                aria-pressed={fav}
+                aria-label={t("trackRow.favAria")}
+              >
+                <span
+                  className="track-row__ic-glyph track-row__ic-glyph--svg"
+                  aria-hidden
+                >
+                  <UiFavorite />
+                </span>
+              </button>
+            ) : null}
+            <div className="track-row__overflow" ref={overflowRef}>
+              <button
+                type="button"
+                className="track-row__ic track-row__ic--overflow"
+                aria-expanded={overflowOpen}
+                aria-haspopup="menu"
+                title={t("trackRow.overflowMenuTitle")}
+                aria-label={t("trackRow.overflowMenuAria")}
+                onClick={(ev) => {
+                  ev.stopPropagation();
+                  setOverflowOpen((o) => !o);
+                }}
+              >
+                <span
+                  className="track-row__ic-glyph track-row__ic-glyph--svg"
+                  aria-hidden
+                >
+                  <UiMoreVert />
+                </span>
+              </button>
+            </div>
+            {overflowOpen
+              ? createPortal(
+                  <ul
+                    ref={overflowMenuRef}
+                    className="track-row__overflow-menu popover-layer-fixed"
+                    role="menu"
+                    style={popoverPlacementStyle(overflowPlacement)}
+                  >
+                    {favInOverflowMenu ? (
+                      <li role="presentation">
+                        <button
+                          type="button"
+                          role="menuitem"
+                          className={`track-row__overflow-item${fav ? " is-on" : ""}`}
+                          title={t("trackRow.favTitle")}
+                          aria-pressed={fav}
+                          aria-label={t("trackRow.favAria")}
+                          onClick={() => {
+                            user.toggleFavorite(track.relPath);
+                            setOverflowOpen(false);
+                          }}
+                        >
+                          <span
+                            className="track-row__overflow-item-glyph track-row__ic-glyph--svg"
+                            aria-hidden
+                          >
+                            <UiFavorite />
+                          </span>
+                          <span className="track-row__overflow-item-label">
+                            {t("trackRow.favTitle")}
+                          </span>
+                        </button>
+                      </li>
+                    ) : null}
+                    <li role="presentation">
+                      {inQ ? (
+                        <button
+                          type="button"
+                          role="menuitem"
+                          className="track-row__overflow-item"
+                          aria-label={t("trackRow.removeQueueAria")}
+                          title={t("trackRow.removeQueueTitle")}
+                          onClick={() => {
+                            p.removeFromQueueByRelPath(track.relPath);
+                            setOverflowOpen(false);
+                          }}
+                        >
+                          <span
+                            className="track-row__overflow-item-glyph track-row__ic-glyph--svg"
+                            aria-hidden
+                          >
+                            <UiRemove />
+                          </span>
+                          <span className="track-row__overflow-item-label">
+                            {t("trackRow.removeQueueTitle")}
+                          </span>
+                        </button>
+                      ) : (
+                        <button
+                          type="button"
+                          role="menuitem"
+                          className="track-row__overflow-item"
+                          aria-label={t("trackRow.addQueueAria")}
+                          title={t("trackRow.addQueueTitle")}
+                          onClick={() => {
+                            p.addToQueue(track);
+                            setOverflowOpen(false);
+                          }}
+                        >
+                          <span
+                            className="track-row__overflow-item-glyph track-row__ic-glyph--svg"
+                            aria-hidden
+                          >
+                            <UiAdd />
+                          </span>
+                          <span className="track-row__overflow-item-label">
+                            {t("trackRow.addQueueTitle")}
+                          </span>
+                        </button>
+                      )}
+                    </li>
+                    <li role="presentation">
+                      <button
+                        type="button"
+                        role="menuitem"
+                        className={`track-row__overflow-item${
+                          playlistPickerOpen ? " is-on" : ""
+                        }`}
+                        aria-expanded={playlistPickerOpen}
+                        aria-haspopup="dialog"
+                        title={t("trackRow.playlistTitle")}
+                        aria-label={t("trackRow.playlistAria")}
+                        onClick={(ev) => {
+                          ev.stopPropagation();
+                          setOverflowOpen(false);
+                          setPlaylistPickerOpen(true);
+                        }}
+                      >
+                        <span
+                          className="track-row__overflow-item-glyph track-row__ic-glyph--svg"
+                          aria-hidden
+                        >
+                          <UiQueueMusic />
+                        </span>
+                        <span className="track-row__overflow-item-label">
+                          {t("trackRow.playlistTitle")}
+                        </span>
+                      </button>
+                    </li>
+                    <li role="presentation">
+                      <button
+                        type="button"
+                        role="menuitem"
+                        className="track-row__overflow-item"
+                        aria-label={t("trackRow.editMetaAria")}
+                        title={t("trackRow.editMetaTitle")}
+                        onClick={() => {
+                          openTrackMetaEdit(track);
+                          setOverflowOpen(false);
+                        }}
+                      >
+                        <span
+                          className="track-row__overflow-item-glyph track-row__ic-glyph--svg"
+                          aria-hidden
+                        >
+                          <TrackMetaEditGlyph />
+                        </span>
+                        <span className="track-row__overflow-item-label">
+                          {t("trackRow.overflowEdit")}
+                        </span>
+                      </button>
+                    </li>
+                    <li role="presentation">
+                      <button
+                        type="button"
+                        role="menuitem"
+                        className={`track-row__overflow-item${
+                          shuffleExcluded ? " is-on" : ""
+                        }`}
+                        disabled={albumShuffleExcluded}
+                        aria-label={
+                          albumShuffleExcluded
+                            ? t("trackRow.excludeLockedByAlbumAria")
+                            : shuffleExcluded
+                            ? t("trackRow.excludeActiveTitle")
+                            : t("trackRow.excludeTitle")
+                        }
+                        title={
+                          albumShuffleExcluded
+                            ? t("trackRow.excludeLockedByAlbumTitle")
+                            : shuffleExcluded
+                            ? t("trackRow.excludeActiveTitle")
+                            : t("trackRow.excludeTitle")
+                        }
+                        onClick={() => {
+                          if (albumShuffleExcluded) return;
+                          user.toggleShuffleExcludedTrack(track.relPath);
+                          setOverflowOpen(false);
+                        }}
+                      >
+                        <span
+                          className="track-row__overflow-item-glyph track-row__ic-glyph--svg"
+                          aria-hidden
+                        >
+                          <ExcludeShuffleIcon />
+                        </span>
+                        <span className="track-row__overflow-item-label">
+                          {excludeOverflowMenuLabel}
+                        </span>
+                      </button>
+                    </li>
+                    {trackRowExtraActionsAsOverflowItems(
+                      favInOverflowMenu ? extraActions : undefined,
+                      () => setOverflowOpen(false)
+                    )}
+                  </ul>,
+                  document.body
+                )
+              : null}
+            {favInOverflowMenu ? null : extraActions}
+          </>
         )}
-        <button
-          type="button"
-          className={`track-row__ic track-row__ic--fav ${fav ? "is-on" : ""}`}
-          onClick={() => user.toggleFavorite(track.relPath)}
-          title={t("trackRow.favTitle")}
-          aria-pressed={fav}
-          aria-label={t("trackRow.favAria")}
-        >
-          <span
-            className="track-row__ic-glyph track-row__ic-glyph--svg"
-            aria-hidden
-          >
-            <UiFavorite />
-          </span>
-        </button>
-        <button
-          type="button"
-          className="track-row__ic track-row__ic--meta"
-          onClick={(ev) => {
-            ev.stopPropagation();
-            openTrackMetaEdit(track);
-          }}
-          title={t("trackRow.editMetaTitle")}
-          aria-label={t("trackRow.editMetaAria")}
-        >
-          <span className="track-row__ic-glyph track-row__ic-glyph--svg">
-            <TrackMetaEditGlyph />
-          </span>
-        </button>
-        <button
-          type="button"
-          className={`track-row__ic track-row__ic--exclude ${
-            shuffleExcluded ? "is-on" : ""
-          }`}
-          disabled={albumShuffleExcluded}
-          title={
-            albumShuffleExcluded
-              ? t("trackRow.excludeLockedByAlbumTitle")
-              : t("trackRow.excludeTitle")
-          }
-          onClick={() => {
-            if (albumShuffleExcluded) return;
-            user.toggleShuffleExcludedTrack(track.relPath);
-          }}
-          aria-pressed={shuffleExcluded}
-          aria-label={
-            albumShuffleExcluded
-              ? t("trackRow.excludeLockedByAlbumAria")
-              : t("trackRow.excludeTitle")
-          }
-        >
-          <span
-            className="track-row__ic-glyph track-row__ic-glyph--svg"
-            aria-hidden
-          >
-            <ExcludeShuffleIcon />
-          </span>
-        </button>
-        {extraActions}
       </div>
+      <TrackRowPlaylistPopover
+        anchorRef={albumToolbar ? playlistAnchorRef : overflowRef}
+        open={playlistPickerOpen}
+        track={track}
+        onRequestClose={() => setPlaylistPickerOpen(false)}
+      />
     </div>
   );
 });
