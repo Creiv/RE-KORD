@@ -1,7 +1,8 @@
 import { render, screen, waitFor } from "@testing-library/react"
-import { useEffect } from "react"
-import { vi } from "vitest"
+import { useEffect, useRef } from "react"
+import { beforeEach, vi } from "vitest"
 import { UserStateProvider, useUserState } from "./UserStateContext"
+import type { LibraryIndex } from "../types"
 
 function Probe() {
   const user = useUserState()
@@ -51,7 +52,38 @@ function SyncRaceProbe() {
   )
 }
 
+function EarlyRehydrateProbe() {
+  const user = useUserState()
+  const rehydratedRef = useRef(false)
+  useEffect(() => {
+    if (rehydratedRef.current) return
+    rehydratedRef.current = true
+    user.rehydrateTrackListsFromLibrary({
+      artists: [],
+      albums: [],
+      tracks: [],
+      stats: {
+        artistCount: 0,
+        albumCount: 0,
+        trackCount: 0,
+        favoriteCapableCount: 0,
+        albumsWithoutCover: 0,
+        albumsWithoutMeta: 0,
+        tracksWithoutMeta: 0,
+        looseAlbumCount: 0,
+      },
+    } satisfies LibraryIndex)
+  }, [user])
+  if (!user.ready) return <div>loading</div>
+  return <span data-testid="early-playlists">{user.state.playlists.length}</span>
+}
+
 describe("UserStateProvider", () => {
+  beforeEach(() => {
+    window.localStorage.clear()
+    window.sessionStorage.clear()
+  })
+
   it("imports legacy data from localStorage and promotes to user-state", async () => {
     window.localStorage.setItem("wpp-favorites", JSON.stringify(["Artist One/Album One/01 Song.mp3"]))
     window.localStorage.setItem(
@@ -139,6 +171,205 @@ describe("UserStateProvider", () => {
     await waitFor(() => expect(screen.getByTestId("favorites")).toHaveTextContent("1"))
     expect(screen.getByTestId("recent")).toHaveTextContent("Legacy Song")
     expect(fetchMock).toHaveBeenCalled()
+  })
+
+  it("importa playlist legacy anche per account già migrati e le salva nello stato utente", async () => {
+    window.localStorage.setItem(
+      "wpp-playlists",
+      JSON.stringify([
+        {
+          id: "legacy-mix",
+          name: "Legacy Mix",
+          tracks: [
+            {
+              relPath: "Artist One/Album One/01 Song.mp3",
+              title: "Legacy Song",
+              artist: "Artist One",
+              album: "Album One",
+            },
+          ],
+        },
+      ]),
+    )
+
+    const remoteState = {
+      version: 1,
+      revision: 7,
+      favorites: ["Artist One/Album One/01 Song.mp3"],
+      recent: [],
+      playlists: [],
+      queue: { tracks: [], currentIndex: 0 },
+      shuffleExcludedAlbumIds: [],
+      shuffleExcludedTrackRelPaths: [],
+      trackPlayCounts: {},
+      settings: {
+        theme: "midnight",
+        vizMode: "bars",
+        restoreSession: true,
+        defaultTab: "dashboard",
+        locale: "en",
+        libBrowse: "artists",
+        libOverviewSort: "name",
+        artistAlbumSort: "date",
+      },
+      migratedLegacy: true,
+    }
+    const fetchMock = vi.fn((input: RequestInfo | URL, init?: RequestInit) => {
+      const url = String(input)
+      if (url === "/api/accounts") {
+        return Promise.resolve(
+          new Response(
+            JSON.stringify({
+              ok: true,
+              data: {
+                defaultAccountId: "default",
+                accounts: [{ id: "default", name: "Default" }],
+                lockedByEnv: false,
+              },
+              error: null,
+            }),
+          ),
+        )
+      }
+      if (url.startsWith("/api/user-state") && init?.method === "PATCH") {
+        const body = JSON.parse(String(init.body || "{}")) as {
+          state?: { playlists?: unknown[]; playlistsMigrated?: boolean }
+        }
+        return Promise.resolve(
+          new Response(
+            JSON.stringify({
+              ok: true,
+              data: {
+                ...remoteState,
+                revision: 8,
+                playlists: body.state?.playlists || [],
+                playlistsMigrated: body.state?.playlistsMigrated,
+              },
+              error: null,
+            }),
+          ),
+        )
+      }
+      if (url.startsWith("/api/user-state")) {
+        return Promise.resolve(
+          new Response(JSON.stringify({ ok: true, data: remoteState, error: null })),
+        )
+      }
+      return Promise.reject(new Error(`Unexpected request: ${url}`))
+    })
+    globalThis.fetch = fetchMock as typeof fetch
+
+    render(
+      <UserStateProvider>
+        <Probe />
+      </UserStateProvider>,
+    )
+
+    await waitFor(() => expect(screen.getByTestId("playlists")).toHaveTextContent("1"))
+    await waitFor(() =>
+      expect(
+        fetchMock.mock.calls.some(([, init]) => {
+          if (init?.method !== "PATCH") return false
+          const body = JSON.parse(String(init.body || "{}")) as {
+            state?: { playlists?: unknown[]; playlistsMigrated?: boolean }
+          }
+          return body.state?.playlists?.length === 1 && body.state.playlistsMigrated === true
+        }),
+      ).toBe(true),
+    )
+  })
+
+  it("non accoda playlist vuote se la reidratazione libreria parte prima dello user-state", async () => {
+    const userStateRequest: {
+      resolve?: (value: Response) => void
+    } = {}
+    const remoteState = {
+      version: 1,
+      revision: 4,
+      favorites: [],
+      recent: [],
+      playlists: [
+        {
+          id: "server-mix",
+          name: "Server Mix",
+          tracks: [],
+        },
+      ],
+      queue: { tracks: [], currentIndex: 0 },
+      shuffleExcludedAlbumIds: [],
+      shuffleExcludedTrackRelPaths: [],
+      trackPlayCounts: {},
+      settings: {
+        theme: "midnight",
+        vizMode: "bars",
+        restoreSession: true,
+        defaultTab: "dashboard",
+        locale: "en",
+        libBrowse: "artists",
+        libOverviewSort: "name",
+        artistAlbumSort: "date",
+      },
+      migratedLegacy: true,
+      playlistsMigrated: true,
+    }
+    const fetchMock = vi.fn((input: RequestInfo | URL, init?: RequestInit) => {
+      const url = String(input)
+      if (url === "/api/accounts") {
+        return Promise.resolve(
+          new Response(
+            JSON.stringify({
+              ok: true,
+              data: {
+                defaultAccountId: "default",
+                accounts: [{ id: "default", name: "Default" }],
+                lockedByEnv: false,
+              },
+              error: null,
+            }),
+          ),
+        )
+      }
+      if (url.startsWith("/api/user-state") && init?.method === "PATCH") {
+        const body = JSON.parse(String(init.body || "{}")) as {
+          state?: { playlists?: unknown[] }
+        }
+        if (body.state?.playlists?.length === 0) {
+          return Promise.reject(new Error("PATCH should not save empty playlists before hydration"))
+        }
+        return Promise.resolve(
+          new Response(JSON.stringify({ ok: true, data: remoteState, error: null })),
+        )
+      }
+      if (url.startsWith("/api/user-state")) {
+        return new Promise<Response>((resolve) => {
+          userStateRequest.resolve = resolve
+        })
+      }
+      return Promise.reject(new Error(`Unexpected request: ${url}`))
+    })
+    globalThis.fetch = fetchMock as typeof fetch
+
+    render(
+      <UserStateProvider>
+        <EarlyRehydrateProbe />
+      </UserStateProvider>,
+    )
+
+    await waitFor(() => expect(userStateRequest.resolve).toBeDefined())
+    userStateRequest.resolve?.(
+      new Response(JSON.stringify({ ok: true, data: remoteState, error: null })),
+    )
+
+    await waitFor(() => expect(screen.getByTestId("early-playlists")).toHaveTextContent("1"))
+    expect(
+      fetchMock.mock.calls.some(([, init]) => {
+        if (init?.method !== "PATCH") return false
+        const body = JSON.parse(String(init.body || "{}")) as {
+          state?: { playlists?: unknown[] }
+        }
+        return body.state?.playlists?.length === 0
+      }),
+    ).toBe(false)
   })
 
   it("non perde patch locali quando un sync riceve stato server vecchio", async () => {

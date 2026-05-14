@@ -129,6 +129,14 @@ function readStoredStudioPane(): StudioPane | null {
   return null;
 }
 
+function isKordClientEmbed(): boolean {
+  try {
+    return sessionStorage.getItem("kord-embed") === "client";
+  } catch {
+    return false;
+  }
+}
+
 function selectionHasArtist(sel: LibrarySelectionV1 | null, artistId: string) {
   if (!sel) return false;
   if (sel.includeAll) return true;
@@ -415,6 +423,7 @@ export function ToolsView({ library, libraryIndex, onRefreshLibrary, onLibraryDe
     }
   });
   const [catalogLockedByEnv, setCatalogLockedByEnv] = useState(false);
+  const [serverLocalAccess, setServerLocalAccess] = useState(false);
   const [localSessionAccount, setLocalSessionAccount] = useState<string | null>(
     () => getSelectedAccountId()
   );
@@ -629,7 +638,10 @@ export function ToolsView({ library, libraryIndex, onRefreshLibrary, onLibraryDe
 
   useEffect(() => {
     fetchConfig()
-      .then((c) => setCatalogLockedByEnv(c.lockedByEnv))
+      .then((c) => {
+        setCatalogLockedByEnv(c.lockedByEnv);
+        setServerLocalAccess(Boolean(c.localAccess) && !isKordClientEmbed());
+      })
       .catch(() => {});
   }, []);
 
@@ -2813,31 +2825,33 @@ export function ToolsView({ library, libraryIndex, onRefreshLibrary, onLibraryDe
                             </button>
                             <button
                               type="button"
-                              className="btn secondary"
+                              className="btn"
                               disabled={!metaAlbumPath || studioMetaBusy}
                               onClick={() => runSanitizeTitles("album", false)}
                             >
                               {titleSanBusy ? "…" : t("tools.applyAlbum")}
                             </button>
                           </div>
-                          <div className="studio-action-row studio-meta-equal-btns">
-                            <button
-                              type="button"
-                              className="btn secondary"
-                              disabled={!library || studioMetaBusy}
-                              onClick={() => runSanitizeTitles("all", true)}
-                            >
-                              {titleSanBusy ? "…" : t("tools.previewLibrary")}
-                            </button>
-                            <button
-                              type="button"
-                              className="btn"
-                              disabled={!library || studioMetaBusy}
-                              onClick={() => runSanitizeTitles("all", false)}
-                            >
-                              {titleSanBusy ? "…" : t("tools.applyLibrary")}
-                            </button>
-                          </div>
+                          {serverLocalAccess ? (
+                            <div className="studio-action-row studio-meta-equal-btns">
+                              <button
+                                type="button"
+                                className="btn secondary"
+                                disabled={!library || studioMetaBusy}
+                                onClick={() => runSanitizeTitles("all", true)}
+                              >
+                                {titleSanBusy ? "…" : t("tools.previewLibrary")}
+                              </button>
+                              <button
+                                type="button"
+                                className="btn"
+                                disabled={!library || studioMetaBusy}
+                                onClick={() => runSanitizeTitles("all", false)}
+                              >
+                                {titleSanBusy ? "…" : t("tools.applyLibrary")}
+                              </button>
+                            </div>
+                          ) : null}
                         </div>
                       </div>
                     ) : null}

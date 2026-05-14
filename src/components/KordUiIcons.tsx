@@ -61,6 +61,14 @@ export function UiAdd({ className }: { className?: string }) {
   );
 }
 
+export function UiRemove({ className }: { className?: string }) {
+  return (
+    <svg className={className} viewBox="0 0 24 24" aria-hidden="true">
+      <path fill="currentColor" d="M19 13H5v-2h14v2z" />
+    </svg>
+  );
+}
+
 export function UiSearch({ className }: { className?: string }) {
   return (
     <svg className={className} viewBox="0 0 24 24" aria-hidden="true">
@@ -237,6 +245,17 @@ export function UiNavMore({ className }: { className?: string }) {
       <circle cx="6" cy="12" r="1.8" />
       <circle cx="12" cy="12" r="1.8" />
       <circle cx="18" cy="12" r="1.8" />
+    </svg>
+  );
+}
+
+/** Overflow ··· verticale (menu azioni lista brani). */
+export function UiMoreVert({ className }: { className?: string }) {
+  return (
+    <svg className={className} viewBox="0 0 24 24" fill="currentColor" aria-hidden>
+      <circle cx="12" cy="6" r="1.8" />
+      <circle cx="12" cy="12" r="1.8" />
+      <circle cx="12" cy="18" r="1.8" />
     </svg>
   );
 }
