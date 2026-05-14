@@ -66,6 +66,9 @@ const LazyToolsView = lazy(() =>
   import("../ToolsView").then((m) => ({ default: m.ToolsView }))
 );
 
+/** Dopo modifiche ai metadati il server ricostruisce l'indice; evitiamo tsunami di GET /library-index. */
+const LIBRARY_RECONCILE_DEBOUNCE_MS = 1400;
+
 export function AppShell() {
   const { route, navigate } = useAppRoute();
   const p = usePlayer();
@@ -89,6 +92,9 @@ export function AppShell() {
   const syncTapTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const refreshSeqRef = useRef(0);
   const backgroundRefreshRef = useRef<Promise<void> | null>(null);
+  const libraryReconcileDebounceRef = useRef<ReturnType<
+    typeof globalThis.setTimeout
+  > | null>(null);
   const [syncTapAnim, setSyncTapAnim] = useState(false);
   const [installPrompt, setInstallPrompt] =
     useState<BeforeInstallPromptEvent | null>(null);
@@ -140,21 +146,38 @@ export function AppShell() {
     [syncUserStateFromServer]
   );
 
-  const refreshManual = useCallback(
-    () => refreshLibrary("manual"),
-    [refreshLibrary]
-  );
+  const scheduleDebouncedLibraryReconcile = useCallback(() => {
+    if (libraryReconcileDebounceRef.current != null) {
+      globalThis.clearTimeout(libraryReconcileDebounceRef.current);
+    }
+    libraryReconcileDebounceRef.current = globalThis.setTimeout(() => {
+      libraryReconcileDebounceRef.current = null;
+      void refreshLibrary("background");
+    }, LIBRARY_RECONCILE_DEBOUNCE_MS);
+  }, [refreshLibrary]);
+
+  const refreshManual = useCallback(() => {
+    if (libraryReconcileDebounceRef.current != null) {
+      globalThis.clearTimeout(libraryReconcileDebounceRef.current);
+      libraryReconcileDebounceRef.current = null;
+    }
+    return refreshLibrary("manual");
+  }, [refreshLibrary]);
 
   const refreshBackground = useCallback(() => {
+    if (libraryReconcileDebounceRef.current != null) {
+      globalThis.clearTimeout(libraryReconcileDebounceRef.current);
+      libraryReconcileDebounceRef.current = null;
+    }
     return refreshLibrary("background");
   }, [refreshLibrary]);
 
   const applyLibraryDelta = useCallback(
     (delta: LibraryEntityDelta, reconcile = true) => {
       setIndex((prev) => applyLibraryDeltaToIndex(prev, delta));
-      if (reconcile) refreshBackground();
+      if (reconcile) scheduleDebouncedLibraryReconcile();
     },
-    [refreshBackground]
+    [scheduleDebouncedLibraryReconcile]
   );
 
   const refreshAfterAlbumMetaSaved = useCallback(
@@ -194,6 +217,9 @@ export function AppShell() {
   useEffect(
     () => () => {
       if (syncTapTimerRef.current) clearTimeout(syncTapTimerRef.current);
+      if (libraryReconcileDebounceRef.current != null) {
+        globalThis.clearTimeout(libraryReconcileDebounceRef.current);
+      }
     },
     []
   );
