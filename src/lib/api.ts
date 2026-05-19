@@ -18,6 +18,71 @@ type Wrapped<T> = { ok: boolean; data: T; error: string | null }
 const SESSION_ACCOUNT_STORAGE_KEY = "kord-session-account-id"
 const LEGACY_ACTIVE_ACCOUNT_STORAGE_KEY = "kord-active-account-id"
 let accountBootstrapPromise: Promise<string | null> | null = null
+let accountBootstrapBackoffUntil = 0
+let accountSessionValidated = false
+const ACCOUNT_BOOTSTRAP_BACKOFF_MS = 8000
+const API_UNREACHABLE_BACKOFF_MS = 12000
+let apiUnreachableUntil = 0
+let inflightUserStateFetch: Promise<UserStateV1> | null = null
+
+/** Thrown when the KORD API cannot be reached or returns a non-JSON proxy error. */
+export class BackendUnreachableError extends Error {
+  constructor() {
+    super("BACKEND_UNREACHABLE")
+    this.name = "BackendUnreachableError"
+  }
+}
+
+function markApiUnreachable() {
+  apiUnreachableUntil = Date.now() + API_UNREACHABLE_BACKOFF_MS
+}
+
+function assertApiReachable() {
+  if (Date.now() < apiUnreachableUntil) {
+    throw new BackendUnreachableError()
+  }
+}
+
+/** True when the KORD API is unreachable (server stopped, proxy down, offline). */
+export function isBackendUnreachableError(err: unknown): boolean {
+  if (err instanceof BackendUnreachableError) return true
+  const msg = (err instanceof Error ? err.message : String(err)).toLowerCase()
+  return (
+    /failed to fetch|networkerror|load failed|network request failed|econnrefused|enotfound|etimedout|502|503|504|bad gateway|service unavailable|proxy error|unexpected end of json|json\.parse|invalid_api_json|backend_unreachable|empty_response/i.test(
+      msg,
+    ) || (err instanceof TypeError && msg.includes("fetch"))
+  )
+}
+
+async function readResponseJson<T>(response: Response): Promise<T> {
+  if (response.status === 502 || response.status === 503 || response.status === 504) {
+    markApiUnreachable()
+    throw new BackendUnreachableError()
+  }
+  let text: string
+  try {
+    text = await response.text()
+  } catch {
+    markApiUnreachable()
+    throw new BackendUnreachableError()
+  }
+  if (!text.trim()) {
+    if (!response.ok) {
+      markApiUnreachable()
+      throw new BackendUnreachableError()
+    }
+    throw new Error("EMPTY_RESPONSE")
+  }
+  try {
+    return JSON.parse(text) as T
+  } catch {
+    if (!response.ok) {
+      markApiUnreachable()
+      throw new BackendUnreachableError()
+    }
+    throw new SyntaxError("INVALID_API_JSON")
+  }
+}
 
 export class UserStateRevisionConflict extends Error {
   readonly currentState: UserStateV1
@@ -29,12 +94,13 @@ export class UserStateRevisionConflict extends Error {
 }
 
 async function unwrapUserStateMutation(response: Response): Promise<UserStateV1> {
-  const parsed = (await response.json()) as
+  const parsed = await readResponseJson<
     | Wrapped<UserStateV1>
     | {
         error?: string
         details?: { code?: string; currentState?: UserStateV1 }
       }
+  >(response)
   if (response.status === 409) {
     const detail = parsed && typeof parsed === "object" ? (parsed as { details?: { currentState?: UserStateV1 } }).details : undefined
     const cur = detail?.currentState
@@ -58,7 +124,7 @@ async function unwrapUserStateMutation(response: Response): Promise<UserStateV1>
 }
 
 async function unwrap<T>(response: Response): Promise<T> {
-  const json = (await response.json()) as T | Wrapped<T> | { error?: string }
+  const json = await readResponseJson<T | Wrapped<T> | { error?: string }>(response)
   if (!response.ok) {
     if (json && typeof json === "object" && "error" in json && typeof json.error === "string") {
       throw new Error(json.error)
@@ -157,22 +223,32 @@ function apiFetch(
     hdr !== undefined
       ? accountHeadersForPath(pathForHdr, hdr as HeadersInit)
       : accountHeadersForPath(pathForHdr)
+  assertApiReachable()
   return fetch(url, {
     ...init,
     headers: nextHeaders,
+  }).catch((err: unknown) => {
+    if (isBackendUnreachableError(err)) markApiUnreachable()
+    throw err
   })
 }
 
 async function ensureSelectedAccountId(): Promise<string | null> {
+  const existing = getSelectedAccountId()
+  if (existing && accountSessionValidated) return existing
+  if (Date.now() < accountBootstrapBackoffUntil) return existing ?? null
   if (accountBootstrapPromise) return accountBootstrapPromise
   accountBootstrapPromise = apiFetch("/api/accounts", { cache: "no-store" })
     .then((response) => unwrap<AccountsResponse>(response))
     .then((data) => {
+      accountSessionValidated = true
+      accountBootstrapBackoffUntil = 0
       rememberAvailableAccount(data)
       return getSelectedAccountId()
     })
     .catch(() => {
       accountBootstrapPromise = null
+      accountBootstrapBackoffUntil = Date.now() + ACCOUNT_BOOTSTRAP_BACKOFF_MS
       return getSelectedAccountId()
     })
   return accountBootstrapPromise
@@ -335,9 +411,20 @@ export async function fetchDashboard(): Promise<DashboardPayload> {
 }
 
 export async function fetchUserState(): Promise<UserStateV1> {
-  await ensureSelectedAccountId()
-  const response = await apiFetch("/api/user-state")
-  return unwrap<UserStateV1>(response)
+  if (inflightUserStateFetch) return inflightUserStateFetch
+  inflightUserStateFetch = (async () => {
+    try {
+      await ensureSelectedAccountId()
+      const response = await apiFetch("/api/user-state")
+      return await unwrap<UserStateV1>(response)
+    } catch (err: unknown) {
+      if (isBackendUnreachableError(err)) markApiUnreachable()
+      throw err
+    } finally {
+      inflightUserStateFetch = null
+    }
+  })()
+  return inflightUserStateFetch
 }
 
 export async function patchUserSettings(
@@ -1174,20 +1261,35 @@ export async function fetchAlbumInfo(
   albumPath: string,
   artist: string,
   album: string,
-): Promise<{ ok: true; albumPath: string; meta: FetchedAlbumMeta }> {
+): Promise<{
+  ok: true;
+  albumPath: string;
+  meta: FetchedAlbumMeta;
+  album?: LibraryEntityDelta["album"];
+}> {
   const response = await apiFetch("/api/album-info/fetch", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ albumPath, artist, album }),
   })
   const json = (await response.json()) as
-    | { ok: true; albumPath: string; meta: FetchedAlbumMeta }
+    | {
+        ok: true;
+        albumPath: string;
+        meta: FetchedAlbumMeta;
+        album?: LibraryEntityDelta["album"];
+      }
     | { error?: string }
   if (!response.ok)
     throw new Error(
       "error" in json ? json.error || "Failed to fetch album metadata" : "Failed to fetch album metadata",
     )
-  return json as { ok: true; albumPath: string; meta: FetchedAlbumMeta }
+  return json as {
+    ok: true;
+    albumPath: string;
+    meta: FetchedAlbumMeta;
+    album?: LibraryEntityDelta["album"];
+  }
 }
 
 export async function saveAlbumInfoManual(
@@ -1207,14 +1309,24 @@ export async function saveAlbumInfoManual(
 
 export async function fetchTrackInfo(
   relPath: string,
-): Promise<{ ok: true; relPath: string; meta: FetchedTrackMeta }> {
+): Promise<{
+  ok: true;
+  relPath: string;
+  meta: FetchedTrackMeta;
+  track?: LibraryEntityDelta["track"];
+}> {
   const response = await apiFetch("/api/track-info/fetch", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ relPath }),
   })
   const json = (await response.json()) as
-    | { ok: true; relPath: string; meta: FetchedTrackMeta }
+    | {
+        ok: true;
+        relPath: string;
+        meta: FetchedTrackMeta;
+        track?: LibraryEntityDelta["track"];
+      }
     | { error?: string }
   if (!response.ok)
     throw new Error(
@@ -1222,7 +1334,12 @@ export async function fetchTrackInfo(
         ? json.error || "Failed to fetch track metadata"
         : "Failed to fetch track metadata",
     )
-  return json as { ok: true; relPath: string; meta: FetchedTrackMeta }
+  return json as {
+    ok: true;
+    relPath: string;
+    meta: FetchedTrackMeta;
+    track?: LibraryEntityDelta["track"];
+  }
 }
 
 export async function fetchTrackLyrics(

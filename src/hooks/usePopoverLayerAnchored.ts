@@ -85,7 +85,8 @@ export function usePopoverLayerAnchored(
 
   useEffect(() => {
     if (!open) return;
-    const onDocMouseDown = (e: globalThis.MouseEvent) => {
+    /** `click` (non `mousedown`) così la voce del menu riceve il click prima della chiusura. */
+    const onDocClick = (e: globalThis.MouseEvent) => {
       const t = e.target as Node;
       if (anchorRef.current?.contains(t)) return;
       if (floatingRef?.current?.contains(t)) return;
@@ -113,13 +114,13 @@ export function usePopoverLayerAnchored(
       }
       onRequestClose();
     };
-    document.addEventListener("mousedown", onDocMouseDown);
+    document.addEventListener("click", onDocClick);
     document.addEventListener("keydown", onKey);
     window.addEventListener("scroll", dismissOnScroll, true);
     const dismissOnResize = () => onRequestClose();
     window.addEventListener("resize", dismissOnResize);
     return () => {
-      document.removeEventListener("mousedown", onDocMouseDown);
+      document.removeEventListener("click", onDocClick);
       document.removeEventListener("keydown", onKey);
       window.removeEventListener("scroll", dismissOnScroll, true);
       window.removeEventListener("resize", dismissOnResize);

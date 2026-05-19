@@ -1,4 +1,4 @@
-import { startTransition, useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import type { AppSection } from "../types";
 
 export type RouteState = {
@@ -50,6 +50,34 @@ export function buildHref(route: RouteState) {
   return query ? `${path}?${query}` : path;
 }
 
+export function mergeRoute(
+  prev: RouteState,
+  next: Partial<RouteState>
+): RouteState {
+  const merged: RouteState = {
+    ...prev,
+    ...next,
+    section: (next.section ?? prev.section) as AppSection,
+  };
+  if (next.section && next.section !== "libreria") {
+    merged.artist = null;
+    merged.album = null;
+  } else if (next.section === "libreria") {
+    if (!("artist" in next)) merged.artist = null;
+    if (!("album" in next)) merged.album = null;
+  } else {
+    merged.artist = next.artist !== undefined ? next.artist : prev.artist;
+    merged.album = next.album !== undefined ? next.album : prev.album;
+  }
+  merged.playlist =
+    merged.section && merged.section !== "playlists"
+      ? null
+      : next.playlist !== undefined
+        ? next.playlist
+        : prev.playlist;
+  return merged;
+}
+
 export function isStandaloneDisplayMode(): boolean {
   try {
     return (
@@ -69,32 +97,12 @@ export function useAppRoute() {
     window.addEventListener("popstate", onPop);
     return () => window.removeEventListener("popstate", onPop);
   }, []);
-  const navigate = (next: Partial<RouteState>) => {
-    startTransition(() => {
-      const merged: RouteState = {
-        ...route,
-        ...next,
-        section: (next.section ?? route.section) as AppSection,
-      };
-      if (next.section && next.section !== "libreria") {
-        merged.artist = null;
-        merged.album = null;
-      } else if (next.section === "libreria") {
-        if (!("artist" in next)) merged.artist = null;
-        if (!("album" in next)) merged.album = null;
-      } else {
-        merged.artist = next.artist !== undefined ? next.artist : route.artist;
-        merged.album = next.album !== undefined ? next.album : route.album;
-      }
-      merged.playlist =
-        merged.section && merged.section !== "playlists"
-          ? null
-          : next.playlist !== undefined
-          ? next.playlist
-          : route.playlist;
+  const navigate = useCallback((next: Partial<RouteState>) => {
+    setRoute((prev) => {
+      const merged = mergeRoute(prev, next);
       window.history.pushState({}, "", buildHref(merged));
-      setRoute(merged);
+      return merged;
     });
-  };
+  }, []);
   return { route, navigate };
 }

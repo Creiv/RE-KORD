@@ -97,6 +97,9 @@ import {
   writeLibraryIndexCache,
   scheduleBackgroundLibraryRefresh,
   invalidateLibraryIndexCache,
+  patchTrackInLibraryIndexCache,
+  patchTracksInLibraryIndexCache,
+  patchAlbumInLibraryIndexCache,
   getLibraryIndexCacheEpochSnapshot,
 } from "./libraryIndexCache.mjs";
 
@@ -966,6 +969,30 @@ async function getLibraryIndex(root = getMusicRoot()) {
 async function invalidateLibraryIndex(root = getMusicRoot()) {
   libraryIndexFlight.delete(path.resolve(root));
   await invalidateLibraryIndexCache(root);
+}
+
+/** Metadati/copertina: patch cache se possibile; refresh completo in background senza bloccare le GET. */
+function scheduleLibraryIndexMetaRefresh(root, cachePatched) {
+  if (!cachePatched) scheduleBackgroundLibraryRefresh(root);
+  else scheduleBackgroundLibraryRefresh(root);
+}
+
+function albumDeltaFromMeta(albumPath, meta, albumNameFallback) {
+  const title =
+    meta?.title && String(meta.title).trim()
+      ? String(meta.title).trim()
+      : albumNameFallback || path.basename(albumPath);
+  return {
+    relPath: albumPath,
+    name: title,
+    title: meta?.title ?? null,
+    releaseDate: meta?.releaseDate ?? null,
+    genre: meta?.genre ?? null,
+    label: meta?.label ?? null,
+    country: meta?.country ?? null,
+    musicbrainzReleaseId: meta?.musicbrainzReleaseId ?? null,
+    hasAlbumMeta: true,
+  };
 }
 
 async function getFilteredIndexForAccount(accountId) {
@@ -2658,12 +2685,19 @@ app.post("/api/artwork/apply", async (req, res) => {
       folder: albumPath,
       detail: path.basename(dest),
     });
-    await invalidateLibraryIndex(root);
+    const coverRelPath = `${albumPath}/${path.basename(dest)}`.replaceAll(
+      path.sep,
+      "/",
+    );
+    const cachePatched = await patchAlbumInLibraryIndexCache(root, albumPath, {
+      coverRelPath,
+    });
+    scheduleLibraryIndexMetaRefresh(root, cachePatched);
     return sendOk(res, {
       saved: path.basename(dest),
       albumPath,
       abs: dest,
-      coverRelPath: `${albumPath}/${path.basename(dest)}`.replaceAll(path.sep, "/"),
+      coverRelPath,
       coverVersion: Date.now(),
     });
   } catch (error) {
@@ -2675,7 +2709,7 @@ app.post("/api/album-info/fetch", async (req, res) => {
   const root = getMusicRoot();
   const albumPath = safeRelSeg(String(req.body?.albumPath || ""));
   const artist = String(req.body?.artist || "").trim();
-  const album = String(req.body?.album || "").trim();
+  const albumTitle = String(req.body?.album || "").trim();
   if (!albumPath) return sendError(res, 400, "albumPath is required");
   try {
     const full = path.join(root, albumPath.replaceAll("/", path.sep));
@@ -2683,7 +2717,7 @@ app.post("/api/album-info/fetch", async (req, res) => {
       return sendError(res, 400, "Folder does not exist");
     if (!statSync(full).isDirectory())
       return sendError(res, 400, "Not a directory");
-    const meta = await fetchReleaseMetadata(artist, album);
+    const meta = await fetchReleaseMetadata(artist, albumTitle);
     if (meta.error) return sendError(res, 404, meta.error);
     const payload = { ...meta, fetchedAt: new Date().toISOString() };
     delete payload.error;
@@ -2694,8 +2728,14 @@ app.post("/api/album-info/fetch", async (req, res) => {
       folder: albumPath,
       detail: "MusicBrainz / release metadata",
     });
-    await invalidateLibraryIndex(root);
-    return res.json({ ok: true, albumPath, meta: savedMeta });
+    const albumDelta = albumDeltaFromMeta(albumPath, savedMeta, albumTitle);
+    const cachePatched = await patchAlbumInLibraryIndexCache(
+      root,
+      albumPath,
+      albumDelta,
+    );
+    scheduleLibraryIndexMetaRefresh(root, cachePatched);
+    return res.json({ ok: true, albumPath, meta: savedMeta, album: albumDelta });
   } catch (error) {
     return sendError(res, 500, String(error?.message || error));
   }
@@ -2769,24 +2809,41 @@ app.post("/api/album-info/save", async (req, res) => {
       folder: albumPath,
       detail: Object.keys(safe).join(", "),
     });
-    await invalidateLibraryIndex(root);
+    const album = {
+      relPath: albumPath,
+      name:
+        meta?.title && String(meta.title).trim()
+          ? String(meta.title).trim()
+          : path.basename(albumPath),
+      title: meta?.title ?? null,
+      releaseDate: meta?.releaseDate ?? null,
+      genre: meta?.genre ?? null,
+      label: meta?.label ?? null,
+      country: meta?.country ?? null,
+      musicbrainzReleaseId: meta?.musicbrainzReleaseId ?? null,
+      expectedTrackCount:
+        typeof meta?.expectedTrackCount === "number"
+          ? meta.expectedTrackCount
+          : null,
+      expectedTracks: Array.isArray(meta?.expectedTracks)
+        ? meta.expectedTracks
+        : null,
+      hasAlbumMeta: true,
+    };
+    const trackPatches = touchedTracks.map((row) => ({
+      relPath: row.relPath,
+      meta: row.meta,
+    }));
+    const cachePatched =
+      (await patchAlbumInLibraryIndexCache(root, albumPath, album)) ||
+      (trackPatches.length
+        ? await patchTracksInLibraryIndexCache(root, trackPatches)
+        : false);
+    scheduleLibraryIndexMetaRefresh(root, cachePatched);
     return sendOk(res, {
       albumPath,
       meta,
-      album: {
-        relPath: albumPath,
-        name: meta?.title && String(meta.title).trim() ? String(meta.title).trim() : path.basename(albumPath),
-        title: meta?.title ?? null,
-        releaseDate: meta?.releaseDate ?? null,
-        genre: meta?.genre ?? null,
-        label: meta?.label ?? null,
-        country: meta?.country ?? null,
-        musicbrainzReleaseId: meta?.musicbrainzReleaseId ?? null,
-        expectedTrackCount:
-          typeof meta?.expectedTrackCount === "number" ? meta.expectedTrackCount : null,
-        expectedTracks: Array.isArray(meta?.expectedTracks) ? meta.expectedTracks : null,
-        hasAlbumMeta: true,
-      },
+      album,
       tracks: touchedTracks,
     });
   } catch (error) {
@@ -2862,13 +2919,27 @@ app.post("/api/track-info/fetch", async (req, res) => {
       folder: albumRel,
       detail: fileName,
     });
-    await invalidateLibraryIndex(root);
     const fileMs = await getAudioFileDurationMs(fullTrackPath);
     const metaOut = {
       ...row,
       durationMs: Number.isFinite(fileMs) ? fileMs : null,
     };
-    return res.json({ ok: true, relPath, meta: metaOut });
+    const resolvedTitle =
+      metaOut?.title && String(metaOut.title).trim()
+        ? String(metaOut.title).trim()
+        : null;
+    const trackDelta = {
+      relPath,
+      ...(resolvedTitle ? { title: resolvedTitle } : {}),
+      meta: metaOut,
+    };
+    const cachePatched = await patchTrackInLibraryIndexCache(
+      root,
+      relPath,
+      trackDelta,
+    );
+    scheduleLibraryIndexMetaRefresh(root, cachePatched);
+    return res.json({ ok: true, relPath, meta: metaOut, track: trackDelta });
   } catch (error) {
     return sendError(res, 500, String(error?.message || error));
   }
@@ -3014,7 +3085,6 @@ app.post("/api/track-info/save", async (req, res) => {
         hasMood ? ", moods" : ""
       }`,
     });
-    await invalidateLibraryIndex(root);
     const title =
       meta?.title && String(meta.title).trim()
         ? String(meta.title).trim()
@@ -3022,15 +3092,22 @@ app.post("/api/track-info/save", async (req, res) => {
           ? String(patch.title).trim()
           : null;
     const metaOut = hasMood ? { ...meta, moods } : meta;
+    const trackDelta = {
+      relPath,
+      ...(title ? { title } : {}),
+      meta: metaOut,
+    };
+    const cachePatched = await patchTrackInLibraryIndexCache(
+      root,
+      relPath,
+      trackDelta,
+    );
+    scheduleLibraryIndexMetaRefresh(root, cachePatched);
     return res.json({
       ok: true,
       relPath,
       meta: metaOut,
-      track: {
-        relPath,
-        ...(title ? { title } : {}),
-        meta: metaOut,
-      },
+      track: trackDelta,
       album: { relPath: albumRel },
     });
   } catch (error) {

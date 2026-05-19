@@ -1,6 +1,7 @@
 import { render, screen, waitFor } from "@testing-library/react"
 import { useEffect, useRef } from "react"
 import { beforeEach, vi } from "vitest"
+import { LibrarySyncActivityProvider } from "./LibrarySyncActivityContext"
 import { UserStateProvider, useUserState } from "./UserStateContext"
 import type { LibraryIndex } from "../types"
 
@@ -163,9 +164,11 @@ describe("UserStateProvider", () => {
     globalThis.fetch = fetchMock as typeof fetch
 
     render(
-      <UserStateProvider>
-        <Probe />
-      </UserStateProvider>,
+      <LibrarySyncActivityProvider>
+        <UserStateProvider>
+          <Probe />
+        </UserStateProvider>
+      </LibrarySyncActivityProvider>,
     )
 
     await waitFor(() => expect(screen.getByTestId("favorites")).toHaveTextContent("1"))
@@ -260,9 +263,11 @@ describe("UserStateProvider", () => {
     globalThis.fetch = fetchMock as typeof fetch
 
     render(
-      <UserStateProvider>
-        <Probe />
-      </UserStateProvider>,
+      <LibrarySyncActivityProvider>
+        <UserStateProvider>
+          <Probe />
+        </UserStateProvider>
+      </LibrarySyncActivityProvider>,
     )
 
     await waitFor(() => expect(screen.getByTestId("playlists")).toHaveTextContent("1"))
@@ -350,9 +355,11 @@ describe("UserStateProvider", () => {
     globalThis.fetch = fetchMock as typeof fetch
 
     render(
-      <UserStateProvider>
-        <EarlyRehydrateProbe />
-      </UserStateProvider>,
+      <LibrarySyncActivityProvider>
+        <UserStateProvider>
+          <EarlyRehydrateProbe />
+        </UserStateProvider>
+      </LibrarySyncActivityProvider>,
     )
 
     await waitFor(() => expect(userStateRequest.resolve).toBeDefined())
@@ -433,9 +440,11 @@ describe("UserStateProvider", () => {
     globalThis.fetch = fetchMock as typeof fetch
 
     render(
-      <UserStateProvider>
-        <SyncRaceProbe />
-      </UserStateProvider>,
+      <LibrarySyncActivityProvider>
+        <UserStateProvider>
+          <SyncRaceProbe />
+        </UserStateProvider>
+      </LibrarySyncActivityProvider>,
     )
 
     await waitFor(() =>
@@ -505,9 +514,11 @@ describe("UserStateProvider", () => {
     globalThis.fetch = fetchMock as typeof fetch
 
     render(
-      <UserStateProvider>
-        <Probe />
-      </UserStateProvider>,
+      <LibrarySyncActivityProvider>
+        <UserStateProvider>
+          <Probe />
+        </UserStateProvider>
+      </LibrarySyncActivityProvider>,
     )
 
     await waitFor(() => expect(screen.getByTestId("favorites")).toHaveTextContent("0"))
