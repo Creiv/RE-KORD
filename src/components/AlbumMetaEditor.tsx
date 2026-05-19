@@ -9,6 +9,10 @@ import {
 } from "react";
 import { deleteAlbumFolder, saveAlbumInfoManual } from "../lib/api";
 import { useI18n } from "../i18n/useI18n";
+import {
+  runWithLibrarySyncActivity,
+  useLibrarySyncActivity,
+} from "../context/LibrarySyncActivityContext";
 import { usePlayer } from "../context/PlayerContext";
 import { useUserState } from "../context/UserStateContext";
 import { useAppConfirm } from "../context/AppConfirmContext";
@@ -42,6 +46,7 @@ function AlbumMetaEditorModal({
 }) {
   const { t } = useI18n();
   const { confirm: appConfirm } = useAppConfirm();
+  const librarySync = useLibrarySyncActivity();
   const [title, setTitle] = useState("");
   const [releaseDate, setReleaseDate] = useState("");
   const [label, setLabel] = useState("");
@@ -70,18 +75,25 @@ function AlbumMetaEditorModal({
       setBusy(true);
       setErr(null);
       try {
-        const saved = await saveAlbumInfoManual(album.relPath, {
-          title: title.trim() === "" ? null : title.trim(),
-          releaseDate: releaseDate.trim() === "" ? null : releaseDate.trim(),
-          label: label.trim() === "" ? null : label.trim(),
-          country: country.trim() === "" ? null : country.trim(),
-        });
-        await Promise.resolve(
-          onSaved({
-            albumPath: saved.albumPath,
-            album: saved.album,
-            tracks: saved.tracks,
-          }),
+        await runWithLibrarySyncActivity(
+          librarySync.beginActivity,
+          "sync.activity.savingAlbumMeta",
+          async () => {
+            const saved = await saveAlbumInfoManual(album.relPath, {
+              title: title.trim() === "" ? null : title.trim(),
+              releaseDate:
+                releaseDate.trim() === "" ? null : releaseDate.trim(),
+              label: label.trim() === "" ? null : label.trim(),
+              country: country.trim() === "" ? null : country.trim(),
+            });
+            await Promise.resolve(
+              onSaved({
+                albumPath: saved.albumPath,
+                album: saved.album,
+                tracks: saved.tracks,
+              })
+            );
+          }
         );
         onClose();
       } catch (error: unknown) {
@@ -90,7 +102,7 @@ function AlbumMetaEditorModal({
         setBusy(false);
       }
     },
-    [album, country, label, onClose, onSaved, releaseDate, title],
+    [album, country, label, librarySync, onClose, onSaved, releaseDate, title],
   );
 
   const runDelete = useCallback(async () => {
@@ -109,21 +121,30 @@ function AlbumMetaEditorModal({
     setDeleteBusy(true);
     setErr(null);
     try {
-      const { deleted, deletedFolder, affectedAlbums } = await deleteAlbumFolder(album.relPath);
-      if (!deleted.length) {
-        setErr(t("albumMeta.deleteFailed"));
-        return;
-      }
-      for (const rel of deleted) p.removeFromQueueByRelPath(rel);
-      stripUserStateForRelPaths(deleted);
-      await Promise.resolve(onSaved({ deleted, deletedFolder, affectedAlbums }));
-      onClose();
+      await runWithLibrarySyncActivity(
+        librarySync.beginActivity,
+        "sync.activity.deletingAlbum",
+        async () => {
+          const { deleted, deletedFolder, affectedAlbums } =
+            await deleteAlbumFolder(album.relPath);
+          if (!deleted.length) {
+            setErr(t("albumMeta.deleteFailed"));
+            return;
+          }
+          for (const rel of deleted) p.removeFromQueueByRelPath(rel);
+          stripUserStateForRelPaths(deleted);
+          await Promise.resolve(
+            onSaved({ deleted, deletedFolder, affectedAlbums })
+          );
+          onClose();
+        }
+      );
     } catch (error: unknown) {
       setErr(error instanceof Error ? error.message : String(error));
     } finally {
       setDeleteBusy(false);
     }
-  }, [album, onClose, onSaved, p, stripUserStateForRelPaths, t, appConfirm]);
+  }, [album, librarySync, onClose, onSaved, p, stripUserStateForRelPaths, t, appConfirm]);
 
   if (!album) return null;
 

@@ -13,6 +13,7 @@ import {
 import type { CSSProperties, RefObject } from "react";
 import { useAppConfirm } from "../../context/AppConfirmContext";
 import { usePlayer } from "../../context/PlayerContext";
+import { useLibrarySyncActivity } from "../../context/LibrarySyncActivityContext";
 import { useToolsActivity } from "../../context/ToolsActivityContext";
 import { useUserState } from "../../context/UserStateContext";
 import { useMatchMedia } from "../../hooks/useMatchMedia";
@@ -22,6 +23,7 @@ import { useI18n } from "../../i18n/useI18n";
 import {
   fetchDashboard,
   fetchLibraryIndex,
+  isBackendUnreachableError,
 } from "../../lib/api";
 import { clientLegacyLibrary } from "../../lib/libraryIndex";
 import { applyLibraryDeltaToIndex } from "../../lib/libraryIndex";
@@ -78,7 +80,25 @@ export function AppShell() {
   const isMobileLayout = useMatchMedia(MOBILE_LAYOUT_MQ);
   const user = useUserState();
   const syncUserStateFromServer = user.syncUserStateFromServer;
+  const {
+    beginActivity: beginLibrarySyncActivity,
+    busy: librarySyncBusy,
+    primaryActivity: librarySyncPrimaryActivity,
+  } = useLibrarySyncActivity();
   const { t } = useI18n();
+  const formatLoadError = useCallback(
+    (message: string | null) => {
+      if (!message) return null;
+      if (message === "errors.backendUnreachable") {
+        return t("errors.backendUnreachable");
+      }
+      if (isBackendUnreachableError(message)) {
+        return t("errors.backendUnreachable");
+      }
+      return message;
+    },
+    [t]
+  );
   const { alert: appAlert } = useAppConfirm();
   const toolsActivity = useToolsActivity();
 
@@ -95,6 +115,7 @@ export function AppShell() {
   const syncTapTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const refreshSeqRef = useRef(0);
   const backgroundRefreshRef = useRef<Promise<void> | null>(null);
+  const libraryRefreshQueuedAfterFlightRef = useRef(false);
   const libraryReconcileDebounceRef = useRef<ReturnType<
     typeof globalThis.setTimeout
   > | null>(null);
@@ -123,8 +144,13 @@ export function AppShell() {
   }, []);
 
   const refreshLibrary = useCallback(
-    (mode: "manual" | "background" = "manual") => {
+    (mode: "manual" | "background" = "manual", syncUser = false) => {
       const seq = ++refreshSeqRef.current;
+      const endActivity = beginLibrarySyncActivity(
+        mode === "manual"
+          ? "sync.activity.reloadLibrary"
+          : "sync.activity.refreshIndex"
+      );
       if (mode === "manual") setLoading(true);
       const task = Promise.all([fetchLibraryIndex(), fetchDashboard()])
         .then(async ([libraryData, dashboardData]) => {
@@ -132,22 +158,43 @@ export function AppShell() {
           setIndex(libraryData);
           setDashboard(dashboardData);
           setError(null);
-          if (mode === "manual") await syncUserStateFromServer();
+          if (mode === "manual" && syncUser) await syncUserStateFromServer();
         })
         .catch((err: unknown) => {
-          if (seq === refreshSeqRef.current) setError(String(err));
+          if (seq !== refreshSeqRef.current) return;
+          setError(
+            isBackendUnreachableError(err)
+              ? "errors.backendUnreachable"
+              : String(err)
+          );
         })
         .finally(() => {
+          endActivity();
           if (mode === "manual") setLoading(false);
-          if (mode === "background" && backgroundRefreshRef.current === task) {
-            backgroundRefreshRef.current = null;
-          }
         });
-      if (mode === "background") backgroundRefreshRef.current = task;
       return task;
     },
-    [syncUserStateFromServer]
+    [beginLibrarySyncActivity, syncUserStateFromServer]
   );
+
+  const runCoalescedBackgroundRefresh = useCallback(() => {
+    if (backgroundRefreshRef.current) {
+      libraryRefreshQueuedAfterFlightRef.current = true;
+      return backgroundRefreshRef.current;
+    }
+    libraryRefreshQueuedAfterFlightRef.current = false;
+    const task = refreshLibrary("background");
+    backgroundRefreshRef.current = task;
+    void task.finally(() => {
+      if (backgroundRefreshRef.current !== task) return;
+      backgroundRefreshRef.current = null;
+      if (libraryRefreshQueuedAfterFlightRef.current) {
+        libraryRefreshQueuedAfterFlightRef.current = false;
+        void runCoalescedBackgroundRefresh();
+      }
+    });
+    return task;
+  }, [refreshLibrary]);
 
   const scheduleDebouncedLibraryReconcile = useCallback(() => {
     if (libraryReconcileDebounceRef.current != null) {
@@ -155,38 +202,53 @@ export function AppShell() {
     }
     libraryReconcileDebounceRef.current = globalThis.setTimeout(() => {
       libraryReconcileDebounceRef.current = null;
-      void refreshLibrary("background");
+      void runCoalescedBackgroundRefresh();
     }, LIBRARY_RECONCILE_DEBOUNCE_MS);
-  }, [refreshLibrary]);
+  }, [runCoalescedBackgroundRefresh]);
 
-  const refreshManual = useCallback(() => {
+  const refreshManual = useCallback(
+    (syncUser = false) => {
+      if (libraryReconcileDebounceRef.current != null) {
+        globalThis.clearTimeout(libraryReconcileDebounceRef.current);
+        libraryReconcileDebounceRef.current = null;
+      }
+      libraryRefreshQueuedAfterFlightRef.current = false;
+      return refreshLibrary("manual", syncUser);
+    },
+    [refreshLibrary]
+  );
+
+  /** Refresh indice in background, accodato e debounced (studio / metadati rapidi). */
+  const refreshBackground = useCallback((): Promise<void> => {
+    scheduleDebouncedLibraryReconcile();
+    return Promise.resolve();
+  }, [scheduleDebouncedLibraryReconcile]);
+
+  /** Dopo download o scan massivi: refresh subito, una richiesta alla volta. */
+  const refreshLibraryNow = useCallback(() => {
     if (libraryReconcileDebounceRef.current != null) {
       globalThis.clearTimeout(libraryReconcileDebounceRef.current);
       libraryReconcileDebounceRef.current = null;
     }
-    return refreshLibrary("manual");
-  }, [refreshLibrary]);
-
-  const refreshBackground = useCallback(() => {
-    if (libraryReconcileDebounceRef.current != null) {
-      globalThis.clearTimeout(libraryReconcileDebounceRef.current);
-      libraryReconcileDebounceRef.current = null;
-    }
-    return refreshLibrary("background");
-  }, [refreshLibrary]);
+    return runCoalescedBackgroundRefresh();
+  }, [runCoalescedBackgroundRefresh]);
 
   const applyLibraryDelta = useCallback(
     (delta: LibraryEntityDelta, reconcile = true) => {
+      const endActivity = beginLibrarySyncActivity(
+        "sync.activity.updatingLibrary"
+      );
       setIndex((prev) => applyLibraryDeltaToIndex(prev, delta));
+      endActivity();
       if (reconcile) scheduleDebouncedLibraryReconcile();
     },
-    [scheduleDebouncedLibraryReconcile]
+    [beginLibrarySyncActivity, scheduleDebouncedLibraryReconcile]
   );
 
   const refreshAfterAlbumMetaSaved = useCallback(
     (delta?: LibraryEntityDelta) => {
       if (delta) {
-        applyLibraryDelta(delta);
+        applyLibraryDelta(delta, false);
         return;
       }
       refreshBackground();
@@ -197,15 +259,39 @@ export function AppShell() {
   const refreshAfterTrackMetaSaved = useCallback(
     (delta?: LibraryEntityDelta) => {
       if (delta) {
-        applyLibraryDelta(delta);
-        void syncUserStateFromServer();
+        applyLibraryDelta(delta, false);
         return;
       }
       refreshBackground();
-      return syncUserStateFromServer();
     },
-    [applyLibraryDelta, refreshBackground, syncUserStateFromServer]
+    [applyLibraryDelta, refreshBackground]
   );
+
+  const syncBusy =
+    loading ||
+    librarySyncBusy ||
+    user.saving ||
+    toolsActivity.toolsAnyBusy;
+
+  const syncStatusTitle = useMemo(() => {
+    const primary = librarySyncPrimaryActivity;
+    if (primary) {
+      return t(
+        primary.labelKey as Parameters<typeof t>[0],
+        primary.labelParams
+      );
+    }
+    if (user.saving) return t("sync.activity.savingUserState");
+    if (loading) return t("sync.activity.reloadLibrary");
+    if (toolsActivity.toolsAnyBusy) return t("topbar.toolsBusyTitle");
+    return t("topbar.refreshTitle");
+  }, [
+    librarySyncPrimaryActivity,
+    loading,
+    t,
+    toolsActivity.toolsAnyBusy,
+    user.saving,
+  ]);
 
   const onSyncButtonClick = useCallback(() => {
     setSyncTapAnim(true);
@@ -214,7 +300,7 @@ export function AppShell() {
       setSyncTapAnim(false);
       syncTapTimerRef.current = null;
     }, 500);
-    void refreshManual();
+    void refreshManual(true);
   }, [refreshManual]);
 
   useEffect(
@@ -354,6 +440,11 @@ export function AppShell() {
     setSearch("");
     setLibrarySearchBarOpen(false);
   }, []);
+
+  const goLibraryOverview = useCallback(() => {
+    closeLibrarySearch();
+    navigate({ section: "libreria", artist: null, album: null });
+  }, [navigate, closeLibrarySearch]);
 
   /** Home libreria senza artista/album; resetta anche filtri overview (tick). */
   const goLibraryRootForBrowse = useCallback(() => {
@@ -547,7 +638,9 @@ export function AppShell() {
     }
     if (loading && !index) return <KordSplashLoader />;
     if (error && !index)
-      return <div className="panel-empty danger">{error}</div>;
+      return (
+        <div className="panel-empty danger">{formatLoadError(error)}</div>
+      );
     if (!index) return <div className="panel-empty">{t("empty.noData")}</div>;
     switch (route.section) {
       case "dashboard":
@@ -585,6 +678,10 @@ export function AppShell() {
               showSearchBar={librarySearchBarOpen}
               onSearchBarClose={closeLibrarySearch}
               onRefreshLibrary={refreshBackground}
+              onLibraryDelta={(delta, reconcile) =>
+                applyLibraryDelta(delta, reconcile ?? false)
+              }
+              onGoLibraryOverview={goLibraryOverview}
               onOpenArtist={navToLibraryArtist}
               onOpenAlbum={navToLibraryAlbum}
             />
@@ -598,6 +695,7 @@ export function AppShell() {
                 library={legacyLibrary}
                 libraryIndex={index}
                 onRefreshLibrary={refreshBackground}
+                onRefreshLibraryNow={refreshLibraryNow}
                 onLibraryDelta={applyLibraryDelta}
               />
             </Suspense>
@@ -684,9 +782,9 @@ export function AppShell() {
             {!isMobileLayout ? (
               <SideBar
                 activeSection={route.section}
-                loading={loading}
+                syncBusy={syncBusy}
+                syncStatusTitle={syncStatusTitle}
                 syncTapAnim={syncTapAnim}
-                toolsBusy={toolsActivity.toolsAnyBusy}
                 librarySearchBarOpen={librarySearchBarOpen}
                 collapsed={sidebarCollapsed}
                 onNavigate={navToSection}
@@ -701,9 +799,9 @@ export function AppShell() {
               {/* Mobile topbar */}
               <TopBar
                 activeSection={route.section}
-                loading={loading}
+                syncBusy={syncBusy}
+                syncStatusTitle={syncStatusTitle}
                 syncTapAnim={syncTapAnim}
-                toolsBusy={toolsActivity.toolsAnyBusy}
                 librarySearchBarOpen={librarySearchBarOpen}
                 showInstallButton={showInstallAppButton}
                 onSync={onSyncButtonClick}
@@ -713,16 +811,20 @@ export function AppShell() {
               />
 
               {error && index ? (
-                <div className={styles.banner}>{error}</div>
+                <div className={styles.banner}>{formatLoadError(error)}</div>
               ) : null}
               {user.error ? (
                 <div className={styles.banner}>
-                  {t("persist.banner")} {user.error}
+                  {user.error === "errors.backendUnreachable"
+                    ? t("errors.backendUnreachable")
+                    : `${t("persist.banner")} ${formatLoadError(user.error)}`}
                 </div>
               ) : null}
 
               <main className={`content-shell ${styles.content}`}>
-                <div className="content-shell__inner">{currentView}</div>
+                <div className="content-shell__inner" key={route.section}>
+                  {currentView}
+                </div>
               </main>
             </div>
             </div>

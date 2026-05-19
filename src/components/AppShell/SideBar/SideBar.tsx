@@ -9,9 +9,9 @@ import styles from "./SideBar.module.css";
 
 interface SideBarProps {
   activeSection: AppSection;
-  loading: boolean;
+  syncBusy: boolean;
+  syncStatusTitle: string;
   syncTapAnim: boolean;
-  toolsBusy: boolean;
   librarySearchBarOpen: boolean;
   collapsed: boolean;
   onNavigate: (section: AppSection) => void;
@@ -23,9 +23,9 @@ interface SideBarProps {
 
 export const SideBar = memo(function SideBar({
   activeSection,
-  loading,
+  syncBusy,
+  syncStatusTitle,
   syncTapAnim,
-  toolsBusy,
   librarySearchBarOpen,
   collapsed,
   onNavigate,
@@ -145,28 +145,21 @@ export const SideBar = memo(function SideBar({
 
       {/* Footer */}
       <div className={styles.footer}>
-        {toolsBusy && !collapsed ? (
-          <span
-            className="topbar2__tools-spinner"
-            role="status"
-            aria-label={t("topbar.toolsBusyTitle")}
-          />
-        ) : null}
         <div className={styles.footerActions}>
           <button
             type="button"
             className={[
               "ghost-btn ghost-btn--toolbar topbar2__sync-btn",
-              loading ? "is-loading" : "",
+              syncBusy ? "is-loading" : "",
               syncTapAnim ? "is-tap" : "",
             ]
               .filter(Boolean)
               .join(" ")}
             onClick={onSync}
-            disabled={loading}
-            title={t("topbar.refreshTitle")}
+            disabled={syncBusy}
+            title={syncStatusTitle}
             aria-label={t("topbar.sync")}
-            aria-busy={loading}
+            aria-busy={syncBusy}
           >
             <span className="topbar2__sync-ic" aria-hidden>
               <svg viewBox="0 0 24 24" fill="currentColor" aria-hidden>

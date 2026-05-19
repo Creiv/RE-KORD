@@ -8,9 +8,9 @@ import styles from "./TopBar.module.css";
 
 interface TopBarProps {
   activeSection: AppSection;
-  loading: boolean;
+  syncBusy: boolean;
+  syncStatusTitle: string;
   syncTapAnim: boolean;
-  toolsBusy: boolean;
   librarySearchBarOpen: boolean;
   showInstallButton: boolean;
   onSync: () => void;
@@ -21,9 +21,9 @@ interface TopBarProps {
 
 export const TopBar = memo(function TopBar({
   activeSection,
-  loading,
+  syncBusy,
+  syncStatusTitle,
   syncTapAnim,
-  toolsBusy,
   librarySearchBarOpen,
   showInstallButton,
   onSync,
@@ -55,27 +55,20 @@ export const TopBar = memo(function TopBar({
 
         {/* End: action buttons */}
         <div className={styles.end}>
-          {toolsBusy ? (
-            <span
-              className="topbar2__tools-spinner"
-              role="status"
-              aria-label={t("topbar.toolsBusyTitle")}
-            />
-          ) : null}
           <button
             type="button"
             className={[
               "ghost-btn ghost-btn--toolbar topbar2__sync-btn",
-              loading ? "is-loading" : "",
+              syncBusy ? "is-loading" : "",
               syncTapAnim ? "is-tap" : "",
             ]
               .filter(Boolean)
               .join(" ")}
             onClick={onSync}
-            disabled={loading}
-            title={t("topbar.refreshTitle")}
+            disabled={syncBusy}
+            title={syncStatusTitle}
             aria-label={t("topbar.sync")}
-            aria-busy={loading}
+            aria-busy={syncBusy}
           >
             <span className="topbar2__sync-ic" aria-hidden>
               <UiAutorenew />

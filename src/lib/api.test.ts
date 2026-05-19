@@ -94,3 +94,15 @@ describe("api account bootstrap", () => {
     ])
   })
 })
+
+describe("isBackendUnreachableError", () => {
+  it("recognizes BackendUnreachableError and empty JSON proxy failures", async () => {
+    const { BackendUnreachableError, isBackendUnreachableError } = await import("./api")
+    expect(isBackendUnreachableError(new BackendUnreachableError())).toBe(true)
+    expect(
+      isBackendUnreachableError(
+        new SyntaxError("JSON.parse: unexpected end of data at line 1 column 1"),
+      ),
+    ).toBe(true)
+  })
+})

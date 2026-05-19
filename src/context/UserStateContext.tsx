@@ -10,8 +10,10 @@ import {
 } from "react";
 import {
   fetchUserState,
+  isBackendUnreachableError,
   patchUserState,
 } from "../lib/api";
+import { useLibrarySyncActivity } from "./LibrarySyncActivityContext";
 import { readLegacyLocalShuffleMigrated, clearLegacyLocalShuffle } from "../lib/legacyShuffleLocal";
 import { fmtDate } from "../lib/metaFormat";
 import { randomUUID } from "../lib/randomUUID";
@@ -635,6 +637,9 @@ type UserStateContextValue = {
 const UserStateContext = createContext<UserStateContextValue | null>(null);
 
 export function UserStateProvider({ children }: { children: React.ReactNode }) {
+  const { beginActivity: beginLibrarySyncActivity } = useLibrarySyncActivity();
+  const beginLibrarySyncActivityRef = useRef(beginLibrarySyncActivity);
+  beginLibrarySyncActivityRef.current = beginLibrarySyncActivity;
   const [state, setState] = useState<UserStateV1>(defaultUserState);
   const [ready, setReady] = useState(false);
   const [saving, setSaving] = useState(false);
@@ -739,20 +744,28 @@ export function UserStateProvider({ children }: { children: React.ReactNode }) {
           .then((remote) => applyRemote(remote))
           .catch((err: unknown) => {
             if (!active) return;
-            if (isLibraryRequiredError(err)) return;
+            if (isLibraryRequiredError(err) || isBackendUnreachableError(err)) return;
             scheduleRetry();
           });
       }, delay);
     };
 
+    const endLoadActivity = beginLibrarySyncActivityRef.current(
+      "sync.activity.loadingUserState"
+    );
     fetchUserState()
       .then((remote) => applyRemote(remote))
       .catch((err: unknown) => {
         if (!active) return;
         const fallback = mergeLegacy(defaultUserState());
-        playlistDirtyRef.current = true;
         setState(fallback);
-        setError(isLibraryRequiredError(err) ? null : String(err));
+        setError(
+          isLibraryRequiredError(err)
+            ? null
+            : isBackendUnreachableError(err)
+              ? "errors.backendUnreachable"
+              : String(err)
+        );
         setReady(true);
         hydratedRef.current = true;
 
@@ -762,7 +775,12 @@ export function UserStateProvider({ children }: { children: React.ReactNode }) {
         pendingPatchRef.current = {};
         inFlightPatchRef.current = {};
 
-        if (!isLibraryRequiredError(err)) scheduleRetry();
+        if (!isLibraryRequiredError(err) && !isBackendUnreachableError(err)) {
+          scheduleRetry();
+        }
+      })
+      .finally(() => {
+        endLoadActivity();
       });
     return () => {
       active = false;
@@ -781,6 +799,9 @@ export function UserStateProvider({ children }: { children: React.ReactNode }) {
     inFlightPatchRef.current = patch;
     flushingRef.current = true;
     const seq = ++saveSeqRef.current;
+    const endSaveActivity = beginLibrarySyncActivity(
+      "sync.activity.savingUserState"
+    );
     setSaving(true);
     patchUserState(patch)
       .then((saved) => {
@@ -808,9 +829,16 @@ export function UserStateProvider({ children }: { children: React.ReactNode }) {
         );
         inFlightPatchRef.current = {};
         dirtyRef.current = true;
-        setError(err instanceof Error ? err.message : String(err));
+        setError(
+          isBackendUnreachableError(err)
+            ? "errors.backendUnreachable"
+            : err instanceof Error
+              ? err.message
+              : String(err)
+        );
       })
       .finally(() => {
+        endSaveActivity();
         if (seq === saveSeqRef.current) setSaving(false);
         flushingRef.current = false;
         if (Object.keys(pendingPatchRef.current).length > 0) {
@@ -821,7 +849,7 @@ export function UserStateProvider({ children }: { children: React.ReactNode }) {
           }, 240);
         }
       });
-  }, [ready]);
+  }, [beginLibrarySyncActivity, ready]);
   useEffect(() => {
     flushPendingPatchRef.current = flushPendingPatch;
   }, [flushPendingPatch]);
@@ -862,6 +890,9 @@ export function UserStateProvider({ children }: { children: React.ReactNode }) {
   }, [state.settings.audioCrossfadeSec]);
 
   const syncUserStateFromServer = useCallback(() => {
+    const endActivity = beginLibrarySyncActivity(
+      "sync.activity.loadingUserState"
+    );
     return Promise.resolve()
       .then(() => fetchUserState())
       .then((remote) => {
@@ -893,9 +924,16 @@ export function UserStateProvider({ children }: { children: React.ReactNode }) {
         setError(null);
       })
       .catch((err: unknown) => {
-        setError(String(err));
+        setError(
+          isBackendUnreachableError(err)
+            ? "errors.backendUnreachable"
+            : String(err)
+        );
+      })
+      .finally(() => {
+        endActivity();
       });
-  }, []);
+  }, [beginLibrarySyncActivity]);
 
   const commit = useCallback(
     (
@@ -905,17 +943,20 @@ export function UserStateProvider({ children }: { children: React.ReactNode }) {
         patch?: (next: UserStateV1, prev: UserStateV1) => UserStatePatch;
       }
     ) => {
-      dirtyRef.current = true;
       setState((prev) => {
         const next = updater(prev);
+        if (next === prev) return prev;
+        dirtyRef.current = true;
         if (next.playlists !== prev.playlists) playlistDirtyRef.current = true;
         const omitPlaylists = !playlistDirtyRef.current;
         const patch =
           options?.patch?.(next, prev) ?? userStateToPatch(next, omitPlaylists);
-        pendingPatchRef.current = mergeUserStatePatches(
-          pendingPatchRef.current,
-          patch
-        );
+        if (Object.keys(patch).length > 0) {
+          pendingPatchRef.current = mergeUserStatePatches(
+            pendingPatchRef.current,
+            patch
+          );
+        }
         if (options?.immediate) {
           window.setTimeout(() => flushPendingPatch(), 0);
         }
@@ -959,23 +1000,72 @@ export function UserStateProvider({ children }: { children: React.ReactNode }) {
       const byPath = new Map(
         libraryIndex.tracks.map((t) => [t.relPath, t])
       );
-      commit((prev) => ({
-        ...prev,
-        recent: prev.recent.map((t) => byPath.get(t.relPath) ?? t),
-        playlists: prev.playlists.map((pl) => ({
-          ...pl,
-          tracks: pl.tracks.map((tr) => {
-            const full = byPath.get(tr.relPath);
-            if (!full) return tr;
-            return {
-              relPath: full.relPath,
-              title: full.title,
-              artist: full.artist,
-              album: full.album,
-            };
-          }),
-        })),
-      }), { patch: (next) => ({ recent: next.recent, playlists: next.playlists }) });
+      type PlaylistTrackStub = {
+        relPath: string;
+        title: string;
+        artist: string;
+        album: string;
+      };
+      const mergePlaylistTrack = (
+        _tr: PlaylistTrackStub,
+        full: LibraryIndex["tracks"][number]
+      ) => ({
+        relPath: full.relPath,
+        title: full.title,
+        artist: full.artist,
+        album: full.album,
+      });
+      const playlistTrackEqual = (a: PlaylistTrackStub, b: PlaylistTrackStub) =>
+        a.relPath === b.relPath &&
+        a.title === b.title &&
+        a.artist === b.artist &&
+        a.album === b.album;
+      const recentEqual = (a: EnrichedTrack, b: EnrichedTrack) =>
+        a.relPath === b.relPath &&
+        a.title === b.title &&
+        a.artist === b.artist &&
+        a.album === b.album &&
+        a.id === b.id;
+
+      commit((prev) => {
+        let recentChanged = false;
+        const recent = prev.recent.map((t) => {
+          const full = byPath.get(t.relPath);
+          if (!full) return t;
+          const next: EnrichedTrack = {
+            ...t,
+            relPath: full.relPath,
+            title: full.title,
+            artist: full.artist,
+            album: full.album,
+          };
+          if (!recentEqual(t, next)) recentChanged = true;
+          return next;
+        });
+        let playlistsChanged = false;
+        const playlists = prev.playlists.map((pl) => {
+          let plChanged = false;
+          const tracks = pl.tracks.map((playlistTrack) => {
+            const full = byPath.get(playlistTrack.relPath);
+            if (!full) return playlistTrack;
+            const next = mergePlaylistTrack(playlistTrack, full);
+            if (!playlistTrackEqual(playlistTrack, next)) plChanged = true;
+            return next;
+          });
+          if (plChanged) playlistsChanged = true;
+          return plChanged ? { ...pl, tracks } : pl;
+        });
+        if (!recentChanged && !playlistsChanged) return prev;
+        return { ...prev, recent, playlists };
+      }, { patch: (next, prev) => {
+        if (
+          next.recent === prev.recent &&
+          next.playlists === prev.playlists
+        ) {
+          return {};
+        }
+        return { recent: next.recent, playlists: next.playlists };
+      } });
     },
     [commit]
   );

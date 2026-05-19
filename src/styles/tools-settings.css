@@ -2104,6 +2104,25 @@
   max-width: 14rem;
 }
 
+.meta-edit-genre-chip__browse {
+  border: none;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  padding: 0;
+  cursor: pointer;
+  text-align: left;
+}
+
+.meta-edit-genre-chip__browse:hover:not(:disabled) {
+  color: var(--accent2);
+}
+
+.meta-edit-genre-chip__browse:disabled {
+  cursor: not-allowed;
+  opacity: 0.55;
+}
+
 .meta-edit-genre-chip__x {
   flex-shrink: 0;
   display: inline-flex;

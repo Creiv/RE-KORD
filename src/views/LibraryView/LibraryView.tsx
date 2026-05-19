@@ -11,6 +11,10 @@ import { createPortal } from "react-dom";
 import { useUserState } from "../../context/UserStateContext";
 import { useAppConfirm } from "../../context/AppConfirmContext";
 import { useI18n } from "../../i18n/useI18n";
+import {
+  runWithLibrarySyncActivity,
+  useLibrarySyncActivity,
+} from "../../context/LibrarySyncActivityContext";
 import { useLibraryPlayback } from "../../hooks/useLibraryPlayback";
 import { PlayCollectionButton } from "../../components/PlayCollectionButton";
 import {
@@ -68,6 +72,7 @@ import {
 import type {
   LibraryAlbumIndex,
   LibraryArtistIndex,
+  LibraryEntityDelta,
   LibraryIndex,
   LibraryTrackIndex,
 } from "../../types";
@@ -93,6 +98,8 @@ interface LibraryViewProps {
   showSearchBar: boolean;
   onSearchBarClose: () => void;
   onRefreshLibrary: () => Promise<void>;
+  onLibraryDelta?: (delta: LibraryEntityDelta, reconcile?: boolean) => void;
+  onGoLibraryOverview: () => void;
 }
 
 export default function LibraryView({
@@ -109,8 +116,11 @@ export default function LibraryView({
   showSearchBar,
   onSearchBarClose,
   onRefreshLibrary,
+  onLibraryDelta,
+  onGoLibraryOverview,
 }: LibraryViewProps) {
   const user = useUserState();
+  const librarySync = useLibrarySyncActivity();
   const {
     playSequence,
     playGlobalRadio,
@@ -257,28 +267,52 @@ export default function LibraryView({
       setAlbumGenreBusy(true);
       setAlbumGenreErr(null);
       try {
-        for (const tr of albumTracks) {
-          const cur = parseTrackGenres(tr.meta?.genre);
-          const low = token.toLowerCase();
-          const next =
-            applyMode === "add"
-              ? cur.some((g) => g.toLowerCase() === low)
-                ? cur
-                : [...cur, token]
-              : cur.filter((g) => g.toLowerCase() !== low);
-          const nextSerialized = serializeTrackGenres(next);
-          await saveTrackInfoManual(tr.relPath, {
-            genre: nextSerialized || null,
-          });
-        }
-        await onRefreshLibrary();
+        await runWithLibrarySyncActivity(
+          librarySync.beginActivity,
+          "sync.activity.updatingGenres",
+          async () => {
+            const trackPatches: NonNullable<LibraryEntityDelta["tracks"]> = [];
+            await Promise.all(
+              albumTracks.map(async (tr) => {
+                const cur = parseTrackGenres(tr.meta?.genre);
+                const low = token.toLowerCase();
+                const next =
+                  applyMode === "add"
+                    ? cur.some((g) => g.toLowerCase() === low)
+                      ? cur
+                      : [...cur, token]
+                    : cur.filter((g) => g.toLowerCase() !== low);
+                const nextSerialized = serializeTrackGenres(next);
+                const saved = await saveTrackInfoManual(tr.relPath, {
+                  genre: nextSerialized || null,
+                });
+                if (saved.track) trackPatches.push(saved.track);
+              })
+            );
+            if (trackPatches.length && onLibraryDelta) {
+              onLibraryDelta({ tracks: trackPatches }, false);
+            } else if (!onLibraryDelta) {
+              await onRefreshLibrary();
+            }
+          }
+        );
       } catch (e: unknown) {
         setAlbumGenreErr(e instanceof Error ? e.message : String(e));
       } finally {
         setAlbumGenreBusy(false);
       }
     },
-    [album?.relPath, albumTracks, onRefreshLibrary]
+    [album?.relPath, albumTracks, librarySync, onLibraryDelta, onRefreshLibrary]
+  );
+
+  const browseGenreFromAlbum = useCallback(
+    (genreLabel: string) => {
+      endSearchForBrowse();
+      user.updateSettings({ libBrowse: "genres" });
+      setSelectedGenreKey(genreLabel.toLowerCase());
+      onGoLibraryOverview();
+    },
+    [endSearchForBrowse, onGoLibraryOverview, user]
   );
 
   const albumGenreOptions = useMemo(() => {
@@ -860,7 +894,15 @@ export default function LibraryView({
                       className="meta-edit-genre-chip"
                       role="listitem"
                     >
-                      <span className="meta-edit-genre-chip__text">{g}</span>
+                      <button
+                        type="button"
+                        className="meta-edit-genre-chip__text meta-edit-genre-chip__browse"
+                        disabled={albumGenreBusy}
+                        onClick={() => browseGenreFromAlbum(g)}
+                        title={g}
+                      >
+                        {g}
+                      </button>
                       <button
                         type="button"
                         className="meta-edit-genre-chip__x"
@@ -882,7 +924,9 @@ export default function LibraryView({
                         type="button"
                         className="meta-edit-genre-chip meta-edit-genre-chip--add"
                         disabled={albumGenreBusy}
-                        onClick={() => {
+                        aria-expanded={albumGenrePickerOpen}
+                        onClick={(e) => {
+                          e.stopPropagation();
                           setAlbumGenrePickerOpen((prev) => !prev);
                         }}
                         aria-label={t("trackMeta.fieldGenreAdd")}
@@ -900,6 +944,7 @@ export default function LibraryView({
                               className="track-row__overflow-menu meta-edit-genre-option-list popover-layer-fixed"
                               role="menu"
                               style={popoverPlacementStyle(albumGenrePlacement)}
+                              onMouseDown={(e) => e.stopPropagation()}
                             >
                               {albumGenreOptions.map((g) => (
                                 <li key={g} role="presentation">
