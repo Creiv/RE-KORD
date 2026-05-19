@@ -102,7 +102,7 @@ export const StudioCatalogArtistTile = memo(function StudioCatalogArtistTile({
         {sel ? (
           <button
             type="button"
-            className="btn danger sm"
+            className="ghost-btn danger ghost-btn--sm"
             disabled={catalogBusy || selectionIncludeAll}
             onClick={(event) => {
               event.stopPropagation();
@@ -114,7 +114,7 @@ export const StudioCatalogArtistTile = memo(function StudioCatalogArtistTile({
         ) : (
           <button
             type="button"
-            className="btn sm"
+            className="primary-btn primary-btn--sm"
             disabled={catalogBusy || selectionIncludeAll}
             onClick={(event) => {
               event.stopPropagation();
@@ -200,7 +200,7 @@ export const StudioCatalogAlbumTile = memo(function StudioCatalogAlbumTile({
         {sel ? (
           <button
             type="button"
-            className="btn danger sm"
+            className="ghost-btn danger ghost-btn--sm"
             disabled={catalogBusy || selectionIncludeAll}
             onClick={onRemoveFromLibrary}
           >
@@ -209,7 +209,7 @@ export const StudioCatalogAlbumTile = memo(function StudioCatalogAlbumTile({
         ) : (
           <button
             type="button"
-            className="btn sm"
+            className="primary-btn primary-btn--sm"
             disabled={catalogBusy || selectionIncludeAll}
             onClick={onAddToLibrary}
           >

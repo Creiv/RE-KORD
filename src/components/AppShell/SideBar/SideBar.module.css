@@ -11,7 +11,7 @@
   background: var(--sidebar-bg, color-mix(in srgb, var(--surface2) 95%, var(--bg) 5%));
   border-right: 1px solid var(--border);
   overflow: hidden;
-  z-index: 20;
+  z-index: var(--z-sidebar);
   flex-shrink: 0;
   transition: width 0.22s ease, min-width 0.22s ease;
 }

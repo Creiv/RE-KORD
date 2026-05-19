@@ -1733,7 +1733,7 @@ export function ToolsView({ library, libraryIndex, onRefreshLibrary, onLibraryDe
                     <div className="studio-catalog-filters__toolbar">
                       <button
                         type="button"
-                        className="btn sm"
+                        className="primary-btn primary-btn--sm"
                         onClick={() => loadCatalogPane(true)}
                         disabled={catalogBusy}
                       >
@@ -2072,7 +2072,7 @@ export function ToolsView({ library, libraryIndex, onRefreshLibrary, onLibraryDe
                           />
                           <button
                             type="button"
-                            className="btn secondary"
+                            className="ghost-btn"
                             disabled={
                               mkBusy || !newDirName.trim() || !dlList
                             }
@@ -2190,7 +2190,7 @@ export function ToolsView({ library, libraryIndex, onRefreshLibrary, onLibraryDe
                           ) : null}
                           <button
                             type="button"
-                            className="btn secondary sm"
+                            className="ghost-btn ghost-btn--sm"
                             onClick={() =>
                               setRelSel(
                                 new Set(filteredRelEntries.map((e) => e.id))
@@ -2201,7 +2201,7 @@ export function ToolsView({ library, libraryIndex, onRefreshLibrary, onLibraryDe
                           </button>
                           <button
                             type="button"
-                            className="btn secondary sm"
+                            className="ghost-btn ghost-btn--sm"
                             onClick={() => setRelSel(new Set())}
                           >
                             {t("tools.dlSelectNone")}
@@ -2286,7 +2286,7 @@ export function ToolsView({ library, libraryIndex, onRefreshLibrary, onLibraryDe
                       {!relPayload ? (
                         <button
                           type="button"
-                          className="btn"
+                          className="primary-btn"
                           onClick={loadReleasesCatalog}
                           disabled={
                             relLoadBusy ||
@@ -2307,7 +2307,7 @@ export function ToolsView({ library, libraryIndex, onRefreshLibrary, onLibraryDe
                         <>
                           <button
                             type="button"
-                            className="btn"
+                            className="primary-btn"
                             onClick={runReleasesDl}
                             disabled={
                               dlBusy ||
@@ -2339,7 +2339,7 @@ export function ToolsView({ library, libraryIndex, onRefreshLibrary, onLibraryDe
                     ) : (
                       <button
                         type="button"
-                        className="btn"
+                        className="primary-btn"
                         onClick={runDl}
                         disabled={
                           dlBusy ||
@@ -2367,7 +2367,7 @@ export function ToolsView({ library, libraryIndex, onRefreshLibrary, onLibraryDe
                       <div className="dl-progress-stop-row">
                         <button
                           type="button"
-                          className="btn danger sm"
+                          className="ghost-btn danger ghost-btn--sm"
                           onClick={stopStudioDownload}
                         >
                           {t("tools.dlStop")}
@@ -2577,7 +2577,7 @@ export function ToolsView({ library, libraryIndex, onRefreshLibrary, onLibraryDe
                     <div className="studio-action-row studio-meta-fill-row">
                       <button
                         type="button"
-                        className="btn secondary sm"
+                        className="ghost-btn ghost-btn--sm"
                         onClick={setMetaFromCurrent}
                         disabled={!p.current || studioMetaBusy}
                       >
@@ -2601,7 +2601,7 @@ export function ToolsView({ library, libraryIndex, onRefreshLibrary, onLibraryDe
                         <div className="studio-action-row studio-meta-equal-btns">
                           <button
                             type="button"
-                            className="btn secondary"
+                            className="ghost-btn"
                             onClick={fetchOneAlbumMeta}
                             disabled={!metaAlbumPath?.trim() || studioMetaBusy}
                           >
@@ -2611,7 +2611,7 @@ export function ToolsView({ library, libraryIndex, onRefreshLibrary, onLibraryDe
                           </button>
                           <button
                             type="button"
-                            className="btn"
+                            className="primary-btn"
                             onClick={() => setMetaScanChoiceOpen("album")}
                             disabled={!library || studioMetaBusy}
                             title={t("tools.scanAlbumsTitle")}
@@ -2632,7 +2632,7 @@ export function ToolsView({ library, libraryIndex, onRefreshLibrary, onLibraryDe
                         <div className="studio-action-row studio-meta-equal-btns">
                           <button
                             type="button"
-                            className="btn secondary"
+                            className="ghost-btn"
                             onClick={fetchCurrentTrackMeta}
                             disabled={!p.current || studioMetaBusy}
                           >
@@ -2640,7 +2640,7 @@ export function ToolsView({ library, libraryIndex, onRefreshLibrary, onLibraryDe
                           </button>
                           <button
                             type="button"
-                            className="btn"
+                            className="primary-btn"
                             onClick={() => setMetaScanChoiceOpen("track")}
                             disabled={!library || studioMetaBusy}
                           >
@@ -2737,7 +2737,7 @@ export function ToolsView({ library, libraryIndex, onRefreshLibrary, onLibraryDe
                         {metaAllBusy ? (
                           <button
                             type="button"
-                            className="btn secondary sm"
+                            className="ghost-btn ghost-btn--sm"
                             onClick={() => {
                               stopMetaAll.current = true;
                             }}
@@ -2748,7 +2748,7 @@ export function ToolsView({ library, libraryIndex, onRefreshLibrary, onLibraryDe
                         {trackAllBusy ? (
                           <button
                             type="button"
-                            className="btn secondary sm"
+                            className="ghost-btn ghost-btn--sm"
                             onClick={() => {
                               stopTrackAll.current = true;
                             }}
@@ -2759,7 +2759,7 @@ export function ToolsView({ library, libraryIndex, onRefreshLibrary, onLibraryDe
                         {trackPruneBusy ? (
                           <button
                             type="button"
-                            className="btn secondary sm"
+                            className="ghost-btn ghost-btn--sm"
                             onClick={() => {
                               stopTrackPrune.current = true;
                             }}
@@ -2772,7 +2772,7 @@ export function ToolsView({ library, libraryIndex, onRefreshLibrary, onLibraryDe
                     <div className="studio-meta-if-needed">
                       <button
                         type="button"
-                        className="btn secondary sm"
+                        className="ghost-btn ghost-btn--sm"
                         onClick={() => {
                           void runPruneOrphanTrackMeta();
                         }}
@@ -2817,7 +2817,7 @@ export function ToolsView({ library, libraryIndex, onRefreshLibrary, onLibraryDe
                           <div className="studio-action-row studio-meta-equal-btns">
                             <button
                               type="button"
-                              className="btn secondary"
+                              className="ghost-btn"
                               disabled={!metaAlbumPath || studioMetaBusy}
                               onClick={() => runSanitizeTitles("album", true)}
                             >
@@ -2825,7 +2825,7 @@ export function ToolsView({ library, libraryIndex, onRefreshLibrary, onLibraryDe
                             </button>
                             <button
                               type="button"
-                              className="btn"
+                              className="primary-btn"
                               disabled={!metaAlbumPath || studioMetaBusy}
                               onClick={() => runSanitizeTitles("album", false)}
                             >
@@ -2836,7 +2836,7 @@ export function ToolsView({ library, libraryIndex, onRefreshLibrary, onLibraryDe
                             <div className="studio-action-row studio-meta-equal-btns">
                               <button
                                 type="button"
-                                className="btn secondary"
+                                className="ghost-btn"
                                 disabled={!library || studioMetaBusy}
                                 onClick={() => runSanitizeTitles("all", true)}
                               >
@@ -2844,7 +2844,7 @@ export function ToolsView({ library, libraryIndex, onRefreshLibrary, onLibraryDe
                               </button>
                               <button
                                 type="button"
-                                className="btn"
+                                className="primary-btn"
                                 disabled={!library || studioMetaBusy}
                                 onClick={() => runSanitizeTitles("all", false)}
                               >
@@ -2977,14 +2977,14 @@ export function ToolsView({ library, libraryIndex, onRefreshLibrary, onLibraryDe
                   <div className="studio-inline-actions studio-inline-actions--spaced">
                     <button
                       type="button"
-                      className="btn secondary sm"
+                      className="ghost-btn ghost-btn--sm"
                       onClick={useCurrentForArt}
                     >
                       {t("tools.fillFromPlayback")}
                     </button>
                     <button
                       type="button"
-                      className="btn"
+                      className="primary-btn"
                       onClick={doArtSearch}
                       disabled={artBusy}
                     >
@@ -3019,7 +3019,7 @@ export function ToolsView({ library, libraryIndex, onRefreshLibrary, onLibraryDe
                       </a>
                       <button
                         type="button"
-                        className="btn sm"
+                        className="primary-btn primary-btn--sm"
                         disabled={artBusy || !albumForCover}
                         onClick={() => applyCover(a.artwork)}
                       >
@@ -3068,7 +3068,7 @@ export function ToolsView({ library, libraryIndex, onRefreshLibrary, onLibraryDe
             <div className="studio-scan-choice__actions">
               <button
                 type="button"
-                className="btn secondary"
+                className="ghost-btn"
                 onClick={() => {
                   const k = metaScanChoiceOpen;
                   setMetaScanChoiceOpen(null);
@@ -3080,7 +3080,7 @@ export function ToolsView({ library, libraryIndex, onRefreshLibrary, onLibraryDe
               </button>
               <button
                 type="button"
-                className="btn"
+                className="primary-btn"
                 onClick={() => {
                   const k = metaScanChoiceOpen;
                   setMetaScanChoiceOpen(null);
@@ -3092,7 +3092,7 @@ export function ToolsView({ library, libraryIndex, onRefreshLibrary, onLibraryDe
               </button>
               <button
                 type="button"
-                className="btn ghost-btn"
+                className="ghost-btn"
                 onClick={() => setMetaScanChoiceOpen(null)}
               >
                 {t("tools.scanChoiceCancel")}

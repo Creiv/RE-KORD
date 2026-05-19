@@ -110,7 +110,7 @@ function SettingsView() {
       return false;
     }
   });
-  const kordAppVersion = String(import.meta.env.VITE_KORD_VERSION ?? "2.6.0");
+  const kordAppVersion = String(import.meta.env.VITE_KORD_VERSION ?? "2.7.0");
 
   useEffect(() => {
     Promise.all([fetchConfig(), fetchAccounts()])
@@ -459,7 +459,7 @@ function SettingsView() {
                   </button>
                   <button
                     type="button"
-                    className="btn secondary"
+                    className="ghost-btn"
                     title={
                       account.id === accounts.defaultAccountId
                         ? t("accounts.removeDisabledDefault")
@@ -502,7 +502,7 @@ function SettingsView() {
               </label>
               <button
                 type="button"
-                className="btn"
+                className="primary-btn"
                 disabled={accountBusy || !newAccountName.trim()}
                 onClick={createNewAccount}
               >
@@ -701,7 +701,7 @@ function SettingsView() {
                   </label>
                   <button
                     type="button"
-                    className="btn"
+                    className="primary-btn"
                     disabled={libraryBusy || !libraryPath.trim()}
                     onClick={() => {
                       setLibraryErr(null);
@@ -761,7 +761,7 @@ function SettingsView() {
               />
               <button
                 type="button"
-                className="btn"
+                className="primary-btn"
                 disabled={youtubeCookiesBusy}
                 onClick={() => youtubeCookiesInputRef.current?.click()}
               >
@@ -771,7 +771,7 @@ function SettingsView() {
               </button>
               <button
                 type="button"
-                className="btn secondary"
+                className="ghost-btn"
                 disabled={youtubeCookiesBusy || !youtubeCookiesConfigured}
                 onClick={removeYoutubeCookies}
               >
@@ -816,7 +816,7 @@ function SettingsView() {
                 >
                   <button
                     type="button"
-                    className="btn secondary sm"
+                    className="ghost-btn ghost-btn--sm"
                     disabled={remoteAccessBusy}
                     onMouseEnter={() => setRemoteLoginHover(true)}
                     onMouseLeave={() => setRemoteLoginHover(false)}
@@ -850,7 +850,7 @@ function SettingsView() {
                   </button>
                   <button
                     type="button"
-                    className="btn sm"
+                    className="primary-btn primary-btn--sm"
                     disabled={remoteAccessBusy}
                     onMouseEnter={() => setRemoteShareHover(true)}
                     onMouseLeave={() => setRemoteShareHover(false)}
@@ -951,7 +951,7 @@ function SettingsView() {
             >
               <button
                 type="button"
-                className="btn secondary sm"
+                className="ghost-btn ghost-btn--sm"
                 disabled={backupBusy || restoreBusy}
                 onClick={runKordBackup}
               >
@@ -969,7 +969,7 @@ function SettingsView() {
               />
               <button
                 type="button"
-                className="btn secondary sm"
+                className="ghost-btn ghost-btn--sm"
                 disabled={restoreBusy || backupBusy}
                 onClick={() => restoreFileInputRef.current?.click()}
               >
@@ -999,7 +999,7 @@ function SettingsView() {
             </div>
             <button
               type="button"
-              className="btn secondary sm"
+              className="ghost-btn ghost-btn--sm"
               disabled={activityLogBusy}
               onClick={loadActivityLog}
             >
