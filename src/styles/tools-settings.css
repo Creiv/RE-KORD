@@ -2012,12 +2012,11 @@
 }
 
 .listen-recent-panel__lead {
-  align-items: flex-start;
+  align-items: center;
 }
 
 .listen-queue-panel .section-head.library-genre-tracklist-headrow {
-  /* Keep the same title-to-content spacing as other panels (e.g. Recent). */
-  margin-bottom: 0.75rem;
+  margin-bottom: var(--space-4);
 }
 
 .listen-recent-panel__head .listen-recent-panel__nav {
@@ -2031,18 +2030,14 @@
   border-bottom: none;
 }
 
-/* Make the "Recent / Lyrics" tabs behave like a normal section title row. */
-.listen-recent-panel__head .section-nav-tab {
-  font-size: 1.28rem;
+/* Make the "Recent / Lyrics" tabs match the h2 size of sibling section heads. */
+.listen-recent-panel .section-nav-tab {
+  font-size: 1.18rem;
 }
 
 .listen-recent-panel .section-nav-tab:disabled {
   opacity: 0.38;
   cursor: not-allowed;
-}
-
-.listen-recent-panel .section-nav-tab {
-  font-size: 1.12rem;
 }
 
 .listen-recent-panel__body {
