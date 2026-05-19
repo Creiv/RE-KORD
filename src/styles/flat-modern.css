@@ -136,6 +136,8 @@
   letter-spacing: 0.1em;
   font-size: 0.68rem;
   font-weight: 700;
+  margin: 0;
+  line-height: 1.25;
 }
 
 /* ── Library list tile ── */
