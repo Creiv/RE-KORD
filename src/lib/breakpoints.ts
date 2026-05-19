@@ -23,6 +23,8 @@ export const BP_TABLET_MAX = 1024;
 export const BP_CONTENT_NARROW_MAX = 900;
 export const BP_PHONE_MAX = 560;
 export const BP_TIGHT_MAX = 400;
+/** Card brano: icone azioni inline (sopra = menu ⋯). */
+export const TRACK_ROW_INLINE_ACTIONS_MIN_PX = 651;
 
 export const MOBILE_LAYOUT_MAX_PX = BP_MOBILE_MAX;
 export const MOBILE_LAYOUT_MQ = `(max-width: ${BP_MOBILE_MAX}px)` as const;
