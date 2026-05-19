@@ -64,7 +64,7 @@ export function LibraryRootGate({ children }: LibraryRootGateProps) {
           {libraryRootWritable ? (
             <button
               type="button"
-              className="btn"
+              className="primary-btn"
               onClick={() => window.location.assign("/settings")}
             >
               {translate(table, "gate.openSettings", undefined)}

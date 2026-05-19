@@ -6,7 +6,7 @@
   left: 0;
   right: 0;
   bottom: 0;
-  z-index: 35;
+  z-index: var(--z-nav);
   box-sizing: border-box;
   padding: 0;
   padding-bottom: env(safe-area-inset-bottom, 0px);
@@ -43,7 +43,7 @@
   background: transparent;
   color: var(--muted);
   font-family: var(--font-ui);
-  font-size: 0.58rem;
+  font-size: var(--text-xs);
   font-weight: 700;
   letter-spacing: 0.025em;
   line-height: 1.2;
@@ -127,7 +127,7 @@
 .sheet {
   position: fixed;
   inset: 0;
-  z-index: 45;
+  z-index: var(--z-nav-sheet);
   display: flex;
   align-items: flex-end;
   justify-content: center;

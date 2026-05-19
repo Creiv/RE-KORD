@@ -206,7 +206,7 @@ function AlbumMetaEditorModal({
             </button>
             <button
               type="submit"
-              className="btn"
+              className="primary-btn"
               disabled={busy || deleteBusy || album.loose}
             >
               {busy ? t("trackMeta.editSaving") : t("trackMeta.editSave")}

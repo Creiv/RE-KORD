@@ -16,12 +16,6 @@ body,
   max-width: 100vw;
 }
 
-.app-shell,
-.main-shell {
-  max-width: 100%;
-  overflow-x: clip;
-}
-
 .content-shell {
   max-width: 100%;
   box-sizing: border-box;
@@ -39,19 +33,6 @@ body,
 
 /* --- Nav in alto: scroll orizzontale confortevole / snap --- */
 @media (max-width: 900px) {
-  .topbar-nav {
-    scroll-snap-type: x proximity;
-    padding-block: 0.1rem 0.55rem;
-  }
-
-  .topbar-nav__col {
-    scroll-snap-align: start;
-  }
-
-  .topbar-nav__btn {
-    min-height: 36px;
-  }
-
   .content-shell {
     padding-inline: max(0.75rem, env(safe-area-inset-left))
       max(0.75rem, env(safe-area-inset-right));
@@ -80,7 +61,7 @@ body,
 @media (max-width: 1000px) {
   :root {
     --mobile-nav-h: 3.6rem;
-    /* Player multiriga: controlli + copertina/meta + seek (non la vecchia altezza ~86px) */
+    /* --bar-h misurato da usePlayerDockCssVars; fallback fino al primo paint */
     --bar-h: 11rem;
     --content-pad-bottom: calc(
       env(safe-area-inset-bottom, 0px) + 0.55rem + var(--bar-h) + 0.5rem +
@@ -141,7 +122,7 @@ body,
     gap: 0.45rem;
   }
 
-  .tool-studio-layout .studio-inline-actions .btn {
+  .tool-studio-layout .studio-inline-actions .primary-btn {
     min-height: 42px;
   }
 
@@ -150,7 +131,7 @@ body,
     gap: 0.55rem;
   }
 
-  .settings-page .account-row .btn.secondary {
+  .settings-page .account-row .ghost-btn {
     width: 100%;
     justify-self: stretch;
     min-height: 44px;
@@ -376,12 +357,30 @@ body,
     min-height: 40px;
   }
 
-  .topbar-nav__btn,
   .track-row__ic,
   .track-row__in-coda,
   .ghost-btn--toolbar,
   .player-bar2__ic {
     touch-action: manipulation;
+  }
+
+  .primary-btn,
+  .ghost-btn,
+  .chip-btn {
+    min-height: max(42px, var(--tap-min));
+  }
+
+  .ghost-btn--toolbar,
+  .topbar2__sync-btn,
+  .topbar2__search-btn,
+  .topbar2__install-btn {
+    min-height: var(--tap-min);
+  }
+
+  .text-btn {
+    min-height: var(--tap-comfort);
+    padding-block: 0.35rem;
+    padding-inline: 0.35rem;
   }
 
   /* Intestazioni toolbar: stessa riga (titolo a sinistra, azioni a destra) */
@@ -521,7 +520,7 @@ body,
   .library-filter-panel .segmented--filter button {
     font-size: 1.05rem;
     line-height: 1.18;
-    min-height: 32px;
+    min-height: var(--tap-min);
   }
 
   .listen-page .listen-stage,
@@ -667,7 +666,7 @@ body,
 
   .ghost-btn--toolbar,
   .ghost-input--topbar {
-    min-height: 40px;
+    min-height: var(--tap-min);
   }
 
   .player-dock2 {
@@ -694,7 +693,7 @@ body,
     flex-wrap: wrap;
   }
 
-  .studio-action-row .btn {
+  .studio-action-row .primary-btn {
     min-width: 0;
   }
 
@@ -722,8 +721,8 @@ body,
     font-size: 0.98rem;
   }
 
-  .studio-action-row .btn,
-  .tool-studio-layout .studio-inline-actions .btn {
+  .studio-action-row .primary-btn,
+  .tool-studio-layout .studio-inline-actions .primary-btn {
     flex: 1 1 10rem;
   }
 
@@ -740,16 +739,6 @@ body,
     line-height: 1.25;
   }
 
-  .topbar-nav__btn {
-    min-width: 0;
-    min-height: 2.35rem;
-    padding: 0.32rem;
-  }
-
-  .topbar-nav__ic {
-    width: 1.32rem;
-    height: 1.32rem;
-  }
 }
 
 /* --- Landscape su telefono: meno altezza player bar --- */

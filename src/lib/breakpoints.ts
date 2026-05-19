@@ -3,6 +3,8 @@
  * In CSS usare gli stessi numeri; in JS importare da qui.
  */
 export const BP_MOBILE_MAX = 1000;
+/** Prima colonna con sidebar fissa (TopBar nascosta in CSS). */
+export const BP_DESKTOP_MIN = BP_MOBILE_MAX + 1;
 export const BP_TABLET_MAX = 1024;
 /** Griglie a colonna singola (ascolta, dashboard, toolbar compatte). */
 export const BP_CONTENT_NARROW_MAX = 900;

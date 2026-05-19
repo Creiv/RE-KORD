@@ -32,7 +32,7 @@ function TrackCollectionView({
           {playAllLabel && onPlayAll && tracks.length > 0 ? (
             <button
               type="button"
-              className="btn btn--collection-play"
+              className="primary-btn btn--collection-play"
               onClick={onPlayAll}
             >
               {playAllLabel}

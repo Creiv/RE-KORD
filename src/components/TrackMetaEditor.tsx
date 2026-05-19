@@ -383,7 +383,7 @@ function TrackMetaEditorModal({
               </button>
               <button
                 type="button"
-                className="btn secondary"
+                className="ghost-btn"
                 disabled={busy || deleteBusy || lyricsFetchBusy}
                 onClick={() => {
                   void fetchLyricsLrc();
@@ -396,7 +396,7 @@ function TrackMetaEditorModal({
               <span className="meta-edit-actions__spacer" aria-hidden />
               <button
                 type="button"
-                className="btn"
+                className="primary-btn"
                 disabled={busy || deleteBusy || lyricsFetchBusy}
                 onClick={() => {
                   void saveLyrics();
@@ -558,7 +558,7 @@ function TrackMetaEditorModal({
               <div className="meta-edit-lyrics-actions">
                 <button
                   type="button"
-                  className="btn secondary meta-edit-lyrics-btn"
+                  className="ghost-btn meta-edit-lyrics-btn"
                   disabled={busy || deleteBusy || lyricsFetchBusy}
                   onClick={() => setLyricsOpen(true)}
                 >
@@ -566,7 +566,7 @@ function TrackMetaEditorModal({
                 </button>
                 <button
                   type="button"
-                  className="btn secondary meta-edit-lyrics-btn"
+                  className="ghost-btn meta-edit-lyrics-btn"
                   disabled={busy || deleteBusy || lyricsFetchBusy}
                   onClick={() => {
                     void runAutoLrcQuickSave();
@@ -601,7 +601,7 @@ function TrackMetaEditorModal({
               </button>
               <button
                 type="submit"
-                className="btn"
+                className="primary-btn"
                 disabled={busy || deleteBusy}
               >
                 {busy ? t("trackMeta.editSaving") : t("trackMeta.editSave")}
