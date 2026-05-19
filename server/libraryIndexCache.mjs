@@ -96,6 +96,120 @@ export async function invalidateLibraryIndexCache(musicRoot) {
 }
 
 /**
+ * Aggiorna un brano nella cache su disco senza riscan completa (metadati trackinfo).
+ * @returns {Promise<boolean>} true se la cache esisteva ed è stata aggiornata
+ */
+export async function patchTrackInLibraryIndexCache(musicRoot, relPath, patch = {}) {
+  if (process.env.KORD_INDEX_CACHE === "0") return false;
+  const cached = await readLibraryIndexCache(musicRoot);
+  if (!cached || !relPath) return false;
+  let found = false;
+  const tracks = cached.tracks.map((track) => {
+    if (track.relPath !== relPath) return track;
+    found = true;
+    const nextMeta =
+      patch.meta && typeof patch.meta === "object"
+        ? { ...(track.meta || {}), ...patch.meta }
+        : track.meta;
+    return {
+      ...track,
+      ...(patch.title ? { title: patch.title } : {}),
+      ...(nextMeta ? { meta: nextMeta } : {}),
+    };
+  });
+  if (!found) return false;
+  await writeLibraryIndexCache(musicRoot, { ...cached, tracks });
+  return true;
+}
+
+/**
+ * Aggiorna più brani nella cache (es. fetch metadati a batch o save album con generi).
+ * @param {string} musicRoot
+ * @param {Array<{ relPath: string, title?: string, meta?: Record<string, unknown> }>} patches
+ */
+export async function patchTracksInLibraryIndexCache(musicRoot, patches) {
+  if (process.env.KORD_INDEX_CACHE === "0" || !patches?.length) return false;
+  const cached = await readLibraryIndexCache(musicRoot);
+  if (!cached) return false;
+  const byPath = new Map(
+    patches.filter((p) => p?.relPath).map((p) => [p.relPath, p]),
+  );
+  if (!byPath.size) return false;
+  let found = false;
+  const tracks = cached.tracks.map((track) => {
+    const patch = byPath.get(track.relPath);
+    if (!patch) return track;
+    found = true;
+    const nextMeta =
+      patch.meta && typeof patch.meta === "object"
+        ? { ...(track.meta || {}), ...patch.meta }
+        : track.meta;
+    return {
+      ...track,
+      ...(patch.title ? { title: patch.title } : {}),
+      ...(nextMeta ? { meta: nextMeta } : {}),
+    };
+  });
+  if (!found) return false;
+  await writeLibraryIndexCache(musicRoot, { ...cached, tracks });
+  return true;
+}
+
+/**
+ * Copertina / metadati album nella cache senza riscan.
+ * @param {string} musicRoot
+ * @param {string} albumRelPath
+ * @param {Record<string, unknown>} patch
+ */
+export async function patchAlbumInLibraryIndexCache(
+  musicRoot,
+  albumRelPath,
+  patch = {},
+) {
+  if (process.env.KORD_INDEX_CACHE === "0") return false;
+  const cached = await readLibraryIndexCache(musicRoot);
+  if (!cached || !albumRelPath) return false;
+  let found = false;
+  const now = Date.now();
+  const albums = cached.albums.map((album) => {
+    if (album.relPath !== albumRelPath) return album;
+    found = true;
+    const next = { ...album, ...patch };
+    if (patch.coverRelPath) {
+      next.coverRelPath = patch.coverRelPath;
+      next.hasCover = true;
+      next.updatedAt = now;
+    }
+    if (patch.title && String(patch.title).trim()) {
+      next.name = String(patch.title).trim();
+    }
+    if (patch.hasAlbumMeta === true) next.hasAlbumMeta = true;
+    return next;
+  });
+  if (!found) return false;
+  let tracks = cached.tracks;
+  let artists = cached.artists;
+  if (patch.coverRelPath) {
+    const albumPrefix = `${albumRelPath}/`;
+    tracks = tracks.map((track) =>
+      track.relPath.startsWith(albumPrefix)
+        ? { ...track, updatedAt: now }
+        : track,
+    );
+    const albumRow = albums.find((a) => a.relPath === albumRelPath);
+    if (albumRow?.artistId) {
+      artists = artists.map((artist) =>
+        artist.id === albumRow.artistId
+          ? { ...artist, coverRelPath: patch.coverRelPath }
+          : artist,
+      );
+    }
+  }
+  await writeLibraryIndexCache(musicRoot, { ...cached, albums, tracks, artists });
+  return true;
+}
+
+/**
  * Restituisce l'epoch corrente (per decidere se scrivere dopo un build lungo).
  * @param {string} musicRoot */
 export function getLibraryIndexCacheEpochSnapshot(musicRoot) {

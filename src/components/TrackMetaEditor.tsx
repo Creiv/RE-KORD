@@ -18,6 +18,10 @@ import {
   saveTrackInfoManual,
 } from "../lib/api";
 import { useI18n } from "../i18n/useI18n";
+import {
+  runWithLibrarySyncActivity,
+  useLibrarySyncActivity,
+} from "../context/LibrarySyncActivityContext";
 import { usePlayer } from "../context/PlayerContext";
 import { useUserState } from "../context/UserStateContext";
 import { useAppConfirm } from "../context/AppConfirmContext";
@@ -97,6 +101,7 @@ function TrackMetaEditorModal({
 }) {
   const { t } = useI18n();
   const { confirm: appConfirm } = useAppConfirm();
+  const librarySync = useLibrarySyncActivity();
   const pickId = useId();
   const [title, setTitle] = useState("");
   const [releaseDate, setReleaseDate] = useState("");
@@ -168,30 +173,37 @@ function TrackMetaEditorModal({
       setBusy(true);
       setErr(null);
       try {
-        const patch = {
-          title: title.trim() === "" ? null : title.trim(),
-          releaseDate: releaseDate.trim() === "" ? null : releaseDate.trim(),
-          genre: serializeTrackGenres(genres),
-          ...(trackMoodsSignature(moods) !== initialMoodsSigRef.current
-            ? { moods: moods.length ? moods : [] }
-            : {}),
-        };
-        const saved = await saveTrackInfoManual(track.relPath, patch);
-        await Promise.resolve(
-          onSaved({
-            relPath: saved.relPath,
-            track:
-              saved.track ??
-              ({
+        await runWithLibrarySyncActivity(
+          librarySync.beginActivity,
+          "sync.activity.savingTrackMeta",
+          async () => {
+            const patch = {
+              title: title.trim() === "" ? null : title.trim(),
+              releaseDate:
+                releaseDate.trim() === "" ? null : releaseDate.trim(),
+              genre: serializeTrackGenres(genres),
+              ...(trackMoodsSignature(moods) !== initialMoodsSigRef.current
+                ? { moods: moods.length ? moods : [] }
+                : {}),
+            };
+            const saved = await saveTrackInfoManual(track.relPath, patch);
+            await Promise.resolve(
+              onSaved({
                 relPath: saved.relPath,
-                title:
-                  typeof patch.title === "string" && patch.title.trim()
-                    ? patch.title.trim()
-                    : track.title,
-                meta: saved.meta as EnrichedTrack["meta"],
-              } satisfies LibraryEntityDelta["track"]),
-            album: saved.album,
-          })
+                track:
+                  saved.track ??
+                  ({
+                    relPath: saved.relPath,
+                    title:
+                      typeof patch.title === "string" && patch.title.trim()
+                        ? patch.title.trim()
+                        : track.title,
+                    meta: saved.meta as EnrichedTrack["meta"],
+                  } satisfies LibraryEntityDelta["track"]),
+                album: saved.album,
+              })
+            );
+          }
         );
         onClose();
       } catch (er: unknown) {
@@ -200,7 +212,7 @@ function TrackMetaEditorModal({
         setBusy(false);
       }
     },
-    [track, title, releaseDate, genres, moods, onClose, onSaved]
+    [track, title, releaseDate, genres, moods, onClose, onSaved, librarySync]
   );
 
   const runDelete = useCallback(async () => {
@@ -216,49 +228,61 @@ function TrackMetaEditorModal({
     setDeleteBusy(true);
     setErr(null);
     try {
-      const { deleted, affectedAlbums } = await deleteAudioRelPaths([
-        track.relPath,
-      ]);
-      if (!deleted.length) {
-        setErr(t("trackMeta.deleteFailed"));
-        return;
-      }
-      for (const rel of deleted) p.removeFromQueueByRelPath(rel);
-      stripUserStateForRelPaths(deleted);
-      await Promise.resolve(onSaved({ deleted, affectedAlbums }));
-      onClose();
+      await runWithLibrarySyncActivity(
+        librarySync.beginActivity,
+        "sync.activity.deletingTrack",
+        async () => {
+          const { deleted, affectedAlbums } = await deleteAudioRelPaths([
+            track.relPath,
+          ]);
+          if (!deleted.length) {
+            setErr(t("trackMeta.deleteFailed"));
+            return;
+          }
+          for (const rel of deleted) p.removeFromQueueByRelPath(rel);
+          stripUserStateForRelPaths(deleted);
+          await Promise.resolve(onSaved({ deleted, affectedAlbums }));
+          onClose();
+        }
+      );
     } catch (er: unknown) {
       setErr(er instanceof Error ? er.message : String(er));
     } finally {
       setDeleteBusy(false);
     }
-  }, [onClose, onSaved, p, stripUserStateForRelPaths, t, track, appConfirm]);
+  }, [onClose, onSaved, p, stripUserStateForRelPaths, t, track, appConfirm, librarySync]);
 
   const saveLyrics = useCallback(async () => {
     if (!track) return;
     setBusy(true);
     setLyricsErr(null);
     try {
-      const patch = {
-        lyrics: lyricsValue.trim() ? lyricsValue : null,
-      };
-      const saved = await saveTrackInfoManual(track.relPath, patch);
-      await Promise.resolve(
-        onSaved({
-          relPath: saved.relPath,
-          track:
-            saved.track ??
-            ({
+      await runWithLibrarySyncActivity(
+        librarySync.beginActivity,
+        "sync.activity.savingLyrics",
+        async () => {
+          const patch = {
+            lyrics: lyricsValue.trim() ? lyricsValue : null,
+          };
+          const saved = await saveTrackInfoManual(track.relPath, patch);
+          await Promise.resolve(
+            onSaved({
               relPath: saved.relPath,
-              title: track.title,
-              meta: {
-                ...(track.meta || {}),
-                ...(saved.meta as EnrichedTrack["meta"]),
-                lyrics: patch.lyrics,
-              } as EnrichedTrack["meta"],
-            } satisfies LibraryEntityDelta["track"]),
-          album: saved.album,
-        })
+              track:
+                saved.track ??
+                ({
+                  relPath: saved.relPath,
+                  title: track.title,
+                  meta: {
+                    ...(track.meta || {}),
+                    ...(saved.meta as EnrichedTrack["meta"]),
+                    lyrics: patch.lyrics,
+                  } as EnrichedTrack["meta"],
+                } satisfies LibraryEntityDelta["track"]),
+              album: saved.album,
+            })
+          );
+        }
       );
       setLyricsOpen(false);
     } catch (er: unknown) {
@@ -266,7 +290,7 @@ function TrackMetaEditorModal({
     } finally {
       setBusy(false);
     }
-  }, [lyricsValue, onSaved, track]);
+  }, [lyricsValue, librarySync, onSaved, track]);
 
   const cancelLyrics = useCallback(() => {
     setLyricsValue(initialLyricsRef.current);
@@ -278,24 +302,30 @@ function TrackMetaEditorModal({
     setLyricsFetchBusy(true);
     setLyricsErr(null);
     try {
-      const fetched = await fetchTrackLyrics(track.relPath);
-      const synced = String(fetched.syncedLyrics || "").trim();
-      const plain = String(fetched.plainLyrics || "").trim();
-      const next = synced || plain;
-      if (!next) {
-        setLyricsErr(t("trackMeta.fetchLrcEmpty"));
-        return;
-      }
-      if (!synced && plain) {
-        setLyricsErr(t("trackMeta.fetchLrcPlainFound"));
-      }
-      setLyricsValue(next);
+      await runWithLibrarySyncActivity(
+        librarySync.beginActivity,
+        "sync.activity.fetchingLyrics",
+        async () => {
+          const fetched = await fetchTrackLyrics(track.relPath);
+          const synced = String(fetched.syncedLyrics || "").trim();
+          const plain = String(fetched.plainLyrics || "").trim();
+          const next = synced || plain;
+          if (!next) {
+            setLyricsErr(t("trackMeta.fetchLrcEmpty"));
+            return;
+          }
+          if (!synced && plain) {
+            setLyricsErr(t("trackMeta.fetchLrcPlainFound"));
+          }
+          setLyricsValue(next);
+        }
+      );
     } catch (er: unknown) {
       setLyricsErr(er instanceof Error ? er.message : String(er));
     } finally {
       setLyricsFetchBusy(false);
     }
-  }, [t, track]);
+  }, [librarySync, t, track]);
 
   const runAutoLrcQuickSave = useCallback(async () => {
     if (!track) return;
@@ -303,44 +333,50 @@ function TrackMetaEditorModal({
     setLyricsErr(null);
     setLyricsAutoStatus("idle");
     try {
-      const fetched = await fetchTrackLyrics(track.relPath);
-      const synced = String(fetched.syncedLyrics || "").trim();
-      const plain = String(fetched.plainLyrics || "").trim();
-      const next = synced || plain;
-      if (!next) {
-        setLyricsAutoStatus("missing");
-        setLyricsErr(t("trackMeta.fetchLrcEmpty"));
-        return;
-      }
-      const patch = { lyrics: next };
-      const saved = await saveTrackInfoManual(track.relPath, patch);
-      await Promise.resolve(
-        onSaved({
-          relPath: saved.relPath,
-          track:
-            saved.track ??
-            ({
+      await runWithLibrarySyncActivity(
+        librarySync.beginActivity,
+        "sync.activity.savingLyrics",
+        async () => {
+          const fetched = await fetchTrackLyrics(track.relPath);
+          const synced = String(fetched.syncedLyrics || "").trim();
+          const plain = String(fetched.plainLyrics || "").trim();
+          const next = synced || plain;
+          if (!next) {
+            setLyricsAutoStatus("missing");
+            setLyricsErr(t("trackMeta.fetchLrcEmpty"));
+            return;
+          }
+          const patch = { lyrics: next };
+          const saved = await saveTrackInfoManual(track.relPath, patch);
+          await Promise.resolve(
+            onSaved({
               relPath: saved.relPath,
-              title: track.title,
-              meta: {
-                ...(track.meta || {}),
-                ...(saved.meta as EnrichedTrack["meta"]),
-                lyrics: patch.lyrics,
-              } as EnrichedTrack["meta"],
-            } satisfies LibraryEntityDelta["track"]),
-          album: saved.album,
-        })
+              track:
+                saved.track ??
+                ({
+                  relPath: saved.relPath,
+                  title: track.title,
+                  meta: {
+                    ...(track.meta || {}),
+                    ...(saved.meta as EnrichedTrack["meta"]),
+                    lyrics: patch.lyrics,
+                  } as EnrichedTrack["meta"],
+                } satisfies LibraryEntityDelta["track"]),
+              album: saved.album,
+            })
+          );
+          setLyricsValue(next);
+          setLyricsAutoStatus(synced ? "okLrc" : "okPlain");
+          if (!synced && plain) setLyricsErr(t("trackMeta.fetchLrcPlainFound"));
+        }
       );
-      setLyricsValue(next);
-      setLyricsAutoStatus(synced ? "okLrc" : "okPlain");
-      if (!synced && plain) setLyricsErr(t("trackMeta.fetchLrcPlainFound"));
     } catch (er: unknown) {
       setLyricsAutoStatus("error");
       setLyricsErr(er instanceof Error ? er.message : String(er));
     } finally {
       setLyricsFetchBusy(false);
     }
-  }, [onSaved, t, track]);
+  }, [librarySync, onSaved, t, track]);
 
   if (!track) return null;
   const currentLyrics = lyricsValue.trim();
