@@ -14,7 +14,7 @@
   -webkit-backdrop-filter: blur(20px);
   position: sticky;
   top: 0;
-  z-index: 10;
+  z-index: var(--z-sticky);
   flex-shrink: 0;
 }
 
@@ -88,8 +88,8 @@
   flex-shrink: 0;
 }
 
-/* ── Desktop: hide topbar (sidebar shows instead) ── */
-@media (min-width: 769px) {
+/* ── Desktop: hide topbar (sidebar shows instead) — allineato a BP_MOBILE_MAX ── */
+@media (min-width: 1001px) {
   .topbar {
     display: none;
   }

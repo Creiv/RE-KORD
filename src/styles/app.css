@@ -1,0 +1,6 @@
+/* KORD — stili app per dominio (ordine = cascata originale App.css) */
+@import "./shell.css";
+@import "./buttons.css";
+@import "./views.css";
+@import "./player.css";
+@import "./tools-settings.css";

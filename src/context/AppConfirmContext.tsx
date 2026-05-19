@@ -173,7 +173,7 @@ export function AppConfirmProvider({ children }: { children: ReactNode }) {
                 <>
                   <button
                     type="button"
-                    className="btn ghost-btn"
+                    className="ghost-btn"
                     onClick={() => dismiss(false)}
                   >
                     {current.options.cancelLabel ?? cancelLbl}
@@ -196,7 +196,7 @@ export function AppConfirmProvider({ children }: { children: ReactNode }) {
               ) : (
                 <button
                   type="button"
-                  className="btn"
+                  className="primary-btn"
                   data-app-dialog-primary="1"
                   onClick={() => dismiss()}
                 >

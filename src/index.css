@@ -1,7 +1,7 @@
 @import url("https://fonts.googleapis.com/css2?family=Manrope:ital,wght@0,400..800;1,400..800&family=Space+Grotesk:wght@400;500;600;700&display=swap");
 
 :root {
-  /* Breakpoint (px, max-width): 1000 mobile · 900 contenuto · 560 phone · 400 stretto — vedi src/lib/breakpoints.ts */
+  /* Breakpoint (max-width px): 1000 mobile · 900 contenuto · 560 phone · 400 stretto — src/lib/breakpoints.ts */
   --bg: #08111d;
   --surface: rgba(14, 24, 38, 0.86);
   --surface2: rgba(18, 31, 49, 0.94);
@@ -29,6 +29,29 @@
   --shadow-elev-1: 0 4px 28px rgba(1, 8, 17, 0.32);
   --shadow-elev-2: 0 22px 56px rgba(1, 8, 17, 0.45);
   --focus-ring: color-mix(in srgb, var(--accent2) 72%, white 18%);
+  /* Spaziatura, tipografia compatta, touch e layer (vedi breakpoints.ts) */
+  --space-1: 0.25rem;
+  --space-2: 0.5rem;
+  --space-3: 0.75rem;
+  --space-4: 1rem;
+  --space-5: 1.25rem;
+  --space-6: 1.5rem;
+  --text-xs: 0.72rem;
+  --text-sm: 0.86rem;
+  --tap-min: 44px;
+  --tap-comfort: 40px;
+  --favorite: var(--danger);
+  --control-hover-bg: var(--dirlist-hover-bg);
+  --sidebar-bg: color-mix(in srgb, var(--surface2) 95%, var(--bg) 5%);
+  --z-sticky: 10;
+  --z-sidebar: 20;
+  --z-player: 25;
+  --z-nav: 35;
+  --z-nav-sheet: 45;
+  --z-overlay: 100;
+  --z-modal: 120;
+  --z-overlay-raised: 125;
+  --z-popover: 250;
   --font-ui: "Manrope", system-ui, sans-serif;
   --font-mono: "Space Grotesk", ui-monospace, monospace;
   --page-glow-1: rgba(255, 143, 92, 0.16);
@@ -970,6 +993,11 @@ a:focus-visible {
   outline-offset: 2px;
 }
 
+.focus-ring:focus-visible {
+  outline: 2px solid var(--focus-ring);
+  outline-offset: 2px;
+}
+
 input[type="search"],
 input[type="text"],
 input[type="url"] {
@@ -1217,7 +1245,7 @@ ul {
   aspect-ratio: 1;
   object-fit: cover;
   display: block;
-  background: #111;
+  background: var(--listen-viz-bg);
 }
 
 .artcap {
@@ -1248,11 +1276,6 @@ ul {
   font-size: 0.9rem;
 }
 
-.btn.sm {
-  font-size: 0.8rem;
-  padding: 0.35rem 0.7rem;
-}
-
 .panel-msg {
   color: var(--muted);
   padding: 1rem 0;
@@ -1262,39 +1285,10 @@ ul {
   color: var(--danger);
 }
 
-.btn {
-  background: linear-gradient(135deg, var(--accent), color-mix(in srgb, var(--accent2) 70%, white 10%));
-  color: var(--text-on-accent);
-  border: none;
-  border-radius: 999px;
-  padding: 0.45rem 0.9rem;
-  font-weight: 800;
-  font-size: 0.9rem;
-  cursor: pointer;
-  white-space: nowrap;
-  transition: filter 0.16s ease;
-  font-family: var(--font-ui);
-}
+/* Pulsanti: src/styles/buttons.css (primary-btn, ghost-btn, alias .btn) */
 
-.btn:hover:not(:disabled) {
-  filter: brightness(1.05);
-}
-
-.btn:disabled {
-  opacity: 0.45;
-  cursor: not-allowed;
-}
-
-.btn.secondary {
-  background: color-mix(in srgb, var(--surface2) 72%, var(--bg));
-  color: var(--text);
-  border: 1px solid var(--border);
-  box-shadow: none;
-}
-
-.btn.danger,
 .mini.danger,
-button.danger {
+button.danger:not(.ghost-btn):not(.btn) {
   color: var(--danger);
   border-color: var(--danger);
   background: transparent;
