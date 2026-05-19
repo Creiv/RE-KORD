@@ -1,7 +1,7 @@
 import { useMemo } from "react";
 import { DashboardMixCard } from "../../components/DashboardMixCard";
 import { useUserState } from "../../context/UserStateContext";
-import { useLibraryCardPlayback } from "../../hooks/useLibraryCardPlayback";
+import { useLibraryPlayback } from "../../hooks/useLibraryPlayback";
 import { useMatchMedia } from "../../hooks/useMatchMedia";
 import { MOBILE_LAYOUT_MQ } from "../../lib/breakpoints";
 import { useDashboardUpdatedAlbumsGrid } from "../../hooks/useDashboardUpdatedAlbumsGrid";
@@ -30,7 +30,7 @@ export default function DashboardView({
 }: DashboardViewProps) {
   const { t } = useI18n();
   const user = useUserState();
-  const playFromLibraryCard = useLibraryCardPlayback(index?.tracks);
+  const { playGlobalRadio } = useLibraryPlayback(index?.tracks);
   const isDashboardMobileLayout = useMatchMedia(MOBILE_LAYOUT_MQ);
   const { ref: updatedAlbumsGridRef, maxItems: updatedAlbumsMax } =
     useDashboardUpdatedAlbumsGrid(isDashboardMobileLayout);
@@ -153,7 +153,7 @@ export default function DashboardView({
                 <TrackListRow
                   key={track.relPath}
                   track={track}
-                  onPlay={() => playFromLibraryCard(track)}
+                  onPlay={() => playGlobalRadio(track, true)}
                 />
               ))}
             </div>

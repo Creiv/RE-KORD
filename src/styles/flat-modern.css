@@ -158,3 +158,37 @@
   box-shadow: none;
   transform: none;
 }
+
+/* ── Banda superiore pagine: sfumatura accent / accent2 del tema ── */
+.page-top-band,
+.view-page__intro > .hero-card,
+.view-page__toolbar-band > :first-child,
+.view-page--studio > .surface-card:first-child,
+.settings-page > .surface-card:first-child,
+.library-page__chrome > :first-child,
+.library-view > .album-hero:first-child,
+.library-view > .surface-card.surface-card--toolbar-only:first-child,
+.library-page.library-view--search-results > :first-child,
+.view-page--listen .listen-page > .listen-stage {
+  background:
+    radial-gradient(
+      ellipse 85% 140% at 0% 50%,
+      color-mix(in srgb, var(--accent) 12%, var(--surface2)) 0%,
+      transparent 52%
+    ),
+    radial-gradient(
+      ellipse 75% 130% at 100% 50%,
+      color-mix(in srgb, var(--accent2) 8%, var(--surface2)) 0%,
+      transparent 48%
+    ),
+    linear-gradient(
+      90deg,
+      color-mix(in srgb, var(--accent) 7%, var(--surface2)) 0%,
+      color-mix(in srgb, var(--accent) 2%, var(--surface2)) 32%,
+      var(--surface2) 58%
+    );
+  border-color: color-mix(in srgb, var(--accent) 16%, var(--border) 84%);
+  box-shadow:
+    var(--shadow-elev-1),
+    inset 1px 0 0 color-mix(in srgb, var(--accent) 10%, transparent);
+}

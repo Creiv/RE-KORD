@@ -8,7 +8,7 @@ import {
 import { usePlayer } from "../../context/PlayerContext";
 import { useUserState } from "../../context/UserStateContext";
 import { useI18n } from "../../i18n/useI18n";
-import { useLibraryCardPlayback } from "../../hooks/useLibraryCardPlayback";
+import { useLibraryPlayback } from "../../hooks/useLibraryPlayback";
 import { useOpenTrackMetaEdit } from "../../components/TrackMetaEditor";
 import { TrackMetaEditGlyph } from "../../components/TrackMetaEditor";
 import { CoverImg } from "../../components/CoverImg";
@@ -31,7 +31,7 @@ import { coverUrlForTrackRelPath } from "../../lib/api";
 import { versionedUrl } from "../../lib/versionedUrl";
 import { isTrackAlbumShuffleExcluded } from "../../lib/randomExclusions";
 import { eligibleTracksForIntelligentRandom } from "../../lib/randomExclusions";
-import { buildSmartRandomQueue } from "../../lib/smartShuffle";
+import { PlayCollectionButton } from "../../components/PlayCollectionButton";
 import { formatDurationMs } from "../../lib/duration";
 import { trackInfoBadges } from "../../lib/metaFormat";
 import { parseLrcLyrics, currentLrcLineIndex } from "../../lib/lrc";
@@ -56,7 +56,7 @@ export default function ListenView({ index, onOpenSection }: ListenViewProps) {
     [user.state.shuffleExcludedTrackRelPaths]
   );
   const cur = p.current;
-  const playFromLibraryCard = useLibraryCardPlayback(index.tracks);
+  const { playGlobalRadio, playPoolShuffle } = useLibraryPlayback(index.tracks);
   const albumShuffleExcluded = cur
     ? isTrackAlbumShuffleExcluded(cur, exAlbums)
     : false;
@@ -71,22 +71,13 @@ export default function ListenView({ index, onOpenSection }: ListenViewProps) {
       }).join(" · ") || t("common.emDash")
     : "";
 
-  const runRandomIntelligent = () => {
+  const runLibraryShuffle = () => {
     const eligible = eligibleTracksForIntelligentRandom(
       index,
       exAlbums,
       exTracksSet
     );
-    if (!eligible.length) return;
-    const recentRelPaths = new Set(
-      user.state.recent.slice(0, 48).map((trk) => trk.relPath)
-    );
-    const shuffled = buildSmartRandomQueue(eligible, {
-      currentRelPath: p.current?.relPath,
-      currentArtist: p.current?.artist,
-      recentRelPaths,
-    });
-    p.playTrack(shuffled[0], shuffled, 0, { preserveQueueOrder: true });
+    playPoolShuffle(eligible, true);
   };
 
   const listenQueueStart = Math.max(0, p.currentIndex - 1);
@@ -252,7 +243,9 @@ export default function ListenView({ index, onOpenSection }: ListenViewProps) {
                         title={
                           albumShuffleExcluded
                             ? t("trackRow.excludeLockedByAlbumTitle")
-                            : t("trackRow.excludeTitle")
+                            : shuffleExcluded
+                              ? t("trackRow.unblockShuffle")
+                              : t("trackRow.blockShuffle")
                         }
                         onClick={() => {
                           if (albumShuffleExcluded) return;
@@ -262,7 +255,9 @@ export default function ListenView({ index, onOpenSection }: ListenViewProps) {
                         aria-label={
                           albumShuffleExcluded
                             ? t("trackRow.excludeLockedByAlbumAria")
-                            : t("trackRow.excludeTitle")
+                            : shuffleExcluded
+                              ? t("trackRow.unblockShuffle")
+                              : t("trackRow.blockShuffle")
                         }
                       >
                         <span
@@ -368,13 +363,10 @@ export default function ListenView({ index, onOpenSection }: ListenViewProps) {
               {p.queue.length === 0 ? (
                 <div className="panel-empty panel-empty--actions">
                   <p>{t("listen.queueEmpty")}</p>
-                  <button
-                    type="button"
-                    className="ghost-btn"
-                    onClick={runRandomIntelligent}
-                  >
-                    {t("listen.smartShuffle")}
-                  </button>
+                  <PlayCollectionButton
+                    label={t("playback.playLibrary")}
+                    onClick={runLibraryShuffle}
+                  />
                 </div>
               ) : (
                 <div className="list-stack listen-queue-panel__list">
@@ -485,7 +477,7 @@ export default function ListenView({ index, onOpenSection }: ListenViewProps) {
                         key={track.relPath}
                         track={track}
                         autoFocusActive={false}
-                        onPlay={() => playFromLibraryCard(track)}
+                        onPlay={() => playGlobalRadio(track, true)}
                       />
                     ))}
                   </div>

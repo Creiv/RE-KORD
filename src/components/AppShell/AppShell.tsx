@@ -630,15 +630,7 @@ export function AppShell() {
               leadIcon={<UiFavorite className="section-head__ic" />}
               tracks={favoriteTracks}
               libraryTracks={index.tracks}
-              playAllLabel={t("collection.playFavorites")}
-              onPlayAll={
-                favoriteTracks.length
-                  ? () => {
-                      const list = favoriteTracks;
-                      p.playTrack(list[0]!, list, 0);
-                    }
-                  : undefined
-              }
+              collectionMode="shuffle"
             />
           </Suspense>
         );
@@ -651,6 +643,7 @@ export function AppShell() {
               leadIcon={<UiHistory className="section-head__ic" />}
               tracks={user.state.recent}
               libraryTracks={index.tracks}
+              collectionMode="radio"
             />
           </Suspense>
         );

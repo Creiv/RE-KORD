@@ -26,7 +26,7 @@ import {
   coverUrlForTrackRelPath,
 } from "../lib/api";
 import { isTrackAlbumShuffleExcluded } from "../lib/randomExclusions";
-import { fmtDate, trackInfoBadges } from "../lib/metaFormat";
+import { fmtDate } from "../lib/metaFormat";
 import { formatDurationMs } from "../lib/duration";
 import { versionedUrl } from "../lib/versionedUrl";
 import { initials } from "../lib/initials";
@@ -37,8 +37,8 @@ import { CoverImg } from "./CoverImg";
 import { ExcludeShuffleIcon } from "./ExcludeShuffleIcon";
 import { TrackMetaEditGlyph, useOpenTrackMetaEdit } from "./TrackMetaEditor";
 import { TrackMoodGlyph } from "./TrackMoodGlyph";
-import { useMatchMedia } from "../hooks/useMatchMedia";
-import { MOBILE_LAYOUT_MQ } from "../lib/breakpoints";
+import { useElementMinWidth } from "../hooks/useElementMinWidth";
+import { TRACK_ROW_INLINE_ACTIONS_MIN_PX } from "../lib/breakpoints";
 import {
   popoverPlacementStyle,
   usePopoverLayerAnchored,
@@ -348,27 +348,16 @@ export const TrackListRow = memo(function TrackListRow({
   track,
   active,
   onPlay,
-  metaRight,
   extraActions,
-  showTrackBadgeRow = false,
   autoFocusActive = true,
-  trackActionsMode,
 }: {
   track: EnrichedTrack;
   /** If omitted, row is active when it matches the current track (`relPath`). Queue uses explicit index. */
   active?: boolean;
   onPlay: () => void;
-  metaRight?: string;
   extraActions?: ReactNode;
-  /** Terza riga (badge traccia/disco…): solo nella lista brani dell’album. */
-  showTrackBadgeRow?: boolean;
   /** Disabilita lo scroll automatico della riga quando diventa quella attiva. */
   autoFocusActive?: boolean;
-  /**
-   * `album`: coda / preferiti / modifica / blocca random come pulsanti sempre visibili.
-   * Omit (default): only favorites + ⋯ menu for queue / meta / shuffle block (+ extraActions).
-   */
-  trackActionsMode?: "album";
 }) {
   const p = usePlayer();
   const user = useUserState();
@@ -385,17 +374,17 @@ export const TrackListRow = memo(function TrackListRow({
   const albumShuffleExcluded = isTrackAlbumShuffleExcluded(track, exAlbums);
   const trackShuffleExcluded = excludedTracksMemo.has(track.relPath);
   const shuffleExcluded = albumShuffleExcluded || trackShuffleExcluded;
-  const albumToolbar = trackActionsMode === "album";
-  const isMobileRowLayout = useMatchMedia(MOBILE_LAYOUT_MQ);
-  const useOverflowActions = !albumToolbar || isMobileRowLayout;
-  const showInlineAlbumActions = albumToolbar && !isMobileRowLayout;
+  const rowRef = useRef<HTMLDivElement | null>(null);
+  const isWideRow = useElementMinWidth(
+    rowRef,
+    TRACK_ROW_INLINE_ACTIONS_MIN_PX
+  );
+  const useOverflowActions = !isWideRow;
+  const showInlineActions = isWideRow;
   const favInOverflowMenu = useOverflowActions;
-  const excludeOverflowMenuLabel =
-    albumShuffleExcluded
-      ? t("trackRow.excludeTitle")
-      : shuffleExcluded
-      ? t("trackRow.excludeActiveTitle")
-      : t("trackRow.excludeTitle");
+  const excludeOverflowMenuLabel = shuffleExcluded
+    ? t("trackRow.unblockShuffle")
+    : t("trackRow.blockShuffle");
   const inQ = p.isTrackInQueue(track.relPath);
   const fav = user.isFavorite(track.relPath);
   const playCount = user.getTrackPlayCount(track.relPath);
@@ -403,18 +392,10 @@ export const TrackListRow = memo(function TrackListRow({
   const hasLyrics = lyricsRaw.length > 0;
   const hasLrcLyrics = hasLyrics && parseLrcLyrics(lyricsRaw).length > 0;
   const durationStr = formatDurationMs(track.meta?.durationMs);
-  const infoLine =
-    metaRight ||
-    trackInfoBadges(track, {
-      track: t("badges.track"),
-      album: t("badges.album"),
-    }).join(" · ") ||
-    t("common.emDash");
   const rowActive =
     active !== undefined
       ? active
       : Boolean(p.current && p.current.relPath === track.relPath);
-  const rowRef = useRef<HTMLDivElement | null>(null);
   const prevActiveRef = useRef(false);
   const [overflowOpen, setOverflowOpen] = useState(false);
   const overflowRef = useRef<HTMLDivElement | null>(null);
@@ -461,9 +442,7 @@ export const TrackListRow = memo(function TrackListRow({
   return (
     <div
       ref={rowRef}
-      className={`track-row${rowActive ? " is-active" : ""}${
-        albumToolbar ? " track-row--album-list" : ""
-      }`}
+      className={`track-row${rowActive ? " is-active" : ""}`}
     >
       <TrackRowArtPlay relPath={track.relPath} onPlay={onPlay} />
       <button
@@ -542,16 +521,13 @@ export const TrackListRow = memo(function TrackListRow({
             <UiLyrics />
           </span>
         </span>
-        {showTrackBadgeRow ? (
-          <span className="track-row__badges">{infoLine}</span>
-        ) : null}
       </button>
       <div
         className={`track-row__actions${
           useOverflowActions ? " track-row__actions--compact-tools" : ""
         }`}
       >
-        {showInlineAlbumActions ? (
+        {showInlineActions ? (
           <>
             {inQ ? (
               <button
@@ -645,7 +621,9 @@ export const TrackListRow = memo(function TrackListRow({
               title={
                 albumShuffleExcluded
                   ? t("trackRow.excludeLockedByAlbumTitle")
-                  : t("trackRow.excludeTitle")
+                  : shuffleExcluded
+                    ? t("trackRow.unblockShuffle")
+                    : t("trackRow.blockShuffle")
               }
               onClick={() => {
                 if (albumShuffleExcluded) return;
@@ -655,7 +633,9 @@ export const TrackListRow = memo(function TrackListRow({
               aria-label={
                 albumShuffleExcluded
                   ? t("trackRow.excludeLockedByAlbumAria")
-                  : t("trackRow.excludeTitle")
+                  : shuffleExcluded
+                    ? t("trackRow.unblockShuffle")
+                    : t("trackRow.blockShuffle")
               }
             >
               <span
@@ -851,16 +831,12 @@ export const TrackListRow = memo(function TrackListRow({
                         aria-label={
                           albumShuffleExcluded
                             ? t("trackRow.excludeLockedByAlbumAria")
-                            : shuffleExcluded
-                            ? t("trackRow.excludeActiveTitle")
-                            : t("trackRow.excludeTitle")
+                            : excludeOverflowMenuLabel
                         }
                         title={
                           albumShuffleExcluded
                             ? t("trackRow.excludeLockedByAlbumTitle")
-                            : shuffleExcluded
-                            ? t("trackRow.excludeActiveTitle")
-                            : t("trackRow.excludeTitle")
+                            : excludeOverflowMenuLabel
                         }
                         onClick={() => {
                           if (albumShuffleExcluded) return;
@@ -892,7 +868,7 @@ export const TrackListRow = memo(function TrackListRow({
         )}
       </div>
       <TrackRowPlaylistPopover
-        anchorRef={showInlineAlbumActions ? playlistAnchorRef : overflowRef}
+        anchorRef={showInlineActions ? playlistAnchorRef : overflowRef}
         open={playlistPickerOpen}
         track={track}
         onRequestClose={() => setPlaylistPickerOpen(false)}

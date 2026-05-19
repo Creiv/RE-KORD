@@ -241,13 +241,17 @@ export const PlayerDock = memo(function PlayerDock({
                 title={
                   albumShuffleExcluded
                     ? t("trackRow.excludeLockedByAlbumTitle")
-                    : t("trackRow.excludeTitle")
+                    : shuffleExcluded
+                      ? t("trackRow.unblockShuffle")
+                      : t("trackRow.blockShuffle")
                 }
                 aria-pressed={shuffleExcluded}
                 aria-label={
                   albumShuffleExcluded
                     ? t("trackRow.excludeLockedByAlbumAria")
-                    : t("trackRow.excludeTitle")
+                    : shuffleExcluded
+                      ? t("trackRow.unblockShuffle")
+                      : t("trackRow.blockShuffle")
                 }
                 onClick={() => {
                   if (!cur || albumShuffleExcluded) return;

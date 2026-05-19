@@ -8,11 +8,11 @@ import {
 } from "react";
 import type { CSSProperties, RefObject } from "react";
 import { createPortal } from "react-dom";
-import { usePlayer } from "../../context/PlayerContext";
 import { useUserState } from "../../context/UserStateContext";
 import { useAppConfirm } from "../../context/AppConfirmContext";
 import { useI18n } from "../../i18n/useI18n";
-import { useLibraryCardPlayback } from "../../hooks/useLibraryCardPlayback";
+import { useLibraryPlayback } from "../../hooks/useLibraryPlayback";
+import { PlayCollectionButton } from "../../components/PlayCollectionButton";
 import {
   popoverPlacementStyle,
   usePopoverLayerAnchored,
@@ -51,7 +51,6 @@ import {
 } from "../../lib/api";
 import { isTrackAlbumShuffleExcluded } from "../../lib/randomExclusions";
 import { eligibleTracksForIntelligentRandom } from "../../lib/randomExclusions";
-import { buildSmartRandomQueue } from "../../lib/smartShuffle";
 import {
   parseTrackGenres,
   serializeTrackGenres,
@@ -111,9 +110,13 @@ export default function LibraryView({
   onSearchBarClose,
   onRefreshLibrary,
 }: LibraryViewProps) {
-  const p = usePlayer();
   const user = useUserState();
-  const playFromLibraryCard = useLibraryCardPlayback(index.tracks);
+  const {
+    playSequence,
+    playGlobalRadio,
+    playCollectionShuffle,
+    playPoolShuffle,
+  } = useLibraryPlayback(index.tracks);
   const { t, sortLocale } = useI18n();
   const { confirm: appConfirm } = useAppConfirm();
   const openAlbumMetaEdit = useOpenAlbumMetaEdit();
@@ -423,15 +426,6 @@ export default function LibraryView({
     user.state.trackPlayCounts,
   ]);
 
-  const genreShuffleEligible = useMemo(() => {
-    if (!selectedGenreKey) return [] as LibraryTrackIndex[];
-    return tracksInSelectedGenre.filter(
-      (tr) =>
-        !excludedTracks.has(tr.relPath) &&
-        !isTrackAlbumShuffleExcluded(tr, excludedAlbums)
-    );
-  }, [selectedGenreKey, tracksInSelectedGenre, excludedTracks, excludedAlbums]);
-
   const genreToolbarBulkAllExcluded = useMemo(() => {
     if (!tracksInSelectedGenre.length) return false;
     return tracksInSelectedGenre.every(
@@ -541,20 +535,6 @@ export default function LibraryView({
     return base;
   }, [tracksMatchingMoodFilter, sortLocale]);
 
-  const moodShuffleEligible = useMemo(() => {
-    if (moodFilterIds.length === 0) return [] as LibraryTrackIndex[];
-    return tracksMatchingMoodFilter.filter(
-      (tr) =>
-        !excludedTracks.has(tr.relPath) &&
-        !isTrackAlbumShuffleExcluded(tr, excludedAlbums)
-    );
-  }, [
-    moodFilterIds.length,
-    tracksMatchingMoodFilter,
-    excludedTracks,
-    excludedAlbums,
-  ]);
-
   const moodToolbarBulkAllExcluded = useMemo(() => {
     if (!tracksMatchingMoodFilter.length) return false;
     return tracksMatchingMoodFilter.every(
@@ -604,67 +584,20 @@ export default function LibraryView({
     };
   }, [index.albums, index.artists, index.tracks, normalizedQuery]);
 
-  const runRandom = () => {
+  const playLibraryShuffle = () => {
     const eligible = eligibleTracksForIntelligentRandom(
       index,
       excludedAlbums,
       excludedTracks
     );
-    if (!eligible.length) return;
-    const recentRelPaths = new Set(
-      user.state.recent.slice(0, 48).map((tr) => tr.relPath)
-    );
-    const shuffled = buildSmartRandomQueue(eligible, {
-      currentRelPath: p.current?.relPath,
-      currentArtist: p.current?.artist,
-      recentRelPaths,
-    });
-    p.playTrack(shuffled[0], shuffled, 0, { preserveQueueOrder: true });
-  };
-
-  const playGenreShuffle = () => {
-    if (!genreShuffleEligible.length) return;
-    const recentRelPaths = new Set(
-      user.state.recent.slice(0, 48).map((tr) => tr.relPath)
-    );
-    const shuffled = buildSmartRandomQueue(genreShuffleEligible, {
-      currentRelPath: p.current?.relPath,
-      currentArtist: p.current?.artist,
-      recentRelPaths,
-    });
-    p.playTrack(shuffled[0], shuffled, 0, { preserveQueueOrder: true });
-  };
-
-  const playMoodShuffle = () => {
-    if (!moodShuffleEligible.length) return;
-    const recentRelPaths = new Set(
-      user.state.recent.slice(0, 48).map((tr) => tr.relPath)
-    );
-    const shuffled = buildSmartRandomQueue(moodShuffleEligible, {
-      currentRelPath: p.current?.relPath,
-      currentArtist: p.current?.artist,
-      recentRelPaths,
-    });
-    p.playTrack(shuffled[0], shuffled, 0, { preserveQueueOrder: true });
-  };
-
-  const playMoodResultsInOrder = () => {
-    if (!sortedMoodTracks.length) return;
-    const list = [...sortedMoodTracks];
-    p.playTrack(list[0], list, 0, { preserveQueueOrder: true });
+    playPoolShuffle(eligible, true);
   };
 
   const playArtistShuffle = () => {
-    if (!artistShuffleEligible.length) return;
-    const recentRelPaths = new Set(
-      user.state.recent.slice(0, 48).map((tr) => tr.relPath)
-    );
-    const shuffled = buildSmartRandomQueue(artistShuffleEligible, {
-      currentRelPath: p.current?.relPath,
-      currentArtist: p.current?.artist,
-      recentRelPaths,
-    });
-    p.playTrack(shuffled[0], shuffled, 0, { preserveQueueOrder: true });
+    if (!artist) return;
+    const rels = new Set(artistAlbums.flatMap((al) => al.tracks));
+    const pool = index.tracks.filter((tr) => rels.has(tr.relPath));
+    playPoolShuffle(pool, true);
   };
 
   const openSearchArtist = (artistId: string) => {
@@ -820,7 +753,7 @@ export default function LibraryView({
                   <TrackListRow
                     key={track.relPath}
                     track={track}
-                    onPlay={() => playFromLibraryCard(track)}
+                    onPlay={() => playGlobalRadio(track, true)}
                   />
                 ))}
               </div>
@@ -876,9 +809,7 @@ export default function LibraryView({
                       <button
                         type="button"
                         className="primary-btn"
-                        onClick={() =>
-                          p.playTrack(albumTracks[0], albumTracks, 0)
-                        }
+                        onClick={() => playSequence(albumTracks, 0)}
                       >
                         {t("library.playAlbum")}
                       </button>
@@ -1028,9 +959,7 @@ export default function LibraryView({
               <TrackListRow
                 key={track.relPath}
                 track={track}
-                showTrackBadgeRow
-                trackActionsMode="album"
-                onPlay={() => p.playTrack(track, albumTracks, trIndex)}
+                onPlay={() => playSequence(albumTracks, trIndex)}
               />
             ))}
           </div>
@@ -1069,7 +998,7 @@ export default function LibraryView({
                   disabled={artistShuffleEligible.length === 0}
                   onClick={playArtistShuffle}
                 >
-                  {t("library.playArtistShuffle")}
+                  {t("playback.playArtist")}
                 </button>
               </div>
             </div>
@@ -1241,14 +1170,11 @@ export default function LibraryView({
             <div className="hero-card__actions">
               {selectedGenreKey ? (
                 <>
-                  <button
-                    type="button"
-                    className="primary-btn"
-                    disabled={genreShuffleEligible.length === 0}
-                    onClick={playGenreShuffle}
-                  >
-                    {t("library.playGenreShuffle")}
-                  </button>
+                  <PlayCollectionButton
+                    label={t("playback.playGenre")}
+                    disabled={sortedGenreTracks.length === 0}
+                    onClick={() => playPoolShuffle(sortedGenreTracks, true)}
+                  />
                   <button
                     type="button"
                     className={`ghost-btn library-toolbar-exclude-btn ${
@@ -1270,14 +1196,11 @@ export default function LibraryView({
                 </>
               ) : libBrowse === "moods" && moodFilterIds.length > 0 ? (
                 <>
-                  <button
-                    type="button"
-                    className="primary-btn"
-                    disabled={moodShuffleEligible.length === 0}
-                    onClick={playMoodShuffle}
-                  >
-                    {t("library.playMoodShuffle")}
-                  </button>
+                  <PlayCollectionButton
+                    label={t("playback.playMood")}
+                    disabled={sortedMoodTracks.length === 0}
+                    onClick={() => playPoolShuffle(sortedMoodTracks, true)}
+                  />
                   <button
                     type="button"
                     className={`ghost-btn library-toolbar-exclude-btn ${
@@ -1298,13 +1221,11 @@ export default function LibraryView({
                   </button>
                 </>
               ) : (
-                <button
-                  type="button"
-                  className="primary-btn"
-                  onClick={runRandom}
-                >
-                  {t("listen.smartShuffle")}
-                </button>
+                <PlayCollectionButton
+                  label={t("playback.playLibrary")}
+                  disabled={index.tracks.length === 0}
+                  onClick={playLibraryShuffle}
+                />
               )}
             </div>
           </div>
@@ -1465,7 +1386,9 @@ export default function LibraryView({
                 <TrackListRow
                   key={track.relPath}
                   track={track}
-                  onPlay={() => playFromLibraryCard(track)}
+                  onPlay={() =>
+                    playCollectionShuffle(track, sortedGenreTracks, true)
+                  }
                 />
               ))}
             </div>
@@ -1571,16 +1494,11 @@ export default function LibraryView({
                     </h2>
                   </div>
                   <div className="section-head__tools">
-                    <button
-                      type="button"
-                      className="primary-btn"
+                    <PlayCollectionButton
+                      label={t("playback.playMood")}
                       disabled={sortedMoodTracks.length === 0}
-                      title={t("library.playMoodResultsInOrderTitle")}
-                      aria-label={t("library.playMoodResultsInOrderAria")}
-                      onClick={playMoodResultsInOrder}
-                    >
-                      {t("library.playMoodResultsInOrder")}
-                    </button>
+                      onClick={() => playPoolShuffle(sortedMoodTracks, true)}
+                    />
                   </div>
                 </div>
                 <div className="list-stack">
@@ -1588,7 +1506,9 @@ export default function LibraryView({
                     <TrackListRow
                       key={track.relPath}
                       track={track}
-                      onPlay={() => playFromLibraryCard(track)}
+                      onPlay={() =>
+                        playCollectionShuffle(track, sortedMoodTracks, true)
+                      }
                     />
                   ))}
                 </div>

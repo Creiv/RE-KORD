@@ -1,5 +1,6 @@
 import type { EnrichedTrack } from "../types";
 import { parseTrackGenres } from "./genres";
+import { isTrackShuffleExcluded } from "./randomExclusions";
 import { parseTrackMoods } from "./trackMoods";
 
 const CARD_QUEUE_CAP = 500;
@@ -39,6 +40,27 @@ export type SmartShuffleOpts = {
   recentRelPaths?: ReadonlySet<string>;
 };
 
+export type ShuffleExclusionOpts = {
+  respectExclusions?: boolean;
+  excludedAlbums?: Set<string>;
+  excludedTracks?: Set<string>;
+};
+
+function filterPoolForExclusions(
+  pool: readonly EnrichedTrack[],
+  seedRelPath: string | null,
+  opts?: ShuffleExclusionOpts
+): EnrichedTrack[] {
+  if (!opts?.respectExclusions) return [...pool];
+  const exA = opts.excludedAlbums ?? new Set<string>();
+  const exT = opts.excludedTracks ?? new Set<string>();
+  return pool.filter(
+    (t) =>
+      (seedRelPath != null && t.relPath === seedRelPath) ||
+      !isTrackShuffleExcluded(t, exT, exA)
+  );
+}
+
 function moodOverlaps(seed: EnrichedTrack, t: EnrichedTrack): boolean {
   const s = parseTrackMoods(seed.meta);
   if (s.length === 0) return false;
@@ -61,17 +83,34 @@ function artistMatches(seed: EnrichedTrack, t: EnrichedTrack): boolean {
   );
 }
 
+export function buildShuffleQueueFromSeed(
+  seed: EnrichedTrack,
+  pool: readonly EnrichedTrack[],
+  opts: SmartShuffleOpts & ShuffleExclusionOpts = {}
+): EnrichedTrack[] {
+  const seedCanon = pool.find((t) => t.relPath === seed.relPath) ?? seed;
+  const filtered = filterPoolForExclusions(pool, seedCanon.relPath, opts);
+  const rest = filtered.filter((t) => t.relPath !== seedCanon.relPath);
+  if (!rest.length) return [seedCanon];
+  const shuffled = buildSmartRandomQueue(rest, opts);
+  return [seedCanon, ...shuffled];
+}
+
 export function buildCardPlayQueueFromSeed(
   seed: EnrichedTrack,
   libraryTracks: readonly EnrichedTrack[],
-  opts?: { maxLength?: number }
+  opts?: { maxLength?: number } & ShuffleExclusionOpts
 ): EnrichedTrack[] {
   const maxLen =
     opts?.maxLength !== undefined ? opts.maxLength : CARD_QUEUE_CAP;
   const cap = Math.max(1, Math.min(maxLen, CARD_QUEUE_CAP));
   const seedCanon =
     libraryTracks.find((t) => t.relPath === seed.relPath) ?? seed;
-  const pool = libraryTracks.filter((t) => t.relPath !== seedCanon.relPath);
+  const pool = filterPoolForExclusions(
+    libraryTracks,
+    seedCanon.relPath,
+    opts
+  ).filter((t) => t.relPath !== seedCanon.relPath);
 
   const mood: EnrichedTrack[] = [];
   const genre: EnrichedTrack[] = [];

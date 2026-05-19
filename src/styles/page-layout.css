@@ -39,6 +39,21 @@
   margin: 0;
 }
 
+/* Banda superiore pagina (titolo / toolbar): sfumatura colore tema — dettaglio in flat-modern.css */
+.page-top-band,
+.view-page__intro > .hero-card,
+.view-page__toolbar-band > :first-child,
+.view-page--studio > .surface-card:first-child,
+.settings-page > .surface-card:first-child,
+.library-page__chrome > :first-child,
+.library-view > .album-hero:first-child,
+.library-view > .surface-card.surface-card--toolbar-only:first-child,
+.library-page.library-view--search-results > :first-child,
+.view-page--listen .listen-page > .listen-stage {
+  position: relative;
+  overflow: hidden;
+}
+
 /* —— Griglia adattiva (container + viewport) —— */
 .layout-adaptive-grid {
   display: grid;
@@ -405,6 +420,10 @@
   min-width: 0;
 }
 
+.settings-ui-section__grid {
+  grid-template-columns: minmax(0, 1fr);
+}
+
 @container kord-page (min-width: 900px) {
   .settings-page.view-page {
     grid-template-columns: repeat(2, minmax(0, 1fr));
@@ -428,16 +447,6 @@
 
   .settings-page__cluster > .surface-card:only-child {
     grid-column: 1 / -1;
-  }
-
-  .settings-ui-section__grid {
-    grid-template-columns: repeat(2, minmax(0, 1fr));
-  }
-}
-
-@container kord-page (min-width: 640px) {
-  .settings-ui-section__grid {
-    grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 }
 
