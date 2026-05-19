@@ -462,12 +462,6 @@
   border-top: 1px solid var(--border);
 }
 
-@media (min-width: 901px) {
-  .settings-ui-section__grid {
-    grid-template-columns: minmax(0, 1fr);
-  }
-}
-
 .surface-card,
 .hero-card,
 .listen-stage,

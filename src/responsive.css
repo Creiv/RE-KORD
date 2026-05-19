@@ -56,6 +56,86 @@ body,
   }
 }
 
+/* Card brano stretta (≤650px): copertina | titolo+stats | ⋯ */
+.track-row:has(.track-row__actions--compact-tools) {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  grid-template-rows: auto;
+  align-items: center;
+  column-gap: 0.45rem;
+  row-gap: 0;
+  padding: 0.55rem 0.7rem;
+  padding-left: max(0.65rem, env(safe-area-inset-left));
+}
+
+.track-row:has(.track-row__actions--compact-tools) .track-row__art-wrap {
+  grid-column: 1;
+  grid-row: 1;
+  width: 44px;
+  height: 44px;
+  flex-shrink: 0;
+  align-self: center;
+}
+
+.track-row:has(.track-row__actions--compact-tools) .track-row__art-wrap .track-row__art {
+  width: 100%;
+  height: 100%;
+}
+
+.track-row:has(.track-row__actions--compact-tools) .track-row__main {
+  grid-column: 2;
+  grid-row: 1;
+  min-width: 0;
+  text-align: left;
+  justify-items: start;
+  align-self: center;
+  flex: unset;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 0.2rem;
+}
+
+.track-row:has(.track-row__actions--compact-tools) .track-row__title-row {
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 0.18rem;
+  width: 100%;
+}
+
+.track-row:has(.track-row__actions--compact-tools) .track-row__stats {
+  width: 100%;
+}
+
+.track-row:has(.track-row__actions--compact-tools)
+  .track-row__lyrics-inline.track-row__lyrics-inline--stats {
+  display: inline-flex;
+}
+
+.track-row:has(.track-row__actions--compact-tools)
+  .track-row__lyrics-inline.track-row__lyrics-inline--meta,
+.track-row:has(.track-row__actions--compact-tools) .track-row__meta-text,
+.track-row:has(.track-row__actions--compact-tools) .track-row__meta-sep,
+.track-row:has(.track-row__actions--compact-tools) .track-row__meta {
+  display: none;
+}
+
+.track-row:has(.track-row__actions--compact-tools) .track-row__actions {
+  grid-column: 3;
+  grid-row: 1;
+  justify-self: end;
+  align-self: center;
+  display: flex;
+  flex-wrap: nowrap;
+  justify-content: flex-end;
+  align-items: center;
+  gap: 0.2rem;
+  min-height: 0;
+  flex: unset;
+  width: auto;
+  min-width: 0;
+}
+
 /* --- “Phablet” + menu mobile (barra inferiore) --- */
 @media (max-width: 1000px) {
   :root {
@@ -169,91 +249,6 @@ body,
 
   .progress2__track-slot {
     height: 11px;
-  }
-
-  /* Card brano: copertina | titolo + riga info | ⋯ */
-  .track-row:has(.track-row__actions--compact-tools) {
-    display: grid;
-    grid-template-columns: auto minmax(0, 1fr) auto;
-    grid-template-rows: auto;
-    align-items: center;
-    column-gap: 0.45rem;
-    row-gap: 0;
-    padding: 0.55rem 0.7rem;
-    padding-left: max(0.65rem, env(safe-area-inset-left));
-  }
-
-  .track-row:has(.track-row__actions--compact-tools) .track-row__art-wrap {
-    grid-column: 1;
-    grid-row: 1;
-    width: 44px;
-    height: 44px;
-    flex-shrink: 0;
-    align-self: center;
-  }
-
-  .track-row:has(.track-row__actions--compact-tools) .track-row__art-wrap .track-row__art {
-    width: 100%;
-    height: 100%;
-  }
-
-  .track-row:has(.track-row__actions--compact-tools) .track-row__main {
-    grid-column: 2;
-    grid-row: 1;
-    min-width: 0;
-    text-align: left;
-    justify-items: start;
-    align-self: center;
-    flex: unset;
-    display: flex;
-    flex-direction: column;
-    align-items: flex-start;
-    gap: 0.2rem;
-  }
-
-  .track-row__title-row {
-    flex-direction: column;
-    align-items: flex-start;
-    gap: 0.18rem;
-    width: 100%;
-  }
-
-  .track-row__stats {
-    width: 100%;
-  }
-
-  .track-row__lyrics-inline.track-row__lyrics-inline--stats {
-    display: inline-flex;
-  }
-
-  .track-row__lyrics-inline.track-row__lyrics-inline--meta,
-  .track-row__meta-text,
-  .track-row__meta-sep {
-    display: none;
-  }
-
-  .track-row__meta {
-    display: none;
-  }
-
-  .track-row--album-list .track-row__badges {
-    display: none;
-  }
-
-  .track-row:has(.track-row__actions--compact-tools) .track-row__actions {
-    grid-column: 3;
-    grid-row: 1;
-    justify-self: end;
-    align-self: center;
-    display: flex;
-    flex-wrap: nowrap;
-    justify-content: flex-end;
-    align-items: center;
-    gap: 0.2rem;
-    min-height: 0;
-    flex: unset;
-    width: auto;
-    min-width: 0;
   }
 
   /* Player: controlli sopra, info brano sotto a tutta larghezza */
