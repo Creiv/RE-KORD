@@ -376,8 +376,6 @@ export function ToolsView({ library, libraryIndex, onRefreshLibrary, onLibraryDe
     stopTrackAll,
     stopTrackPrune,
   } = useToolsActivity();
-  const [preset, setPreset] = useState<string | null>(null);
-  const [ytCookiesConfigured, setYtCookiesConfigured] = useState(false);
   const [url, setUrl] = useState("");
   const [dlUrlMode, setDlUrlMode] = useState<DlVideoMode>("single");
   const [dlList, setDlList] = useState<{
@@ -503,8 +501,6 @@ export function ToolsView({ library, libraryIndex, onRefreshLibrary, onLibraryDe
   const loadPreset = useCallback(() => {
     fetchDownloadPreset()
       .then((d) => {
-        setPreset(d.found && d.text ? d.text : null);
-        setYtCookiesConfigured(Boolean(d.cookiesConfigured));
         if (d.exampleUrl) setUrl(d.exampleUrl);
       })
       .catch((e) => setLog((x) => x + t("tools.logCmdErr", { e })));
@@ -1885,18 +1881,6 @@ export function ToolsView({ library, libraryIndex, onRefreshLibrary, onLibraryDe
               role="region"
               aria-label={t("tools.downloadTitle")}
             >
-              <details className="studio-details" open={false}>
-                <summary>{t("tools.cmdUsed")}</summary>
-                <pre className="codebox" tabIndex={0}>
-                  {preset || t("tools.cmdFallback")}
-                </pre>
-                <p className="subtle sm">
-                  {ytCookiesConfigured
-                    ? t("tools.dlCookiesOn")
-                    : t("tools.dlCookiesOff")}
-                </p>
-              </details>
-
               <div className="studio-panel tools-dl-dest">
                 <h4 className="studio-panel-title">
                   {t("tools.dlSaveFolder")}

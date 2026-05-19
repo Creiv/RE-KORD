@@ -572,6 +572,26 @@ function SettingsView() {
               <option value="karaoke">{t("settings.vizKaraoke")}</option>
             </select>
           </label>
+          <label className="settings-ui-inline-control">
+            <span>{t("settings.trackTransitions")}</span>
+            <select
+              className="ghost-input w-full"
+              title={t("settings.trackTransitionsHint")}
+              value={String(user.state.settings.audioCrossfadeSec)}
+              onChange={(event) =>
+                user.updateSettings({
+                  audioCrossfadeSec: Number(event.target.value) as
+                    | 0
+                    | 3
+                    | 5,
+                })
+              }
+            >
+              <option value="0">{t("settings.audioCrossfadeOff")}</option>
+              <option value="3">{t("settings.audioCrossfade3")}</option>
+              <option value="5">{t("settings.audioCrossfade5")}</option>
+            </select>
+          </label>
         </div>
       </section>
       <section className="surface-card">
@@ -617,26 +637,6 @@ function SettingsView() {
               </span>
             </div>
           </div>
-          <label className="settings-ui-inline-control settings-shortcuts-track-transitions">
-            <span>{t("settings.trackTransitions")}</span>
-            <select
-              className="ghost-input w-full"
-              title={t("settings.trackTransitionsHint")}
-              value={String(user.state.settings.audioCrossfadeSec)}
-              onChange={(event) =>
-                user.updateSettings({
-                  audioCrossfadeSec: Number(event.target.value) as
-                    | 0
-                    | 3
-                    | 5,
-                })
-              }
-            >
-              <option value="0">{t("settings.audioCrossfadeOff")}</option>
-              <option value="3">{t("settings.audioCrossfade3")}</option>
-              <option value="5">{t("settings.audioCrossfade5")}</option>
-            </select>
-          </label>
         </div>
       </section>
       {isKordClientEmbed ? null : (
