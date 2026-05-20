@@ -136,11 +136,12 @@ function shuffleTailFromCurrent<T>(items: T[], currentIdx: number): T[] {
 export function PlayerProvider({ children }: { children: React.ReactNode }) {
   const user = useUserState();
   const userReady = user.ready;
-  const restoreSession = true;
+  const restoreSession = user.state.settings.restoreSession;
   const persistedQueue = user.state.queue;
   const pushRecent = user.pushRecent;
   const incrementTrackPlayCount = user.incrementTrackPlayCount;
-  const setQueueSnapshot = user.setQueueSnapshot;
+  const enqueueQueuePatch = user.enqueueQueuePatch;
+  const flushUserStateNow = user.flushUserStateNow;
   const audioRef = useRef<HTMLAudioElement | null>(null);
   const audioDeck0Ref = useRef<HTMLAudioElement | null>(null);
   const audioDeck1Ref = useRef<HTMLAudioElement | null>(null);
@@ -540,40 +541,27 @@ export function PlayerProvider({ children }: { children: React.ReactNode }) {
     }
   }, [persistedQueue, restoreSession, userReady]);
 
-  const queuePersistTimerRef = useRef<number | null>(null);
-  const queuePersistPendingRef = useRef({ tracks: queue, currentIndex });
+  useEffect(() => {
+    if (!userReady || !restoreSession) return;
+    enqueueQueuePatch({ tracks: queue, currentIndex });
+  }, [currentIndex, enqueueQueuePatch, queue, restoreSession, userReady]);
 
   useEffect(() => {
     if (!userReady || !restoreSession) return;
-    queuePersistPendingRef.current = { tracks: queue, currentIndex };
-    if (queuePersistTimerRef.current != null) {
-      window.clearTimeout(queuePersistTimerRef.current);
-    }
-    queuePersistTimerRef.current = window.setTimeout(() => {
-      queuePersistTimerRef.current = null;
-      setQueueSnapshot(queuePersistPendingRef.current);
-    }, 3200);
-    return () => {
-      if (queuePersistTimerRef.current != null) {
-        window.clearTimeout(queuePersistTimerRef.current);
-        queuePersistTimerRef.current = null;
-      }
+    const onPageHide = () => {
+      enqueueQueuePatch({ tracks: queue, currentIndex });
+      flushUserStateNow();
     };
-  }, [currentIndex, queue, restoreSession, setQueueSnapshot, userReady]);
-
-  useEffect(() => {
-    if (!userReady || !restoreSession) return;
-    const flushQueue = () => {
-      if (queuePersistTimerRef.current != null) {
-        window.clearTimeout(queuePersistTimerRef.current);
-        queuePersistTimerRef.current = null;
-      }
-      setQueueSnapshot(queuePersistPendingRef.current);
-    };
-    const onPageHide = () => flushQueue();
     window.addEventListener("pagehide", onPageHide);
     return () => window.removeEventListener("pagehide", onPageHide);
-  }, [restoreSession, setQueueSnapshot, userReady]);
+  }, [
+    currentIndex,
+    enqueueQueuePatch,
+    flushUserStateNow,
+    queue,
+    restoreSession,
+    userReady,
+  ]);
 
   useEffect(() => {
     if (!current) {
@@ -944,8 +932,28 @@ export function PlayerProvider({ children }: { children: React.ReactNode }) {
     const byPath = new Map(
       libraryIndex.tracks.map((t) => [t.relPath, t as EnrichedTrack]),
     );
-    setQueue((prev) => prev.map((t) => byPath.get(t.relPath) ?? t));
-    setCurrent((c) => (c ? byPath.get(c.relPath) ?? c : c));
+    const trackEqual = (a: EnrichedTrack, b: EnrichedTrack) =>
+      a.relPath === b.relPath &&
+      a.title === b.title &&
+      a.artist === b.artist &&
+      a.album === b.album &&
+      a.id === b.id;
+    setQueue((prev) => {
+      let changed = false;
+      const next = prev.map((t) => {
+        const full = byPath.get(t.relPath);
+        if (!full || trackEqual(t, full)) return t;
+        changed = true;
+        return full;
+      });
+      return changed ? next : prev;
+    });
+    setCurrent((c) => {
+      if (!c) return c;
+      const full = byPath.get(c.relPath);
+      if (!full || trackEqual(c, full)) return c;
+      return full;
+    });
   }, []);
 
   const next = useCallback(() => {

@@ -27,7 +27,12 @@ import {
   isBackendUnreachableError,
 } from "../../lib/api";
 import { clientLegacyLibrary } from "../../lib/libraryIndex";
-import { applyLibraryDeltaToIndex } from "../../lib/libraryIndex";
+import {
+  applyLibraryDeltaToIndex,
+  applyLibraryDeltasToIndex,
+  libraryIndexRehydrateSig,
+} from "../../lib/libraryIndex";
+import type { LibraryReconcileOptions } from "../../lib/libraryReconcile";
 import { parseTrackGenres } from "../../lib/genres";
 import { isStandaloneDisplayMode, useAppRoute } from "../../lib/routing";
 import { KordSplashLoader } from "../KordSplashLoader";
@@ -239,6 +244,24 @@ export function AppShell() {
     return runCoalescedBackgroundRefresh();
   }, [runCoalescedBackgroundRefresh]);
 
+  /**
+   * Unico ingresso per riconciliare indice libreria + dashboard.
+   * @see src/lib/libraryReconcile.ts
+   */
+  const reconcileLibrary = useCallback(
+    (opts?: LibraryReconcileOptions): Promise<void> => {
+      const mode = opts?.mode ?? "debounced";
+      if (mode === "manual") {
+        return refreshManual(Boolean(opts?.syncUser));
+      }
+      if (mode === "now") {
+        return refreshLibraryNow();
+      }
+      return refreshBackground();
+    },
+    [refreshBackground, refreshLibraryNow, refreshManual]
+  );
+
   const applyLibraryDelta = useCallback(
     (delta: LibraryEntityDelta, reconcile = true) => {
       const endActivity = beginLibrarySyncActivity(
@@ -251,15 +274,28 @@ export function AppShell() {
     [beginLibrarySyncActivity, scheduleDebouncedLibraryReconcile]
   );
 
+  const applyLibraryDeltas = useCallback(
+    (deltas: LibraryEntityDelta[], reconcile = false) => {
+      if (!deltas.length) return;
+      const endActivity = beginLibrarySyncActivity(
+        "sync.activity.updatingLibrary"
+      );
+      setIndex((prev) => applyLibraryDeltasToIndex(prev, deltas));
+      endActivity();
+      if (reconcile) scheduleDebouncedLibraryReconcile();
+    },
+    [beginLibrarySyncActivity, scheduleDebouncedLibraryReconcile]
+  );
+
   const refreshAfterAlbumMetaSaved = useCallback(
     (delta?: LibraryEntityDelta) => {
       if (delta) {
         applyLibraryDelta(delta, false);
         return;
       }
-      refreshBackground();
+      void reconcileLibrary({ mode: "debounced" });
     },
-    [applyLibraryDelta, refreshBackground]
+    [applyLibraryDelta, reconcileLibrary]
   );
 
   const refreshAfterTrackMetaSaved = useCallback(
@@ -268,9 +304,9 @@ export function AppShell() {
         applyLibraryDelta(delta, false);
         return;
       }
-      refreshBackground();
+      void reconcileLibrary({ mode: "debounced" });
     },
-    [applyLibraryDelta, refreshBackground]
+    [applyLibraryDelta, reconcileLibrary]
   );
 
   const bootstrapLoading = loading && !index;
@@ -293,29 +329,17 @@ export function AppShell() {
     return t("topbar.refreshTitle");
   }, [librarySyncPrimaryActivity, bootstrapLoading, t, toolsActivity.toolsAnyBusy]);
 
-  const syncSnackbarMessage = useMemo(() => {
-    if (librarySyncPrimaryActivity) {
-      return t(
-        librarySyncPrimaryActivity.labelKey as Parameters<typeof t>[0],
-        librarySyncPrimaryActivity.labelParams
-      );
-    }
-    return t("sync.activity.reloadLibrary");
-  }, [librarySyncPrimaryActivity, t]);
-
-  const { open: syncSnackbarOpen, notifySyncClick: notifySyncSnackbar } =
-    useSyncStatusSnackbar(librarySyncBusy);
+  const { open: syncSnackbarOpen } = useSyncStatusSnackbar(syncBusy);
 
   const onSyncButtonClick = useCallback(() => {
-    notifySyncSnackbar();
     setSyncTapAnim(true);
     if (syncTapTimerRef.current) clearTimeout(syncTapTimerRef.current);
     syncTapTimerRef.current = setTimeout(() => {
       setSyncTapAnim(false);
       syncTapTimerRef.current = null;
     }, 500);
-    void refreshManual(true);
-  }, [notifySyncSnackbar, refreshManual]);
+    void reconcileLibrary({ mode: "manual", syncUser: true });
+  }, [reconcileLibrary]);
 
   useEffect(
     () => () => {
@@ -393,10 +417,10 @@ export function AppShell() {
 
   useEffect(() => {
     const timer = window.setTimeout(() => {
-      void refreshManual();
+      void reconcileLibrary({ mode: "manual" });
     }, 0);
     return () => window.clearTimeout(timer);
-  }, [refreshManual]);
+  }, [reconcileLibrary]);
 
   useEffect(() => {
     const w = window as unknown as {
@@ -424,14 +448,12 @@ export function AppShell() {
 
   useEffect(() => {
     if (!index || !user.ready) return;
-    const sig = `${index.tracks.length}|${index.albums.length}|${index.stats.trackCount}`;
-    const sigChanged = sig !== indexLibrarySigRef.current;
-    if (sigChanged) {
-      indexLibrarySigRef.current = sig;
-      p.resyncTracksFromIndex(index);
-      user.rehydrateTrackListsFromLibrary(index);
-      user.rehydrateShuffleExclusionsFromIndex(index);
-    }
+    p.resyncTracksFromIndex(index);
+    const sig = libraryIndexRehydrateSig(index);
+    if (sig === indexLibrarySigRef.current) return;
+    indexLibrarySigRef.current = sig;
+    user.rehydrateTrackListsFromLibrary(index);
+    user.rehydrateShuffleExclusionsFromIndex(index);
   }, [
     index,
     p.resyncTracksFromIndex,
@@ -694,7 +716,7 @@ export function AppShell() {
               onSearchFocus={ensureLibrarySectionForSearch}
               showSearchBar={librarySearchBarOpen}
               onSearchBarClose={closeLibrarySearch}
-              onRefreshLibrary={refreshBackground}
+              onReconcileLibrary={reconcileLibrary}
               onLibraryDelta={(delta, reconcile) =>
                 applyLibraryDelta(delta, reconcile ?? false)
               }
@@ -711,9 +733,9 @@ export function AppShell() {
               <LazyToolsView
                 library={legacyLibrary}
                 libraryIndex={index}
-                onRefreshLibrary={refreshBackground}
-                onRefreshLibraryNow={refreshLibraryNow}
+                onReconcileLibrary={reconcileLibrary}
                 onLibraryDelta={applyLibraryDelta}
+                onLibraryDeltas={applyLibraryDeltas}
               />
             </Suspense>
           </div>
@@ -856,8 +878,8 @@ export function AppShell() {
           ) : null}
           {syncSnackbarOpen ? (
             <SyncStatusSnackbar
-              message={syncSnackbarMessage}
-              busy={librarySyncBusy}
+              message={syncStatusTitle}
+              busy={syncBusy}
             />
           ) : null}
         </div>

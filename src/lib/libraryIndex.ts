@@ -57,6 +57,39 @@ export function clientLegacyLibrary(
   };
 }
 
+/** Sig per rehydrate playlist/recent/shuffle (cambio struttura libreria). */
+export function libraryIndexRehydrateSig(index: LibraryIndex): string {
+  return `${index.indexEpoch ?? 0}|${index.tracks.length}|${index.albums.length}|${index.stats.trackCount}`;
+}
+
+export function mergeLibraryEntityDeltas(
+  acc: LibraryEntityDelta,
+  delta: LibraryEntityDelta
+): LibraryEntityDelta {
+  const next: LibraryEntityDelta = { ...acc, ...delta };
+  if (acc.tracks?.length || delta.tracks?.length) {
+    const byPath = new Map<string, NonNullable<LibraryEntityDelta["tracks"]>[number]>();
+    for (const tr of acc.tracks ?? []) byPath.set(tr.relPath, tr);
+    for (const tr of delta.tracks ?? []) byPath.set(tr.relPath, tr);
+    next.tracks = [...byPath.values()];
+  }
+  if (acc.deleted?.length || delta.deleted?.length) {
+    next.deleted = [...new Set([...(acc.deleted ?? []), ...(delta.deleted ?? [])])];
+  }
+  return next;
+}
+
+export function applyLibraryDeltasToIndex(
+  prev: LibraryIndex | null,
+  deltas: LibraryEntityDelta[]
+): LibraryIndex | null {
+  if (!prev || !deltas.length) return prev;
+  return deltas.reduce(
+    (acc, delta) => applyLibraryDeltaToIndex(acc, delta) ?? acc,
+    prev
+  );
+}
+
 export function recomputeLibraryStats(index: LibraryIndex): LibraryIndex {
   const stats = {
     artistCount: index.artists.length,

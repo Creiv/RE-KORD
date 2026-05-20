@@ -220,6 +220,8 @@ export type LibraryStats = {
 
 export type LibraryIndex = {
   musicRoot?: string;
+  /** Epoch cache server (opzionale, backward compatible). */
+  indexEpoch?: number;
   artists: LibraryArtistIndex[];
   albums: LibraryAlbumIndex[];
   tracks: LibraryTrackIndex[];

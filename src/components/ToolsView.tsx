@@ -81,15 +81,15 @@ import {
 } from "./library";
 import { StudioDownloadExplore } from "./StudioDownloadExplore";
 import { StudioCatalogWeb } from "./StudioCatalogWeb";
+import type { LibraryReconcileOptions } from "../lib/libraryReconcile";
 
 type P = {
   library: LibraryResponse | null;
   libraryIndex: LibraryIndex | null;
-  /** Refresh debounced (metadati singoli, copertine). */
-  onRefreshLibrary: () => void | Promise<void>;
-  /** Refresh immediato dopo download / scan massivi. */
-  onRefreshLibraryNow?: () => void | Promise<void>;
+  onReconcileLibrary: (opts?: LibraryReconcileOptions) => void | Promise<void>;
   onLibraryDelta?: (delta: LibraryEntityDelta, reconcile?: boolean) => void;
+  /** Applica più delta in un solo aggiornamento indice (scan metadati). */
+  onLibraryDeltas?: (deltas: LibraryEntityDelta[], reconcile?: boolean) => void;
 };
 
 function sourceLabel(s: string | undefined): string {
@@ -413,11 +413,10 @@ function DlDestUpIcon() {
 export function ToolsView({
   library,
   libraryIndex,
-  onRefreshLibrary,
-  onRefreshLibraryNow,
+  onReconcileLibrary,
   onLibraryDelta,
+  onLibraryDeltas,
 }: P) {
-  const reconcileLibrary = onRefreshLibraryNow ?? onRefreshLibrary;
   const p = usePlayer();
   const { t, sortLocale } = useI18n();
   const downloadSummaryLine = useCallback(
@@ -981,8 +980,8 @@ export function ToolsView({
     } else {
       loadCatalogPane(true);
     }
-    onRefreshLibrary();
-  }, [catalogArtistDetail, loadCatalogPane, onRefreshLibrary, t]);
+    void onReconcileLibrary({ mode: "debounced" });
+  }, [catalogArtistDetail, loadCatalogPane, onReconcileLibrary, t]);
 
   const addArtistCatalog = useCallback(
     (artistId: string) => {
@@ -1125,7 +1124,7 @@ export function ToolsView({
         if (r.album && onLibraryDelta) {
           onLibraryDelta({ album: r.album }, false);
         } else {
-          onRefreshLibrary();
+          void onReconcileLibrary({ mode: "debounced" });
         }
       })
       .catch((e) => setMetaLog((s) => s + t("tools.metaErr", { e })))
@@ -1170,20 +1169,33 @@ export function ToolsView({
       setMetaLog((s) => s + t("tools.metaNoAlbums"));
       return;
     }
+    const scanDeltas: LibraryEntityDelta[] = [];
+    const flushScanDeltas = () => {
+      if (!scanDeltas.length) return;
+      if (onLibraryDeltas) {
+        onLibraryDeltas(scanDeltas, false);
+      } else {
+        for (const delta of scanDeltas) {
+          onLibraryDelta?.(delta, false);
+        }
+      }
+      scanDeltas.length = 0;
+    };
     for (let i = 0; i < toFetch.length; i += 1) {
       if (stopMetaAll.current) {
         setMetaLog((s) => s + t("tools.metaUserStop"));
         setMetaScanProg(null);
         setMetaAllBusy(false);
-        void reconcileLibrary();
+        flushScanDeltas();
+        void onReconcileLibrary({ mode: "now" });
         return;
       }
       const row = toFetch[i]!;
       setMetaScanProg({ current: i + 1, total: toFetch.length });
       try {
         const r = await fetchAlbumInfo(row.path, row.artist, row.album);
-        if (r.album && onLibraryDelta) {
-          onLibraryDelta({ album: r.album }, false);
+        if (r.album) {
+          scanDeltas.push({ album: r.album });
         }
       } catch (e) {
         setMetaLog(
@@ -1203,8 +1215,9 @@ export function ToolsView({
     }
     setMetaScanProg(null);
     setMetaAllBusy(false);
+    flushScanDeltas();
     setMetaLog((s) => s + t("tools.metaScanDone"));
-    void reconcileLibrary();
+    void onReconcileLibrary({ mode: "now" });
   };
 
   const fetchCurrentTrackMeta = () => {
@@ -1228,7 +1241,7 @@ export function ToolsView({
         if (r.track && onLibraryDelta) {
           onLibraryDelta({ track: r.track }, false);
         } else {
-          onRefreshLibrary();
+          void onReconcileLibrary({ mode: "debounced" });
         }
       })
       .catch((e) => setMetaLog((s) => s + t("tools.metaTrackErr", { e })))
@@ -1274,7 +1287,7 @@ export function ToolsView({
         setMetaLog((s) => s + t("tools.trackScanStop"));
         setTrackScanProg(null);
         setTrackAllBusy(false);
-        void reconcileLibrary();
+        void onReconcileLibrary({ mode: "now" });
         return;
       }
       const rel = toFetch[i]!;
@@ -1303,7 +1316,7 @@ export function ToolsView({
     setTrackScanProg(null);
     setTrackAllBusy(false);
     setMetaLog((s) => s + t("tools.trackScanDone"));
-    void reconcileLibrary();
+    void onReconcileLibrary({ mode: "now" });
   };
 
   const runPruneOrphanTrackMeta = async () => {
@@ -1334,7 +1347,7 @@ export function ToolsView({
         setMetaLog((s) => s + t("tools.trackMetaPruneStop"));
         setTrackPruneProg(null);
         setTrackPruneBusy(false);
-        void reconcileLibrary();
+        void onReconcileLibrary({ mode: "now" });
         return;
       }
       const albumPath = list[i]!;
@@ -1372,7 +1385,7 @@ export function ToolsView({
       (s) =>
         s + t("tools.trackMetaPruneDone", { a: albumsTouched, k: keysRemoved })
     );
-    void reconcileLibrary();
+    void onReconcileLibrary({ mode: "now" });
   };
 
   const runSanitizeTitles = async (scope: "album" | "all", dryRun: boolean) => {
@@ -1433,7 +1446,7 @@ export function ToolsView({
           return acc;
         });
       }
-      if (!dryRun) void reconcileLibrary();
+      if (!dryRun) void onReconcileLibrary({ mode: "now" });
     } catch (e) {
       setMetaLog((s) => s + t("tools.sanitizeErr", { e: String(e) }));
     } finally {
@@ -1577,7 +1590,7 @@ export function ToolsView({
               downloadSummaryLine(r)
             );
           });
-          await reconcileLibrary();
+          await onReconcileLibrary({ mode: "now" });
         } catch (e) {
           setLog(
             (x) =>
@@ -1800,7 +1813,7 @@ export function ToolsView({
             setDlTrackProg(null);
           }
           setLog((x) => x + buildReleaseBatchSummaryLine(batchResults, t));
-          await reconcileLibrary();
+          await onReconcileLibrary({ mode: "now" });
         } finally {
           dlActiveDownloadIdRef.current = null;
         }
@@ -1858,7 +1871,7 @@ export function ToolsView({
       .then((delta) => {
         setLog((x) => x + t("tools.coverSaved", { path: albumForCover }));
         if (onLibraryDelta) onLibraryDelta(delta, false);
-        else onRefreshLibrary();
+        else void onReconcileLibrary({ mode: "debounced" });
       })
       .catch((e) => setLog((x) => x + t("tools.coverErr", { e })))
       .finally(() => setArtBusy(false));
@@ -2451,7 +2464,7 @@ export function ToolsView({
                     onProgress={setDlProg}
                     onTrackProgress={setDlTrackProg}
                     onLog={setLog}
-                    onRefreshLibrary={reconcileLibrary}
+                    onReconcileLibrary={onReconcileLibrary}
                     onPrepareDownload={prepareExploreDownload}
                     downloadSummaryLine={downloadSummaryLine}
                   />

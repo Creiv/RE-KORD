@@ -9,6 +9,7 @@ import {
 import type { DownloadItemSummary } from "../lib/downloadLogSummary";
 import { ytdlpLogDetailForUser } from "../lib/ytdlpLogFilter";
 import type { useI18n } from "../i18n/useI18n";
+import type { LibraryReconcileOptions } from "../lib/libraryReconcile";
 import { UiAlbumIcon, UiMusicNote } from "./KordUiIcons";
 
 type TFn = ReturnType<typeof useI18n>["t"];
@@ -27,7 +28,7 @@ type Props = {
   onProgress: (p: { current: number; total: number } | null) => void;
   onTrackProgress: (p: { current: number; total: number } | null) => void;
   onLog: (updater: (prev: string) => string) => void;
-  onRefreshLibrary: () => void | Promise<void>;
+  onReconcileLibrary: (opts?: LibraryReconcileOptions) => void | Promise<void>;
   onPrepareDownload: (item: YoutubeExploreResult) => Promise<boolean>;
   downloadSummaryLine: (r: DownloadItemSummary) => string;
 };
@@ -48,7 +49,7 @@ export function StudioDownloadExplore({
   onProgress,
   onTrackProgress,
   onLog,
-  onRefreshLibrary,
+  onReconcileLibrary,
   onPrepareDownload,
   downloadSummaryLine,
 }: Props) {
@@ -159,7 +160,7 @@ export function StudioDownloadExplore({
             downloadSummaryLine(r)
           );
         });
-        await onRefreshLibrary();
+        await onReconcileLibrary({ mode: "now" });
       } catch (e) {
         onLog(
           (x) =>
@@ -183,7 +184,7 @@ export function StudioDownloadExplore({
       onProgress,
       onTrackProgress,
       onLog,
-      onRefreshLibrary,
+      onReconcileLibrary,
       onPrepareDownload,
       downloadSummaryLine,
       t,

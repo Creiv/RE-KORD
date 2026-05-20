@@ -1,17 +1,18 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 
-const MIN_VISIBLE_MS = 4000;
-const AFTER_BUSY_MS = 2500;
+const MIN_VISIBLE_MS = 3000;
+const AFTER_BUSY_MS = 2000;
 
 /**
- * Snackbar solo dopo clic sul pulsante sync/reload.
- * Non si lega a salvataggi in background (coda, preferenze, ecc.).
+ * Snackbar visibile mentre il pulsante sync/reload è busy
+ * (bootstrap, refresh libreria, download Studio, ecc.).
+ * Non include salvataggi user-state in background (preferiti, coda).
  */
-export function useSyncStatusSnackbar(librarySyncBusy: boolean) {
+export function useSyncStatusSnackbar(syncBusy: boolean) {
   const [open, setOpen] = useState(false);
-  const sessionActiveRef = useRef(false);
   const hideUntilRef = useRef(0);
   const hideTimerRef = useRef<number | null>(null);
+  const hadBusyRef = useRef(false);
 
   const clearHideTimer = useCallback(() => {
     if (hideTimerRef.current != null) {
@@ -20,24 +21,17 @@ export function useSyncStatusSnackbar(librarySyncBusy: boolean) {
     }
   }, []);
 
-  const extendVisible = useCallback((ms: number) => {
-    hideUntilRef.current = Math.max(hideUntilRef.current, Date.now() + ms);
-    setOpen(true);
-  }, []);
-
   const scheduleHide = useCallback(() => {
     clearHideTimer();
-    if (librarySyncBusy && sessionActiveRef.current) return;
     const wait = hideUntilRef.current - Date.now();
     if (wait <= 0) {
       setOpen(false);
-      sessionActiveRef.current = false;
       return;
     }
     hideTimerRef.current = window.setTimeout(() => {
       hideTimerRef.current = null;
-      if (librarySyncBusy && sessionActiveRef.current) {
-        scheduleHide();
+      if (syncBusy) {
+        setOpen(true);
         return;
       }
       if (Date.now() < hideUntilRef.current) {
@@ -45,28 +39,29 @@ export function useSyncStatusSnackbar(librarySyncBusy: boolean) {
         return;
       }
       setOpen(false);
-      sessionActiveRef.current = false;
     }, wait);
-  }, [clearHideTimer, librarySyncBusy]);
+  }, [clearHideTimer, syncBusy]);
 
   useEffect(() => {
-    if (!sessionActiveRef.current) return;
-    if (librarySyncBusy) {
+    if (syncBusy) {
+      hadBusyRef.current = true;
       clearHideTimer();
+      hideUntilRef.current = Math.max(
+        hideUntilRef.current,
+        Date.now() + MIN_VISIBLE_MS
+      );
       setOpen(true);
       return;
     }
-    extendVisible(Math.max(AFTER_BUSY_MS, MIN_VISIBLE_MS));
+    if (!hadBusyRef.current) return;
+    hideUntilRef.current = Math.max(
+      hideUntilRef.current,
+      Date.now() + AFTER_BUSY_MS
+    );
     scheduleHide();
-  }, [clearHideTimer, extendVisible, librarySyncBusy, scheduleHide]);
+  }, [clearHideTimer, scheduleHide, syncBusy]);
 
   useEffect(() => () => clearHideTimer(), [clearHideTimer]);
 
-  const notifySyncClick = useCallback(() => {
-    sessionActiveRef.current = true;
-    extendVisible(MIN_VISIBLE_MS);
-    scheduleHide();
-  }, [extendVisible, scheduleHide]);
-
-  return { open, notifySyncClick };
+  return { open: open || syncBusy };
 }
