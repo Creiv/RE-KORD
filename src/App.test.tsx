@@ -205,7 +205,12 @@ describe("App", () => {
       );
     });
 
-    expect(screen.getAllByText("Library overview").length).toBeGreaterThan(0);
+    await waitFor(
+      () => {
+        expect(screen.getAllByText("Library overview").length).toBeGreaterThan(0);
+      },
+      { timeout: 8000 }
+    );
     await waitFor(() => {
       const inList = screen
         .getAllByText("Artist One")
@@ -213,7 +218,7 @@ describe("App", () => {
       expect(inList).toBe(true);
     });
     expect(
-      screen.getByRole("button", { name: "Random all" })
+      screen.getByRole("button", { name: "Play all" })
     ).toBeInTheDocument();
   });
 

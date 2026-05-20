@@ -97,7 +97,9 @@ interface LibraryViewProps {
   onSearchFocus: () => void;
   showSearchBar: boolean;
   onSearchBarClose: () => void;
-  onRefreshLibrary: () => Promise<void>;
+  onReconcileLibrary: (
+    opts?: import("../../lib/libraryReconcile").LibraryReconcileOptions
+  ) => Promise<void>;
   onLibraryDelta?: (delta: LibraryEntityDelta, reconcile?: boolean) => void;
   onGoLibraryOverview: () => void;
 }
@@ -115,7 +117,7 @@ export default function LibraryView({
   onSearchFocus,
   showSearchBar,
   onSearchBarClose,
-  onRefreshLibrary,
+  onReconcileLibrary,
   onLibraryDelta,
   onGoLibraryOverview,
 }: LibraryViewProps) {
@@ -292,7 +294,7 @@ export default function LibraryView({
             if (trackPatches.length && onLibraryDelta) {
               onLibraryDelta({ tracks: trackPatches }, false);
             } else if (!onLibraryDelta) {
-              await onRefreshLibrary();
+              await onReconcileLibrary({ mode: "debounced" });
             }
           }
         );
@@ -302,7 +304,7 @@ export default function LibraryView({
         setAlbumGenreBusy(false);
       }
     },
-    [album?.relPath, albumTracks, librarySync, onLibraryDelta, onRefreshLibrary]
+    [album?.relPath, albumTracks, librarySync, onLibraryDelta, onReconcileLibrary]
   );
 
   const browseGenreFromAlbum = useCallback(
