@@ -20,6 +20,13 @@ import { randomUUID } from "../lib/randomUUID";
 import { normalizeShuffleAlbumKeysWithIndex } from "../lib/shuffleExclusionKeys";
 import { DEFAULT_CUSTOM_THEME } from "../lib/themeCatalog";
 import {
+  applyUserStatePatchFields,
+  compactUserStatePatch,
+  flushDelayMsForPending,
+  mergeSavedUserState,
+  mergeUserStatePatches,
+} from "../lib/userStatePatch";
+import {
   APP_LOCALES,
   THEME_MODES,
   type AppLocale,
@@ -419,33 +426,6 @@ function uniqStrings(list: string[]) {
   return [...new Set(list.filter(Boolean))];
 }
 
-function compactUserStatePatch(patch: UserStatePatch): UserStatePatch {
-  const out: UserStatePatch = {};
-  for (const [key, value] of Object.entries(patch) as [keyof UserStatePatch, unknown][]) {
-    if (value !== undefined) {
-      (out as Record<string, unknown>)[key] = value;
-    }
-  }
-  return out;
-}
-
-function mergeUserStatePatches(a: UserStatePatch, b: UserStatePatch): UserStatePatch {
-  const next: UserStatePatch = { ...a, ...b };
-  if (a.settings || b.settings) {
-    next.settings = {
-      ...(a.settings || {}),
-      ...(b.settings || {}),
-    };
-  }
-  if (a.trackMoods || b.trackMoods) {
-    next.trackMoods = {
-      ...(a.trackMoods || {}),
-      ...(b.trackMoods || {}),
-    };
-  }
-  return compactUserStatePatch(next);
-}
-
 function isLibraryRequiredError(err: unknown): boolean {
   const msg = err instanceof Error ? err.message : String(err);
   return /Library folder not configured|LIBRARY_REQUIRED|Set it in server Settings/i.test(msg);
@@ -455,62 +435,7 @@ function applyUserStatePatchLocal(
   base: UserStateV1,
   patch: UserStatePatch
 ): UserStateV1 {
-  const compact = compactUserStatePatch(patch);
-  if (Object.keys(compact).length === 0) return base;
-  const next: UserStateV1 = { ...base };
-  for (const [key, value] of Object.entries(compact) as [
-    keyof UserStatePatch,
-    unknown,
-  ][]) {
-    if (value === undefined) continue;
-    if (key === "settings") {
-      next.settings = normalizeSettings({
-        ...next.settings,
-        ...(value as Partial<UserSettings>),
-      });
-      continue;
-    }
-    if (key === "trackMoods") {
-      next.trackMoods = {
-        ...(next.trackMoods || {}),
-        ...(value as Record<string, string[]>),
-      };
-      continue;
-    }
-    (next as unknown as Record<string, unknown>)[key] = value;
-  }
-  return normalizeUserState(next);
-}
-
-/** Dopo PATCH: conserva in RAM i campi non inclusi nel patch (evita risposta server stale). */
-function mergeSavedUserState(
-  prev: UserStateV1,
-  saved: UserStateV1,
-  savedPatch: UserStatePatch
-): UserStateV1 {
-  const compact = compactUserStatePatch(savedPatch);
-  const keys = Object.keys(compact) as (keyof UserStatePatch)[];
-  if (keys.length === 0) return saved;
-  const next: UserStateV1 = { ...saved };
-  const keepPrevUnlessPatched = (key: keyof UserStatePatch) => {
-    if (!(key in compact)) {
-      (next as unknown as Record<string, unknown>)[key] =
-        prev[key as keyof UserStateV1] as unknown;
-    }
-  };
-  keepPrevUnlessPatched("favorites");
-  keepPrevUnlessPatched("recent");
-  keepPrevUnlessPatched("trackPlayCounts");
-  keepPrevUnlessPatched("playlists");
-  keepPrevUnlessPatched("queue");
-  keepPrevUnlessPatched("shuffleExcludedAlbumIds");
-  keepPrevUnlessPatched("shuffleExcludedTrackRelPaths");
-  keepPrevUnlessPatched("trackMoods");
-  keepPrevUnlessPatched("migratedLegacy");
-  keepPrevUnlessPatched("trackMoodsMigrated");
-  keepPrevUnlessPatched("playlistsMigrated");
-  if (!("settings" in compact)) next.settings = prev.settings;
-  return normalizeUserState(next);
+  return applyUserStatePatchFields(base, patch, normalizeSettings, normalizeUserState);
 }
 
 function userStateToPatch(state: UserStateV1, omitPlaylists = false): UserStatePatch {
@@ -649,6 +574,9 @@ type UserStateContextValue = {
   getTrackPlayCount: (relPath: string) => number;
   incrementTrackPlayCount: (relPath: string) => void;
   setQueueSnapshot: (queue: QueueState) => void;
+  /** Solo patch `queue` — debounce unificato nel writer (3s). */
+  enqueueQueuePatch: (queue: QueueState) => void;
+  flushUserStateNow: () => void;
   updateSettings: (patch: Partial<UserSettings>) => void;
   createPlaylist: (name: string) => string;
   renamePlaylist: (id: string, name: string) => void;
@@ -684,6 +612,7 @@ export function UserStateProvider({ children }: { children: React.ReactNode }) {
   const inFlightPatchRef = useRef<UserStatePatch>({});
   const flushTimerRef = useRef<number | null>(null);
   const flushPendingPatchRef = useRef<(() => void) | null>(null);
+  const schedulePendingFlushRef = useRef<(() => void) | null>(null);
   const flushingRef = useRef(false);
 
   useEffect(() => {
@@ -705,8 +634,9 @@ export function UserStateProvider({ children }: { children: React.ReactNode }) {
       let merged = normalizeUserState(mergeLegacy(remote));
       if (
         !remote.migratedLegacy ||
-        merged.playlistsMigrated !== remote.playlistsMigrated ||
-        merged.playlists !== remote.playlists
+        (merged.playlists.length > 0 &&
+          (merged.playlistsMigrated !== remote.playlistsMigrated ||
+            merged.playlists !== remote.playlists))
       ) {
         playlistDirtyRef.current = true;
       }
@@ -727,12 +657,15 @@ export function UserStateProvider({ children }: { children: React.ReactNode }) {
         clearLegacyLocalShuffle();
       }
 
+      const playlistsNeedPersist =
+        merged.playlists.length > 0 &&
+        (merged.playlistsMigrated !== remote.playlistsMigrated ||
+          merged.playlists !== remote.playlists);
       const needsInitialPersist =
         fromLocal.albumKeys.length > 0 ||
         fromLocal.trackPaths.length > 0 ||
         !remote.migratedLegacy ||
-        merged.playlistsMigrated !== remote.playlistsMigrated ||
-        merged.playlists !== remote.playlists;
+        playlistsNeedPersist;
       if (needsInitialPersist) {
         pendingPatchRef.current = mergeUserStatePatches(
           pendingPatchRef.current,
@@ -761,6 +694,9 @@ export function UserStateProvider({ children }: { children: React.ReactNode }) {
       setError(null);
       setReady(true);
       hydratedRef.current = true;
+      if (dirtyRef.current && Object.keys(pendingPatchRef.current).length > 0) {
+        schedulePendingFlushRef.current?.();
+      }
     };
 
     const scheduleRetry = () => {
@@ -845,7 +781,7 @@ export function UserStateProvider({ children }: { children: React.ReactNode }) {
                 ...prev,
                 revision: normalized.revision,
               }
-            : mergeSavedUserState(prev, normalized, patch)
+            : mergeSavedUserState(prev, normalized, patch, normalizeUserState)
         );
         setError(null);
         dirtyRef.current = hasNewerPending;
@@ -873,17 +809,29 @@ export function UserStateProvider({ children }: { children: React.ReactNode }) {
         if (seq === saveSeqRef.current) setSaving(false);
         flushingRef.current = false;
         if (Object.keys(pendingPatchRef.current).length > 0) {
-          if (flushTimerRef.current != null) window.clearTimeout(flushTimerRef.current);
-          flushTimerRef.current = window.setTimeout(() => {
-            flushTimerRef.current = null;
-            flushPendingPatchRef.current?.();
-          }, 240);
+          schedulePendingFlushRef.current?.();
         }
       });
   }, [beginLibrarySyncActivity, ready]);
   useEffect(() => {
     flushPendingPatchRef.current = flushPendingPatch;
   }, [flushPendingPatch]);
+
+  useEffect(() => {
+    const onPageHide = () => flushPendingPatchRef.current?.();
+    window.addEventListener("pagehide", onPageHide);
+    return () => window.removeEventListener("pagehide", onPageHide);
+  }, []);
+
+  useEffect(
+    () => () => {
+      if (flushTimerRef.current != null) {
+        window.clearTimeout(flushTimerRef.current);
+        flushTimerRef.current = null;
+      }
+    },
+    []
+  );
 
   useEffect(() => {
     const root = document.documentElement;
@@ -952,17 +900,25 @@ export function UserStateProvider({ children }: { children: React.ReactNode }) {
   }, [beginLibrarySyncActivity]);
 
   const schedulePendingFlush = useCallback(() => {
-    if (!ready || !hydratedRef.current || !dirtyRef.current) return;
+    // `ready` può essere ancora false nello stesso tick di applyRemote (setState async).
+    if (!hydratedRef.current || !dirtyRef.current) return;
     if (flushTimerRef.current != null) window.clearTimeout(flushTimerRef.current);
-    const pending = pendingPatchRef.current;
-    const queueOnly =
-      Object.keys(pending).length === 1 && pending.queue !== undefined;
-    const delayMs = queueOnly ? 2200 : 400;
+    const delayMs = flushDelayMsForPending(pendingPatchRef.current);
     flushTimerRef.current = window.setTimeout(() => {
       flushTimerRef.current = null;
       flushPendingPatchRef.current?.();
     }, delayMs);
-  }, [ready]);
+  }, []);
+
+  schedulePendingFlushRef.current = schedulePendingFlush;
+
+  const flushUserStateNow = useCallback(() => {
+    if (flushTimerRef.current != null) {
+      window.clearTimeout(flushTimerRef.current);
+      flushTimerRef.current = null;
+    }
+    flushPendingPatch();
+  }, [flushPendingPatch]);
 
   const commit = useCallback(
     (
@@ -1229,20 +1185,33 @@ export function UserStateProvider({ children }: { children: React.ReactNode }) {
     [commit]
   );
 
+  const normalizeQueueState = useCallback((queue: QueueState): QueueState => ({
+    tracks: queue.tracks,
+    currentIndex: Math.min(
+      Math.max(queue.currentIndex, 0),
+      Math.max(queue.tracks.length - 1, 0)
+    ),
+  }), []);
+
+  const enqueueQueuePatch = useCallback(
+    (queue: QueueState) => {
+      const nextQueue = normalizeQueueState(queue);
+      commit(
+        (prev) => ({
+          ...prev,
+          queue: nextQueue,
+        }),
+        { patch: () => ({ queue: nextQueue }) }
+      );
+    },
+    [commit, normalizeQueueState]
+  );
+
   const setQueueSnapshot = useCallback(
     (queue: QueueState) => {
-      commit((prev) => ({
-        ...prev,
-        queue: {
-          tracks: queue.tracks,
-          currentIndex: Math.min(
-            Math.max(queue.currentIndex, 0),
-            Math.max(queue.tracks.length - 1, 0)
-          ),
-        },
-      }), { patch: (next) => ({ queue: next.queue }) });
+      enqueueQueuePatch(queue);
     },
-    [commit]
+    [enqueueQueuePatch]
   );
 
   const getTrackPlayCount = useCallback(
@@ -1430,6 +1399,8 @@ export function UserStateProvider({ children }: { children: React.ReactNode }) {
       getTrackPlayCount,
       incrementTrackPlayCount,
       setQueueSnapshot,
+      enqueueQueuePatch,
+      flushUserStateNow,
       updateSettings,
       createPlaylist,
       renamePlaylist,
@@ -1449,8 +1420,10 @@ export function UserStateProvider({ children }: { children: React.ReactNode }) {
       addTrackToPlaylist,
       createPlaylist,
       deletePlaylist,
+      enqueueQueuePatch,
       error,
       favorites,
+      flushUserStateNow,
       getTrackPlayCount,
       incrementTrackPlayCount,
       pushRecent,

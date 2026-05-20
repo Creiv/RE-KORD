@@ -1003,7 +1003,11 @@ async function getFilteredIndexForAccount(accountId) {
     readLibrarySelection(root, accountId),
   ]);
   const filt = filterLibraryIndexBySelection(full, sel, accountId);
-  return mergeTrackMoodsIntoIndex(filt, state.trackMoods);
+  const merged = mergeTrackMoodsIntoIndex(filt, state.trackMoods);
+  return {
+    ...merged,
+    indexEpoch: getLibraryIndexCacheEpochSnapshot(root),
+  };
 }
 
 function libraryOverviewFromIndex(index) {
