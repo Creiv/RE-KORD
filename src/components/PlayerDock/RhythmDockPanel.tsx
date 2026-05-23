@@ -14,6 +14,10 @@ import { DIFFICULTIES } from "../../game/config/gameConfig";
 import { useRhythmChart } from "../../game/hooks/useRhythmChart";
 import { prefetchRhythmChart } from "../../game/lib/analyzeLibraryTrack";
 import {
+  loadPlectrDifficulty,
+  savePlectrDifficulty,
+} from "../../game/lib/plectrDifficultyStorage";
+import {
   getSessionTrackBest,
   hydrateSessionTrackBest,
   saveSessionTrackBest,
@@ -33,25 +37,6 @@ import type {
 import { audioElementMatchesTrack } from "../../lib/mediaTrackMatch";
 import type { EnrichedTrack, LibraryEntityDelta } from "../../types";
 import { UiClose, UiJoystick } from "../KordUiIcons";
-
-const DIFFICULTY_KEY = "kord-plectr-difficulty";
-
-function migrateDifficulty(raw: string | null): DifficultyId {
-  if (raw === "extreme") return "hard";
-  if (raw === "hard") return "normal";
-  if (raw === "normal") return "easy";
-  if (raw === "easy" || raw === "normal" || raw === "hard") return raw;
-  return "easy";
-}
-
-function loadDifficulty(): DifficultyId {
-  try {
-    return migrateDifficulty(localStorage.getItem(DIFFICULTY_KEY));
-  } catch {
-    /* ignore */
-  }
-  return "easy";
-}
 
 function resolveDisplayBest(
   relPath: string,
@@ -88,11 +73,11 @@ export const RhythmDockPanel = memo(function RhythmDockPanel({
     }
   }, [phase, p.currentIndex, p.queue, track.relPath]);
 
-  const [difficulty, setDifficulty] = useState<DifficultyId>(loadDifficulty);
+  const [difficulty, setDifficulty] = useState<DifficultyId>(loadPlectrDifficulty);
   const [runId, setRunId] = useState(0);
   const [lastResult, setLastResult] = useState<GameResult | null>(null);
   const [bestRevision, setBestRevision] = useState(0);
-  const wasPlayingRef = useRef(false);
+  const resumePlaybackOnCloseRef = useRef(false);
   const lastRunRef = useRef<GameResult | null>(null);
 
   const displayBest = useMemo(
@@ -106,8 +91,8 @@ export const RhythmDockPanel = memo(function RhythmDockPanel({
   }, [chartSet, difficulty]);
 
   useLayoutEffect(() => {
-    wasPlayingRef.current = p.isPlaying;
-  }, []);
+    resumePlaybackOnCloseRef.current = p.isPlaying;
+  }, [p.isPlaying]);
 
   useLayoutEffect(() => {
     setLastResult(null);
@@ -171,13 +156,9 @@ export const RhythmDockPanel = memo(function RhythmDockPanel({
 
   const onDifficulty = useCallback((id: DifficultyId) => {
     setDifficulty(id);
+    savePlectrDifficulty(id);
     setLastResult(null);
     setRunId((n) => n + 1);
-    try {
-      localStorage.setItem(DIFFICULTY_KEY, id);
-    } catch {
-      /* ignore */
-    }
   }, []);
 
   const syncRunScore = useCallback(
@@ -232,7 +213,7 @@ export const RhythmDockPanel = memo(function RhythmDockPanel({
       persistRunScore(lastRunRef.current, false);
     }
     setOpen(false);
-    if (wasPlayingRef.current && !p.isPlaying) {
+    if (resumePlaybackOnCloseRef.current && !p.isPlaying) {
       p.play();
     }
   }, [p, persistRunScore, setOpen]);
