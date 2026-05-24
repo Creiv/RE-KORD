@@ -587,7 +587,7 @@ type UserStateContextValue = {
   setQueueSnapshot: (queue: QueueState) => void;
   /** Solo patch `queue` — debounce unificato nel writer (3s). */
   enqueueQueuePatch: (queue: QueueState) => void;
-  flushUserStateNow: () => void;
+  flushUserStateNow: (opts?: { silent?: boolean }) => void;
   updateSettings: (patch: Partial<UserSettings>) => void;
   createPlaylist: (name: string) => string;
   renamePlaylist: (id: string, name: string) => void;
@@ -625,7 +625,9 @@ export function UserStateProvider({ children }: { children: React.ReactNode }) {
   const pendingPatchRef = useRef<UserStatePatch>({});
   const inFlightPatchRef = useRef<UserStatePatch>({});
   const flushTimerRef = useRef<number | null>(null);
-  const flushPendingPatchRef = useRef<(() => void) | null>(null);
+  const flushPendingPatchRef = useRef<
+    ((opts?: { silent?: boolean }) => void) | null
+  >(null);
   const schedulePendingFlushRef = useRef<(() => void) | null>(null);
   const flushingRef = useRef(false);
 
@@ -769,7 +771,7 @@ export function UserStateProvider({ children }: { children: React.ReactNode }) {
     };
   }, []);
 
-  const flushPendingPatch = useCallback(() => {
+  const flushPendingPatch = useCallback((opts?: { silent?: boolean }) => {
     if (!hydratedRef.current || flushingRef.current) {
       if (hydratedRef.current && dirtyRef.current) {
         schedulePendingFlushRef.current?.();
@@ -785,10 +787,11 @@ export function UserStateProvider({ children }: { children: React.ReactNode }) {
     inFlightPatchRef.current = patch;
     flushingRef.current = true;
     const seq = ++saveSeqRef.current;
-    const endSaveActivity = beginLibrarySyncActivity(
-      "sync.activity.savingUserState"
-    );
-    setSaving(true);
+    const silent = Boolean(opts?.silent);
+    const endSaveActivity = silent
+      ? () => {}
+      : beginLibrarySyncActivity("sync.activity.savingUserState");
+    if (!silent) setSaving(true);
     patchUserState(patch)
       .then((saved) => {
         if (seq !== saveSeqRef.current) return;
@@ -825,7 +828,7 @@ export function UserStateProvider({ children }: { children: React.ReactNode }) {
       })
       .finally(() => {
         endSaveActivity();
-        if (seq === saveSeqRef.current) setSaving(false);
+        if (seq === saveSeqRef.current && !silent) setSaving(false);
         flushingRef.current = false;
         if (Object.keys(pendingPatchRef.current).length > 0) {
           schedulePendingFlushRef.current?.();
@@ -933,12 +936,12 @@ export function UserStateProvider({ children }: { children: React.ReactNode }) {
     schedulePendingFlushRef.current = schedulePendingFlush;
   }, [schedulePendingFlush]);
 
-  const flushUserStateNow = useCallback(() => {
+  const flushUserStateNow = useCallback((opts?: { silent?: boolean }) => {
     if (flushTimerRef.current != null) {
       window.clearTimeout(flushTimerRef.current);
       flushTimerRef.current = null;
     }
-    flushPendingPatch();
+    flushPendingPatch(opts);
   }, [flushPendingPatch]);
 
   const commit = useCallback(
@@ -946,6 +949,7 @@ export function UserStateProvider({ children }: { children: React.ReactNode }) {
       updater: (prev: UserStateV1) => UserStateV1,
       options?: {
         immediate?: boolean;
+        silent?: boolean;
         patch?: (next: UserStateV1, prev: UserStateV1) => UserStatePatch;
       }
     ) => {
@@ -964,7 +968,10 @@ export function UserStateProvider({ children }: { children: React.ReactNode }) {
           );
         }
         if (options?.immediate) {
-          window.setTimeout(() => flushPendingPatchRef.current?.(), 0);
+          window.setTimeout(
+            () => flushPendingPatchRef.current?.({ silent: options?.silent }),
+            0,
+          );
         } else {
           schedulePendingFlush();
         }
@@ -1009,6 +1016,7 @@ export function UserStateProvider({ children }: { children: React.ReactNode }) {
         },
         {
           immediate: true,
+          silent: true,
           patch: (next, prev) => {
             const entry = next.plectrBests?.[relPath];
             const prevEntry = prev.plectrBests?.[relPath];

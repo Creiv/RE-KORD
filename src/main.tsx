@@ -21,6 +21,7 @@ if (bootstrapAccount) {
   }
 }
 if (electronEmbed) {
+  document.documentElement.dataset.kordClient = "1"
   u.delete("kordClient")
   u.delete("kordAccount")
   const qAid = String(u.get("accountId") ?? "").trim()

@@ -3,7 +3,7 @@ import { KORD_LANES } from "./kordLanes";
 
 export const LANES = KORD_LANES;
 
-/** Tre livelli: generazione da ex Normal / Hard / Extreme; etichette Easy / Normal / Hard. */
+/** Tre livelli KORD: Easy / Normal / Hard, con Hard sulla densità più alta. */
 export const DIFFICULTIES: Difficulty[] = [
   {
     id: "easy",
@@ -45,7 +45,7 @@ export const DIFFICULTIES: Difficulty[] = [
     cooldownDrop: 0.14,
     cooldownMin: 0.085,
     pulseModulo: 3,
-    holdEvery: 2,
+    holdEvery: 3,
     holdIntensity: 0.21,
     swipeEvery: 0,
     swipeIntensity: 1,

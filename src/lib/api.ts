@@ -426,14 +426,22 @@ export async function fetchCatalogWebTracks(
   }>(response)
 }
 
-/** URL per `<audio src>`: streaming progressivo (yt-dlp → pipe), avvio più rapido. */
+/** URL per `<audio src>`: streaming via proxy token (affidabile anche su Windows). */
+export async function catalogWebPreviewAudioSrc(
+  watchUrl: string,
+): Promise<string> {
+  const { playUrl } = await fetchCatalogWebPreviewPlayUrl(watchUrl)
+  return apiUrl(playUrl)
+}
+
+/** URL diretto pipe yt-dlp (fallback legacy). */
 export function catalogWebPreviewStreamUrl(watchUrl: string): string {
   return apiUrl("/api/catalog-web-preview/play", {
     url: watchUrl.trim(),
   })
 }
 
-/** @deprecated Usare {@link catalogWebPreviewStreamUrl} per l’anteprima nel player. */
+/** @deprecated Usare {@link catalogWebPreviewAudioSrc}. */
 export async function fetchCatalogWebPreviewPlayUrl(
   watchUrl: string,
 ): Promise<{ playUrl: string }> {

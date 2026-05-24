@@ -14,11 +14,11 @@ describe("plectrDifficultyStorage", () => {
   });
 
   describe("migratePlectrPlayMode", () => {
-    it("keeps current difficulty ids and extreme", () => {
+    it("keeps current difficulty ids and migrates extreme to hard", () => {
       expect(migratePlectrPlayMode("easy")).toBe("easy");
       expect(migratePlectrPlayMode("normal")).toBe("normal");
       expect(migratePlectrPlayMode("hard")).toBe("hard");
-      expect(migratePlectrPlayMode("extreme")).toBe("extreme");
+      expect(migratePlectrPlayMode("extreme")).toBe("hard");
     });
 
     it("defaults unknown values to easy", () => {
@@ -35,9 +35,9 @@ describe("plectrDifficultyStorage", () => {
 
   describe("load/save", () => {
     it("persists play mode in localStorage", () => {
-      savePlectrPlayMode("extreme");
-      expect(localStorage.getItem(PLECTR_DIFFICULTY_KEY)).toBe("extreme");
-      expect(loadPlectrPlayMode()).toBe("extreme");
+      savePlectrPlayMode("hard");
+      expect(localStorage.getItem(PLECTR_DIFFICULTY_KEY)).toBe("hard");
+      expect(loadPlectrPlayMode()).toBe("hard");
       expect(loadPlectrDifficulty()).toBe("hard");
     });
   });

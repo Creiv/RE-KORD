@@ -329,6 +329,10 @@ async function startServer() {
 
 function createWindow() {
   const p = String(appPort)
+  const winExtras =
+    process.platform === "win32"
+      ? { backgroundMaterial: "acrylic" }
+      : {}
   mainWindow = new BrowserWindow({
     width: 1280,
     height: 800,
@@ -338,13 +342,18 @@ function createWindow() {
     title: APP_NAME,
     icon: getAppIconPath(),
     autoHideMenuBar: false,
+    backgroundColor: "#060810",
+    ...winExtras,
     webPreferences: {
       contextIsolation: true,
       nodeIntegration: false,
       sandbox: true,
     },
   })
-  const url = isDev() ? "http://127.0.0.1:5173" : `http://127.0.0.1:${p}/`
+  const clientQ = "kordClient=1"
+  const url = isDev()
+    ? `http://127.0.0.1:5173?${clientQ}`
+    : `http://127.0.0.1:${p}/?${clientQ}`
   void mainWindow.loadURL(url)
   void mainWindow.webContents.on("did-fail-load", (_ev, code, reason) => {
     appendLaunchLog(`did-fail-load ${code} ${reason}`)

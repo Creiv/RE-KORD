@@ -2,7 +2,7 @@ import type { DifficultyId } from "../types";
 
 export const PLECTR_DIFFICULTY_KEY = "kord-plectr-difficulty";
 
-export type PlectrPlayMode = DifficultyId | "extreme";
+export type PlectrPlayMode = DifficultyId;
 
 const VALID_DIFF: readonly DifficultyId[] = ["easy", "normal", "hard"];
 function isDifficultyId(raw: string): raw is DifficultyId {
@@ -11,12 +11,11 @@ function isDifficultyId(raw: string): raw is DifficultyId {
 
 /** @deprecated use migratePlectrPlayMode */
 export function migratePlectrDifficulty(raw: string | null): DifficultyId {
-  const mode = migratePlectrPlayMode(raw);
-  return mode === "extreme" ? "hard" : mode;
+  return migratePlectrPlayMode(raw);
 }
 
 export function migratePlectrPlayMode(raw: string | null): PlectrPlayMode {
-  if (raw === "extreme") return "extreme";
+  if (raw === "extreme") return "hard";
   if (raw && isDifficultyId(raw)) return raw;
   return "easy";
 }
@@ -39,8 +38,7 @@ export function savePlectrPlayMode(id: PlectrPlayMode): void {
 
 /** @deprecated use loadPlectrPlayMode */
 export function loadPlectrDifficulty(): DifficultyId {
-  const mode = loadPlectrPlayMode();
-  return mode === "extreme" ? "hard" : mode;
+  return loadPlectrPlayMode();
 }
 
 /** @deprecated use savePlectrPlayMode */
