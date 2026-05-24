@@ -72,11 +72,12 @@ export const PlayerDock = memo(function PlayerDock({
     () => p.prev(),
     () => p.next(),
     isMobileLayout,
+    isMobileLayout ? onGoToAscolta : undefined,
   );
 
   const openListenFromTopBar = (event: ReactMouseEvent<HTMLDivElement>) => {
     const el = event.target as HTMLElement;
-    if (el.closest("button, input, .player-bar2__byline, .progress2")) {
+    if (el.closest("button, input, .player-bar2__crumb, .progress2")) {
       return;
     }
     onGoToAscolta();
@@ -106,11 +107,11 @@ export const PlayerDock = memo(function PlayerDock({
         ) : null}
         <footer
           className={`player-bar2${isMobileLayout ? " player-bar2--mobile" : ""}`}
-          {...(isMobileLayout ? swipeHandlers : {})}
         >
           <div
             className="player-bar2__row player-bar2__row--top player-bar2__row--open-listen"
-            onClick={openListenFromTopBar}
+            {...(isMobileLayout ? swipeHandlers : {})}
+            onClick={isMobileLayout ? undefined : openListenFromTopBar}
             title={t("player.openListenTitle")}
           >
             <div className="player-bar2__identity">

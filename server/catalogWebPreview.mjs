@@ -450,7 +450,7 @@ export function buildCatalogWebPreviewYtdlpArgs(watchUrl, ytdlpExtraArgs) {
   const playlist = isYoutubePlaylistUrl(url)
   return {
     url,
-    contentType: "audio/webm",
+    contentType: "audio/*",
     args: [
       "-f",
       CATALOG_WEB_PREVIEW_YTDLP_FORMAT,
@@ -460,8 +460,6 @@ export function buildCatalogWebPreviewYtdlpArgs(watchUrl, ytdlpExtraArgs) {
       "--no-progress",
       "--socket-timeout",
       "15",
-      "--download-sections",
-      `*0:00-0:${String(CATALOG_WEB_PREVIEW_MAX_SECONDS).padStart(2, "0")}`,
       ...(playlist ? ["--playlist-items", "1"] : ["--no-playlist"]),
       ...ytdlpExtraArgs(),
       url,

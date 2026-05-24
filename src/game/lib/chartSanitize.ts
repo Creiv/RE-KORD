@@ -1,15 +1,12 @@
 import type { Chart, ChartMap, ChartSet, DifficultyId } from "../types";
 
-/** Chart KORD: tap; hold opzionale (modalità Extreme). Niente swipe. */
-export function sanitizeChartForKord(
-  chart: Chart,
-  allowHold = false,
-): Chart {
+/** Chart KORD: tap + hold mantenute su tutte le difficoltà. Niente swipe. */
+export function sanitizeChartForKord(chart: Chart): Chart {
   const notes = chart.notes
     .filter((raw) => raw.type !== "swipe")
     .map((raw, id) => {
       const dur = raw.duration ?? 0;
-      const isHold = allowHold && dur > 0 && (raw.type === "hold" || raw.type === "tap");
+      const isHold = dur > 0 && (raw.type === "hold" || raw.type === "tap");
       return {
         ...raw,
         id,
@@ -29,7 +26,7 @@ export function sanitizeChartForKord(
 export function sanitizeChartSetForKord(chartSet: ChartSet): ChartSet {
   const charts = {} as ChartMap;
   for (const id of Object.keys(chartSet.charts) as DifficultyId[]) {
-    charts[id] = sanitizeChartForKord(chartSet.charts[id], false);
+    charts[id] = sanitizeChartForKord(chartSet.charts[id]);
   }
   return { ...chartSet, charts };
 }

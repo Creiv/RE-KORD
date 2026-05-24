@@ -1,8 +1,8 @@
 import type { ChartSet } from "../types";
 
 const MAX_ENTRIES = 8;
-/** Bump per invalidare chart obsolete (es. hold inline su Hard). */
-const CHART_CACHE_GENERATION = 3;
+/** Bump per invalidare chart obsolete (hold mantenute su tutti i livelli). */
+const CHART_CACHE_GENERATION = 4;
 const cache = new Map<string, { gen: number; chartSet: ChartSet }>();
 
 export function getCachedChart(relPath: string): ChartSet | null {

@@ -58,9 +58,10 @@ describe("catalogWebPreview", () => {
       () => [],
     )
     expect(url).toContain("youtube.com/watch")
-    expect(contentType).toBe("audio/webm")
+    expect(contentType).toBe("audio/*")
     expect(args).toContain("-o")
     expect(args).toContain("-")
+    expect(args).not.toContain("--download-sections")
     expect(args).toContain("--no-playlist")
     expect(args[args.length - 1]).toContain("youtube.com")
   })

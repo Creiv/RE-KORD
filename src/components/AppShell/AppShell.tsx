@@ -707,7 +707,6 @@ export function AppShell() {
       } else if (event.code === "KeyP") {
         event.preventDefault();
         if (p.queue.length > 0) setRhythmOpen(true);
-        startTransition(() => navigate({ section: "dashboard" }));
       }
     };
     window.addEventListener("keydown", handler);
