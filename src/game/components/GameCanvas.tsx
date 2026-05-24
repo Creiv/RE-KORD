@@ -106,6 +106,11 @@ const DEFAULT_LABELS = {
   timeAria: "Song progress",
 };
 
+const CLOCK_RESYNC_INTERVAL_MS = 120;
+const CLOCK_SOFT_SYNC_THRESHOLD_SECONDS = 0.012;
+const CLOCK_HARD_SYNC_THRESHOLD_SECONDS = 0.45;
+const CLOCK_CORRECTION_RATIO = 0.18;
+
 export function GameCanvas({
   chart,
   audioUrl,
@@ -414,6 +419,7 @@ export function GameCanvas({
       return;
     }
 
+    const hudSyncMinMs = embedded ? 120 : 0;
     const sync = hudSyncRef.current;
     const hudDirty =
       state.score !== sync.score ||
@@ -421,21 +427,29 @@ export function GameCanvas({
       state.feedback !== sync.feedback ||
       state.feedbackPulse !== sync.feedbackPulse;
     if (hudDirty) {
-      hudSyncRef.current = {
-        score: state.score,
-        combo: state.combo,
-        feedback: state.feedback,
-        feedbackPulse: state.feedbackPulse,
-        at: now,
-      };
-      setHud((prev) => ({
-        ...prev,
-        score: state.score,
-        combo: state.combo,
-        feedback: state.feedback,
-        feedbackPulse: state.feedbackPulse,
-        paused: state.paused,
-      }));
+      const feedbackChanged = state.feedback !== sync.feedback;
+      const elapsed = now - sync.at;
+      if (
+        hudSyncMinMs === 0 ||
+        feedbackChanged ||
+        elapsed >= hudSyncMinMs
+      ) {
+        hudSyncRef.current = {
+          score: state.score,
+          combo: state.combo,
+          feedback: state.feedback,
+          feedbackPulse: state.feedbackPulse,
+          at: now,
+        };
+        setHud((prev) => ({
+          ...prev,
+          score: state.score,
+          combo: state.combo,
+          feedback: state.feedback,
+          feedbackPulse: state.feedbackPulse,
+          paused: state.paused,
+        }));
+      }
     }
 
     rafRef.current = requestAnimationFrame(() => drawRef.current());
@@ -733,17 +747,35 @@ export function GameCanvas({
     if (!syncLive || !playerSync) return;
     const audio = playerSync.getAudio();
     if (!audio) return;
+    const syncClockToPlayer = () => {
+      const state = stateRef.current;
+      if (!state || state.finished) return;
+      const t = playerSync.getCurrentTime();
+      resetSongClock(state, t, performance.now());
+    };
     const onPlay = () => {
       const state = stateRef.current;
       if (!state || state.finished) return;
       state.paused = false;
       state.started = true;
       if (state.playStartAt <= 0) state.playStartAt = performance.now();
-      const t = playerSync.getCurrentTime();
-      resetSongClock(state, t, performance.now());
+      syncClockToPlayer();
+    };
+    const onPause = () => {
+      syncClockToPlayer();
     };
     audio.addEventListener("play", onPlay);
-    return () => audio.removeEventListener("play", onPlay);
+    audio.addEventListener("pause", onPause);
+    audio.addEventListener("seeking", syncClockToPlayer);
+    audio.addEventListener("seeked", syncClockToPlayer);
+    audio.addEventListener("ratechange", syncClockToPlayer);
+    return () => {
+      audio.removeEventListener("play", onPlay);
+      audio.removeEventListener("pause", onPause);
+      audio.removeEventListener("seeking", syncClockToPlayer);
+      audio.removeEventListener("seeked", syncClockToPlayer);
+      audio.removeEventListener("ratechange", syncClockToPlayer);
+    };
   }, [playerSync, syncLive]);
 
   useEffect(() => {
@@ -951,6 +983,9 @@ function resolveSmoothSongTime(
   const audio = playerSync.getAudio();
   const audioT = playerSync.getCurrentTime();
   const playing = Boolean(audio && !audio.paused && !audio.ended);
+  const playbackRate = audio?.playbackRate && Number.isFinite(audio.playbackRate)
+    ? audio.playbackRate
+    : 1;
 
   if (!playing) {
     resetSongClock(state, audioT, perfNow);
@@ -962,18 +997,22 @@ function resolveSmoothSongTime(
     return audioT;
   }
 
-  let t = state.clockAnchorSong + (perfNow - state.clockAnchorPerf) / 1000;
+  let t =
+    state.clockAnchorSong +
+    ((perfNow - state.clockAnchorPerf) / 1000) * playbackRate;
 
-  if (perfNow - state.lastClockResyncAt >= 90) {
+  if (perfNow - state.lastClockResyncAt >= CLOCK_RESYNC_INTERVAL_MS) {
     state.lastClockResyncAt = perfNow;
     const err = audioT - t;
-    if (Math.abs(err) > 0.06) {
+    if (Math.abs(err) > CLOCK_HARD_SYNC_THRESHOLD_SECONDS) {
       resetSongClock(state, audioT, perfNow);
       return audioT;
     }
-    if (Math.abs(err) > 0.004) {
-      state.clockAnchorSong += err * 0.35;
-      t = state.clockAnchorSong + (perfNow - state.clockAnchorPerf) / 1000;
+    if (Math.abs(err) > CLOCK_SOFT_SYNC_THRESHOLD_SECONDS) {
+      state.clockAnchorSong += err * CLOCK_CORRECTION_RATIO;
+      t =
+        state.clockAnchorSong +
+        ((perfNow - state.clockAnchorPerf) / 1000) * playbackRate;
     }
   }
 

@@ -14,7 +14,6 @@ import { GameCanvas } from "../../game/components/GameCanvas";
 import { DIFFICULTIES } from "../../game/config/gameConfig";
 import { useRhythmChart } from "../../game/hooks/useRhythmChart";
 import { prefetchRhythmChart } from "../../game/lib/analyzeLibraryTrack";
-import { buildExtremeChart } from "../../game/lib/extremeChart";
 import {
   loadPlectrPlayMode,
   savePlectrPlayMode,
@@ -86,10 +85,6 @@ export const RhythmDockPanel = memo(function RhythmDockPanel({
   );
 
   const chart = useMemo((): Chart | null => {
-    if (playMode === "extreme") {
-      const hard = chartSet?.charts.hard;
-      return hard ? buildExtremeChart(hard) : null;
-    }
     if (!chartSet) return null;
     return chartSet.charts[playMode] ?? null;
   }, [chartSet, playMode]);
@@ -104,15 +99,19 @@ export const RhythmDockPanel = memo(function RhythmDockPanel({
       lastRunRef.current = result;
       const accountBest = plectrBestFromUserState(user.state.plectrBests, relPath);
       saveSessionTrackBest(relPath, result);
-      setBestRevision((n) => n + 1);
       if (showLast && relPath === track.relPath) setLastResult(result);
-      // Confronta solo col record account: la sessione può già avere lo stesso
-      // punteggio (syncRunScore) e altrimenti non si persiste mai su server.
       if (!isBetterPlectrScore(result, accountBest)) return;
       user.savePlectrBest(relPath, result);
-      void persistPlectrBest(relPath, result, accountBest).then(({ delta }) => {
-        if (delta && onLibraryDelta) onLibraryDelta(delta, false);
-      });
+      const persist = () => {
+        void persistPlectrBest(relPath, result, accountBest).then(({ delta }) => {
+          if (delta && onLibraryDelta) onLibraryDelta(delta, false);
+        });
+      };
+      if (typeof requestIdleCallback === "function") {
+        requestIdleCallback(persist, { timeout: 2500 });
+      } else {
+        window.setTimeout(persist, 0);
+      }
     },
     [onLibraryDelta, track.relPath, user]
   );
@@ -123,7 +122,7 @@ export const RhythmDockPanel = memo(function RhythmDockPanel({
       if (!pending) return;
       persistRunScore(relPath, pending, false);
       lastRunRef.current = null;
-      user.flushUserStateNow();
+      user.flushUserStateNow({ silent: true });
     },
     [persistRunScore, user]
   );
@@ -231,7 +230,7 @@ export const RhythmDockPanel = memo(function RhythmDockPanel({
 
   const onClose = useCallback(() => {
     flushPendingRun(track.relPath);
-    user.flushUserStateNow();
+    user.flushUserStateNow({ silent: true });
     setOpen(false);
     if (resumePlaybackOnCloseRef.current && !p.isPlaying) {
       p.play();
@@ -241,7 +240,7 @@ export const RhythmDockPanel = memo(function RhythmDockPanel({
   useLayoutEffect(() => {
     return () => {
       flushPendingRunRef.current(prevTrackRelRef.current);
-      flushUserStateNowRef.current();
+      flushUserStateNowRef.current({ silent: true });
     };
   }, []);
 
@@ -342,20 +341,6 @@ export const RhythmDockPanel = memo(function RhythmDockPanel({
               </button>
             );
           })}
-          <button
-            type="button"
-            className={`rhythm-dock-panel__diff rhythm-dock-panel__diff--extreme${
-              playMode === "extreme" ? " is-active" : ""
-            }`}
-            disabled={
-              (chartSet?.charts.hard?.notes.length ?? 0) < 12 ||
-              phase !== "ready"
-            }
-            aria-pressed={playMode === "extreme"}
-            onClick={() => onPlayMode("extreme")}
-          >
-            Extreme
-          </button>
         </div>
       </header>
 

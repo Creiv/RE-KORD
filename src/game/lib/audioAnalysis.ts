@@ -7,7 +7,7 @@ const HOP_SIZE = 1024;
 const FRAME_SIZE = 2048;
 const SECTION_SECONDS = 8;
 const SNAP_SUBDIVISION = 4;
-/** easy/normal/hard = generazione ex Normal / Hard / Extreme. */
+/** Motivi dedicati per Easy / Normal / Hard. */
 const MOTIFS = {
   easy: [
     [0, 1, 2, 3, 2, 1, 0, 2],
@@ -275,6 +275,62 @@ function resequence(notes: ChartNote[]): ChartNote[] {
   return notes.map((note, id) => ({ ...note, id }));
 }
 
+const MAINTAINED_MIN_GAP = 0.58;
+const MAINTAINED_MIN_DURATION = 0.44;
+const MAINTAINED_MAX_DURATION = 1.75;
+
+function resetAsTap(note: ChartNote, id: number): ChartNote {
+  return {
+    ...note,
+    id,
+    type: "tap",
+    direction: null,
+    duration: 0,
+    endLane: null,
+    hit: false,
+    missed: false,
+    holding: false,
+    completed: false,
+  };
+}
+
+function addMaintainedNotes(notes: ChartNote[], difficulty: Difficulty): ChartNote[] {
+  const sorted = notes.map(resetAsTap).sort(compareNotes);
+  const holdEvery = difficulty.holdEvery;
+  let lastHoldTime = -Infinity;
+  let holdOrdinal = 0;
+
+  const withHolds = sorted.map((raw, index) => {
+    const note = { ...raw };
+    const next = sorted[index + 1];
+    const gapAfter = next ? next.time - note.time : Infinity;
+    const gapBefore = index > 0 ? note.time - sorted[index - 1].time : Infinity;
+
+    holdOrdinal += 1;
+    const eligible =
+      holdOrdinal % holdEvery === 0 &&
+      note.time - lastHoldTime >= MAINTAINED_MIN_GAP &&
+      gapBefore >= 0.12 &&
+      gapAfter >= MAINTAINED_MIN_DURATION + 0.12;
+
+    if (eligible) {
+      const duration = clamp(
+        Math.min(gapAfter * 0.78, MAINTAINED_MAX_DURATION),
+        MAINTAINED_MIN_DURATION,
+        MAINTAINED_MAX_DURATION,
+      );
+      note.type = "hold";
+      note.duration = Number(duration.toFixed(3));
+      note.endLane = note.lane;
+      lastHoldTime = note.time;
+    }
+
+    return note;
+  });
+
+  return resequence(withHolds);
+}
+
 function noteLanes(note: Pick<ChartNote, "lane" | "endLane">): number[] {
   return note.endLane === null || note.endLane === note.lane ? [note.lane] : [note.lane, note.endLane];
 }
@@ -539,7 +595,10 @@ function buildChartForDifficulty({
     lastLane = lane;
   }
 
-  const finalNotes = polishGeneratedNotes(notes, difficulty, buffer.duration);
+  const finalNotes = addMaintainedNotes(
+    polishGeneratedNotes(notes, difficulty, buffer.duration),
+    difficulty,
+  );
 
   return {
     songId: `${baseSongId}:${difficulty.id}`,

@@ -8,7 +8,7 @@ import {
 } from "react";
 import { createPortal } from "react-dom";
 import {
-  catalogWebPreviewStreamUrl,
+  catalogWebPreviewAudioSrc,
   fetchCatalogWebDiscover,
   fetchCatalogWebTracks,
   isBackendUnreachableError,
@@ -139,10 +139,16 @@ function CatalogWebPickDialog({
   const [previewErr, setPreviewErr] = useState<string | null>(null);
   const audioRef = useRef<HTMLAudioElement | null>(null);
   const loadGenRef = useRef(0);
+  const previewTimeUpdateRef = useRef<(() => void) | null>(null);
 
   const stopPreview = useCallback(() => {
     const audio = audioRef.current;
     if (audio) {
+      const onTimeUpdate = previewTimeUpdateRef.current;
+      if (onTimeUpdate) {
+        audio.removeEventListener("timeupdate", onTimeUpdate);
+        previewTimeUpdateRef.current = null;
+      }
       audio.pause();
       audio.removeAttribute("src");
       audio.load();
@@ -222,38 +228,63 @@ function CatalogWebPickDialog({
       audio.removeAttribute("src");
       audio.load();
       try {
+        const previewSrc = await catalogWebPreviewAudioSrc(track.url);
         await new Promise<void>((resolve, reject) => {
           const timeout = window.setTimeout(() => {
             cleanup();
             reject(new Error("Preview playback timed out"));
           }, 45_000);
-          const onPlaying = () => {
+          let settled = false;
+          const onReady = () => {
+            if (settled) return;
+            settled = true;
             cleanup();
             setPlayingUrl(track.url);
             setPreviewBusyUrl(null);
+            const prevTimeUpdate = previewTimeUpdateRef.current;
+            if (prevTimeUpdate) {
+              audio.removeEventListener("timeupdate", prevTimeUpdate);
+            }
             const onTimeUpdate = () => {
               if (audio.currentTime >= CATALOG_WEB_PREVIEW_MAX_SEC) {
                 audio.removeEventListener("timeupdate", onTimeUpdate);
+                if (previewTimeUpdateRef.current === onTimeUpdate) {
+                  previewTimeUpdateRef.current = null;
+                }
                 stopPreview();
               }
             };
+            previewTimeUpdateRef.current = onTimeUpdate;
             audio.addEventListener("timeupdate", onTimeUpdate);
             resolve();
           };
           const onError = () => {
+            if (settled) return;
+            settled = true;
             cleanup();
-            reject(new Error("Preview playback failed"));
+            const code = audio.error?.code;
+            const detail =
+              code === 4
+                ? "Unsupported audio format"
+                : code != null
+                  ? `Media error ${code}`
+                  : "Preview playback failed";
+            reject(new Error(detail));
           };
           const cleanup = () => {
             window.clearTimeout(timeout);
-            audio.removeEventListener("playing", onPlaying);
+            audio.removeEventListener("playing", onReady);
+            audio.removeEventListener("canplay", onReady);
             audio.removeEventListener("error", onError);
           };
-          audio.addEventListener("playing", onPlaying);
+          audio.addEventListener("playing", onReady);
+          audio.addEventListener("canplay", onReady);
           audio.addEventListener("error", onError);
           audio.preload = "auto";
-          audio.src = catalogWebPreviewStreamUrl(track.url);
+          audio.src = previewSrc;
           void audio.play().catch((err: unknown) => {
+            if (settled) return;
+            settled = true;
             cleanup();
             reject(err instanceof Error ? err : new Error(String(err)));
           });

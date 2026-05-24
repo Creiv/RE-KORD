@@ -165,9 +165,14 @@ export default function LibraryView({
     if (!showSearchBar) return;
     const el = searchInputRef.current;
     if (!el) return;
+    const hadFocus = document.activeElement === el;
     el.focus({ preventScroll: true });
-    el.select();
-  }, [showSearchBar, searchInputRef, route.artist, route.album]);
+    if (!search) {
+      el.select();
+    } else if (!hadFocus) {
+      el.setSelectionRange(search.length, search.length);
+    }
+  }, [showSearchBar, searchInputRef, route.artist, route.album, search, normalizedQuery]);
 
   const artist = route.artist
     ? index.artists.find((item) => item.id === route.artist) || null
