@@ -150,7 +150,13 @@ export async function sendCoverResponse(res, { root, relPath, width, underRoot }
     res.setHeader("Cache-Control", COVER_CACHE);
     await sendFileAbsolute(res, thumbPath);
   } catch (err) {
-    console.error("[kord] cover thumb failed, serving original:", err?.message || err);
+    const msg = err?.message || String(err);
+    // `res.sendFile()` can report "Not Found" if the cached thumb disappears between
+    // our stat check and the actual send (or during dev/HMR restarts). In that case
+    // we just fall back to the original without spamming the console.
+    if (msg !== "Not Found" && err?.code !== "ENOENT" && err?.status !== 404) {
+      console.error("[kord] cover thumb failed, serving original:", msg);
+    }
     if (!res.headersSent) {
       res.setHeader("Cache-Control", COVER_CACHE);
       await sendFileAbsolute(res, coverPath);
