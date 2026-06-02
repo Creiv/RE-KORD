@@ -14,6 +14,10 @@
 
 ---
 
+## WEBSITE: https://re-kord.com
+
+---
+
 ## Why RE-KORD
 
 RE-KORD is not a cloud service: it is **home for your audio**. It indexes the folder you choose, keeps queue, playlists, favorites, and stats per profile, and gives you studio-grade tools built in. Open the player in **Studio → Listen**, pick a **visualizer** (including **DiscoWall**), or launch **Plectr** on the track that is playing.
