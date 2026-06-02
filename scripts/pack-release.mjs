@@ -1,24 +1,23 @@
 /**
- * Esempio: node scripts/pack-release.mjs server linux 3.3.0
- * Da npm:   npm run pack:linux:server -- 3.3.0
+ * Esempio: node scripts/pack-release.mjs server linux 3.4.0
+ * Da npm:   npm run pack:linux:server -- 3.4.0
  */
 import { execSync } from "node:child_process"
 import fs from "node:fs"
 import path from "node:path"
 import { fileURLToPath } from "node:url"
-import { prepareNativeDeps, restoreHostNativeDeps } from "./prepare-native-deps.mjs"
 
 const root = path.join(path.dirname(fileURLToPath(import.meta.url)), "..")
 const configPath = path.join(root, "electron-builder.rekord.cjs")
 const pkgPath = path.join(root, "package.json")
-const [,, flavor, platform, vArg] = process.argv
+const [, , flavor, platform, vArg] = process.argv
 const platforms = new Set(["linux", "win", "mac"])
 const flavors = new Set(["server", "client"])
 
 if (!flavors.has(flavor) || !platforms.has(platform)) {
   console.error(
     "Uso: node scripts/pack-release.mjs <server|client> <linux|win|mac> [versione]\n" +
-      "Esempio: npm run pack:linux:server -- 3.3.0",
+      "Esempio: npm run pack:linux:server -- 3.4.0",
   )
   process.exit(1)
 }
@@ -38,26 +37,20 @@ const platFlag = platform === "win" ? "--win" : platform === "mac" ? "--mac" : "
 process.env.REKORD_PACK_FLAVOR = flavor
 process.env.REKORD_APP_VERSION = version
 
-const crossWinPrepared = prepareNativeDeps(platform)
-
-try {
-  if (flavor === "server") {
-    execSync("npm run build", { stdio: "inherit", cwd: root })
-    execSync(`node ${path.join(root, "scripts", "fetch-ytdlp.mjs")} ${platform}`, {
-      stdio: "inherit",
-      cwd: root,
-    })
-    execSync(`node ${path.join(root, "scripts", "fetch-cloudflared.mjs")} ${platform}`, {
-      stdio: "inherit",
-      cwd: root,
-    })
-  }
-
-  execSync(`npx electron-builder ${platFlag} --config ${configPath}`, {
+if (flavor === "server") {
+  execSync("npm run build", { stdio: "inherit", cwd: root })
+  execSync(`node ${path.join(root, "scripts", "fetch-ytdlp.mjs")} ${platform}`, {
     stdio: "inherit",
     cwd: root,
-    env: { ...process.env, REKORD_PACK_FLAVOR: flavor, REKORD_APP_VERSION: version },
   })
-} finally {
-  restoreHostNativeDeps(crossWinPrepared)
+  execSync(`node ${path.join(root, "scripts", "fetch-cloudflared.mjs")} ${platform}`, {
+    stdio: "inherit",
+    cwd: root,
+  })
 }
+
+execSync(`npx electron-builder ${platFlag} --config ${configPath}`, {
+  stdio: "inherit",
+  cwd: root,
+  env: { ...process.env, REKORD_PACK_FLAVOR: flavor, REKORD_APP_VERSION: version },
+})

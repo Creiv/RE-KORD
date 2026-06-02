@@ -3,7 +3,7 @@
   "description": "RE-KORD — local hub for listening to, organizing, and maintaining a personal music library",
   "author": "RE-KORD",
   "private": true,
-  "version": "3.3.0",
+  "version": "3.4.0",
   "type": "module",
   "main": "electron/main.mjs",
   "scripts": {
@@ -38,7 +38,6 @@
     "react": "^19.2.5",
     "react-dom": "^19.2.5",
     "react-window": "^2.2.7",
-    "sharp": "^0.34.5",
     "unzipper": "^0.12.3"
   },
   "devDependencies": {
@@ -121,7 +120,6 @@
     "asar": true,
     "asarUnpack": [
       "node_modules",
-      "node_modules/@img/**",
       "server",
       "dist"
     ],

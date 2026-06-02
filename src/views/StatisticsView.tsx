@@ -4,6 +4,8 @@ import { useI18n } from "../i18n/useI18n";
 import type { LibraryIndex, LibraryTrackIndex } from "../types";
 import { parseTrackGenres } from "../lib/genres";
 import { buildRandomArtistCoverMap } from "../lib/artistCover";
+import { coverUrlForAlbumRelPath, coverUrlForTrackRelPath } from "../lib/api";
+import { versionedUrl } from "../lib/versionedUrl";
 import { CoverImg } from "../components/CoverImg";
 import {
   UiBarChart,
@@ -266,9 +268,10 @@ function StatisticsView({
                       <span className="statistics-rank-row__pos">{i + 1}</span>
                       <CoverImg
                         className="statistics-rank-row__art"
-                        preset="thumb"
-                        trackPath={row.tr.relPath}
-                        coverVersion={row.tr.updatedAt}
+                        src={versionedUrl(
+                          coverUrlForTrackRelPath(row.tr.relPath),
+                          row.tr.updatedAt,
+                        )}
                         alt=""
                         fallbackClassName="statistics-rank-row__art statistics-rank-row__art--fallback"
                         fallback={
@@ -321,8 +324,7 @@ function StatisticsView({
                       {coverRel ? (
                         <CoverImg
                           className="statistics-rank-row__art"
-                          preset="thumb"
-                          coverPath={coverRel}
+                          src={coverUrlForAlbumRelPath(coverRel)}
                           alt=""
                           fallbackClassName="statistics-rank-row__art statistics-rank-row__art--fallback"
                           fallback={initials(row.ar.name)}
@@ -375,8 +377,7 @@ function StatisticsView({
                     <span className="statistics-rank-row__pos">{i + 1}</span>
                     <CoverImg
                       className="statistics-rank-row__art"
-                      preset="thumb"
-                      coverPath={row.al.relPath}
+                      src={coverUrlForAlbumRelPath(row.al.relPath)}
                       alt=""
                       fallbackClassName="statistics-rank-row__art statistics-rank-row__art--fallback"
                       fallback={
