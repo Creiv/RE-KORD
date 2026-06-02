@@ -7,6 +7,12 @@ import http from "http"
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url))
 
+/** AppImage / Ubuntu freschi: sandbox Chromium può bloccare rete locale e lo spawn del server. */
+if (process.platform === "linux") {
+  app.commandLine.appendSwitch("no-sandbox")
+  app.commandLine.appendSwitch("disable-gpu-sandbox")
+}
+
 const DEFAULT_SERVER_PORT = 3001
 const PORT_FILE = "rekord-electron-port.json"
 let appPort =
@@ -158,6 +164,8 @@ function waitForHealth(port, startupToken, maxMs) {
 
 let serverChild = null
 let mainWindow = null
+/** Ultimo token usato per avviare il server (health probe prima di caricare la UI). */
+let lastServerStartupToken = null
 
 const APP_NAME = "RE-KORD"
 
@@ -287,6 +295,7 @@ function serverStdioForPackaged(userData, useStdio) {
 
 async function tryStartOnPort(userData, port, useStdio, cwd, script) {
   const startupToken = makeStartupToken()
+  lastServerStartupToken = startupToken
   const env = {
     ...process.env,
     REKORD_USER_CONFIG_DIR: userData,
@@ -295,6 +304,9 @@ async function tryStartOnPort(userData, port, useStdio, cwd, script) {
     PORT: String(port),
     REKORD_STARTUP_TOKEN: startupToken,
     ELECTRON_RUN_AS_NODE: "1",
+  }
+  if (process.platform === "linux" && app.isPackaged) {
+    env.ELECTRON_DISABLE_SANDBOX = "1"
   }
   appendLaunchLog(`spawn server on ${port} cwd=${cwd}`)
   const child = spawn(process.execPath, [script], {
@@ -382,12 +394,13 @@ async function startServer() {
   )
 }
 
-function createWindow() {
+async function createWindow() {
   const p = String(appPort)
   const winExtras =
     process.platform === "win32"
       ? { backgroundMaterial: "acrylic" }
       : {}
+  const useRendererSandbox = !(process.platform === "linux" && app.isPackaged)
   mainWindow = new BrowserWindow({
     width: 1280,
     height: 800,
@@ -402,13 +415,20 @@ function createWindow() {
     webPreferences: {
       contextIsolation: true,
       nodeIntegration: false,
-      sandbox: true,
+      sandbox: useRendererSandbox,
     },
   })
   const clientQ = "rekordClient=1"
   const url = isDev()
     ? `http://127.0.0.1:5173?${clientQ}`
     : `http://127.0.0.1:${p}/?${clientQ}`
+  if (!isDev() && lastServerStartupToken) {
+    try {
+      await waitForHealth(p, lastServerStartupToken, 15000)
+    } catch (e) {
+      appendLaunchLog(`warn: health before loadURL ${e}`)
+    }
+  }
   void mainWindow.loadURL(url)
   void mainWindow.webContents.on("did-fail-load", (_ev, code, reason) => {
     appendLaunchLog(`did-fail-load ${code} ${reason}`)

@@ -13,7 +13,7 @@ import {
   clearYoutubeCookies,
   createAccount as createApiAccount,
   deleteAccount as deleteApiAccount,
-  downloadRekordDataBackup,
+  downloadKordDataBackup,
   fetchAccounts,
   fetchActivityLog,
   fetchConfig,
@@ -25,7 +25,7 @@ import {
   setSelectedAccountId,
   startRemoteAccess,
   stopRemoteAccess,
-  uploadRekordDataRestore,
+  uploadKordDataRestore,
   uploadYoutubeCookies,
 } from "../lib/api";
 import type {
@@ -73,8 +73,6 @@ function SettingsView() {
   const [youtubeCookiesOk, setYoutubeCookiesOk] = useState<string | null>(null);
   const youtubeCookiesInputRef = useRef<HTMLInputElement | null>(null);
   const [lanAccessUrl, setLanAccessUrl] = useState<string | null>(null);
-  const [lanAccessUrls, setLanAccessUrls] = useState<string[]>([]);
-  const [serverPlatform, setServerPlatform] = useState<string | null>(null);
   const [remoteAccess, setRemoteAccess] = useState<RemoteAccessState | null>(
     null
   );
@@ -105,14 +103,14 @@ function SettingsView() {
   const [restoreOk, setRestoreOk] = useState<string | null>(null);
   const [restoreErr, setRestoreErr] = useState<string | null>(null);
   const restoreFileInputRef = useRef<HTMLInputElement | null>(null);
-  const [isRekordClientEmbed] = useState(() => {
+  const [isKordClientEmbed] = useState(() => {
     try {
       return sessionStorage.getItem("rekord-embed") === "client";
     } catch {
       return false;
     }
   });
-  const rekordAppVersion = String(import.meta.env.VITE_REKORD_VERSION ?? "3.3.0");
+  const rekordAppVersion = String(import.meta.env.VITE_REKORD_VERSION ?? "3.4.0");
 
   useEffect(() => {
     Promise.all([fetchConfig(), fetchAccounts()])
@@ -139,16 +137,6 @@ function SettingsView() {
         setSelectedAccountIdState(selected);
         setLibraryPath(String(c.musicRoot ?? ""));
         setLanAccessUrl(c.lanAccessUrl);
-        setLanAccessUrls(
-          Array.isArray(c.lanAccessUrls) && c.lanAccessUrls.length
-            ? c.lanAccessUrls
-            : c.lanAccessUrl
-              ? [c.lanAccessUrl]
-              : [],
-        );
-        setServerPlatform(
-          typeof c.serverPlatform === "string" ? c.serverPlatform : null,
-        );
         setRemoteAccess(c.remoteAccess || null);
         setLibraryErr(null);
         setAccountErr(null);
@@ -170,11 +158,11 @@ function SettingsView() {
   }, []);
 
   useEffect(() => {
-    if (isRekordClientEmbed) return;
+    if (isKordClientEmbed) return;
     queueMicrotask(() => {
       loadActivityLog();
     });
-  }, [isRekordClientEmbed, loadActivityLog]);
+  }, [isKordClientEmbed, loadActivityLog]);
 
   const selectedAccount: Account | null =
     accounts?.accounts.find((account) => account.id === selectedAccountId) ||
@@ -211,11 +199,11 @@ function SettingsView() {
     window.location.replace(url.toString());
   };
 
-  const runRekordBackup = () => {
+  const runKordBackup = () => {
     setBackupErr(null);
     setBackupOk(null);
     setBackupBusy(true);
-    downloadRekordDataBackup()
+    downloadKordDataBackup()
       .then((name) => {
         setBackupOk(t("settings.backupSuccess", { name }));
         window.setTimeout(() => setBackupOk(null), 5000);
@@ -237,7 +225,7 @@ function SettingsView() {
     setRestoreErr(null);
     setRestoreOk(null);
     setRestoreBusy(true);
-    uploadRekordDataRestore(f)
+    uploadKordDataRestore(f)
       .then(() => {
         setRestoreOk(t("settings.restoreSuccess"));
         window.setTimeout(() => setRestoreOk(null), 8000);
@@ -432,7 +420,7 @@ function SettingsView() {
   }, [refreshRemoteState]);
 
   const isRemoteViewer = !serverLocalAccess;
-  const isNetworkControlAllowed = serverLocalAccess && !isRekordClientEmbed;
+  const isNetworkControlAllowed = serverLocalAccess && !isKordClientEmbed;
 
   return (
     <div
@@ -661,7 +649,7 @@ function SettingsView() {
           </div>
         </div>
       </section>
-      {isRekordClientEmbed ? null : (
+      {isKordClientEmbed ? null : (
         <section className="surface-card">
           <div className="section-head section-head--page-toolbar">
             <div>
@@ -752,7 +740,7 @@ function SettingsView() {
           )}
         </section>
       )}
-      {!isRekordClientEmbed &&
+      {!isKordClientEmbed &&
       serverLocalAccess &&
       (youtubeCookiesWritable || youtubeCookiesLockedByEnv) ? (
         <section className="surface-card settings-youtube-cookies-section">
@@ -825,18 +813,6 @@ function SettingsView() {
             ) : (
               <p className="subtle sm">{t("settings.networkNoUrl")}</p>
             )}
-            {lanAccessUrls.length > 1 ? (
-              <p className="subtle sm">
-                {t("settings.networkUrlAlternates", {
-                  urls: lanAccessUrls.slice(1).join(", "),
-                })}
-              </p>
-            ) : null}
-            {serverPlatform === "win32" && isNetworkControlAllowed ? (
-              <p className="subtle sm warnline">
-                {t("settings.networkWinFirewallHint")}
-              </p>
-            ) : null}
             {isNetworkControlAllowed ? (
               <>
                 <div
@@ -969,7 +945,7 @@ function SettingsView() {
           ) : null}
         </div>
       </section>
-      {isRekordClientEmbed ? null : (
+      {isKordClientEmbed ? null : (
         <section
           className="surface-card settings-activity-section"
           aria-label={t("settings.backupHeading")}
@@ -987,7 +963,7 @@ function SettingsView() {
                 type="button"
                 className="ghost-btn ghost-btn--sm"
                 disabled={backupBusy || restoreBusy}
-                onClick={runRekordBackup}
+                onClick={runKordBackup}
               >
                 {backupBusy
                   ? t("settings.backupRunning")
@@ -1021,7 +997,7 @@ function SettingsView() {
           {restoreOk ? <p className="subtle sm">{restoreOk}</p> : null}
         </section>
       )}
-      {isRekordClientEmbed ? null : (
+      {isKordClientEmbed ? null : (
         <section
           className="surface-card settings-activity-section"
           aria-label={t("settings.activityLogHeading")}

@@ -147,6 +147,19 @@ function findLibTrack(
   return null;
 }
 
+function artistNameForAlbumRelPath(
+  library: LibraryResponse,
+  albumRelPath: string,
+): string {
+  for (const a of library.artists) {
+    for (const al of a.albums) {
+      const rp = al.relPath || `${a.name}/${al.name}`;
+      if (rp === albumRelPath) return a.name;
+    }
+  }
+  return "";
+}
+
 const REKORD_DL_OK = "rekord-dl-committed";
 const W_DL_OK = "wpp-dl-committed";
 const REKORD_DL_OUT = "rekord-dl-out";
@@ -758,31 +771,23 @@ export function ToolsView({
     [t, commitDlDest],
   );
 
-  useEffect(() => {
-    if (!library || !metaAlbumPath) return;
-    for (const a of library.artists) {
-      for (const al of a.albums) {
-        const rp = al.relPath || `${a.name}/${al.name}`;
-        if (rp === metaAlbumPath) {
-          setMetaArtistName(a.name);
-          return;
-        }
-      }
+  const prevMetaAlbumPathRef = useRef(metaAlbumPath);
+  if (metaAlbumPath !== prevMetaAlbumPathRef.current) {
+    prevMetaAlbumPathRef.current = metaAlbumPath;
+    if (library && metaAlbumPath) {
+      const name = artistNameForAlbumRelPath(library, metaAlbumPath);
+      if (name) setMetaArtistName(name);
     }
-  }, [library, metaAlbumPath]);
+  }
 
-  useEffect(() => {
-    if (!library || !albumForCover) return;
-    for (const a of library.artists) {
-      for (const al of a.albums) {
-        const rp = al.relPath || `${a.name}/${al.name}`;
-        if (rp === albumForCover) {
-          setCoverPickArtist(a.name);
-          return;
-        }
-      }
+  const prevAlbumForCoverRef = useRef(albumForCover);
+  if (albumForCover !== prevAlbumForCoverRef.current) {
+    prevAlbumForCoverRef.current = albumForCover;
+    if (library && albumForCover) {
+      const name = artistNameForAlbumRelPath(library, albumForCover);
+      if (name) setCoverPickArtist(name);
     }
-  }, [library, albumForCover]);
+  }
 
   useEffect(() => {
     setRelPayload(null);

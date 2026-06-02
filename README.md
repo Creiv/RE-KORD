@@ -1,8 +1,16 @@
-# RE-KORD 3.3
+<p align="center">
+  <img src="public/REKORDlogo.png" alt="RE-KORD" width="128" />
+</p>
 
-**Your local music hub.** One interface to listen, organize, enrich your library, and play with the music — on your disk, on your network, under your control.
+<h1 align="center">RE-KORD 3.4</h1>
 
-*Exact semver in `package.json` · UI in English and Italian*
+<p align="center">
+  <strong>Your local music hub.</strong> One interface to listen, organize, enrich your library, and play with the music — on your disk, on your network, under your control.
+</p>
+
+<p align="center"><em>Exact semver in <code>package.json</code> · UI in English and Italian</em></p>
+
+> **Stable release line:** **3.4** is the rebuilt, pack-tested branch (no server-side `sharp` for covers, DiscoWall in Studio → Listen). Earlier **3.3** tags on GitHub used a different stack and are not recommended for new installs.
 
 ---
 
@@ -44,7 +52,7 @@ Built for **legal libraries** (rights-free music, your own productions, podcasts
 - **Discover** — **local** catalog (per-account artist/album selection) and **web** suggestions (preview and download into the library).
 - **Download** — `yt-dlp` bundled in Server packs; single, playlist/album, artist discography; classic and **explore** UI; folders under *Music*; progress and cancel; native AAC/Opus (m4a/webm) without ffmpeg in RE-KORD; optional YouTube cookies.
 - **Metadata** — album and track enrichment (MusicBrainz / iTunes and RE-KORD pipeline), bulk scan, heuristic **title cleanup**, prune orphan track metadata.
-- **Covers** — artwork search and apply to album folders.
+- **Covers** — artwork search and apply to album folders (full-size files served by the API; resized in the browser).
 
 ### Plectr
 
@@ -97,19 +105,26 @@ Library root: `MUSIC_ROOT` or Settings. Server config dir: `REKORD_USER_CONFIG_D
 | `REKORD_YTDLP_COOKIES` | Netscape cookies file for downloads |
 | `REKORD_LISTEN_ON_LAN=1` | Expose Vite dev server on LAN |
 
-### Build and release 3.3
+### Build and release 3.4
 
 ```bash
 npm run build
 npm test && npm run lint
 
 # Recommended: versioned Server / Client packs (uses electron-builder.rekord.cjs)
-npm run pack:linux:server -- 3.3.0   # → release/RE-KORD-Server-3.3.0-linux-x64.AppImage
-npm run pack:win:server -- 3.3.0    # → RE-KORD Server .exe (build on Windows for NSIS)
-npm run pack:linux:client -- 3.3.0  # → RE-KORD-Client-… (UI only, remote server)
-npm run pack:win:client -- 3.3.0
+npm run pack:linux:server -- 3.4.0   # → release/RE-KORD-Server-3.4.0-linux-x64.AppImage
+npm run pack:win:server -- 3.4.0    # → RE-KORD Server .exe (build on Windows for NSIS)
+npm run pack:linux:client -- 3.4.0  # → RE-KORD-Client-… (UI only, remote server)
+npm run pack:win:client -- 3.4.0
 
 npm run pack              # generic electron-builder on current OS → release/
+```
+
+On Linux without `libfuse2`, start the AppImage with:
+
+```bash
+./scripts/run-linux-appimage.sh
+# or: APPIMAGE_EXTRACT_AND_RUN=1 ./release/RE-KORD-Server-3.4.0-linux-x64.AppImage
 ```
 
 Server packs bundle **yt-dlp** and **cloudflared** for the target OS, run `vite build`, and ship `dist/`, `server/`, and `public/REKORDlogo.png`. Existing libraries keep data under **`.kord/`** (unchanged on disk).
@@ -132,4 +147,4 @@ Windows: prefer building **on Windows** for installers. Linux Electron: `ELECTRO
 
 ---
 
-*RE-KORD 3.3 by Creiv — local music, serious tools, play on the beat.*
+<p align="center"><em>RE-KORD 3.4 by Creiv — local music, serious tools, play on the beat.</em></p>
