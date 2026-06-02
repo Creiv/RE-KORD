@@ -7,6 +7,7 @@ import {
 } from "../AppSharedUi";
 import { CoverImg } from "../CoverImg";
 import { UiStyle } from "../RekordUiIcons";
+import { coverUrlForAlbumRelPath } from "../../lib/api";
 import { useI18n } from "../../i18n/useI18n";
 import type { LibraryIndex } from "../../types";
 
@@ -23,8 +24,7 @@ function MiniSlot({ relPath }: { relPath: string | null }) {
   return (
     <div className="library-list-tile__genre-slot">
       <CoverImg
-        preset="micro"
-        coverPath={relPath}
+        src={coverUrlForAlbumRelPath(relPath)}
         alt=""
         onError={() => setFailed(true)}
       />

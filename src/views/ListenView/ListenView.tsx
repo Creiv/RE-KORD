@@ -33,6 +33,8 @@ import {
   UiNavList,
   UiNote,
 } from "../../components/RekordUiIcons";
+import { coverUrlForTrackRelPath } from "../../lib/api";
+import { versionedUrl } from "../../lib/versionedUrl";
 import { isTrackAlbumShuffleExcluded } from "../../lib/randomExclusions";
 import { eligibleTracksForIntelligentRandom } from "../../lib/randomExclusions";
 import { PlayCollectionButton } from "../../components/PlayCollectionButton";
@@ -185,16 +187,16 @@ export default function ListenView({ index, onOpenSection }: ListenViewProps) {
             <div className="listen-stage__head">
               {p.current?.relPath ? (
                 <CoverImg
-                  preset="listen"
-                  trackPath={p.current.relPath}
-                  coverVersion={
+                  priority
+                  className="listen-stage__art"
+                  src={versionedUrl(
+                    coverUrlForTrackRelPath(p.current.relPath),
                     typeof (p.current as unknown as { updatedAt?: unknown })
                       .updatedAt === "number"
                       ? (p.current as unknown as { updatedAt: number })
                           .updatedAt
-                      : null
-                  }
-                  className="listen-stage__art"
+                      : null,
+                  )}
                   alt=""
                   fallbackClassName="listen-stage__art listen-stage__art--empty"
                   fallback={<UiMusicNote className="listen-stage__empty-ic" />}
