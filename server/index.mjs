@@ -1134,10 +1134,10 @@ app.get("/api/health", async (req, res) => {
   try {
     const envToken = String(process.env.REKORD_STARTUP_TOKEN || "").trim();
     const queryToken = String(req.query?.startupToken ?? "").trim();
-    if (envToken) {
-      if (queryToken !== envToken) {
-        return sendError(res, 503, "startup_token_mismatch");
-      }
+    // REKORD_STARTUP_TOKEN is for Electron startup (localhost + ?startupToken=…).
+    // Remote clients probe /api/health without the token; reject only a wrong non-empty token.
+    if (envToken && queryToken && queryToken !== envToken) {
+      return sendError(res, 503, "startup_token_mismatch");
     }
 
     const accountId = accountIdFromReq(req);
