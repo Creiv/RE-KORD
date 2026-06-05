@@ -161,13 +161,49 @@ function artistNameForAlbumRelPath(
 }
 
 const REKORD_DL_OK = "rekord-dl-committed";
-const W_DL_OK = "wpp-dl-committed";
+const LEGACY_DL_OK = "wpp-dl-committed";
 const REKORD_DL_OUT = "rekord-dl-out";
-const W_DL_OUT = "wpp-dl-out";
+const LEGACY_DL_OUT = "wpp-dl-out";
 const K_COVER_ALB = "rekord-cover-album";
-const W_COVER_ALB = "wpp-cover-album";
+const LEGACY_COVER_ALB = "wpp-cover-album";
 const REKORD_DL_STUDIO_MODE = "rekord-dl-studio-mode";
 const REKORD_CATALOG_STUDIO_MODE = "rekord-catalog-studio-mode";
+
+function migrateSessionKey(primary: string, legacy: string): string | null {
+  try {
+    const current = sessionStorage.getItem(primary);
+    if (current != null) return current;
+    const legacyVal = sessionStorage.getItem(legacy);
+    if (legacyVal == null) return null;
+    sessionStorage.setItem(primary, legacyVal);
+    sessionStorage.removeItem(legacy);
+    return legacyVal;
+  } catch {
+    return null;
+  }
+}
+
+function migrateSessionFlag(primary: string, legacy: string): boolean {
+  try {
+    if (sessionStorage.getItem(primary) === "1") return true;
+    if (sessionStorage.getItem(legacy) !== "1") return false;
+    sessionStorage.setItem(primary, "1");
+    sessionStorage.removeItem(legacy);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+function clearLegacySessionKeys() {
+  try {
+    sessionStorage.removeItem(LEGACY_DL_OK);
+    sessionStorage.removeItem(LEGACY_DL_OUT);
+    sessionStorage.removeItem(LEGACY_COVER_ALB);
+  } catch {
+    /* ignore */
+  }
+}
 
 type StudioPane = StudioPaneId;
 type DlStudioMode = "classic" | "explore";
@@ -561,32 +597,23 @@ export function ToolsView({
   const [dlDirSearchBusy, setDlDirSearchBusy] = useState(false);
   const [dlPath, setDlPath] = useState(() => {
     try {
-      if (
-        sessionStorage.getItem(REKORD_DL_OK) === "1" ||
-        sessionStorage.getItem(W_DL_OK) === "1"
-      ) {
-        const saved = normalizeDownloadDestPath(
-          sessionStorage.getItem(REKORD_DL_OUT) ??
-          sessionStorage.getItem(W_DL_OUT) ??
-          ""
-        );
-        if (saved) return saved;
-      }
+      if (!migrateSessionFlag(REKORD_DL_OK, LEGACY_DL_OK)) return "";
+      const saved = normalizeDownloadDestPath(
+        migrateSessionKey(REKORD_DL_OUT, LEGACY_DL_OUT) ?? "",
+      );
+      return saved;
     } catch {
-      /* ignore */
+      return "";
     }
-    return "";
   });
   const [dlDestPicked, setDlDestPicked] = useState(() => {
     try {
       const saved = normalizeDownloadDestPath(
-        sessionStorage.getItem(REKORD_DL_OUT) ??
-          sessionStorage.getItem(W_DL_OUT) ??
-          ""
+        migrateSessionKey(REKORD_DL_OUT, LEGACY_DL_OUT) ?? "",
       );
-      return Boolean(saved) && (
-        sessionStorage.getItem(REKORD_DL_OK) === "1" ||
-        sessionStorage.getItem(W_DL_OK) === "1"
+      return (
+        Boolean(saved) &&
+        migrateSessionFlag(REKORD_DL_OK, LEGACY_DL_OK)
       );
     } catch {
       return false;
@@ -640,11 +667,7 @@ export function ToolsView({
   const studioDlRunLatchRef = useRef(false);
   const [albumForCover, setAlbumForCover] = useState(() => {
     try {
-      return (
-        sessionStorage.getItem(K_COVER_ALB) ||
-        sessionStorage.getItem(W_COVER_ALB) ||
-        ""
-      );
+      return migrateSessionKey(K_COVER_ALB, LEGACY_COVER_ALB) ?? "";
     } catch {
       return "";
     }
@@ -722,8 +745,7 @@ export function ToolsView({
       } else {
         sessionStorage.removeItem(REKORD_DL_OK);
         sessionStorage.removeItem(REKORD_DL_OUT);
-        sessionStorage.removeItem(W_DL_OK);
-        sessionStorage.removeItem(W_DL_OUT);
+        clearLegacySessionKeys();
       }
     } catch {
       /* ignore */
@@ -736,8 +758,7 @@ export function ToolsView({
     try {
       sessionStorage.removeItem(REKORD_DL_OK);
       sessionStorage.removeItem(REKORD_DL_OUT);
-      sessionStorage.removeItem(W_DL_OK);
-      sessionStorage.removeItem(W_DL_OUT);
+      clearLegacySessionKeys();
     } catch {
       /* ignore */
     }
@@ -843,7 +864,7 @@ export function ToolsView({
         sessionStorage.setItem(K_COVER_ALB, albumForCover);
       } else {
         sessionStorage.removeItem(K_COVER_ALB);
-        sessionStorage.removeItem(W_COVER_ALB);
+        clearLegacySessionKeys();
       }
     } catch {
       /* ignore */
@@ -1751,7 +1772,7 @@ export function ToolsView({
       }
       setLog(
         (x) =>
-          x + t("tools.sharedErr", { e: String((e as Error)?.message || e) })
+          x + t("tools.pickerErr", { e: String((e as Error)?.message || e) })
       );
       setRelLoadBusy(false);
       setRelPayload(null);
@@ -2071,13 +2092,13 @@ export function ToolsView({
           ) : null}
           {studioPane === "catalog" ? (
             <div
-              className="studio-pane tools-shared-lib"
+              className="studio-pane studio-catalog-pane"
               role="region"
               aria-label={t("tools.catalogTitle")}
             >
-              <div className="studio-catalog-browse tools-shared-browse">
+              <div className="studio-catalog-browse">
                 <div className="studio-catalog-head">
-                  <p className="subtle sm tools-shared-browse-lead">
+                  <p className="subtle sm studio-catalog-browse-lead">
                     {catalogStudioMode === "web"
                       ? t("tools.catalogWebDesc")
                       : t("tools.catalogDesc")}
@@ -2132,7 +2153,7 @@ export function ToolsView({
                   <>
                 {catalogLockedByEnv ? (
                   <p className="subtle sm warnline">
-                    {t("tools.sharedEnvLock")}
+                    {t("tools.catalogEnvLock")}
                   </p>
                 ) : null}
                 {!catalogLockedByEnv ? (
@@ -2558,7 +2579,6 @@ export function ToolsView({
                     hasValidDownloadDest={hasValidDownloadDest}
                     dlBusy={dlBusy}
                     onBusyChange={setDlBusy}
-                    onProgress={setDlProg}
                     onTrackProgress={setDlTrackProg}
                     onLog={setLog}
                     onReconcileLibrary={onReconcileLibrary}
@@ -3042,13 +3062,13 @@ export function ToolsView({
               <div className="studio-meta-split">
                 <div className="studio-meta-split__primary">
                   <div className="studio-panel studio-meta-picks">
-                    <div className="tools-shared-browse-picks tools-studio-pair-picks">
+                    <div className="studio-picker-picks tools-studio-pair-picks">
                       <div>
                         <label
                           className="subtle sm block-label"
                           htmlFor="meta-artist-sel"
                         >
-                          {t("tools.sharedPickArtist")}
+                          {t("tools.pickerArtist")}
                         </label>
                         <select
                           id="meta-artist-sel"
@@ -3059,10 +3079,10 @@ export function ToolsView({
                             setMetaArtistName(v);
                             setMetaAlbumPath("");
                           }}
-                          aria-label={t("tools.sharedPickArtist")}
+                          aria-label={t("tools.pickerArtist")}
                         >
                           <option value="">
-                            {t("tools.sharedPickPlaceholder")}
+                            {t("tools.pickerPlaceholder")}
                           </option>
                           {libraryArtistsSorted.map((a) => (
                             <option key={a.name} value={a.name}>
@@ -3076,7 +3096,7 @@ export function ToolsView({
                           className="subtle sm block-label"
                           htmlFor="meta-album-sel"
                         >
-                          {t("tools.sharedPickAlbum")}
+                          {t("tools.pickerAlbum")}
                         </label>
                         <select
                           id="meta-album-sel"
@@ -3098,7 +3118,7 @@ export function ToolsView({
                         >
                           {!metaArtistName ? (
                             <option value="">
-                              {t("tools.sharedAlbumNeedArtist")}
+                              {t("tools.pickerAlbumNeedArtist")}
                             </option>
                           ) : (
                             <>
@@ -3433,13 +3453,13 @@ export function ToolsView({
                   <h4 className="studio-panel-title">
                     {t("tools.coversSave")}
                   </h4>
-                  <div className="tools-shared-browse-picks tools-studio-pair-picks tools-cover-save-picks">
+                  <div className="studio-picker-picks tools-studio-pair-picks tools-cover-save-picks">
                     <div>
                       <label
                         className="subtle sm block-label"
                         htmlFor="cover-artist-sel"
                       >
-                        {t("tools.sharedPickArtist")}
+                        {t("tools.pickerArtist")}
                       </label>
                       <select
                         id="cover-artist-sel"
@@ -3449,10 +3469,10 @@ export function ToolsView({
                           setCoverPickArtist(e.target.value);
                           setAlbumForCover("");
                         }}
-                        aria-label={t("tools.sharedPickArtist")}
+                        aria-label={t("tools.pickerArtist")}
                       >
                         <option value="">
-                          {t("tools.sharedPickPlaceholder")}
+                          {t("tools.pickerPlaceholder")}
                         </option>
                         {libraryArtistsSorted.map((a) => (
                           <option key={a.name} value={a.name}>
@@ -3466,7 +3486,7 @@ export function ToolsView({
                         className="subtle sm block-label"
                         htmlFor="cover-album-sel"
                       >
-                        {t("tools.sharedPickAlbum")}
+                        {t("tools.pickerAlbum")}
                       </label>
                       <select
                         id="cover-album-sel"
@@ -3478,7 +3498,7 @@ export function ToolsView({
                       >
                         {!coverPickArtist ? (
                           <option value="">
-                            {t("tools.sharedAlbumNeedArtist")}
+                            {t("tools.pickerAlbumNeedArtist")}
                           </option>
                         ) : (
                           <>

@@ -528,6 +528,8 @@ export const EN: Record<string, string> = {
   "settings.vizExpand": "Expand visualizer",
   "settings.vizCloseExpanded": "Close expanded visualizer",
   "settings.vizKaraoke": "Karaoke",
+  "settings.plectrDisableVizBackdrop":
+    "Disable audio visualizer as background in Plectr",
   "settings.vizPrism": "Prism",
   "settings.restoreSession": "Restore listening session on launch",
   "settings.language": "Language",
@@ -852,30 +854,13 @@ export const EN: Record<string, string> = {
   "tools.catalogFilterEmpty": "No artists match these filters.",
   "tools.catalogAddLibrary": "Add to library",
   "tools.catalogRemoveLibrary": "Remove from library",
-  "tools.sharedEyebrow": "Multi-account",
-  "tools.sharedTitle": "Share music with other users",
-  "tools.sharedBrowseDesc":
-    "Pick a user, load the index, then artist and album: under Album, the first option is All albums (entire artist folder) or pick a single album. Symlinks and sanitized rekord metadata are created; favorites, shuffle blocks, play counts, and queue stay in your account state.",
-  "tools.sharedAllAlbums": "All albums",
-  "tools.sharedAlbumNeedArtist": "Choose an artist first…",
-  "tools.sharedLinkOkArtist":
-    "Linked {{albums}} albums, {{files}} new files (skipped as already present: {{skipped}}).{{extra}}",
-  "tools.sharedLinkArtistErrors": " {{n}} folder(s) were not linked.",
-  "tools.sharedPickPlaceholder": "Choose…",
-  "tools.sharedPickSource": "Source profile",
-  "tools.sharedLoadCatalog": "Load catalog",
-  "tools.sharedLoadingCatalog": "Loading…",
-  "tools.sharedPickArtist": "Artist",
-  "tools.sharedPickAlbum": "Album",
-  "tools.sharedAddToMine": "Add to my library",
-  "tools.sharedLinking": "Linking…",
-  "tools.sharedLinkOk":
-    "Linked {{linked}} file(s) ({{skipped}} skipped) at `{{path}}`",
-  "tools.sharedNoOtherAccount":
-    "Add another account in Settings to browse other libraries.",
-  "tools.sharedEnvLock":
+  "tools.pickerAlbumNeedArtist": "Choose an artist first…",
+  "tools.pickerPlaceholder": "Choose…",
+  "tools.pickerArtist": "Artist",
+  "tools.pickerAlbum": "Album",
+  "tools.catalogEnvLock":
     "MUSIC_ROOT is set in the environment: all profiles share one folder, so per-account link sync is not available.",
-  "tools.sharedErr": "Error: {{e}}",
+  "tools.pickerErr": "Error: {{e}}",
   "tools.downloadTitle": "Download",
   "tools.dlSaveFolder": "Save folder (under Music)",
   "tools.dlSourceSection": "Source",
@@ -884,8 +869,9 @@ export const EN: Record<string, string> = {
   "tools.dlUiExplore": "Explore",
   "tools.dlLinkSection": "Link",
   "tools.exploreLead":
-    "Search YouTube Music: albums first, then tracks. Select a result to download (you’ll get the same confirmation dialogs as in Classic).",
+    "Search YouTube Music: artists, albums, then tracks. Select a result to download (you’ll get the same confirmation dialogs as in Classic).",
   "tools.exploreAlbumsSection": "Albums",
+  "tools.exploreArtistsSection": "Artists",
   "tools.exploreSongsSection": "Tracks",
   "tools.exploreSearchPh": "Search YouTube Music…",
   "tools.exploreSearchAria": "Search catalog",

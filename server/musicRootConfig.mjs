@@ -118,10 +118,6 @@ function normalizeAccountsArray(raw) {
   return accounts;
 }
 
-function normalizeAccountsFromFile(file) {
-  return normalizeAccountsArray(file.accounts);
-}
-
 function resolveLibraryRootFromBootstrap(file) {
   if (typeof file.musicRoot === "string" && file.musicRoot.trim()) {
     return path.resolve(file.musicRoot.trim());
@@ -221,10 +217,6 @@ function persistBootstrapOnlySync() {
   }
 }
 
-function persistConfigSyncFromState() {
-  persistBootstrapOnlySync();
-}
-
 function shouldRewriteBootstrap(file) {
   if (Number(file.schemaVersion) !== BOOTSTRAP_SCHEMA_VERSION) return true;
   return Object.prototype.hasOwnProperty.call(file, "accounts");
@@ -310,10 +302,6 @@ export function getMusicRoot() {
   return state.path;
 }
 
-export function getLibraryRoot() {
-  return state.path;
-}
-
 export function getDefaultAccountId() {
   return state.accounts[0]?.id ?? "";
 }
@@ -328,10 +316,6 @@ export function getAccount(accountId) {
     };
   }
   return { id: account.id, name: account.name };
-}
-
-export function getMusicRootForAccount(_accountId) {
-  return state.path;
 }
 
 export function findAccountById(accountId) {
