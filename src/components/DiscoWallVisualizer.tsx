@@ -8,6 +8,12 @@ import {
 } from "react";
 import { createPortal } from "react-dom";
 import { usePlayer } from "../context/PlayerContext";
+import { usePlayerProgressTime } from "../hooks/usePlayerProgressTime";
+import {
+  shouldPauseBackgroundVisualizersForPlectr,
+  subscribeRhythmModeOpen,
+} from "../hooks/useRhythmModeOpen";
+import { MOBILE_LAYOUT_MQ } from "../lib/breakpoints";
 import { useRhythmChart } from "../game/hooks/useRhythmChart";
 import type { ChartNote } from "../game/types";
 import { useI18n } from "../i18n/useI18n";
@@ -151,7 +157,8 @@ function chooseNotes(chartSet: ReturnType<typeof useRhythmChart>["chartSet"]) {
 
 export function DiscoWallVisualizer() {
   const { t } = useI18n();
-  const { audioRef, current, currentTime, getAnalyser } = usePlayer();
+  const { audioRef, current, getAnalyser } = usePlayer();
+  const progressTime = usePlayerProgressTime();
   const { chartSet } = useRhythmChart(current);
   const wrapRef = useRef<HTMLDivElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
@@ -161,7 +168,7 @@ export function DiscoWallVisualizer() {
   const colorNudgeRef = useRef(0);
   const burstRef = useRef({ x: 0.5, y: 0.5 });
   const lastNoteRef = useRef(-1);
-  const currentTimeRef = useRef(currentTime);
+  const currentTimeRef = useRef(progressTime);
   const notesRef = useRef<ChartNote[]>([]);
   const visibleRef = useRef(
     typeof document !== "undefined" ? !document.hidden : true,
@@ -228,8 +235,8 @@ export function DiscoWallVisualizer() {
   }, [expanded]);
 
   useEffect(() => {
-    currentTimeRef.current = currentTime;
-  }, [currentTime]);
+    currentTimeRef.current = progressTime;
+  }, [progressTime]);
 
   useEffect(() => {
     notesRef.current = notes;
@@ -329,10 +336,30 @@ export function DiscoWallVisualizer() {
 
     const onVisibility = () => {
       visibleRef.current = !document.hidden;
+      if (
+        visibleRef.current &&
+        inViewRef.current &&
+        !shouldPauseBackgroundVisualizersForPlectr() &&
+        raf === 0
+      ) {
+        raf = requestAnimationFrame(draw);
+      }
+    };
+
+    const syncRhythmPause = () => {
+      if (shouldPauseBackgroundVisualizersForPlectr()) {
+        cancelAnimationFrame(raf);
+        raf = 0;
+        return;
+      }
       if (visibleRef.current && inViewRef.current && raf === 0) {
         raf = requestAnimationFrame(draw);
       }
     };
+
+    const unsubRhythm = subscribeRhythmModeOpen(syncRhythmPause);
+    const layoutMq = window.matchMedia(MOBILE_LAYOUT_MQ);
+    layoutMq.addEventListener("change", syncRhythmPause);
 
     const notePulseAt = (time: number) => {
       const chartNotes = notesRef.current;
@@ -367,7 +394,11 @@ export function DiscoWallVisualizer() {
     };
 
     const draw = () => {
-      if (!visibleRef.current || !inViewRef.current) {
+      if (
+        !visibleRef.current ||
+        !inViewRef.current ||
+        shouldPauseBackgroundVisualizersForPlectr()
+      ) {
         raf = 0;
         return;
       }
@@ -546,7 +577,12 @@ export function DiscoWallVisualizer() {
 
     resizeRef.current = resize;
     drawKickRef.current = () => {
-      if (raf === 0 && visibleRef.current && inViewRef.current) {
+      if (
+        raf === 0 &&
+        visibleRef.current &&
+        inViewRef.current &&
+        !shouldPauseBackgroundVisualizersForPlectr()
+      ) {
         raf = requestAnimationFrame(draw);
       }
     };
@@ -558,7 +594,13 @@ export function DiscoWallVisualizer() {
     if (expanded) window.addEventListener("resize", onWindowResize);
     document.addEventListener("visibilitychange", onVisibility);
     visibleRef.current = !document.hidden;
-    raf = requestAnimationFrame(draw);
+    if (
+      visibleRef.current &&
+      inViewRef.current &&
+      !shouldPauseBackgroundVisualizersForPlectr()
+    ) {
+      raf = requestAnimationFrame(draw);
+    }
 
     return () => {
       resizeRef.current = null;
@@ -566,6 +608,8 @@ export function DiscoWallVisualizer() {
       cancelAnimationFrame(raf);
       window.removeEventListener("resize", onWindowResize);
       document.removeEventListener("visibilitychange", onVisibility);
+      unsubRhythm();
+      layoutMq.removeEventListener("change", syncRhythmPause);
       ro.disconnect();
     };
   }, [audioRef, bpm, current?.relPath, expanded, getAnalyser, seed, triads]);

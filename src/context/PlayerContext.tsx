@@ -21,6 +21,11 @@ import {
   setMediaSessionPosition,
 } from "../lib/mediaSession";
 import { fisherYatesShuffle } from "../lib/smartShuffle";
+import {
+  resetPlayerProgressTime,
+  setPlayerProgressTime,
+  readPlayerProgressTime,
+} from "./playerProgressStore";
 import { useUserState } from "./UserStateContext";
 import type {
   AudioCrossfadeSec,
@@ -201,6 +206,7 @@ export function PlayerProvider({ children }: { children: React.ReactNode }) {
   );
   const analyserRef = useRef<AnalyserNode | null>(null);
   const getAnalyser = useCallback(() => analyserRef.current, []);
+
   const audioCtxRef = useRef<AudioContext | null>(null);
   const keepPlayingRef = useRef(true);
   const restoredRef = useRef(false);
@@ -278,6 +284,7 @@ export function PlayerProvider({ children }: { children: React.ReactNode }) {
 
   useLayoutEffect(() => {
     if (!current) return;
+    resetPlayerProgressTime();
     const timer = window.setTimeout(() => setCurrentTime(0), 0);
     return () => window.clearTimeout(timer);
   }, [current?.relPath]);
@@ -666,7 +673,9 @@ export function PlayerProvider({ children }: { children: React.ReactNode }) {
         if (Number.isFinite(ready.duration) && ready.duration > 0) {
           setDuration(ready.duration);
         }
-        setCurrentTime(ready.currentTime);
+        const t = ready.currentTime;
+        setCurrentTime(t);
+        setPlayerProgressTime(t, true);
       }
       return;
     }
@@ -711,8 +720,9 @@ export function PlayerProvider({ children }: { children: React.ReactNode }) {
       if (Number.isFinite(inEl.duration) && inEl.duration > 0) {
         setDuration(inEl.duration);
       }
-      setCurrentTime(inEl.currentTime);
-
+      const deckT = inEl.currentTime;
+      setCurrentTime(deckT);
+      setPlayerProgressTime(deckT, true);
       if (keepPlayingRef.current) {
         const ctx = audioCtxRef.current;
         if (ctx && ctx.state === "suspended") await ctx.resume();
@@ -749,7 +759,7 @@ export function PlayerProvider({ children }: { children: React.ReactNode }) {
     const bind = (audio: HTMLAudioElement) => {
       const onTime = () => {
         if (ixFor(audio) !== activeDeckRef.current) return;
-        setCurrentTime(audio.currentTime);
+        setPlayerProgressTime(audio.currentTime);
         if (
           audio.duration &&
           !Number.isNaN(audio.duration) &&
@@ -896,7 +906,10 @@ export function PlayerProvider({ children }: { children: React.ReactNode }) {
     void abortCrossfade();
     const audio = audioRef.current;
     if (!audio) return;
-    audio.currentTime = Math.max(0, time);
+    const t = Math.max(0, time);
+    audio.currentTime = t;
+    setCurrentTime(t);
+    setPlayerProgressTime(t, true);
   }, [abortCrossfade]);
 
   const seekRatio = useCallback(
@@ -1241,21 +1254,27 @@ export function PlayerProvider({ children }: { children: React.ReactNode }) {
       lastMediaRelPathRef.current = current.relPath;
       lastMediaPosAtRef.current = 0;
     }
-    const a = audioRef.current;
-    if (!a) return;
-    const dur = Number.isFinite(duration) && duration > 0
-      ? duration
-      : a.duration;
-    if (!dur || Number.isNaN(dur) || dur <= 0) return;
-    const pos = a.currentTime;
-    const now = performance.now();
-    const needSeekBar =
-      !isPlaying || now - lastMediaPosAtRef.current > 1000;
-    if (needSeekBar) {
-      lastMediaPosAtRef.current = now;
-      setMediaSessionPosition(dur, pos, a.playbackRate || 1);
-    }
-  }, [current, isPlaying, duration, currentTime]);
+    const tick = () => {
+      const a = audioRef.current;
+      if (!a) return;
+      const dur = Number.isFinite(duration) && duration > 0
+        ? duration
+        : a.duration;
+      if (!dur || Number.isNaN(dur) || dur <= 0) return;
+      const pos = readPlayerProgressTime();
+      const now = performance.now();
+      const needSeekBar =
+        !isPlaying || now - lastMediaPosAtRef.current > 1000;
+      if (needSeekBar) {
+        lastMediaPosAtRef.current = now;
+        setMediaSessionPosition(dur, pos, a.playbackRate || 1);
+      }
+    };
+    tick();
+    if (!isPlaying) return;
+    const id = window.setInterval(tick, 1000);
+    return () => window.clearInterval(id);
+  }, [current, isPlaying, duration]);
 
   const value = useMemo<Ctx>(
     () => ({

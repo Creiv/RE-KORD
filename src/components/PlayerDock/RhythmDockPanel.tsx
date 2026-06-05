@@ -30,10 +30,27 @@ import {
   pickBetterPlectrScore,
   plectrBestFromUserState,
 } from "../../game/lib/plectrStorage";
-import type { Chart, GameResult } from "../../game/types";
+import type { Chart, DifficultyId, GameResult } from "../../game/types";
 import { audioElementMatchesTrack } from "../../lib/mediaTrackMatch";
 import type { EnrichedTrack, LibraryEntityDelta, PlectrBestScore } from "../../types";
 import { UiClose, UiEmojiEvents, UiPlectrum } from "../RekordUiIcons";
+
+function makePlaceholderChart(
+  track: EnrichedTrack,
+  difficultyId: DifficultyId
+): Chart {
+  const difficulty =
+    DIFFICULTIES.find((d) => d.id === difficultyId) ?? DIFFICULTIES[1];
+  return {
+    songId: `placeholder:${track.relPath}:${difficultyId}`,
+    baseSongId: track.relPath,
+    difficulty,
+    title: track.title || track.relPath,
+    duration: 180,
+    notes: [],
+    stats: { bpm: 0, rmsAvg: 0, density: 0 },
+  };
+}
 
 function resolveDisplayBest(
   relPath: string,
@@ -58,7 +75,8 @@ export const RhythmDockPanel = memo(function RhythmDockPanel({
   const p = usePlayer();
   const user = useUserState();
   const { setOpen } = useRhythmMode();
-  const { phase, chartSet, loadMessage, errorCode } = useRhythmChart(track);
+  const { phase, chartSet, chartRelPath, loadMessage, errorCode } =
+    useRhythmChart(track);
 
   useLayoutEffect(() => {
     if (phase !== "ready" || p.queue.length < 2) return;
@@ -85,9 +103,25 @@ export const RhythmDockPanel = memo(function RhythmDockPanel({
   );
 
   const chart = useMemo((): Chart | null => {
-    if (!chartSet) return null;
+    if (!chartSet || chartRelPath !== track.relPath) return null;
     return chartSet.charts[playMode] ?? null;
-  }, [chartSet, playMode]);
+  }, [chartRelPath, chartSet, playMode, track.relPath]);
+
+  const lastChartRef = useRef<{ relPath: string; chart: Chart } | null>(null);
+  if (chart) lastChartRef.current = { relPath: track.relPath, chart };
+
+  const placeholderChart = useMemo(
+    () => makePlaceholderChart(track, playMode),
+    [playMode, track]
+  );
+
+  const displayChart = useMemo((): Chart => {
+    if (chart) return chart;
+    if (lastChartRef.current?.relPath === track.relPath) {
+      return lastChartRef.current.chart;
+    }
+    return placeholderChart;
+  }, [chart, placeholderChart, track.relPath]);
 
   useLayoutEffect(() => {
     resumePlaybackOnCloseRef.current = p.isPlaying;
@@ -130,43 +164,67 @@ export const RhythmDockPanel = memo(function RhythmDockPanel({
   useLayoutEffect(() => {
     const prevRel = prevTrackRelRef.current;
     if (prevRel !== track.relPath) {
-      flushPendingRun(prevRel);
+      const flush = () => flushPendingRun(prevRel);
+      if (typeof requestIdleCallback === "function") {
+        requestIdleCallback(flush, { timeout: 1200 });
+      } else {
+        window.setTimeout(flush, 0);
+      }
       prevTrackRelRef.current = track.relPath;
       setLastResult(null);
-      setRunId((n) => n + 1);
       lastRunRef.current = null;
     }
     hydrateSessionTrackBest(track.relPath, user.state.plectrBests);
     setBestRevision((n) => n + 1);
   }, [track.relPath, user.state.plectrBests, flushPendingRun]);
 
+  const trackRelRef = useRef(track.relPath);
+  trackRelRef.current = track.relPath;
+
+  const playerBridgeRef = useRef({
+    audioRef: p.audioRef,
+    seek: p.seek,
+    play: p.play,
+    pause: p.pause,
+    isPlaying: p.isPlaying,
+  });
+  playerBridgeRef.current = {
+    audioRef: p.audioRef,
+    seek: p.seek,
+    play: p.play,
+    pause: p.pause,
+    isPlaying: p.isPlaying,
+  };
+
   const playerSync = useMemo(
     () => ({
       getCurrentTime: () => {
-        const audio = p.audioRef.current;
-        if (audio && audioElementMatchesTrack(audio, track.relPath)) {
-          return audio.currentTime;
+        const audio = playerBridgeRef.current.audioRef.current;
+        if (!audio || !audioElementMatchesTrack(audio, trackRelRef.current)) {
+          return 0;
         }
-        return 0;
+        return audio.currentTime;
       },
       getAudio: () => {
-        const audio = p.audioRef.current;
-        if (audio && audioElementMatchesTrack(audio, track.relPath)) {
-          return audio;
+        const audio = playerBridgeRef.current.audioRef.current;
+        if (!audio || !audioElementMatchesTrack(audio, trackRelRef.current)) {
+          return null;
         }
-        return null;
+        return audio;
       },
       seek: (seconds: number) => {
-        p.seek(seconds);
+        playerBridgeRef.current.seek(seconds);
       },
       play: async () => {
-        p.play();
+        playerBridgeRef.current.play();
       },
       pause: () => {
-        if (p.isPlaying) p.pause();
+        if (playerBridgeRef.current.isPlaying) {
+          playerBridgeRef.current.pause();
+        }
       },
     }),
-    [p, track.relPath]
+    [],
   );
 
   const gameLabels = useMemo(
@@ -345,15 +403,6 @@ export const RhythmDockPanel = memo(function RhythmDockPanel({
       </header>
 
       <div className="rhythm-dock-panel__body">
-        {phase === "loading" ? (
-          <div className="rhythm-dock-panel__status">
-            <p>{loadLabel}</p>
-            <p className="rhythm-dock-panel__status-sub">
-              {t("rhythm.analyzingKeepPlaying")}
-            </p>
-          </div>
-        ) : null}
-
         {phase === "error" ? (
           <div className="rhythm-dock-panel__status rhythm-dock-panel__status--error">
             <p>
@@ -364,18 +413,31 @@ export const RhythmDockPanel = memo(function RhythmDockPanel({
           </div>
         ) : null}
 
-        {phase === "ready" && chart ? (
-          <GameCanvas
-            key={`${track.relPath}-${playMode}-${runId}`}
-            chart={chart}
-            runId={runId}
-            embedded
-            syncLive
-            playerSync={playerSync}
-            onFinish={onFinish}
-            onRunUpdate={onRunUpdate}
-            labels={gameLabels}
-          />
+        {phase !== "error" ? (
+          <div className="rhythm-dock-panel__canvas-wrap">
+            {phase === "loading" && !chart ? (
+              <div
+                className="rhythm-dock-panel__status rhythm-dock-panel__status--overlay"
+                aria-live="polite"
+              >
+                <p>{loadLabel}</p>
+                <p className="rhythm-dock-panel__status-sub">
+                  {t("rhythm.analyzingKeepPlaying")}
+                </p>
+              </div>
+            ) : null}
+            <GameCanvas
+              key={playMode}
+              chart={displayChart}
+              runId={runId}
+              embedded
+              syncLive
+              playerSync={playerSync}
+              onFinish={onFinish}
+              onRunUpdate={onRunUpdate}
+              labels={gameLabels}
+            />
+          </div>
         ) : null}
       </div>
     </section>

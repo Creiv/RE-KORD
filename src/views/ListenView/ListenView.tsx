@@ -11,6 +11,7 @@ import { usePlayer } from "../../context/PlayerContext";
 import { useUserState } from "../../context/UserStateContext";
 import { useI18n } from "../../i18n/useI18n";
 import { useLibraryPlayback } from "../../hooks/useLibraryPlayback";
+import { usePlayerProgressTime } from "../../hooks/usePlayerProgressTime";
 import { useOpenTrackMetaEdit } from "../../components/TrackMetaEditor";
 import { TrackMetaEditGlyph } from "../../components/TrackMetaEditor";
 import { CoverImg } from "../../components/CoverImg";
@@ -50,6 +51,7 @@ interface ListenViewProps {
 
 export default function ListenView({ index, onOpenSection }: ListenViewProps) {
   const p = usePlayer();
+  const progressTime = usePlayerProgressTime();
   const user = useUserState();
   const { t } = useI18n();
   const openTrackMetaEdit = useOpenTrackMetaEdit();
@@ -109,8 +111,8 @@ export default function ListenView({ index, onOpenSection }: ListenViewProps) {
     [currentLyricsRaw]
   );
   const currentLrcIdx = useMemo(
-    () => currentLrcLineIndex(parsedLrc, p.currentTime),
-    [parsedLrc, p.currentTime]
+    () => currentLrcLineIndex(parsedLrc, progressTime),
+    [parsedLrc, progressTime]
   );
   const hasLyrics = currentLyricsRaw.length > 0;
   const hasLrcLyrics = parsedLrc.length > 0;
