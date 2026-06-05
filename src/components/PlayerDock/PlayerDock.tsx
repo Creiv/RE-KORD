@@ -6,6 +6,7 @@ import { useRhythmMode } from "../../context/RhythmModeContext";
 import { useI18n } from "../../i18n/useI18n";
 import { useUserState } from "../../context/UserStateContext";
 import { useMatchMedia } from "../../hooks/useMatchMedia";
+import { usePlayerProgressTime } from "../../hooks/usePlayerProgressTime";
 import { usePlayerBarSwipe } from "../../hooks/usePlayerBarSwipe";
 import { MOBILE_LAYOUT_MQ } from "../../lib/breakpoints";
 import { prefetchPlectrStyles } from "../../lib/ensurePlectrStyles";
@@ -42,6 +43,7 @@ export const PlayerDock = memo(function PlayerDock({
   onLibraryDelta,
 }: PlayerDockProps) {
   const p = usePlayer();
+  const progressTime = usePlayerProgressTime();
   const { open: rhythmOpen, stylesReady, setOpen: setRhythmOpen } = useRhythmMode();
   const user = useUserState();
   const { t } = useI18n();
@@ -60,7 +62,7 @@ export const PlayerDock = memo(function PlayerDock({
     () => new Set(user.state.shuffleExcludedTrackRelPaths),
     [user.state.shuffleExcludedTrackRelPaths],
   );
-  const percent = p.duration > 0 ? (p.currentTime / p.duration) * 100 : 0;
+  const percent = p.duration > 0 ? (progressTime / p.duration) * 100 : 0;
   const cur = p.current;
   const albumShuffleExcluded = Boolean(
     cur && isTrackAlbumShuffleExcluded(cur, exAlbums),
@@ -352,7 +354,7 @@ export const PlayerDock = memo(function PlayerDock({
             <div className="player-bar2__timeline">
               <PlayerProgressTrack percent={percent} seekRatio={p.seekRatio} />
               <div className="player-bar2__times">
-                <span>{formatDuration(p.currentTime)}</span>
+                <span>{formatDuration(progressTime)}</span>
                 <span>{formatDuration(p.duration)}</span>
               </div>
             </div>
