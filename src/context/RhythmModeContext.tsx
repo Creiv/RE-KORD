@@ -7,6 +7,7 @@ import {
   useMemo,
   useState,
 } from "react";
+import { setRhythmModeOpenSnapshot } from "../hooks/useRhythmModeOpen";
 import {
   ensurePlectrStyles,
   isPlectrStylesLoaded,
@@ -23,9 +24,23 @@ type RhythmModeCtx = {
 const RhythmModeContext = createContext<RhythmModeCtx | null>(null);
 
 export function RhythmModeProvider({ children }: { children: React.ReactNode }) {
-  const [open, setOpen] = useState(false);
+  const [open, setOpenState] = useState(false);
   const [stylesReady, setStylesReady] = useState(isPlectrStylesLoaded());
-  const toggle = useCallback(() => setOpen((v) => !v), []);
+  const setOpen = useCallback((next: boolean) => {
+    setOpenState(next);
+    setRhythmModeOpenSnapshot(next);
+  }, []);
+  const toggle = useCallback(() => {
+    setOpenState((v) => {
+      const next = !v;
+      setRhythmModeOpenSnapshot(next);
+      return next;
+    });
+  }, []);
+
+  useEffect(() => {
+    setRhythmModeOpenSnapshot(open);
+  }, [open]);
 
   useEffect(() => {
     if (!open) return;

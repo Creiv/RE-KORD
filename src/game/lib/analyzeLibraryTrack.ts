@@ -37,6 +37,7 @@ function mediaFetchUrl(relPath: string): string {
 }
 
 const prefetchInFlight = new Set<string>();
+const analyzeInFlight = new Map<string, Promise<ChartSet>>();
 
 /** Precarica la chart in cache (es. prossimo brano in coda). */
 export function prefetchRhythmChart(track: EnrichedTrack): void {
@@ -63,6 +64,12 @@ export async function analyzeLibraryTrack(
     return cached;
   }
 
+  const inflight = analyzeInFlight.get(track.relPath);
+  if (inflight) {
+    return inflight;
+  }
+
+  const run = (async (): Promise<ChartSet> => {
   onProgress?.(0.08, "fetch");
   const controller = new AbortController();
   const timeoutId = window.setTimeout(() => controller.abort(), FETCH_TIMEOUT_MS);
@@ -114,5 +121,13 @@ export async function analyzeLibraryTrack(
   } finally {
     window.clearTimeout(timeoutId);
     signal?.removeEventListener("abort", abortHandler);
+  }
+  })();
+
+  analyzeInFlight.set(track.relPath, run);
+  try {
+    return await run;
+  } finally {
+    analyzeInFlight.delete(track.relPath);
   }
 }

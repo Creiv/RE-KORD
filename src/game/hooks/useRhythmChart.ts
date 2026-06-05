@@ -16,6 +16,7 @@ export function useRhythmChart(track: EnrichedTrack | null) {
 
   const [phase, setPhase] = useState<RhythmChartPhase>("idle");
   const [chartSet, setChartSet] = useState<ChartSet | null>(null);
+  const [chartRelPath, setChartRelPath] = useState<string | null>(null);
   const [loadMessage, setLoadMessage] = useState("");
   const [errorCode, setErrorCode] = useState<
     "fetch" | "decode" | "sparse" | "timeout" | null
@@ -24,6 +25,7 @@ export function useRhythmChart(track: EnrichedTrack | null) {
   const reset = useCallback(() => {
     setPhase("idle");
     setChartSet(null);
+    setChartRelPath(null);
     setLoadMessage("");
     setErrorCode(null);
   }, []);
@@ -41,6 +43,7 @@ export function useRhythmChart(track: EnrichedTrack | null) {
       const timer = window.setTimeout(() => {
         if (loadGenRef.current !== gen) return;
         setChartSet(sanitizeChartSetForRekord(cached));
+        setChartRelPath(relPath);
         setPhase("ready");
         setErrorCode(null);
         prefetchRhythmChart(track);
@@ -49,10 +52,9 @@ export function useRhythmChart(track: EnrichedTrack | null) {
     }
     const abort = new AbortController();
 
-    const timer = window.setTimeout(() => {
+    const runAnalyze = () => {
       if (abort.signal.aborted || loadGenRef.current !== gen) return;
       setPhase("loading");
-      setChartSet(null);
       setErrorCode(null);
       setLoadMessage("fetch");
       void (async () => {
@@ -68,6 +70,7 @@ export function useRhythmChart(track: EnrichedTrack | null) {
           );
           if (abort.signal.aborted || loadGenRef.current !== gen) return;
           setChartSet(sanitizeChartSetForRekord(raw));
+          setChartRelPath(relPath);
           setPhase("ready");
           setErrorCode(null);
           prefetchRhythmChart(track);
@@ -81,13 +84,24 @@ export function useRhythmChart(track: EnrichedTrack | null) {
           setPhase("error");
         }
       })();
-    }, 0);
+    };
+
+    let timer = 0;
+    let idleId: number | undefined;
+    if (typeof requestIdleCallback === "function") {
+      idleId = requestIdleCallback(runAnalyze, { timeout: 200 });
+    } else {
+      timer = window.setTimeout(runAnalyze, 0);
+    }
 
     return () => {
-      window.clearTimeout(timer);
+      if (timer) window.clearTimeout(timer);
+      if (idleId !== undefined && typeof cancelIdleCallback === "function") {
+        cancelIdleCallback(idleId);
+      }
       abort.abort();
     };
   }, [track, track?.relPath, reset]);
 
-  return { phase, chartSet, loadMessage, errorCode, reset };
+  return { phase, chartSet, chartRelPath, loadMessage, errorCode, reset };
 }

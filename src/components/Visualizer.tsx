@@ -1,6 +1,12 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { usePlayer } from "../context/PlayerContext";
+import { usePlayerProgressTime } from "../hooks/usePlayerProgressTime";
+import {
+  shouldPauseBackgroundVisualizersForPlectr,
+  subscribeRhythmModeOpen,
+} from "../hooks/useRhythmModeOpen";
+import { MOBILE_LAYOUT_MQ } from "../lib/breakpoints";
 import { binAmplitude, logBinT, sampleSpectrumLinear } from "../lib/freqMap";
 import type { VizMode } from "../types";
 
@@ -298,7 +304,8 @@ function mix(c1: RGB, c2: RGB, t: number): RGB {
 
 
 export function Visualizer({ mode }: { mode: VizMode }) {
-  const { getAnalyser, isPlaying, current, currentTime, duration } = usePlayer();
+  const { getAnalyser, isPlaying, current, duration } = usePlayer();
+  const progressTime = usePlayerProgressTime();
   const currentLyricsRaw = String(current?.meta?.lyrics || "").trim();
   const parsedLrc = useMemo(() => {
     const out: { atSec: number; text: string }[] = [];
@@ -329,11 +336,11 @@ export function Visualizer({ mode }: { mode: VizMode }) {
     if (!parsedLrc.length) return -1;
     let idx = -1;
     for (let i = 0; i < parsedLrc.length; i += 1) {
-      if (currentTime >= parsedLrc[i]!.atSec) idx = i;
+      if (progressTime >= parsedLrc[i]!.atSec) idx = i;
       else break;
     }
     return idx;
-  }, [parsedLrc, currentTime]);
+  }, [parsedLrc, progressTime]);
   const currentLrcText =
     currentLrcIdx >= 0 ? parsedLrc[currentLrcIdx]?.text?.trim() || "" : "";
   const previousLrcText =
@@ -351,9 +358,9 @@ export function Visualizer({ mode }: { mode: VizMode }) {
   const plainLyricsIdx = useMemo(() => {
     if (!plainLyricsLines.length) return -1;
     const safeDuration = Number.isFinite(duration) && duration > 0 ? duration : 180;
-    const progress = Math.min(0.999, Math.max(0, currentTime / safeDuration));
+    const progress = Math.min(0.999, Math.max(0, progressTime / safeDuration));
     return Math.min(plainLyricsLines.length - 1, Math.floor(progress * plainLyricsLines.length));
-  }, [currentTime, duration, plainLyricsLines.length]);
+  }, [progressTime, duration, plainLyricsLines.length]);
   const karaokeHasLrc = parsedLrc.length > 0;
   const karaokeIdx = karaokeHasLrc ? currentLrcIdx : plainLyricsIdx;
   const karaokeCurrent =
@@ -518,14 +525,33 @@ export function Visualizer({ mode }: { mode: VizMode }) {
 
     const onVis = () => {
       visibleRef.current = !document.hidden;
-      if (visibleRef.current && raf === 0) {
+      if (
+        visibleRef.current &&
+        !shouldPauseBackgroundVisualizersForPlectr() &&
+        raf === 0
+      ) {
         raf = requestAnimationFrame(step);
       }
     };
     document.addEventListener("visibilitychange", onVis);
 
+    const syncRhythmPause = () => {
+      if (shouldPauseBackgroundVisualizersForPlectr()) {
+        cancelAnimationFrame(raf);
+        raf = 0;
+        return;
+      }
+      if (visibleRef.current && raf === 0) {
+        raf = requestAnimationFrame(step);
+      }
+    };
+
+    const unsubRhythm = subscribeRhythmModeOpen(syncRhythmPause);
+    const layoutMq = window.matchMedia(MOBILE_LAYOUT_MQ);
+    layoutMq.addEventListener("change", syncRhythmPause);
+
     const step = () => {
-      if (!visibleRef.current) {
+      if (!visibleRef.current || shouldPauseBackgroundVisualizersForPlectr()) {
         raf = 0;
         return;
       }
@@ -1089,10 +1115,14 @@ export function Visualizer({ mode }: { mode: VizMode }) {
       }
     };
     visibleRef.current = !document.hidden;
-    if (visibleRef.current) raf = requestAnimationFrame(step);
+    if (visibleRef.current && !shouldPauseBackgroundVisualizersForPlectr()) {
+      raf = requestAnimationFrame(step);
+    }
     return () => {
       cancelAnimationFrame(raf);
       document.removeEventListener("visibilitychange", onVis);
+      unsubRhythm();
+      layoutMq.removeEventListener("change", syncRhythmPause);
       ro.disconnect();
     };
   }, [getAnalyser, isPlaying, mode, expanded]);

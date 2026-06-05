@@ -12,9 +12,15 @@ import {
   NOTE_SPEED,
 } from "../config/gameConfig";
 import { roundedRect } from "../lib/canvasDrawing";
+import { applyLanePadDom, clearLanePadDom } from "../lib/lanePadDom";
 import { clamp } from "../lib/math";
 import { resolveRunEndTime } from "../lib/runTiming";
 import { buildGameResult } from "../lib/runResult";
+import {
+  createSongClockState,
+  resetSongClock,
+  resolveSmoothSongTime,
+} from "../lib/smoothSongClock";
 import type { Chart, ChartNote, GameResult, Lane } from "../types";
 import { FeedbackBadge } from "./FeedbackBadge";
 
@@ -50,7 +56,7 @@ interface GameCanvasProps {
   };
 }
 
-interface RunState {
+type RunState = {
   notes: ChartNote[];
   activeHolds: ChartNote[];
   score: number;
@@ -71,21 +77,14 @@ interface RunState {
   audioStartRequested: boolean;
   pressedLanes: boolean[];
   laneFlash: Array<{ kind: "hit" | "miss"; until: number } | null>;
-  /** Orologio fluido: ancorato al player audio ma avanzato con performance.now(). */
-  clockAnchorSong: number;
-  clockAnchorPerf: number;
-  /** Ultimo frame per delta nel clock fluido (syncLive). */
-  smoothFramePerf: number;
   missScanIndex: number;
   finished: boolean;
   /** syncLive: note esaurite, in attesa della fine del brano nel player. */
   awaitingTrackEnd: boolean;
-}
+} & ReturnType<typeof createSongClockState>;
 
-type LaneFlashKind = "hit" | "miss" | null;
-
-/** Aggiorna i pad DOM solo al flash hit/miss (non ogni frame). */
-const laneFlashNotifier = { sync: null as (() => void) | null };
+/** Aggiorna pad/striscia DOM senza re-render React. */
+const lanePadUiNotifier = { sync: null as (() => void) | null };
 
 interface DrawContext {
   cssWidth: number;
@@ -107,13 +106,6 @@ const DEFAULT_LABELS = {
   timeAria: "Song progress",
 };
 
-/** Seek / drift grande: riallinea subito al player. */
-const CLOCK_HARD_SYNC_THRESHOLD_SECONDS = 0.45;
-/** Costante tempo per inseguire audio.currentTime senza scatti a intervalli fissi. */
-const CLOCK_SMOOTH_TAU_SECONDS = 0.14;
-/** Sotto questa soglia l’extrapolazione performance.now basta (niente micro-correzioni). */
-const CLOCK_MIN_CORRECTION_SECONDS = 0.0025;
-
 export function GameCanvas({
   chart,
   audioUrl,
@@ -128,6 +120,8 @@ export function GameCanvas({
 }: GameCanvasProps) {
   const labels = { ...DEFAULT_LABELS, ...labelsProp };
   const usePlayer = Boolean(playerSync);
+  const playerSyncRef = useRef(playerSync);
+  playerSyncRef.current = playerSync;
   const gameRef = useRef<HTMLElement | null>(null);
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
   const audioRef = useRef<HTMLAudioElement | null>(null);
@@ -145,35 +139,32 @@ export function GameCanvas({
   const lanePressReleaseTimersRef = useRef<
     Array<ReturnType<typeof setTimeout> | null>
   >([null, null, null, null]);
-  const [pressedLanes, setPressedLanes] = useState([false, false, false, false]);
-  const [holdingLanes, setHoldingLanes] = useState([false, false, false, false]);
-  const [laneFlash, setLaneFlash] = useState<LaneFlashKind[]>([null, null, null, null]);
+  const lanePadRefs = useRef<Array<HTMLButtonElement | null>>([
+    null,
+    null,
+    null,
+    null,
+  ]);
+  const laneStripRefs = useRef<Array<HTMLDivElement | null>>([
+    null,
+    null,
+    null,
+    null,
+  ]);
   const canvasLayoutRef = useRef({ width: 0, height: 0, dpr: 1, bufferW: 0, bufferH: 0 });
 
-  const syncLaneFlashUi = useCallback(() => {
+  const syncLanePadUi = useCallback(() => {
     const s = stateRef.current;
     if (!s) return;
-    const now = performance.now();
-    setLaneFlash(s.laneFlash.map((f) => (f && f.until > now ? f.kind : null)));
-    const nextHold = LANES.map((_, i) =>
-      s.activeHolds.some(
-        (n) =>
-          n.holding &&
-          !n.completed &&
-          (n.lane === i || noteEndLane(n) === i),
-      ),
-    );
-    setHoldingLanes((prev) =>
-      prev.every((v, i) => v === nextHold[i]) ? prev : nextHold,
-    );
+    applyLanePadDom(s, lanePadRefs.current, laneStripRefs.current);
   }, []);
 
   useLayoutEffect(() => {
-    laneFlashNotifier.sync = syncLaneFlashUi;
+    lanePadUiNotifier.sync = syncLanePadUi;
     return () => {
-      laneFlashNotifier.sync = null;
+      lanePadUiNotifier.sync = null;
     };
-  }, [syncLaneFlashUi]);
+  }, [syncLanePadUi]);
   const [waitingForStart, setWaitingForStart] = useState(true);
   const canvasLite = embedded || syncLive;
 
@@ -336,12 +327,13 @@ export function GameCanvas({
     const now = performance.now();
 
     let songTime = state.offset;
+    const bridge = playerSyncRef.current;
     const audio = usePlayer ? null : audioRef.current;
-    const clockReady = usePlayer ? Boolean(playerSync) : Boolean(audio);
-    if (syncLive && usePlayer && playerSync) {
+    const clockReady = usePlayer ? Boolean(bridge) : Boolean(audio);
+    if (syncLive && usePlayer && bridge) {
       state.started = true;
       state.paused = false;
-      songTime = resolveSmoothSongTime(state, now, playerSync);
+      songTime = resolveSmoothSongTime(state, now, bridge);
     } else if (!state.paused && state.playStartAt > 0 && clockReady) {
       if (!state.started && !state.audioStartRequested && now >= state.countdownUntil) {
         state.audioStartRequested = true;
@@ -373,7 +365,7 @@ export function GameCanvas({
           });
       } else if (state.started) {
         songTime = usePlayer
-          ? playerSync!.getCurrentTime()
+          ? bridge!.getCurrentTime()
           : audio!.currentTime;
       }
     }
@@ -415,7 +407,7 @@ export function GameCanvas({
 
     const runEnd = resolveRunEndTime(
       chart.duration,
-      usePlayer && playerSync ? playerSync.getAudio()?.duration : undefined
+      usePlayer && bridge ? bridge.getAudio()?.duration : undefined
     );
     if (!state.finished && songTime >= runEnd - 0.06) {
       finish(false);
@@ -462,7 +454,6 @@ export function GameCanvas({
     embedded,
     finish,
     maybeReportRunProgress,
-    playerSync,
     startAudioAt,
     syncLive,
     usePlayer,
@@ -508,7 +499,7 @@ export function GameCanvas({
       const state = stateRef.current;
       if (!state) return;
       const t = clamp(
-        offset ?? (playerSync?.getCurrentTime() ?? 0),
+        offset ?? (playerSyncRef.current?.getCurrentTime() ?? 0),
         0,
         Math.max(0, chart.duration - 0.02)
       );
@@ -529,7 +520,7 @@ export function GameCanvas({
       setWaitingForStart(false);
       rafRef.current = requestAnimationFrame(draw);
     },
-    [chart.duration, draw, embedded, finish, playerSync]
+    [chart.duration, draw, embedded, finish]
   );
 
   useLayoutEffect(() => {
@@ -559,8 +550,8 @@ export function GameCanvas({
       feedback: state.feedback,
       feedbackPulse: state.feedbackPulse,
     }));
-    syncLaneFlashUi();
-  }, [syncLaneFlashUi]);
+    syncLanePadUi();
+  }, [syncLanePadUi]);
 
   const releaseLanePress = useCallback((laneIndex: number) => {
     const timers = lanePressReleaseTimersRef.current;
@@ -579,18 +570,19 @@ export function GameCanvas({
         (note.lane === laneIndex || noteEndLane(note) === laneIndex),
     );
     state.pressedLanes[laneIndex] = false;
-    setPressedLanes([...state.pressedLanes]);
+    syncLanePadUi();
 
     if (canJudge() && hadActiveHold) {
-      if (syncLive && usePlayer && playerSync) {
+      const bridge = playerSyncRef.current;
+      if (syncLive && usePlayer && bridge) {
         state.songTime = resolveSmoothSongTime(
           state,
           performance.now(),
-          playerSync,
+          bridge,
         );
       } else {
         const nextSongTime = usePlayer
-          ? playerSync?.getCurrentTime()
+          ? bridge?.getCurrentTime()
           : audioRef.current?.currentTime;
         if (typeof nextSongTime === "number" && Number.isFinite(nextSongTime)) {
           state.songTime = nextSongTime;
@@ -605,7 +597,7 @@ export function GameCanvas({
         syncHudNow(state);
       }
     }
-  }, [canJudge, playerSync, syncHudNow, syncLive, usePlayer, vibrateMiss]);
+  }, [canJudge, syncHudNow, syncLanePadUi, syncLive, usePlayer, vibrateMiss]);
 
   const judgeLane = useCallback(
     (laneIndex: number, pressed: boolean) => {
@@ -616,7 +608,7 @@ export function GameCanvas({
         return;
       }
       state.pressedLanes[laneIndex] = true;
-      setPressedLanes([...state.pressedLanes]);
+      syncLanePadUi();
       if (!canJudge()) {
         if (embedded) {
           const timers = lanePressReleaseTimersRef.current;
@@ -629,14 +621,19 @@ export function GameCanvas({
         }
         return;
       }
-      if (syncLive && usePlayer && playerSync) {
-        state.songTime = resolveSmoothSongTime(state, performance.now(), playerSync);
+      const bridge = playerSyncRef.current;
+      if (syncLive && usePlayer && bridge) {
+        state.songTime = resolveSmoothSongTime(
+          state,
+          performance.now(),
+          bridge,
+        );
       }
       const startedHold = judgeHoldStart(state, laneIndex);
       if (!startedHold) {
         judgeTap(state, laneIndex);
       }
-      setPressedLanes([...state.pressedLanes]);
+      syncLanePadUi();
       if (embedded) {
         const timers = lanePressReleaseTimersRef.current;
         const pending = timers[laneIndex];
@@ -654,7 +651,7 @@ export function GameCanvas({
         }
       }
     },
-    [canJudge, embedded, playerSync, releaseLanePress, syncLive, usePlayer]
+    [canJudge, embedded, releaseLanePress, syncLanePadUi, syncLive, usePlayer]
   );
 
   useEffect(() => {
@@ -717,6 +714,7 @@ export function GameCanvas({
     } else {
       rafRef.current = requestAnimationFrame(draw);
     }
+    queueMicrotask(() => syncLanePadUi());
 
     return () => {
       cancelled = true;
@@ -727,9 +725,43 @@ export function GameCanvas({
         if (lane) clearTimeout(lane);
       }
       lanePressReleaseTimersRef.current = [null, null, null, null];
+      clearLanePadDom(lanePadRefs.current, laneStripRefs.current);
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps -- runId + songId
-  }, [runId, chart.songId, embedded, autoBegin, onRunUpdate, syncLive]);
+  }, [runId, chart.songId, embedded, autoBegin, onRunUpdate, syncLanePadUi, syncLive]);
+
+  useEffect(() => {
+    if (!syncLive || !usePlayer) return;
+    const bridge = playerSyncRef.current;
+    if (!bridge) return;
+    const audio = bridge.getAudio();
+    if (!audio) return;
+    const syncClockToPlayer = () => {
+      const state = stateRef.current;
+      if (!state || state.finished) return;
+      resetSongClock(state, bridge.getCurrentTime(), performance.now());
+    };
+    const onPlay = () => {
+      const state = stateRef.current;
+      if (!state || state.finished) return;
+      state.paused = false;
+      state.started = true;
+      if (state.playStartAt <= 0) state.playStartAt = performance.now();
+      syncClockToPlayer();
+    };
+    audio.addEventListener("play", onPlay);
+    audio.addEventListener("pause", syncClockToPlayer);
+    audio.addEventListener("seeking", syncClockToPlayer);
+    audio.addEventListener("seeked", syncClockToPlayer);
+    audio.addEventListener("ratechange", syncClockToPlayer);
+    return () => {
+      audio.removeEventListener("play", onPlay);
+      audio.removeEventListener("pause", syncClockToPlayer);
+      audio.removeEventListener("seeking", syncClockToPlayer);
+      audio.removeEventListener("seeked", syncClockToPlayer);
+      audio.removeEventListener("ratechange", syncClockToPlayer);
+    };
+  }, [syncLive, usePlayer, chart.songId]);
 
   useEffect(() => {
     const onVisibility = () => {
@@ -745,41 +777,6 @@ export function GameCanvas({
     document.addEventListener("visibilitychange", onVisibility);
     return () => document.removeEventListener("visibilitychange", onVisibility);
   }, [draw]);
-
-  useEffect(() => {
-    if (!syncLive || !playerSync) return;
-    const audio = playerSync.getAudio();
-    if (!audio) return;
-    const syncClockToPlayer = () => {
-      const state = stateRef.current;
-      if (!state || state.finished) return;
-      const t = playerSync.getCurrentTime();
-      resetSongClock(state, t, performance.now());
-    };
-    const onPlay = () => {
-      const state = stateRef.current;
-      if (!state || state.finished) return;
-      state.paused = false;
-      state.started = true;
-      if (state.playStartAt <= 0) state.playStartAt = performance.now();
-      syncClockToPlayer();
-    };
-    const onPause = () => {
-      syncClockToPlayer();
-    };
-    audio.addEventListener("play", onPlay);
-    audio.addEventListener("pause", onPause);
-    audio.addEventListener("seeking", syncClockToPlayer);
-    audio.addEventListener("seeked", syncClockToPlayer);
-    audio.addEventListener("ratechange", syncClockToPlayer);
-    return () => {
-      audio.removeEventListener("play", onPlay);
-      audio.removeEventListener("pause", onPause);
-      audio.removeEventListener("seeking", syncClockToPlayer);
-      audio.removeEventListener("seeked", syncClockToPlayer);
-      audio.removeEventListener("ratechange", syncClockToPlayer);
-    };
-  }, [playerSync, syncLive]);
 
   useEffect(() => {
     const keyMap = new Map([
@@ -811,7 +808,7 @@ export function GameCanvas({
       const state = stateRef.current;
       if (state) {
         state.pressedLanes[lane] = false;
-        setPressedLanes([...state.pressedLanes]);
+        syncLanePadUi();
       }
     };
     window.addEventListener("keydown", down);
@@ -820,7 +817,7 @@ export function GameCanvas({
       window.removeEventListener("keydown", down);
       window.removeEventListener("keyup", up);
     };
-  }, [judgeLane]);
+  }, [judgeLane, syncLanePadUi]);
 
   return (
     <main
@@ -875,12 +872,10 @@ export function GameCanvas({
         {LANES.map((lane, index) => (
           <div
             key={`${lane.name}-strip`}
-            className={[
-              "rhythm-lane-strip__cell",
-              laneFlash[index] ? `rhythm-lane-strip__cell--${laneFlash[index]}` : "",
-            ]
-              .filter(Boolean)
-              .join(" ")}
+            ref={(el) => {
+              laneStripRefs.current[index] = el;
+            }}
+            className="rhythm-lane-strip__cell"
             style={
               {
                 "--lane-color": lane.color,
@@ -896,14 +891,10 @@ export function GameCanvas({
         {LANES.map((lane, index) => (
           <button
             key={lane.name}
-            className={[
-              "lane-pad",
-              pressedLanes[index] || holdingLanes[index] ? "is-pressed" : "",
-              holdingLanes[index] ? "lane-pad--holding" : "",
-              laneFlash[index] ? `lane-pad--${laneFlash[index]}` : "",
-            ]
-              .filter(Boolean)
-              .join(" ")}
+            ref={(el) => {
+              lanePadRefs.current[index] = el;
+            }}
+            className="lane-pad"
             style={{ "--lane-color": lane.color, "--lane-shadow": lane.shadow } as React.CSSProperties}
             type="button"
             tabIndex={-1}
@@ -963,65 +954,11 @@ function initialRunState(notes: ChartNote[]): RunState {
     audioStartRequested: false,
     pressedLanes: [false, false, false, false],
     laneFlash: [null, null, null, null],
-    clockAnchorSong: 0,
-    clockAnchorPerf: 0,
-    smoothFramePerf: 0,
     missScanIndex: 0,
     finished: false,
     awaitingTrackEnd: false,
+    ...createSongClockState(),
   };
-}
-
-function resetSongClock(state: RunState, songTime: number, perfNow: number): void {
-  state.clockAnchorSong = songTime;
-  state.clockAnchorPerf = perfNow;
-  state.smoothFramePerf = perfNow;
-}
-
-function resolveSmoothSongTime(
-  state: RunState,
-  perfNow: number,
-  playerSync: PlayerSyncBridge
-): number {
-  const audio = playerSync.getAudio();
-  const audioT = playerSync.getCurrentTime();
-  const playing = Boolean(audio && !audio.paused && !audio.ended);
-  const playbackRate = audio?.playbackRate && Number.isFinite(audio.playbackRate)
-    ? audio.playbackRate
-    : 1;
-
-  if (!playing) {
-    resetSongClock(state, audioT, perfNow);
-    return audioT;
-  }
-
-  if (state.clockAnchorPerf <= 0) {
-    resetSongClock(state, audioT, perfNow);
-    return audioT;
-  }
-
-  const prevPerf = state.smoothFramePerf > 0 ? state.smoothFramePerf : perfNow;
-  const dtSec = Math.min(0.05, Math.max(0, (perfNow - prevPerf) / 1000));
-  state.smoothFramePerf = perfNow;
-
-  const t =
-    state.clockAnchorSong +
-    ((perfNow - state.clockAnchorPerf) / 1000) * playbackRate;
-  const err = audioT - t;
-
-  if (Math.abs(err) > CLOCK_HARD_SYNC_THRESHOLD_SECONDS) {
-    resetSongClock(state, audioT, perfNow);
-    return audioT;
-  }
-
-  if (Math.abs(err) <= CLOCK_MIN_CORRECTION_SECONDS) {
-    return t;
-  }
-
-  const blend = 1 - Math.exp(-dtSec / CLOCK_SMOOTH_TAU_SECONDS);
-  const corrected = t + err * blend;
-  resetSongClock(state, corrected, perfNow);
-  return corrected;
 }
 
 function isChartRunComplete(state: RunState, songTime: number): boolean {
@@ -1044,12 +981,12 @@ const laneFlashClearTimers: Array<ReturnType<typeof setTimeout> | null> = [
 function flashLane(state: RunState, lane: number, kind: "hit" | "miss"): void {
   const until = performance.now() + 420;
   state.laneFlash[lane] = { kind, until };
-  laneFlashNotifier.sync?.();
+  lanePadUiNotifier.sync?.();
   const pending = laneFlashClearTimers[lane];
   if (pending) clearTimeout(pending);
   laneFlashClearTimers[lane] = window.setTimeout(() => {
     laneFlashClearTimers[lane] = null;
-    laneFlashNotifier.sync?.();
+    lanePadUiNotifier.sync?.();
   }, Math.max(0, until - performance.now()) + 16);
 }
 
@@ -1117,7 +1054,7 @@ function isHoldLanePressed(state: RunState, note: ChartNote): boolean {
 function completeHeldNote(note: ChartNote): void {
   note.holding = false;
   note.completed = true;
-  laneFlashNotifier.sync?.();
+  lanePadUiNotifier.sync?.();
 }
 
 function lowerBoundNoteIndex(notes: ChartNote[], time: number): number {
@@ -1143,7 +1080,6 @@ function upperBoundNoteIndex(notes: ChartNote[], time: number): number {
 }
 
 function drawStage(ctx: CanvasRenderingContext2D, { cssWidth, cssHeight, hitY, laneWidth, songTime, state, lite }: DrawContext): void {
-  const feverActive = false;
   if (lite) {
     const now = performance.now();
     ctx.fillStyle = "#080a12";
@@ -1173,28 +1109,22 @@ function drawStage(ctx: CanvasRenderingContext2D, { cssWidth, cssHeight, hitY, l
     return;
   }
   const gradient = ctx.createLinearGradient(0, 0, 0, cssHeight);
-  gradient.addColorStop(0, feverActive ? "#08060f" : "#04050c");
-  gradient.addColorStop(0.38, feverActive ? "#171028" : "#0b1020");
-  gradient.addColorStop(0.72, feverActive ? "#1b1730" : "#11152a");
+  gradient.addColorStop(0, "#04050c");
+  gradient.addColorStop(0.38, "#0b1020");
+  gradient.addColorStop(0.72, "#11152a");
   gradient.addColorStop(1, "#030409");
   ctx.fillStyle = gradient;
   ctx.fillRect(0, 0, cssWidth, cssHeight);
 
   const centerGlow = ctx.createRadialGradient(cssWidth / 2, hitY, 20, cssWidth / 2, hitY, cssWidth * 0.72);
-  centerGlow.addColorStop(0, feverActive ? "rgba(255, 232, 102, 0.34)" : "rgba(70, 231, 255, 0.22)");
-  centerGlow.addColorStop(0.36, feverActive ? "rgba(244, 76, 255, 0.2)" : "rgba(244, 76, 255, 0.08)");
+  centerGlow.addColorStop(0, "rgba(70, 231, 255, 0.22)");
+  centerGlow.addColorStop(0.36, "rgba(244, 76, 255, 0.08)");
   centerGlow.addColorStop(1, "rgba(0, 0, 0, 0)");
   ctx.fillStyle = centerGlow;
   ctx.fillRect(0, 0, cssWidth, cssHeight);
 
-  if (feverActive) {
-    const pulse = 0.08 + Math.sin(songTime * 10) * 0.025;
-    ctx.fillStyle = `rgba(255, 232, 102, ${pulse})`;
-    ctx.fillRect(0, 0, cssWidth, cssHeight);
-  }
-
   ctx.fillStyle = "rgba(255,255,255,0.03)";
-  for (let y = 20 - ((songTime * (feverActive ? 126 : 72)) % 28); y < cssHeight; y += 28) ctx.fillRect(0, y, cssWidth, feverActive ? 2 : 1);
+  for (let y = 20 - ((songTime * 72) % 28); y < cssHeight; y += 28) ctx.fillRect(0, y, cssWidth, 1);
 
   ctx.fillStyle = "rgba(0,0,0,0.44)";
   ctx.beginPath();
@@ -1216,12 +1146,12 @@ function drawStage(ctx: CanvasRenderingContext2D, { cssWidth, cssHeight, hitY, l
     const x = lane * laneWidth;
     const laneGradient = ctx.createLinearGradient(x, 0, x + laneWidth, 0);
     laneGradient.addColorStop(0, lane % 2 === 0 ? "rgba(255,255,255,0.035)" : "rgba(255,255,255,0.055)");
-    laneGradient.addColorStop(0.5, state.pressedLanes[lane] ? "rgba(255,255,255,0.17)" : feverActive ? "rgba(255,255,255,0.12)" : "rgba(255,255,255,0.085)");
+    laneGradient.addColorStop(0.5, state.pressedLanes[lane] ? "rgba(255,255,255,0.17)" : "rgba(255,255,255,0.085)");
     laneGradient.addColorStop(1, lane % 2 === 0 ? "rgba(255,255,255,0.035)" : "rgba(255,255,255,0.055)");
     ctx.fillStyle = laneGradient;
     ctx.fillRect(x, 0, laneWidth, cssHeight);
     ctx.fillStyle = LANES[lane].color;
-    ctx.globalAlpha = state.pressedLanes[lane] ? 0.42 : feverActive ? 0.28 : 0.18;
+    ctx.globalAlpha = state.pressedLanes[lane] ? 0.42 : 0.18;
     ctx.fillRect(x + 1, 0, 2, cssHeight);
     ctx.fillRect(x + laneWidth - 3, 0, 2, cssHeight);
     ctx.globalAlpha = 1;
@@ -1234,7 +1164,6 @@ function drawReceptors(
   ctx: CanvasRenderingContext2D,
   { cssWidth, hitY, laneWidth, state, lite }: Pick<DrawContext, "cssWidth" | "hitY" | "laneWidth" | "state" | "lite"> & { songTime?: number }
 ): void {
-  const feverActive = false;
   const holdLanes = new Set<number>();
   for (const note of state.activeHolds) {
     if (!note.holding || note.completed) continue;
@@ -1270,13 +1199,13 @@ function drawReceptors(
   }
   const deckGradient = ctx.createLinearGradient(0, hitY - 38, 0, hitY + 56);
   deckGradient.addColorStop(0, "rgba(255,255,255,0.02)");
-  deckGradient.addColorStop(0.43, feverActive ? "rgba(255,232,102,0.34)" : "rgba(70,231,255,0.22)");
-  deckGradient.addColorStop(0.58, feverActive ? "rgba(255,255,255,0.3)" : "rgba(255,255,255,0.18)");
+  deckGradient.addColorStop(0.43, "rgba(70,231,255,0.22)");
+  deckGradient.addColorStop(0.58, "rgba(255,255,255,0.18)");
   deckGradient.addColorStop(1, "rgba(0,0,0,0.36)");
   ctx.fillStyle = deckGradient;
   ctx.fillRect(0, hitY - 40, cssWidth, 92);
-  ctx.shadowColor = feverActive ? "rgba(255,232,102,0.85)" : "rgba(255,255,255,0.75)";
-  ctx.shadowBlur = feverActive ? 34 : 24;
+  ctx.shadowColor = "rgba(255,255,255,0.75)";
+  ctx.shadowBlur = 24;
   for (let lane = 0; lane < LANES.length; lane += 1) {
     const x = lane * laneWidth + laneWidth * 0.12;
     const receptor = ctx.createLinearGradient(0, hitY - 18, 0, hitY + 18);
@@ -1307,7 +1236,6 @@ function drawNotes(ctx: CanvasRenderingContext2D, drawCtx: DrawContext): void {
   const noteHeight = lite ? 14 : 20;
 
   if (lite) {
-    const feverActive = false;
     for (let i = start; i < end; i += 1) {
       const note = state.notes[i];
       if (note.completed || note.missed) continue;
@@ -1330,7 +1258,6 @@ function drawNotes(ctx: CanvasRenderingContext2D, drawCtx: DrawContext): void {
       if (note.duration > 0) {
         drawHoldTrail(ctx, {
           centerX,
-          feverActive,
           hitY,
           lane,
           laneWidth,
@@ -1344,8 +1271,6 @@ function drawNotes(ctx: CanvasRenderingContext2D, drawCtx: DrawContext): void {
       if (!holdingActive && headOnScreen) {
         ctx.fillStyle = lane.color;
         drawNoteHead(ctx, {
-          feverActive,
-          isSwipeNote: false,
           lane,
           noteHeight,
           noteWidth,
@@ -1358,7 +1283,6 @@ function drawNotes(ctx: CanvasRenderingContext2D, drawCtx: DrawContext): void {
     return;
   }
 
-  const feverActive = false;
   for (let i = start; i < end; i += 1) {
     const note = state.notes[i];
     if (note.completed || note.missed) continue;
@@ -1382,7 +1306,6 @@ function drawNotes(ctx: CanvasRenderingContext2D, drawCtx: DrawContext): void {
     if (note.duration > 0) {
       drawHoldTrail(ctx, {
         centerX,
-        feverActive,
         hitY,
         lane,
         laneWidth,
@@ -1395,8 +1318,6 @@ function drawNotes(ctx: CanvasRenderingContext2D, drawCtx: DrawContext): void {
     }
     if (!holdingActive && headOnScreen) {
       drawNoteHead(ctx, {
-        feverActive,
-        isSwipeNote: false,
         lane,
         noteHeight,
         noteWidth,
@@ -1422,7 +1343,6 @@ function drawHoldTrail(
     headY,
   }: {
     centerX: number;
-    feverActive: boolean;
     hitY: number;
     lane: Lane;
     laneWidth: number;
@@ -1512,7 +1432,6 @@ function drawHoldTrail(
 function drawNoteHead(
   ctx: CanvasRenderingContext2D,
   {
-    feverActive,
     lane,
     noteHeight,
     noteWidth,
@@ -1520,8 +1439,6 @@ function drawNoteHead(
     y,
     lite,
   }: {
-    feverActive: boolean;
-    isSwipeNote: boolean;
     lane: Lane;
     noteHeight: number;
     noteWidth: number;
@@ -1538,12 +1455,12 @@ function drawNoteHead(
   }
   const noteGradient = ctx.createLinearGradient(noteX, y - noteHeight / 2, noteX, y + noteHeight / 2);
   noteGradient.addColorStop(0, "#ffffff");
-  noteGradient.addColorStop(0.16, feverActive ? "#ffe866" : lane.color);
+  noteGradient.addColorStop(0.16, lane.color);
   noteGradient.addColorStop(0.42, lane.color);
-  noteGradient.addColorStop(1, feverActive ? "rgba(244,76,255,0.34)" : "rgba(0,0,0,0.28)");
+  noteGradient.addColorStop(1, "rgba(0,0,0,0.28)");
   ctx.fillStyle = noteGradient;
-  ctx.shadowColor = feverActive ? "#ffe866" : lane.shadow;
-  ctx.shadowBlur = feverActive ? 34 : 22;
+  ctx.shadowColor = lane.shadow;
+  ctx.shadowBlur = 22;
   roundedRect(ctx, noteX, y - noteHeight / 2, noteWidth, noteHeight, 3);
   ctx.fill();
   ctx.shadowBlur = 0;

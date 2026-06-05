@@ -1,4 +1,4 @@
-import type { ChartNote, SwipeDirection } from "../game/types";
+import type { ChartNote } from "../game/types";
 
 const LANE_X = [0.18, 0.39, 0.61, 0.82] as const;
 const BEATS_PER_TRIAD = 5;
@@ -25,7 +25,7 @@ interface MotifInstance {
   born: number;
   until: number;
   lane: number;
-  direction: SwipeDirection | null;
+  direction: null;
   strength: number;
 }
 
@@ -117,32 +117,6 @@ function noteMotionPath(note: ChartNote, trackSeed: number) {
       y: clamp01(0.14 + (note.lane / 3) * 0.72),
       xEnd: clamp01(laneX(note.endLane)),
       yEnd: clamp01(0.14 + (note.endLane / 3) * 0.72),
-    };
-  }
-
-  if (note.type === "swipe") {
-    if (note.direction === "left") {
-      return {
-        x: clamp01(ax + reach * 0.35),
-        y: clamp01(ay - reach * 0.15),
-        xEnd: clamp01(ax - reach * 1.05),
-        yEnd: clamp01(ay + reach * 0.95),
-      };
-    }
-    if (note.direction === "right") {
-      return {
-        x: clamp01(ax - reach * 0.35),
-        y: clamp01(ay - reach * 0.1),
-        xEnd: clamp01(ax + reach * 1.05),
-        yEnd: clamp01(ay + reach * 0.9),
-      };
-    }
-    const upRight = note.lane >= 2;
-    return {
-      x: clamp01(ax + (upRight ? -0.2 : 0.2) * reach),
-      y: clamp01(ay + reach * 0.55),
-      xEnd: clamp01(ax + (upRight ? 0.85 : -0.85) * reach),
-      yEnd: clamp01(ay - reach * 1.05),
     };
   }
 
@@ -300,16 +274,8 @@ export function writeSceneStyleWeights(
   out[b] += f * 0.45;
 }
 
-/** Pesi per mescolare più stili senza tagli a ogni battuta. */
-export function sceneStyleWeights(beatIndex: number, seed: number): SceneStyleWeights {
-  const out = createSceneStyleWeights();
-  writeSceneStyleWeights(out, beatIndex, seed);
-  return out;
-}
-
 function noteStrength(note: ChartNote) {
   if (note.type === "hold") return 1;
-  if (note.type === "swipe") return 0.88;
   return 0.92;
 }
 
@@ -355,11 +321,9 @@ export function collectMotifs(
       xEnd: path.xEnd,
       yEnd: path.yEnd,
       born: note.time,
-      until:
-        note.time +
-        (note.type === "swipe" ? 0.62 : note.type === "hold" ? note.duration : 0.62),
+      until: note.time + (note.type === "hold" ? note.duration : 0.62),
       lane: note.lane,
-      direction: note.direction,
+      direction: null,
       strength,
     });
   }
@@ -416,17 +380,6 @@ function holdInfluence(m: MotifInstance, xn: number, yn: number, time: number) {
   const env = smoothstep(age / 0.12) * (1 - smoothstep((age - 0.88) / 0.12));
   const v = (along * 0.5 + sweep * 0.5) * Math.exp(-perp2 * 32) * env * m.strength;
   return { v, cw: [0, v, 0] as [number, number, number] };
-}
-
-function swipeInfluence(m: MotifInstance, xn: number, yn: number, time: number) {
-  const life = Math.max(0.001, m.until - m.born);
-  const age = clamp((time - m.born) / life);
-  const t = smootherstep(age);
-  const fade = lifeEnvelope(age);
-  const px = lerp(m.x, m.xEnd, t);
-  const py = lerp(m.y, m.yEnd, t);
-  const v = softBlob(xn - px, yn - py, 12, 15) * fade * m.strength;
-  return { v, cw: [0, 0, v] as [number, number, number] };
 }
 
 export function prepareConstellationTaps(motifs: MotifInstance[], time: number) {
@@ -490,9 +443,6 @@ export function samplePlectrField(
     } else if (m.kind === "hold") {
       const { v, cw } = holdInfluence(m, xn, yn, time);
       add(v, cw, pillarW * 1.15 + bloomW * 0.25);
-    } else if (m.kind === "swipe") {
-      const { v, cw } = swipeInfluence(m, xn, yn, time);
-      add(v, cw, bloomW * 0.5 + 0.65);
     }
   }
 
@@ -505,8 +455,8 @@ export function samplePlectrField(
 }
 
 /** Griglia interna per il campo Plectr (una sample per frame, non per cella visiva). */
-export const PLECTR_FIELD_COLS = 40;
-export const PLECTR_FIELD_ROWS = 30;
+export const PLECTR_FIELD_COLS = 28;
+export const PLECTR_FIELD_ROWS = 22;
 
 export type PlectrFieldGrid = {
   field: Float32Array;
