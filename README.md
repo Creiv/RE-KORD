@@ -2,7 +2,7 @@
   <img src="public/REKORDlogo.png" alt="RE-KORD" width="128" />
 </p>
 
-<h1 align="center">RE-KORD 3.4</h1>
+<h1 align="center">RE-KORD 3.5</h1>
 
 <p align="center">
   <strong>Your local music hub.</strong> One interface to listen, organize, enrich your library, and play with the music — on your disk, on your network, under your control.
@@ -10,7 +10,7 @@
 
 <p align="center"><em>Exact semver in <code>package.json</code> · UI in English and Italian</em></p>
 
-> **Stable release line:** **3.4** is the rebuilt, pack-tested branch (no server-side `sharp` for covers, DiscoWall in Studio → Listen). Earlier **3.3** tags on GitHub used a different stack and are not recommended for new installs.
+> **Stable release line:** **3.5** builds on the rebuilt 3.4 branch (no server-side `sharp` for covers, DiscoWall in Studio → Listen) and adds **Docker** deployment (`Dockerfile`, `docker-compose.yml`) plus **Plectr visualizer backdrops** (live audio visualizer behind the lanes; disable in Settings). Earlier **3.3** tags on GitHub used a different stack and are not recommended for new installs.
 
 ---
 
@@ -61,6 +61,7 @@ Built for **legal libraries** (rights-free music, your own productions, podcasts
 ### Plectr
 
 - **Plectr** (main nav) — rhythm game on charts generated from audio: **easy / normal / hard**, tap / hold, score, combo, accuracy, **per-track records** (per account), **live sync** with the player (follow the track already playing). Open from the nav or with **P** while a queue is active.
+- **Plectr backdrop** — the active **visualizer** (bars, DiscoWall, karaoke, …) renders behind the lanes in the game canvas; turn it off in **Settings → Theme and visualizer** if you prefer a clean lane view.
 
 ### Personalization and profiles
 
@@ -75,6 +76,7 @@ Built for **legal libraries** (rights-free music, your own productions, podcasts
 - **LAN** — listens on all interfaces by default: other devices open `http://<IP>:<port>` (firewall permitting).
 - **External access** — **Cloudflare** tunnel from Settings (quick trycloudflare URL or stable named tunnel).
 - **Electron** — full desktop app; **RE-KORD Server** (server + yt-dlp per target OS); **RE-KORD Client** (UI only, points at an existing server).
+- **Docker** — single-container server + built UI (`Dockerfile`, `docker-compose.yml`); persistent volumes for `/music` and `/config`.
 
 ---
 
@@ -102,6 +104,16 @@ npm run dev:app      # Electron + server in userData
 
 Library root: `MUSIC_ROOT` or Settings. Server config dir: `REKORD_USER_CONFIG_DIR` (legacy: `WPP_USER_CONFIG_DIR`).
 
+### Docker
+
+```bash
+npm run docker:build
+npm run docker:up
+# → http://localhost:3001 (or REKORD_PORT)
+```
+
+`docker-compose.yml` mounts named volumes for the library (`/music`) and server config (`/config`). Set `REKORD_YTDLP_COOKIES` to a cookies file path inside `/config` when needed.
+
 | Variable | Effect |
 | --- | --- |
 | `REKORD_LISTEN_HOST=127.0.0.1` | Loopback only (no LAN) |
@@ -109,17 +121,17 @@ Library root: `MUSIC_ROOT` or Settings. Server config dir: `REKORD_USER_CONFIG_D
 | `REKORD_YTDLP_COOKIES` | Netscape cookies file for downloads |
 | `REKORD_LISTEN_ON_LAN=1` | Expose Vite dev server on LAN |
 
-### Build and release 3.4
+### Build and release 3.5
 
 ```bash
 npm run build
 npm test && npm run lint
 
 # Recommended: versioned Server / Client packs (uses electron-builder.rekord.cjs)
-npm run pack:linux:server -- 3.4.0   # → release/RE-KORD-Server-3.4.0-linux-x64.AppImage
-npm run pack:win:server -- 3.4.0    # → RE-KORD Server .exe (build on Windows for NSIS)
-npm run pack:linux:client -- 3.4.0  # → RE-KORD-Client-… (UI only, remote server)
-npm run pack:win:client -- 3.4.0
+npm run pack:linux:server -- 3.5.0   # → release/RE-KORD-Server-3.5.0-linux-x64.AppImage
+npm run pack:win:server -- 3.5.0    # → RE-KORD Server .exe (build on Windows for NSIS)
+npm run pack:linux:client -- 3.5.0  # → RE-KORD-Client-… (UI only, remote server)
+npm run pack:win:client -- 3.5.0
 
 npm run pack              # generic electron-builder on current OS → release/
 ```
@@ -128,7 +140,7 @@ On Linux without `libfuse2`, start the AppImage with:
 
 ```bash
 ./scripts/run-linux-appimage.sh
-# or: APPIMAGE_EXTRACT_AND_RUN=1 ./release/RE-KORD-Server-3.4.0-linux-x64.AppImage
+# or: APPIMAGE_EXTRACT_AND_RUN=1 ./release/RE-KORD-Server-3.5.0-linux-x64.AppImage
 ```
 
 Server packs bundle **yt-dlp** and **cloudflared** for the target OS, run `vite build`, and ship `dist/`, `server/`, and `public/REKORDlogo.png`. Existing libraries keep data under **`.kord/`** (unchanged on disk).
@@ -142,8 +154,9 @@ Windows: prefer building **on Windows** for installers. Linux Electron: `ELECTRO
 | `src/` | React, player, routing, i18n, Plectr game |
 | `server/` | Express, library index, downloads, state in `MUSIC_ROOT/.kord/` |
 | `electron/` | Main process, RE-KORD Client connect flow |
+| `Dockerfile` · `docker-compose.yml` | Container image and compose stack (server + UI) |
 
-**Scripts:** `dev` · `dev:app` · `build` · `test` · `lint` · `pack` / `pack:linux|win|mac` · `pack:*:server|client`
+**Scripts:** `dev` · `dev:app` · `build` · `test` · `lint` · `pack` / `pack:linux|win|mac` · `pack:*:server|client` · `docker:build` · `docker:up` · `docker:down` · `docker:logs`
 
 **Main API:** `/api/library` · `/api/library-index` · `/api/dashboard` · `/api/user-state` · `/api/download` · `/api/artwork/*` · `/api/album-info/*` · `/api/track-info/*` · `/api/fs/*`
 
@@ -151,4 +164,4 @@ Windows: prefer building **on Windows** for installers. Linux Electron: `ELECTRO
 
 ---
 
-<p align="center"><em>RE-KORD 3.4 by Creiv — local music, serious tools, play on the beat.</em></p>
+<p align="center"><em>RE-KORD 3.5 by Creiv — local music, serious tools, play on the beat.</em></p>

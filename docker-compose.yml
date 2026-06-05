@@ -1,7 +1,7 @@
 services:
   rekord:
     build: .
-    image: rekord:3.4.0
+    image: rekord:3.5.0
     ports:
       - "${REKORD_PORT:-3001}:3001"
     environment:
