@@ -75,6 +75,7 @@ function defaultSettings(): UserSettings {
     libOverviewSort: "name",
     artistAlbumSort: "date",
     audioCrossfadeSec: 3,
+    plectrDisableVizBackdrop: false,
   };
 }
 
@@ -157,6 +158,7 @@ function normalizeSettings(raw: Partial<UserSettings>): UserSettings {
     libOverviewSort,
     artistAlbumSort,
     audioCrossfadeSec: normalizeAudioCrossfadeSec(raw),
+    plectrDisableVizBackdrop: raw.plectrDisableVizBackdrop === true,
   };
 }
 

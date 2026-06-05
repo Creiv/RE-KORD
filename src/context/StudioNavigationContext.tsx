@@ -13,20 +13,17 @@ export type StudioPaneId =
 
 const StudioNavigationContext = createContext<{
   openStudioListen: () => void;
-  openStudioMeta: () => void;
 } | null>(null);
 
 export function StudioNavigationProvider({
   openStudioListen,
-  openStudioMeta,
   children,
 }: {
   openStudioListen: () => void;
-  openStudioMeta: () => void;
   children: React.ReactNode;
 }) {
   return (
-    <StudioNavigationContext.Provider value={{ openStudioListen, openStudioMeta }}>
+    <StudioNavigationContext.Provider value={{ openStudioListen }}>
       {children}
     </StudioNavigationContext.Provider>
   );

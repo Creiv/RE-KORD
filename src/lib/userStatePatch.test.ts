@@ -30,6 +30,7 @@ function baseState(): UserStateV1 {
       libOverviewSort: "name",
       artistAlbumSort: "date",
       audioCrossfadeSec: 3,
+      plectrDisableVizBackdrop: false,
     },
     shuffleExcludedAlbumIds: [],
     shuffleExcludedTrackRelPaths: [],

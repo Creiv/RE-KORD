@@ -21,6 +21,9 @@ import {
   resetSongClock,
   resolveSmoothSongTime,
 } from "../lib/smoothSongClock";
+import type { KaraokeLines } from "../../lib/karaokeLyrics";
+import { PlectrVizBackdrop } from "../../lib/plectrVizBackdrop";
+import type { VizMode } from "../../types";
 import type { Chart, ChartNote, GameResult, Lane } from "../types";
 import { FeedbackBadge } from "./FeedbackBadge";
 
@@ -46,6 +49,14 @@ interface GameCanvasProps {
   autoBegin?: boolean;
   /** Segue il player RE-KORD: niente countdown, note in sync col tempo corrente. */
   syncLive?: boolean;
+  /** Sfondo visualizer nel canvas (solo embedded). */
+  vizBackdrop?: {
+    mode: VizMode;
+    getAnalyser: () => AnalyserNode | null;
+    isPlaying: boolean;
+    seedKey: string;
+    karaoke?: KaraokeLines;
+  };
   labels?: {
     score: string;
     combo: string;
@@ -95,6 +106,7 @@ interface DrawContext {
   songTime: number;
   state: RunState;
   lite: boolean;
+  vizUnderlay: boolean;
 }
 
 const DEFAULT_LABELS = {
@@ -116,6 +128,7 @@ export function GameCanvas({
   embedded = false,
   autoBegin = false,
   syncLive = false,
+  vizBackdrop,
   labels: labelsProp,
 }: GameCanvasProps) {
   const labels = { ...DEFAULT_LABELS, ...labelsProp };
@@ -152,6 +165,9 @@ export function GameCanvas({
     null,
   ]);
   const canvasLayoutRef = useRef({ width: 0, height: 0, dpr: 1, bufferW: 0, bufferH: 0 });
+  const vizBackdropEngineRef = useRef(new PlectrVizBackdrop());
+  const vizBackdropRef = useRef(vizBackdrop);
+  vizBackdropRef.current = vizBackdrop;
 
   const syncLanePadUi = useCallback(() => {
     const s = stateRef.current;
@@ -371,6 +387,20 @@ export function GameCanvas({
     }
     state.songTime = songTime;
 
+    const vizUnderlay = Boolean(embedded && vizBackdropRef.current);
+    if (vizUnderlay) {
+      const backdrop = vizBackdropRef.current!;
+      vizBackdropEngineRef.current.draw(ctx, cssWidth, cssHeight, dpr, {
+        mode: backdrop.mode,
+        analyser: backdrop.getAnalyser(),
+        isPlaying: backdrop.isPlaying,
+        chart,
+        seedKey: backdrop.seedKey,
+        liveTime: songTime,
+        karaoke: backdrop.karaoke,
+      });
+    }
+
     const drawCtx = {
       cssWidth,
       cssHeight,
@@ -380,6 +410,7 @@ export function GameCanvas({
       songTime,
       state,
       lite: canvasLite,
+      vizUnderlay,
     };
     drawStage(ctx, drawCtx);
     drawNotes(ctx, drawCtx);
@@ -1079,11 +1110,13 @@ function upperBoundNoteIndex(notes: ChartNote[], time: number): number {
   return lo;
 }
 
-function drawStage(ctx: CanvasRenderingContext2D, { cssWidth, cssHeight, hitY, laneWidth, songTime, state, lite }: DrawContext): void {
+function drawStage(ctx: CanvasRenderingContext2D, { cssWidth, cssHeight, hitY, laneWidth, songTime, state, lite, vizUnderlay }: DrawContext): void {
   if (lite) {
     const now = performance.now();
-    ctx.fillStyle = "#080a12";
-    ctx.fillRect(0, 0, cssWidth, cssHeight);
+    if (!vizUnderlay) {
+      ctx.fillStyle = "#080a12";
+      ctx.fillRect(0, 0, cssWidth, cssHeight);
+    }
     for (let lane = 0; lane < LANES.length; lane += 1) {
       const x = lane * laneWidth;
       const pressed = state.pressedLanes[lane];
@@ -1092,20 +1125,37 @@ function drawStage(ctx: CanvasRenderingContext2D, { cssWidth, cssHeight, hitY, l
         flash && flash.until > now ? flash.kind : null;
       if (pressed) {
         ctx.fillStyle = LANES[lane].color;
-        ctx.globalAlpha = 0.2;
+        ctx.globalAlpha = vizUnderlay ? 0.14 : 0.2;
         ctx.fillRect(x, 0, laneWidth, cssHeight);
         ctx.globalAlpha = 1;
       } else {
-        ctx.fillStyle = lane % 2 === 0 ? "rgba(255,255,255,0.02)" : "rgba(255,255,255,0.035)";
+        ctx.fillStyle =
+          lane % 2 === 0 ? "rgba(255,255,255,0.02)" : "rgba(255,255,255,0.035)";
+        if (vizUnderlay) ctx.globalAlpha = 0.88;
         ctx.fillRect(x, 0, laneWidth, cssHeight);
+        ctx.globalAlpha = 1;
       }
       ctx.fillStyle = LANES[lane].color;
-      ctx.globalAlpha = pressed ? 0.55 : flashKind === "hit" ? 0.38 : flashKind === "miss" ? 0.32 : 0.14;
+      ctx.globalAlpha = pressed
+        ? vizUnderlay ? 0.2 : 0.55
+        : flashKind === "hit"
+          ? vizUnderlay ? 0.16 : 0.38
+          : flashKind === "miss"
+            ? vizUnderlay ? 0.14 : 0.32
+            : vizUnderlay ? 0.05 : 0.14;
       ctx.fillRect(x + 1, 0, 2, cssHeight);
       ctx.fillRect(x + laneWidth - 3, 0, 2, cssHeight);
       ctx.globalAlpha = 1;
     }
-    drawReceptors(ctx, { cssWidth, hitY, laneWidth, state, lite: true, songTime });
+    drawReceptors(ctx, {
+      cssWidth,
+      hitY,
+      laneWidth,
+      state,
+      lite: true,
+      songTime,
+      vizUnderlay,
+    });
     return;
   }
   const gradient = ctx.createLinearGradient(0, 0, 0, cssHeight);
@@ -1162,7 +1212,17 @@ function drawStage(ctx: CanvasRenderingContext2D, { cssWidth, cssHeight, hitY, l
 
 function drawReceptors(
   ctx: CanvasRenderingContext2D,
-  { cssWidth, hitY, laneWidth, state, lite }: Pick<DrawContext, "cssWidth" | "hitY" | "laneWidth" | "state" | "lite"> & { songTime?: number }
+  {
+    cssWidth,
+    hitY,
+    laneWidth,
+    state,
+    lite,
+    vizUnderlay = false,
+  }: Pick<DrawContext, "cssWidth" | "hitY" | "laneWidth" | "state" | "lite"> & {
+    songTime?: number;
+    vizUnderlay?: boolean;
+  },
 ): void {
   const holdLanes = new Set<number>();
   for (const note of state.activeHolds) {
@@ -1172,7 +1232,7 @@ function drawReceptors(
   }
   if (lite) {
     const now = performance.now();
-    ctx.fillStyle = "rgba(255,255,255,0.06)";
+    ctx.fillStyle = vizUnderlay ? "rgba(255,255,255,0.035)" : "rgba(255,255,255,0.06)";
     ctx.fillRect(0, hitY - 2, cssWidth, 4);
     for (let lane = 0; lane < LANES.length; lane += 1) {
       const x = lane * laneWidth + laneWidth * 0.08;
@@ -1193,7 +1253,9 @@ function drawReceptors(
       } else {
         ctx.fillStyle = "rgba(255,255,255,0.22)";
       }
+      ctx.globalAlpha = vizUnderlay && !pressed && !holding && !flashKind ? 0.42 : 0.88;
       ctx.fillRect(x, hitY - 11, w, 22);
+      ctx.globalAlpha = 1;
     }
     return;
   }

@@ -143,6 +143,8 @@ export type UserSettings = {
   artistAlbumSort: ArtistAlbumSortMode;
   /** Crossfade sul passaggio tra tracce (0 = no; 3 o 5 s overlap). Anche scroll/copertina su Ascolta quando > 0. */
   audioCrossfadeSec: AudioCrossfadeSec;
+  /** In Plectr: niente visualizer nel canvas di gioco (solo corsie); Ascolta resta in pausa. */
+  plectrDisableVizBackdrop: boolean;
 };
 
 export type QueueState = {

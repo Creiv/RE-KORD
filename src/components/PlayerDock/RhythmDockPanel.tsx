@@ -9,7 +9,9 @@ import {
 import { usePlayer } from "../../context/PlayerContext";
 import { useRhythmMode } from "../../context/RhythmModeContext";
 import { useUserState } from "../../context/UserStateContext";
+import { usePlayerProgressTime } from "../../hooks/usePlayerProgressTime";
 import { useI18n } from "../../i18n/useI18n";
+import { resolveKaraokeLines } from "../../lib/karaokeLyrics";
 import { GameCanvas } from "../../game/components/GameCanvas";
 import { DIFFICULTIES } from "../../game/config/gameConfig";
 import { useRhythmChart } from "../../game/hooks/useRhythmChart";
@@ -73,6 +75,7 @@ export const RhythmDockPanel = memo(function RhythmDockPanel({
 }: RhythmDockPanelProps) {
   const { t } = useI18n();
   const p = usePlayer();
+  const progressTime = usePlayerProgressTime();
   const user = useUserState();
   const { setOpen } = useRhythmMode();
   const { phase, chartSet, chartRelPath, loadMessage, errorCode } =
@@ -238,6 +241,37 @@ export const RhythmDockPanel = memo(function RhythmDockPanel({
     }),
     [t]
   );
+
+  const vizBackdrop = useMemo(() => {
+    if (user.state.settings.plectrDisableVizBackdrop) return undefined;
+    const mode = user.state.settings.vizMode;
+    const karaoke =
+      mode === "karaoke"
+        ? resolveKaraokeLines(
+            String(track.meta?.lyrics || "").trim(),
+            progressTime,
+            p.duration,
+            track.title || track.relPath,
+          )
+        : undefined;
+    return {
+      mode,
+      getAnalyser: p.getAnalyser,
+      isPlaying: p.isPlaying,
+      seedKey: track.relPath,
+      karaoke,
+    };
+  }, [
+    p.duration,
+    p.getAnalyser,
+    p.isPlaying,
+    progressTime,
+    track.meta?.lyrics,
+    track.relPath,
+    track.title,
+    user.state.settings.plectrDisableVizBackdrop,
+    user.state.settings.vizMode,
+  ]);
 
   const loadLabel = useMemo(() => {
     if (loadMessage === "fetch") return t("rhythm.analyzingFetch");
@@ -433,6 +467,7 @@ export const RhythmDockPanel = memo(function RhythmDockPanel({
               embedded
               syncLive
               playerSync={playerSync}
+              vizBackdrop={vizBackdrop}
               onFinish={onFinish}
               onRunUpdate={onRunUpdate}
               labels={gameLabels}

@@ -9,7 +9,7 @@
   -webkit-touch-callout: none;
   overscroll-behavior: none;
   -webkit-tap-highlight-color: transparent;
-  background: #090b12;
+  background: transparent;
 }
 
 .rhythm-dock-panel .game-screen * {

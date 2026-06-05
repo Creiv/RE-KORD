@@ -573,6 +573,19 @@ function SettingsView() {
               <option value="karaoke">{t("settings.vizKaraoke")}</option>
             </select>
           </label>
+          <label className="settings-ui-inline-control settings-ui-inline-control--checkbox-row">
+            <input
+              type="checkbox"
+              className="settings-checkbox"
+              checked={user.state.settings.plectrDisableVizBackdrop}
+              onChange={(event) =>
+                user.updateSettings({
+                  plectrDisableVizBackdrop: event.target.checked,
+                })
+              }
+            />
+            <span>{t("settings.plectrDisableVizBackdrop")}</span>
+          </label>
           <label className="settings-ui-inline-control">
             <span>{t("settings.trackTransitions")}</span>
             <select

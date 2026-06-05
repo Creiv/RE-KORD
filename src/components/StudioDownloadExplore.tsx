@@ -3,14 +3,16 @@ import {
   fetchYoutubeExploreSearch,
   newStudioDownloadId,
   runYtdlpDownload,
+  streamYoutubeReleasesList,
   type StudioDownloadKind,
   type YoutubeExploreResult,
+  type YoutubeReleaseEntry,
 } from "../lib/api";
 import type { DownloadItemSummary } from "../lib/downloadLogSummary";
 import { ytdlpLogDetailForUser } from "../lib/ytdlpLogFilter";
 import type { useI18n } from "../i18n/useI18n";
 import type { LibraryReconcileOptions } from "../lib/libraryReconcile";
-import { UiAlbumIcon, UiMusicNote } from "./RekordUiIcons";
+import { UiAlbumIcon, UiMusicNote, UiPerson } from "./RekordUiIcons";
 import { StudioDownloadDisclaimer } from "./StudioDownloadDisclaimer";
 
 type TFn = ReturnType<typeof useI18n>["t"];
@@ -26,7 +28,6 @@ type Props = {
   hasValidDownloadDest: boolean;
   dlBusy: boolean;
   onBusyChange: (busy: boolean) => void;
-  onProgress: (p: { current: number; total: number } | null) => void;
   onTrackProgress: (p: { current: number; total: number } | null) => void;
   onLog: (updater: (prev: string) => string) => void;
   onReconcileLibrary: (opts?: LibraryReconcileOptions) => void | Promise<void>;
@@ -39,6 +40,19 @@ function exploreItemKey(item: YoutubeExploreResult) {
   return `${item.type}-${item.id}`;
 }
 
+function releaseEntryToAlbumItem(
+  entry: YoutubeReleaseEntry,
+  artist: YoutubeExploreResult,
+): YoutubeExploreResult {
+  return {
+    id: entry.id,
+    type: "album",
+    title: entry.title,
+    subtitle: artist.title,
+    url: entry.url,
+  };
+}
+
 export function StudioDownloadExplore({
   t,
   dlPath,
@@ -48,7 +62,6 @@ export function StudioDownloadExplore({
   hasValidDownloadDest,
   dlBusy,
   onBusyChange,
-  onProgress,
   onTrackProgress,
   onLog,
   onReconcileLibrary,
@@ -61,8 +74,21 @@ export function StudioDownloadExplore({
   const [searchErr, setSearchErr] = useState<string | null>(null);
   const [results, setResults] = useState<YoutubeExploreResult[]>([]);
   const [preparingKey, setPreparingKey] = useState<string | null>(null);
+  const [expandedArtistKey, setExpandedArtistKey] = useState<string | null>(
+    null,
+  );
+  const [artistAlbums, setArtistAlbums] = useState<
+    Record<string, YoutubeReleaseEntry[]>
+  >({});
+  const [artistLoadBusy, setArtistLoadBusy] = useState<string | null>(null);
+  const [artistLoadErr, setArtistLoadErr] = useState<Record<string, string>>(
+    {},
+  );
   const runLatch = useRef(false);
   const searchGen = useRef(0);
+  const artistLoadGen = useRef(0);
+  const artistAlbumsRef = useRef(artistAlbums);
+  artistAlbumsRef.current = artistAlbums;
 
   const runSearch = useCallback((raw: string) => {
     const q = raw.trim();
@@ -78,6 +104,9 @@ export function StudioDownloadExplore({
       .then((d) => {
         if (gen !== searchGen.current) return;
         setResults(d.results);
+        setExpandedArtistKey(null);
+        setArtistAlbums({});
+        setArtistLoadErr({});
       })
       .catch((e: unknown) => {
         if (gen !== searchGen.current) return;
@@ -100,15 +129,73 @@ export function StudioDownloadExplore({
     return () => window.clearTimeout(timer);
   }, [query, runSearch]);
 
-  const { albums, songs } = useMemo(() => {
+  const { artists, albums, songs } = useMemo(() => {
+    const ar: YoutubeExploreResult[] = [];
     const a: YoutubeExploreResult[] = [];
     const s: YoutubeExploreResult[] = [];
     for (const item of results) {
-      if (item.type === "album") a.push(item);
+      if (item.type === "artist") ar.push(item);
+      else if (item.type === "album") a.push(item);
       else if (item.type === "song") s.push(item);
     }
-    return { albums: a, songs: s };
+    return { artists: ar, albums: a, songs: s };
   }, [results]);
+
+  const loadArtistAlbums = useCallback(async (artist: YoutubeExploreResult) => {
+    const key = exploreItemKey(artist);
+    if (artistAlbumsRef.current[key]?.length) return;
+    const gen = ++artistLoadGen.current;
+      setArtistLoadBusy(key);
+      setArtistLoadErr((prev) => {
+        const next = { ...prev };
+        delete next[key];
+        return next;
+      });
+      const entries: YoutubeReleaseEntry[] = [];
+      try {
+        await streamYoutubeReleasesList(
+          artist.url,
+          {
+            onMeta: () => {},
+            onEntry: (entry) => {
+              if (gen !== artistLoadGen.current) return;
+              entries.push(entry);
+            },
+            onDone: () => {},
+          },
+          { enrichCounts: false },
+        );
+        if (gen !== artistLoadGen.current) return;
+        setArtistAlbums((prev) => ({ ...prev, [key]: entries }));
+        if (!entries.length) {
+          setArtistLoadErr((prev) => ({
+            ...prev,
+            [key]: t("tools.exploreArtistEmpty"),
+          }));
+        }
+      } catch (e) {
+        if (gen !== artistLoadGen.current) return;
+        setArtistLoadErr((prev) => ({
+          ...prev,
+          [key]: e instanceof Error ? e.message : String(e),
+        }));
+      } finally {
+        if (gen === artistLoadGen.current) setArtistLoadBusy(null);
+      }
+  }, [t]);
+
+  const toggleArtist = useCallback(
+    (artist: YoutubeExploreResult) => {
+      const key = exploreItemKey(artist);
+      if (expandedArtistKey === key) {
+        setExpandedArtistKey(null);
+        return;
+      }
+      setExpandedArtistKey(key);
+      void loadArtistAlbums(artist);
+    },
+    [expandedArtistKey, loadArtistAlbums],
+  );
 
   const downloadItem = useCallback(
     async (item: YoutubeExploreResult) => {
@@ -128,7 +215,6 @@ export function StudioDownloadExplore({
       if (runLatch.current || dlBusy) return;
       runLatch.current = true;
       onBusyChange(true);
-      onProgress(null);
       onTrackProgress(null);
       const outputDir = resolveOutputDir(dlPath, item);
       const dlId = newStudioDownloadId();
@@ -186,7 +272,6 @@ export function StudioDownloadExplore({
       resolveOutputDir,
       downloadKindForItem,
       onBusyChange,
-      onProgress,
       onTrackProgress,
       onLog,
       onReconcileLibrary,
@@ -197,7 +282,7 @@ export function StudioDownloadExplore({
     ],
   );
 
-  const renderRow = (item: YoutubeExploreResult) => {
+  const renderDownloadRow = (item: YoutubeExploreResult) => {
     const key = exploreItemKey(item);
     const isPreparing = preparingKey === key;
     const isAlbum = item.type === "album";
@@ -250,6 +335,63 @@ export function StudioDownloadExplore({
     );
   };
 
+  const renderArtistRow = (artist: YoutubeExploreResult) => {
+    const key = exploreItemKey(artist);
+    const expanded = expandedArtistKey === key;
+    const loading = artistLoadBusy === key;
+    const albumsForArtist = artistAlbums[key] ?? [];
+    const err = artistLoadErr[key];
+
+    return (
+      <li key={key} className="tools-dl-explore__artist">
+        <button
+          type="button"
+          className={`tools-dl-explore__item tools-dl-explore__item--artist${
+            expanded ? " is-expanded" : ""
+          }`}
+          disabled={dlBusy || preparingKey != null}
+          aria-expanded={expanded}
+          onClick={() => toggleArtist(artist)}
+        >
+          <span
+            className="tools-dl-explore__thumb tools-dl-explore__thumb--fallback tools-dl-explore__thumb--artist"
+            aria-hidden
+          >
+            <UiPerson className="tools-dl-explore__thumb-fallback-ic" />
+          </span>
+          <span className="tools-dl-explore__item-body">
+            <span className="tools-dl-explore__item-title">{artist.title}</span>
+            {artist.subtitle ? (
+              <span className="tools-dl-explore__item-meta">{artist.subtitle}</span>
+            ) : null}
+          </span>
+        </button>
+        {expanded ? (
+          <div className="tools-dl-explore__artist-panel">
+            {loading ? (
+              <p className="subtle sm" role="status">
+                {t("tools.exploreArtistLoading")}
+              </p>
+            ) : null}
+            {err ? <p className="subtle sm warnline">{err}</p> : null}
+            {albumsForArtist.length > 0 ? (
+              <>
+                <p className="tools-dl-explore__artist-panel-title subtle sm">
+                  {t("tools.exploreArtistAlbums")}
+                </p>
+                <ul className="tools-dl-explore__list tools-dl-explore__list--nested">
+                  {albumsForArtist.map((entry) =>
+                    renderDownloadRow(releaseEntryToAlbumItem(entry, artist)),
+                  )}
+                </ul>
+              </>
+            ) : null}
+          </div>
+        ) : null}
+      </li>
+    );
+  };
+
   return (
     <div className="tools-dl-explore">
       <p className="subtle sm tools-dl-explore__lead">{t("tools.exploreLead")}</p>
@@ -275,9 +417,22 @@ export function StudioDownloadExplore({
       {query.trim().length >= 2 &&
       !searchBusy &&
       !searchErr &&
+      artists.length === 0 &&
       albums.length === 0 &&
       songs.length === 0 ? (
         <p className="subtle sm">{t("tools.exploreEmpty")}</p>
+      ) : null}
+
+      {artists.length > 0 ? (
+        <section
+          className="tools-dl-explore__group"
+          aria-label={t("tools.exploreArtistsSection")}
+        >
+          <h5 className="tools-dl-explore__group-title">
+            {t("tools.exploreArtistsSection")}
+          </h5>
+          <ul className="tools-dl-explore__list">{artists.map(renderArtistRow)}</ul>
+        </section>
       ) : null}
 
       {albums.length > 0 ? (
@@ -285,7 +440,7 @@ export function StudioDownloadExplore({
           <h5 className="tools-dl-explore__group-title">
             {t("tools.exploreAlbumsSection")}
           </h5>
-          <ul className="tools-dl-explore__list">{albums.map(renderRow)}</ul>
+          <ul className="tools-dl-explore__list">{albums.map(renderDownloadRow)}</ul>
         </section>
       ) : null}
 
@@ -294,7 +449,7 @@ export function StudioDownloadExplore({
           <h5 className="tools-dl-explore__group-title">
             {t("tools.exploreSongsSection")}
           </h5>
-          <ul className="tools-dl-explore__list">{songs.map(renderRow)}</ul>
+          <ul className="tools-dl-explore__list">{songs.map(renderDownloadRow)}</ul>
         </section>
       ) : null}
 

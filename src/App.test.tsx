@@ -122,6 +122,7 @@ const userState: UserStateV1 = {
     libOverviewSort: "name",
     artistAlbumSort: "date",
     audioCrossfadeSec: 3,
+    plectrDisableVizBackdrop: false,
   },
   migratedLegacy: true,
 };
