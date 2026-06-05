@@ -494,11 +494,6 @@ export function AppShell() {
     setLibrarySearchBarOpen(false);
   }, []);
 
-  const goLibraryOverview = useCallback(() => {
-    closeLibrarySearch();
-    navigate({ section: "libreria", artist: null, album: null });
-  }, [navigate, closeLibrarySearch]);
-
   /** Home libreria senza artista/album; resetta anche filtri overview (tick). */
   const goLibraryRootForBrowse = useCallback(() => {
     if (route.section !== "libreria") {
@@ -764,7 +759,6 @@ export function AppShell() {
               onLibraryDelta={(delta, reconcile) =>
                 applyLibraryDelta(delta, reconcile ?? false)
               }
-              onGoLibraryOverview={goLibraryOverview}
               onOpenArtist={navToLibraryArtist}
               onOpenAlbum={navToLibraryAlbum}
             />
