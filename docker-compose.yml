@@ -1,0 +1,20 @@
+services:
+  rekord:
+    build: .
+    image: rekord:3.4.0
+    ports:
+      - "${REKORD_PORT:-3001}:3001"
+    environment:
+      PORT: 3001
+      REKORD_LISTEN_HOST: ${REKORD_LISTEN_HOST:-0.0.0.0}
+      MUSIC_ROOT: /music
+      REKORD_USER_CONFIG_DIR: /config
+      # REKORD_YTDLP_COOKIES: /config/youtube-cookies.txt
+    volumes:
+      - rekord_music:/music
+      - rekord_config:/config
+    restart: unless-stopped
+
+volumes:
+  rekord_music:
+  rekord_config:
