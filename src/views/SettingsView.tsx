@@ -110,7 +110,7 @@ function SettingsView() {
       return false;
     }
   });
-  const rekordAppVersion = String(import.meta.env.VITE_REKORD_VERSION ?? "3.4.0");
+  const rekordAppVersion = String(import.meta.env.VITE_REKORD_VERSION ?? "3.5.0");
 
   useEffect(() => {
     Promise.all([fetchConfig(), fetchAccounts()])
@@ -1106,6 +1106,9 @@ function SettingsView() {
         </p>
         <p className="settings-colophon__subtle subtle sm">
           {t("settings.colophonLine4")}
+        </p>
+        <p className="settings-colophon__subtle subtle sm">
+          {t("settings.colophonLine5")}
         </p>
       </footer>
     </div>
