@@ -101,7 +101,6 @@ interface LibraryViewProps {
     opts?: import("../../lib/libraryReconcile").LibraryReconcileOptions
   ) => Promise<void>;
   onLibraryDelta?: (delta: LibraryEntityDelta, reconcile?: boolean) => void;
-  onGoLibraryOverview: () => void;
 }
 
 export default function LibraryView({
@@ -118,7 +117,6 @@ export default function LibraryView({
   onSearchBarClose,
   onReconcileLibrary,
   onLibraryDelta,
-  onGoLibraryOverview,
 }: LibraryViewProps) {
   const user = useUserState();
   const librarySync = useLibrarySyncActivity();
@@ -272,6 +270,17 @@ export default function LibraryView({
     );
   }, [albumTracks, sortLocale]);
 
+  const albumTrackGenreCounts = useMemo(() => {
+    const counts = new Map<string, number>();
+    for (const tr of albumTracks) {
+      for (const g of parseTrackGenres(tr.meta?.genre)) {
+        const low = g.toLowerCase();
+        counts.set(low, (counts.get(low) ?? 0) + 1);
+      }
+    }
+    return counts;
+  }, [albumTracks]);
+
   const applyAlbumGenreToAllTracks = useCallback(
     async (genreToken: string, applyMode: "add" | "remove") => {
       const albumPath = album?.relPath;
@@ -319,16 +328,6 @@ export default function LibraryView({
     [album?.relPath, albumTracks, librarySync, onLibraryDelta, onReconcileLibrary]
   );
 
-  const browseGenreFromAlbum = useCallback(
-    (genreLabel: string) => {
-      endSearchForBrowse();
-      user.updateSettings({ libBrowse: "genres" });
-      setSelectedGenreKey(genreLabel.toLowerCase());
-      onGoLibraryOverview();
-    },
-    [endSearchForBrowse, onGoLibraryOverview, user]
-  );
-
   const albumGenreOptions = useMemo(() => {
     const albumKeys = new Set(albumTrackGenres.map((g) => g.toLowerCase()));
     const byLower = new Map<string, string>();
@@ -351,6 +350,31 @@ export default function LibraryView({
       setAlbumGenrePickerOpen(false);
     },
     [applyAlbumGenreToAllTracks]
+  );
+
+  const applyAlbumGenreToMissingTracks = useCallback(
+    async (genreToken: string) => {
+      const token = genreToken.trim();
+      if (!token) return;
+      const low = token.toLowerCase();
+      const missing = albumTracks.filter(
+        (tr) =>
+          !parseTrackGenres(tr.meta?.genre).some((g) => g.toLowerCase() === low)
+      ).length;
+      if (missing === 0) return;
+      if (
+        !(await appConfirm({
+          message: t("albumMeta.addGenreMissingConfirm", {
+            g: genreToken,
+            n: missing,
+          }),
+        }))
+      ) {
+        return;
+      }
+      await applyAlbumGenreToAllTracks(token, "add");
+    },
+    [albumTracks, appConfirm, applyAlbumGenreToAllTracks, t]
   );
 
   const removeAlbumGenre = useCallback(
@@ -901,7 +925,10 @@ export default function LibraryView({
               </p>
               <div className="album-track-genres-inline">
                 <div className="meta-edit-genre-chips" role="list">
-                  {albumTrackGenres.map((g) => (
+                  {albumTrackGenres.map((g) => {
+                    const genreCount =
+                      albumTrackGenreCounts.get(g.toLowerCase()) ?? 0;
+                    return (
                     <span
                       key={g}
                       className="meta-edit-genre-chip"
@@ -911,10 +938,16 @@ export default function LibraryView({
                         type="button"
                         className="meta-edit-genre-chip__text meta-edit-genre-chip__browse"
                         disabled={albumGenreBusy}
-                        onClick={() => browseGenreFromAlbum(g)}
-                        title={g}
+                        onClick={() => {
+                          void applyAlbumGenreToMissingTracks(g);
+                        }}
+                        title={t("albumMeta.applyGenreMissingTitle", {
+                          g,
+                          n: genreCount,
+                          total: albumTracks.length,
+                        })}
                       >
-                        {g}
+                        {g} ({genreCount})
                       </button>
                       <button
                         type="button"
@@ -930,7 +963,8 @@ export default function LibraryView({
                         <UiClose className="meta-edit-genre-chip__x-ic" />
                       </button>
                     </span>
-                  ))}
+                    );
+                  })}
                   {albumGenreOptions.length > 0 ? (
                     <div className="meta-edit-genre-add" ref={albumGenreAnchorRef}>
                       <button

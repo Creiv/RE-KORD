@@ -174,6 +174,10 @@ export const EN: Record<string, string> = {
   "albumMeta.deleteFailed": "No album was removed.",
   "albumMeta.removeGenreAllConfirm":
     "Remove genre \"{{g}}\" from all tracks in this album? This updates metadata for each track.",
+  "albumMeta.addGenreMissingConfirm":
+    "Add genre \"{{g}}\" to {{n}} track(s) in this album that don't have it yet? This updates metadata for each affected track.",
+  "albumMeta.applyGenreMissingTitle":
+    "{{g}} on {{n}} of {{total}} tracks — click to add to the rest",
   "trackRow.editMetaTitle": "Edit track metadata",
   "trackRow.editMetaAria": "Edit track metadata",
   "trackRow.removeQueueTitle": "Remove from queue",

@@ -176,6 +176,10 @@ export const IT: Record<string, string> = {
   "albumMeta.deleteFailed": "Nessun album è stato eliminato.",
   "albumMeta.removeGenreAllConfirm":
     "Rimuovere il genere \"{{g}}\" da tutti i brani dell'album? L'operazione aggiorna i metadati di ogni brano.",
+  "albumMeta.addGenreMissingConfirm":
+    "Associare il genere \"{{g}}\" a {{n}} brano/i dell'album che non lo hanno ancora? L'operazione aggiorna i metadati di ogni brano interessato.",
+  "albumMeta.applyGenreMissingTitle":
+    "{{g}} su {{n}} di {{total}} brani — clicca per aggiungerlo ai restanti",
   "trackRow.editMetaTitle": "Modifica metadati brano",
   "trackRow.editMetaAria": "Modifica metadati brano",
   "trackRow.removeQueueTitle": "Rimuovi dalla coda",
