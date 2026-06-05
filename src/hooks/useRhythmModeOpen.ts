@@ -1,5 +1,4 @@
 import { useSyncExternalStore } from "react";
-import { MOBILE_LAYOUT_MQ } from "../lib/breakpoints";
 
 let open = false;
 const listeners = new Set<() => void>();
@@ -31,11 +30,9 @@ export function isRhythmModeOpen(): boolean {
   return open;
 }
 
-/** Su mobile Plectr ferma i visualizer di sfondo; su desktop restano attivi. */
+/** Con Plectr aperto il visualizer di Ascolta resta fermo (sfondo nel canvas Plectr). */
 export function shouldPauseBackgroundVisualizersForPlectr(): boolean {
-  if (!open) return false;
-  if (typeof window === "undefined") return false;
-  return window.matchMedia(MOBILE_LAYOUT_MQ).matches;
+  return open;
 }
 
 /** Per componenti che devono aggiornarsi all'apertura/chiusura Plectr. */

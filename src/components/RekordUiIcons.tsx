@@ -156,17 +156,6 @@ export function UiRepeat({ className }: { className?: string }) {
   );
 }
 
-export function UiCast({ className }: { className?: string }) {
-  return (
-    <svg className={className} viewBox="0 0 24 24" aria-hidden="true">
-      <path
-        fill="currentColor"
-        d="M21 3H3c-1.1 0-2 .9-2 2v3h2V5h18v14h-7v2h7c1.1 0 2-.9 2-2V5c0-1.1-.9-2-2-2zM1 18v3h3c0-1.66-1.34-3-3-3zm0-4v2c2.76 0 5 2.24 5 5h2c0-3.87-3.13-7-7-7zm0-4v2c4.97 0 9 4.03 9 9h2c0-6.08-4.93-11-11-11z"
-      />
-    </svg>
-  );
-}
-
 export function UiInstallMobile({ className }: { className?: string }) {
   return (
     <svg className={className} viewBox="0 0 24 24" aria-hidden="true">
@@ -298,18 +287,8 @@ export function UiTrackChanges({ className }: { className?: string }) {
   );
 }
 
-/** @deprecated Usa UiTrackChanges */
-export function UiExplore({ className }: { className?: string }) {
-  return <UiTrackChanges className={className} />;
-}
-
 /** Plectr — usa il plettro */
 export function UiJoystick({ className }: { className?: string }) {
-  return <UiPlectrum className={className} />;
-}
-
-/** @deprecated Usa UiPlectrum */
-export function UiSportsEsports({ className }: { className?: string }) {
   return <UiPlectrum className={className} />;
 }
 
@@ -387,17 +366,6 @@ export function UiAutorenew({ className }: { className?: string }) {
       <path
         fill="currentColor"
         d="M12 6v3l4-4-4-4v3c-4.42 0-8 3.58-8 8 0 1.57.46 3.03 1.24 4.26L6.7 14.8c-.45-.83-.7-1.79-.7-2.8 0-3.31 2.69-6 6-6m6.76 1.74L17.3 9.2c.44.84.7 1.79.7 2.8 0 3.31-2.69 6-6 6v-3l-4 4 4 4v-3c4.42 0 8-3.58 8-8 0-1.57-.46-3.03-1.24-4.26"
-      />
-    </svg>
-  );
-}
-
-export function UiPlayCircle({ className }: { className?: string }) {
-  return (
-    <svg className={className} viewBox="0 0 24 24" aria-hidden="true">
-      <path
-        fill="currentColor"
-        d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2M9.5 16.5v-9l7 4.5z"
       />
     </svg>
   );

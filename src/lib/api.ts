@@ -1,13 +1,8 @@
 import type {
   DashboardPayload,
   LibraryCatalogResponse,
-  LibraryAlbumDetail,
-  LibraryArtistDetail,
   LibraryEntityDelta,
   LibraryIndex,
-  LibraryOverview,
-  LibraryResponse,
-  LibrarySearchResult,
   LibrarySelectionV1,
   UserSettings,
   UserStatePatch,
@@ -294,61 +289,9 @@ export function coverUrlForAlbumRelPath(relPath: string) {
   return apiUrl("/api/cover", { path: relPath })
 }
 
-export async function fetchLibrary(): Promise<LibraryResponse> {
-  await ensureSelectedAccountId()
-  const response = await apiFetch("/api/library")
-  return unwrap<LibraryResponse>(response)
-}
-
 export async function fetchLibraryIndex(): Promise<LibraryIndex> {
   await ensureSelectedAccountId()
   const response = await apiFetch("/api/library-index", { cache: "no-store" })
-  return unwrap<LibraryIndex>(response)
-}
-
-export async function fetchLibraryOverview(): Promise<LibraryOverview> {
-  await ensureSelectedAccountId()
-  const response = await apiFetch("/api/library-overview", { cache: "no-store" })
-  return unwrap<LibraryOverview>(response)
-}
-
-export async function fetchLibraryArtistDetail(artistId: string): Promise<LibraryArtistDetail> {
-  await ensureSelectedAccountId()
-  const response = await apiFetch(
-    `/api/library-artists/${encodeURIComponent(artistId)}`,
-    { cache: "no-store" },
-  )
-  return unwrap<LibraryArtistDetail>(response)
-}
-
-export async function fetchLibraryAlbumDetail(relPath: string): Promise<LibraryAlbumDetail> {
-  await ensureSelectedAccountId()
-  const response = await apiFetch("/api/library-albums", { cache: "no-store" }, { relPath })
-  return unwrap<LibraryAlbumDetail>(response)
-}
-
-export async function searchLibrary(q: string): Promise<LibrarySearchResult> {
-  await ensureSelectedAccountId()
-  const response = await apiFetch("/api/library-search", { cache: "no-store" }, { q })
-  return unwrap<LibrarySearchResult>(response)
-}
-
-export async function resolveLibraryTracks(relPaths: string[]): Promise<{ tracks: LibraryIndex["tracks"] }> {
-  await ensureSelectedAccountId()
-  const response = await apiFetch("/api/library/tracks/resolve", {
-    method: "POST",
-    cache: "no-store",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ relPaths }),
-  })
-  return unwrap<{ tracks: LibraryIndex["tracks"] }>(response)
-}
-
-export async function fetchLibraryIndexForAccount(accountId: string): Promise<LibraryIndex> {
-  const response = await apiFetch(
-    `/api/accounts/${encodeURIComponent(accountId)}/library-index`,
-    { cache: "no-store" },
-  )
   return unwrap<LibraryIndex>(response)
 }
 
@@ -434,15 +377,7 @@ export async function catalogWebPreviewAudioSrc(
   return apiUrl(playUrl)
 }
 
-/** URL diretto pipe yt-dlp (fallback legacy). */
-export function catalogWebPreviewStreamUrl(watchUrl: string): string {
-  return apiUrl("/api/catalog-web-preview/play", {
-    url: watchUrl.trim(),
-  })
-}
-
-/** @deprecated Usare {@link catalogWebPreviewAudioSrc}. */
-export async function fetchCatalogWebPreviewPlayUrl(
+async function fetchCatalogWebPreviewPlayUrl(
   watchUrl: string,
 ): Promise<{ playUrl: string }> {
   await ensureSelectedAccountId()
@@ -638,10 +573,6 @@ export async function saveAppConfig(
   return unwrap<AppConfig>(response)
 }
 
-export async function saveConfig(musicRoot: string): Promise<AppConfig> {
-  return saveAppConfig({ musicRoot })
-}
-
 export async function uploadYoutubeCookies(file: File): Promise<AppConfig> {
   const fd = new FormData()
   fd.append("file", file)
@@ -784,8 +715,6 @@ export async function fetchDownloadPreset(): Promise<PresetYtdlp> {
   return unwrap<PresetYtdlp>(response)
 }
 
-export type YoutubeExploreFilter = "all" | "songs" | "albums" | "artists"
-
 export type YoutubeExploreResult = {
   id: string
   type: "song" | "album" | "artist"
@@ -825,17 +754,6 @@ export type YoutubeReleasesListMeta = {
   uploader: string
   channelUrl: string
   total: number
-}
-
-export async function fetchYoutubeReleasesList(
-  url: string,
-): Promise<YoutubeReleasesList> {
-  const response = await apiFetch("/api/youtube-releases-list", {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ url }),
-  })
-  return unwrap<YoutubeReleasesList>(response)
 }
 
 /**
@@ -1229,17 +1147,6 @@ export async function searchMusicDirs(q: string): Promise<FsDirSearchResult[]> {
   const response = await apiFetch("/api/fs/search-dirs", {}, { q: query })
   const data = await unwrap<{ results: FsDirSearchResult[] }>(response)
   return data.results || []
-}
-
-export async function clearDownloadDestAudioFiles(
-  relPath: string,
-): Promise<{ deleted: string[] }> {
-  const response = await apiFetch("/api/fs/clear-dl-dest", {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ path: relPath }),
-  })
-  return unwrap<{ deleted: string[] }>(response)
 }
 
 export async function deleteAudioRelPaths(

@@ -537,6 +537,8 @@ export const IT: Record<string, string> = {
   "settings.vizExpand": "Espandi visualizzatore",
   "settings.vizCloseExpanded": "Chiudi visualizzatore espanso",
   "settings.vizKaraoke": "Karaoke",
+  "settings.plectrDisableVizBackdrop":
+    "Disattiva visualizzatore audio come sfondo in Plectr",
   "settings.vizPrism": "Prisma",
   "settings.restoreSession": "Ripristina la sessione di ascolto all’apertura",
   "settings.language": "Lingua",
@@ -860,30 +862,13 @@ export const IT: Record<string, string> = {
   "tools.catalogFilterEmpty": "Nessun artista corrisponde a questi filtri.",
   "tools.catalogAddLibrary": "Aggiungi alla libreria",
   "tools.catalogRemoveLibrary": "Rimuovi dalla libreria",
-  "tools.sharedEyebrow": "Multi-account",
-  "tools.sharedTitle": "Condividere musica con altri utenti",
-  "tools.sharedBrowseDesc":
-    "Scegli l’utente, carica l’elenco, artista e album: sotto «Album» la prima voce è «Tutti gli album» (stessa cartella artista) oppure un album singolo. Vengono creati symlink e metadati rekord sanificati; preferiti, blocchi shuffle, ascolti e coda restano nello stato del tuo account.",
-  "tools.sharedAllAlbums": "Tutti gli album",
-  "tools.sharedAlbumNeedArtist": "Scegli un artista…",
-  "tools.sharedLinkOkArtist":
-    "Collegati {{albums}} album, {{files}} file (saltati già collegati: {{skipped}}).{{extra}}",
-  "tools.sharedLinkArtistErrors": " Non collegate {{n}} cartelle.",
-  "tools.sharedPickPlaceholder": "Scegli…",
-  "tools.sharedPickSource": "Profilo sorgente",
-  "tools.sharedLoadCatalog": "Carica catalogo",
-  "tools.sharedLoadingCatalog": "Lettura…",
-  "tools.sharedPickArtist": "Artista",
-  "tools.sharedPickAlbum": "Album",
-  "tools.sharedAddToMine": "Aggiungi alla mia libreria",
-  "tools.sharedLinking": "Collegamento…",
-  "tools.sharedLinkOk":
-    "Collegati {{linked}} file (saltati {{skipped}}) in `{{path}}`",
-  "tools.sharedNoOtherAccount":
-    "Serve almeno un altro profilo oltre a quello attuale. Aggiungilo dalle impostazioni.",
-  "tools.sharedEnvLock":
+  "tools.pickerAlbumNeedArtist": "Scegli un artista…",
+  "tools.pickerPlaceholder": "Scegli…",
+  "tools.pickerArtist": "Artista",
+  "tools.pickerAlbum": "Album",
+  "tools.catalogEnvLock":
     "MUSIC_ROOT è fissata dall’ambiente: tutti i profili usano la stessa cartella; la sincronia tra account non applica (nessuna cartella distinta in cui creare i link).",
-  "tools.sharedErr": "Errore: {{e}}",
+  "tools.pickerErr": "Errore: {{e}}",
   "tools.downloadTitle": "Download",
   "tools.dlSaveFolder": "Cartella di salvataggio (sotto Musica)",
   "tools.dlSourceSection": "Sorgente",
@@ -894,6 +879,7 @@ export const IT: Record<string, string> = {
   "tools.exploreLead":
     "Cerca nel catalogo YouTube Music: prima gli album, poi i brani. Seleziona un risultato per scaricarlo (ti verrà chiesta conferma come in Classico).",
   "tools.exploreAlbumsSection": "Album",
+  "tools.exploreArtistsSection": "Artisti",
   "tools.exploreSongsSection": "Brani",
   "tools.exploreSearchPh": "Cerca su YouTube Music…",
   "tools.exploreSearchAria": "Cerca nel catalogo",

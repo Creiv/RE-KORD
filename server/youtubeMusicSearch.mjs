@@ -241,9 +241,10 @@ function compareExploreTitles(a, b) {
 }
 
 function orderExploreResults(results) {
+  const artists = results.filter((r) => r.type === "artist").sort(compareExploreTitles)
   const albums = results.filter((r) => r.type === "album").sort(compareExploreTitles)
   const songs = results.filter((r) => r.type === "song").sort(compareExploreTitles)
-  return [...albums, ...songs].slice(0, 48)
+  return [...artists, ...albums, ...songs].slice(0, 48)
 }
 
 /**

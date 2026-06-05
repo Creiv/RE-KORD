@@ -168,22 +168,10 @@ body,
     padding: 0;
   }
 
-  .tools .studio-head h3 {
-    font-size: 1rem;
-    line-height: 1.25;
-    word-break: break-word;
-  }
-
   .tools .studio-panel {
     min-width: 0;
     padding: 0.85rem;
     border-radius: var(--radius-lg);
-  }
-
-  .studio-head-desc,
-  .studio-panel-intro {
-    font-size: 0.86rem;
-    line-height: 1.45;
   }
 
   .tools .codebox,

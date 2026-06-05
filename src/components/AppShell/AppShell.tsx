@@ -638,11 +638,6 @@ export function AppShell() {
     startTransition(() => navigate({ section: "studio" }));
   }, [navigate]);
 
-  const openStudioMeta = useCallback(() => {
-    emitStudioPane("meta");
-    startTransition(() => navigate({ section: "studio" }));
-  }, [navigate]);
-
   const onGoToAscolta = openStudioListen;
 
   const goAppSection = useCallback(
@@ -854,10 +849,7 @@ export function AppShell() {
   }, [sideW]);
 
   return (
-    <StudioNavigationProvider
-      openStudioListen={openStudioListen}
-      openStudioMeta={openStudioMeta}
-    >
+    <StudioNavigationProvider openStudioListen={openStudioListen}>
     <TrackMetaEditProvider
       genreOptions={libraryGenreOptions}
       onSaved={refreshAfterTrackMetaSaved}
