@@ -506,6 +506,8 @@ export const EN: Record<string, string> = {
     "RE-KORD and its creators assume no responsibility for content users download or manage.",
   "settings.colophonLine4":
     "This tool is designed for legal/no-copyright music libraries (or any content used with proper rights). Each user is solely responsible for their own actions.",
+  "settings.colophonLine5":
+    "3.5 highlights: Docker deployment (server + UI) and audio visualizer backdrop in the Plectr canvas (toggle in Settings → Theme and visualizer).",
   "settings.uiEyebrow": "Interface preferences",
   "settings.uiHeading": "Theme and visualizer",
   "settings.theme": "Theme",
