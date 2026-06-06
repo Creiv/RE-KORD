@@ -4,14 +4,11 @@ import path from "path"
 import fs from "fs"
 import { fileURLToPath } from "url"
 import http from "http"
+import { applyChromiumGlassFlags, ELECTRON_WINDOW_BG } from "./chromium-glass.mjs"
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url))
 
-/** AppImage / Ubuntu freschi: sandbox Chromium può bloccare rete locale e lo spawn del server. */
-if (process.platform === "linux") {
-  app.commandLine.appendSwitch("no-sandbox")
-  app.commandLine.appendSwitch("disable-gpu-sandbox")
-}
+applyChromiumGlassFlags()
 
 const DEFAULT_SERVER_PORT = 3001
 const PORT_FILE = "rekord-electron-port.json"
@@ -396,10 +393,6 @@ async function startServer() {
 
 async function createWindow() {
   const p = String(appPort)
-  const winExtras =
-    process.platform === "win32"
-      ? { backgroundMaterial: "acrylic" }
-      : {}
   const useRendererSandbox = !(process.platform === "linux" && app.isPackaged)
   mainWindow = new BrowserWindow({
     width: 1280,
@@ -410,8 +403,7 @@ async function createWindow() {
     title: APP_NAME,
     icon: getAppIconPath(),
     autoHideMenuBar: false,
-    backgroundColor: "#060810",
-    ...winExtras,
+    backgroundColor: ELECTRON_WINDOW_BG,
     webPreferences: {
       contextIsolation: true,
       nodeIntegration: false,

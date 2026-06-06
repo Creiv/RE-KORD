@@ -781,6 +781,28 @@
   }
 }
 
+/* Impostazioni senza vetro: un solo scroll (content-shell), come in modalità vetro */
+html:not([data-glass-surfaces="1"]):has(.settings-page) {
+  overflow-y: hidden;
+}
+
+html:not([data-glass-surfaces="1"]) .settings-page > .surface-card,
+html:not([data-glass-surfaces="1"]) .settings-page__cluster > .surface-card {
+  position: relative;
+  isolation: isolate;
+}
+
+@media (min-width: 900px) {
+  html:not([data-glass-surfaces="1"]) .settings-page.view-page {
+    align-items: start;
+  }
+
+  html:not([data-glass-surfaces="1"]) .settings-page > .surface-card,
+  html:not([data-glass-surfaces="1"]) .settings-page__cluster > .surface-card {
+    align-self: start;
+  }
+}
+
 /* —— Playlist (due colonne nel main) —— */
 .playlists-page__main {
   display: grid;

@@ -123,6 +123,7 @@ const userState: UserStateV1 = {
     artistAlbumSort: "date",
     audioCrossfadeSec: 3,
     plectrDisableVizBackdrop: false,
+    glassSurfaces: false,
   },
   migratedLegacy: true,
 };

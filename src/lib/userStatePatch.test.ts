@@ -31,6 +31,7 @@ function baseState(): UserStateV1 {
       artistAlbumSort: "date",
       audioCrossfadeSec: 3,
       plectrDisableVizBackdrop: false,
+      glassSurfaces: false,
     },
     shuffleExcludedAlbumIds: [],
     shuffleExcludedTrackRelPaths: [],

@@ -2,9 +2,12 @@ import { app, BrowserWindow, dialog, Menu, ipcMain, shell } from "electron";
 import path from "path";
 import fs from "fs";
 import { fileURLToPath, pathToFileURL } from "url";
+import { applyChromiumGlassFlags, ELECTRON_WINDOW_BG } from "./chromium-glass.mjs";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const APP_NAME = "RE-KORD Client";
+
+applyChromiumGlassFlags();
 
 let mainWindow = null;
 let useConnectScreen = true;
@@ -148,6 +151,7 @@ function createWindow() {
     title: APP_NAME,
     icon: getAppIconPath(),
     autoHideMenuBar: false,
+    backgroundColor: ELECTRON_WINDOW_BG,
     webPreferences: {
       contextIsolation: true,
       nodeIntegration: false,

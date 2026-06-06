@@ -520,6 +520,8 @@ export const IT: Record<string, string> = {
   "settings.uiEyebrow": "Preferenze interfaccia",
   "settings.uiHeading": "Tema e visualizer",
   "settings.theme": "Tema",
+  "settings.glassSurfaces":
+    "Stile vetro (schede semitrasparenti con riflessi)",
   "settings.visualizer": "Visualizer",
   "settings.trackTransitions": "Transizioni tra i brani",
   "settings.trackTransitionsHint":

@@ -145,6 +145,8 @@ export type UserSettings = {
   audioCrossfadeSec: AudioCrossfadeSec;
   /** In Plectr: niente visualizer nel canvas di gioco (solo corsie); Ascolta resta in pausa. */
   plectrDisableVizBackdrop: boolean;
+  /** Schede e sezioni semitrasparenti con riflessi (sfondo pagina invariato). */
+  glassSurfaces: boolean;
 };
 
 export type QueueState = {

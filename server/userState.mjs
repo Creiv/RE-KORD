@@ -233,6 +233,7 @@ function sanitizeSettings(settings) {
     artistAlbumSort,
     audioCrossfadeSec: normalizeAudioCrossfadeSec(src),
     plectrDisableVizBackdrop: src.plectrDisableVizBackdrop === true,
+    glassSurfaces: src.glassSurfaces === true,
   }
 }
 

@@ -3677,6 +3677,20 @@ button.settings-network-qr:focus-visible {
   margin-top: 0.15rem;
 }
 
+.theme-picker.is-open {
+  z-index: var(--z-popover);
+}
+
+.settings-ui-section:has(.theme-picker.is-open) {
+  position: relative;
+  z-index: var(--z-popover);
+  overflow: visible;
+}
+
+.settings-ui-section__grid:has(.theme-picker.is-open) {
+  overflow: visible;
+}
+
 .theme-picker__btn {
   display: flex;
   align-items: center;
@@ -3730,7 +3744,7 @@ button.settings-network-qr:focus-visible {
 
 .theme-picker__menu {
   position: absolute;
-  z-index: 40;
+  z-index: var(--z-popover);
   left: 0;
   right: 0;
   top: calc(100% + 4px);

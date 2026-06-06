@@ -85,7 +85,7 @@ export function ThemePicker({
   ] as const;
 
   return (
-    <div className="theme-picker" ref={rootRef}>
+    <div className={`theme-picker${open ? " is-open" : ""}`} ref={rootRef}>
       <button
         type="button"
         className="theme-picker__btn"

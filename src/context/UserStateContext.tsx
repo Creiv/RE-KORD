@@ -21,6 +21,7 @@ import { normalizeShuffleAlbumKeysWithIndex } from "../lib/shuffleExclusionKeys"
 import { DEFAULT_CUSTOM_THEME } from "../lib/themeCatalog";
 import { touchListeningActivity } from "../lib/achievements";
 import { enrichedTracksNeedPlayerResync } from "../lib/libraryIndex";
+import { probeGlassBackdrop } from "../lib/glassBackdrop";
 import {
   applyUserStatePatchFields,
   compactUserStatePatch,
@@ -76,6 +77,7 @@ function defaultSettings(): UserSettings {
     artistAlbumSort: "date",
     audioCrossfadeSec: 3,
     plectrDisableVizBackdrop: false,
+    glassSurfaces: false,
   };
 }
 
@@ -159,6 +161,7 @@ function normalizeSettings(raw: Partial<UserSettings>): UserSettings {
     artistAlbumSort,
     audioCrossfadeSec: normalizeAudioCrossfadeSec(raw),
     plectrDisableVizBackdrop: raw.plectrDisableVizBackdrop === true,
+    glassSurfaces: raw.glassSurfaces === true,
   };
 }
 
@@ -867,6 +870,27 @@ export function UserStateProvider({ children }: { children: React.ReactNode }) {
       clearCustomThemeVars(root);
     }
   }, [state.settings.customTheme, state.settings.theme]);
+
+  useEffect(() => {
+    if (state.settings.glassSurfaces) {
+      document.documentElement.dataset.glassSurfaces = "1";
+    } else {
+      delete document.documentElement.dataset.glassSurfaces;
+      delete document.documentElement.dataset.glassBackdrop;
+    }
+  }, [state.settings.glassSurfaces]);
+
+  useEffect(() => {
+    if (!state.settings.glassSurfaces) return;
+    let cancelled = false;
+    void probeGlassBackdrop().then((works) => {
+      if (cancelled) return;
+      document.documentElement.dataset.glassBackdrop = works ? "1" : "0";
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [state.settings.glassSurfaces]);
 
   useEffect(() => {
     document.documentElement.lang =

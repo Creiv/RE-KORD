@@ -37,6 +37,7 @@ const userStatePayload = {
     artistAlbumSort: "date",
     audioCrossfadeSec: 3,
     plectrDisableVizBackdrop: false,
+    glassSurfaces: false,
   },
   shuffleExcludedAlbumIds: ["Artist::Album"],
   shuffleExcludedTrackRelPaths: [],
