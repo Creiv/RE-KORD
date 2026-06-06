@@ -21,13 +21,15 @@ coverage
 !.env.example
 
 *.local
-server/music-root.config.json
-server/music-root.config.json.bak
+
+# Server runtime — percorsi libreria, cookie, account, backup config (mai in git)
+server/music-root.config.json*
 server/youtube-cookies.txt
 server/accounts/
 
-# RE-KORD activity log (local paths, URLs — never commit)
-kord-activity.log.jsonl
+# Log attività (percorsi assoluti, cartelle, URL) — anche legacy in server/
+**/kord-activity.log.jsonl
+**/rekord-activity.log.jsonl
 
 # One-shot rebrand migration scripts (local only, not shipped)
 scripts/rename-to-rekord.mjs

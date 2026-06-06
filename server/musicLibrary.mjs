@@ -25,6 +25,9 @@ const COVER_FILES = [
   "artwork.jpg",
 ]
 
+/** Copertine album salvate in libreria (backup/restore metadati visivi). */
+export const ALBUM_COVER_BASENAMES = COVER_FILES
+
 function numOrNull(v) {
   return Number.isFinite(v) ? Number(v) : null
 }

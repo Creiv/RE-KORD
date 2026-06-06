@@ -3838,8 +3838,19 @@ button.settings-network-qr:focus-visible {
   gap: 0.65rem;
 }
 
+.custom-theme-dialog__title-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+}
+
 .custom-theme-dialog__head .eyebrow {
   margin: 0;
+}
+
+.custom-theme-dialog__close {
+  flex-shrink: 0;
 }
 
 .custom-theme-dialog__preview-strip {
@@ -4074,12 +4085,6 @@ button.settings-network-qr:focus-visible {
 
 .custom-theme-dialog__err {
   margin: 0;
-}
-
-.custom-theme-dialog__actions {
-  margin-top: 0.15rem;
-  padding-top: 0.35rem;
-  border-top: 1px solid color-mix(in srgb, var(--border) 78%, transparent);
 }
 
 @media (max-width: 420px) {

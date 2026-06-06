@@ -2,13 +2,11 @@ import {
   useCallback,
   useEffect,
   useRef,
-  useState,
   type ChangeEvent,
 } from "react";
 import { createPortal } from "react-dom";
 import { useI18n } from "../i18n/useI18n";
 import { customThemeBgImageUrl } from "../lib/api";
-import { DEFAULT_CUSTOM_THEME } from "../lib/themeCatalog";
 import type { CustomThemeBgMode, CustomThemeSettings } from "../types";
 
 function ThemePreviewStrip({
@@ -96,36 +94,26 @@ function ColorSwatchField({
 
 export function CustomThemeDialog({
   open,
-  initialTheme,
-  onSave,
+  theme,
+  onThemeChange,
   onClose,
   onUploadBg,
   onClearBg,
+  bgBusy = false,
+  bgError = null,
 }: {
   open: boolean;
-  initialTheme: CustomThemeSettings;
-  onSave: (theme: CustomThemeSettings) => void;
+  theme: CustomThemeSettings;
+  onThemeChange: (theme: CustomThemeSettings) => void;
   onClose: () => void;
   onUploadBg: (file: File) => Promise<{ bgImage: string; bgImageRev: number }>;
   onClearBg: () => Promise<void>;
+  bgBusy?: boolean;
+  bgError?: string | null;
 }) {
   const { t } = useI18n();
   const panelRef = useRef<HTMLDivElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
-  const [draft, setDraft] = useState<CustomThemeSettings>(initialTheme);
-  const [bgBusy, setBgBusy] = useState(false);
-  const [bgErr, setBgErr] = useState<string | null>(null);
-  const [draftBgRev, setDraftBgRev] = useState<number | null | undefined>(
-    initialTheme.bgImageRev,
-  );
-
-  useEffect(() => {
-    if (!open) return;
-    setDraft(initialTheme);
-    setDraftBgRev(initialTheme.bgImageRev);
-    setBgErr(null);
-    setBgBusy(false);
-  }, [open, initialTheme]);
 
   useEffect(() => {
     if (!open) return;
@@ -138,74 +126,51 @@ export function CustomThemeDialog({
 
   useEffect(() => {
     if (!open || !panelRef.current) return;
-    panelRef.current.querySelector<HTMLElement>('[data-custom-theme-primary="1"]')?.focus();
+    panelRef.current.focus();
   }, [open]);
 
-  const bgMode: CustomThemeBgMode = draft.bgMode === "image" ? "image" : "color";
+  const bgMode: CustomThemeBgMode = theme.bgMode === "image" ? "image" : "color";
   const bgPreviewUrl =
-    bgMode === "image" && draft.bgImage
-      ? customThemeBgImageUrl(draftBgRev ?? undefined)
+    bgMode === "image" && theme.bgImage
+      ? customThemeBgImageUrl(theme.bgImageRev ?? undefined)
       : null;
 
-  const setBgMode = useCallback((next: CustomThemeBgMode) => {
-    setDraft((prev) => ({ ...prev, bgMode: next }));
-  }, []);
-
-  const updateColor = useCallback(
-    (key: keyof CustomThemeSettings, next: string) => {
-      setDraft((prev) => ({ ...prev, [key]: next }));
+  const patchTheme = useCallback(
+    (patch: Partial<CustomThemeSettings>) => {
+      onThemeChange({ ...theme, ...patch });
     },
-    [],
+    [onThemeChange, theme],
   );
 
   const onFileChange = async (event: ChangeEvent<HTMLInputElement>) => {
     const f = event.target.files?.[0];
     if (event.target) event.target.value = "";
-    if (!f) return;
-    if (!/^image\/(jpeg|png|webp|gif)$/i.test(f.type)) {
-      setBgErr(t("themePicker.customBgTypeErr"));
-      return;
-    }
-    setBgErr(null);
-    setBgBusy(true);
+    if (!f || bgBusy) return;
+    if (!/^image\/(jpeg|png|webp|gif)$/i.test(f.type)) return;
     try {
       const { bgImage, bgImageRev } = await onUploadBg(f);
-      setDraft((prev) => ({
-        ...prev,
+      onThemeChange({
+        ...theme,
         bgMode: "image",
         bgImage,
         bgImageRev,
-      }));
-      setDraftBgRev(bgImageRev);
-    } catch (e: unknown) {
-      setBgErr(e instanceof Error ? e.message : String(e));
-    } finally {
-      setBgBusy(false);
+      });
+    } catch {
+      /* parent handles error state */
     }
   };
 
   const onClearImage = async () => {
-    setBgErr(null);
-    setBgBusy(true);
+    if (bgBusy) return;
     try {
       await onClearBg();
-      setDraft((prev) => {
-        const { bgImage: _b, bgImageRev: _r, ...rest } = prev;
-        void _b;
-        void _r;
-        return { ...rest, bgMode: "color" };
-      });
-      setDraftBgRev(null);
-    } catch (e: unknown) {
-      setBgErr(e instanceof Error ? e.message : String(e));
-    } finally {
-      setBgBusy(false);
+      const { bgImage: _b, bgImageRev: _r, ...rest } = theme;
+      void _b;
+      void _r;
+      onThemeChange({ ...rest, bgMode: "color" });
+    } catch {
+      /* parent handles error state */
     }
-  };
-
-  const handleSave = () => {
-    onSave(draft);
-    onClose();
   };
 
   if (!open) return null;
@@ -216,8 +181,8 @@ export function CustomThemeDialog({
     <ColorSwatchField
       key={key}
       label={t(`themePicker.custom.${key}`)}
-      value={draft[key]}
-      onChange={(next) => updateColor(key, next)}
+      value={theme[key]}
+      onChange={(next) => patchTheme({ [key]: next })}
     />
   ));
 
@@ -235,13 +200,23 @@ export function CustomThemeDialog({
         role="dialog"
         aria-modal="true"
         aria-labelledby="custom-theme-dialog-title"
+        tabIndex={-1}
         onMouseDown={(e) => e.stopPropagation()}
       >
         <div className="custom-theme-dialog__head">
-          <p className="eyebrow" id="custom-theme-dialog-title">
-            {t("themePicker.customDialogTitle")}
-          </p>
-          <ThemePreviewStrip theme={draft} bgImageUrl={bgPreviewUrl} t={t} />
+          <div className="custom-theme-dialog__title-row">
+            <p className="eyebrow" id="custom-theme-dialog-title">
+              {t("themePicker.customDialogTitle")}
+            </p>
+            <button
+              type="button"
+              className="text-btn custom-theme-dialog__close"
+              onClick={onClose}
+            >
+              {t("trackMeta.editClose")}
+            </button>
+          </div>
+          <ThemePreviewStrip theme={theme} bgImageUrl={bgPreviewUrl} t={t} />
         </div>
 
         <div className="custom-theme-dialog__section">
@@ -259,11 +234,11 @@ export function CustomThemeDialog({
                 bgMode === "color" ? " is-active" : ""
               }`}
               aria-pressed={bgMode === "color"}
-              onClick={() => setBgMode("color")}
+              onClick={() => patchTheme({ bgMode: "color" })}
             >
               <span
                 className="custom-theme-dialog__bg-mode-swatch"
-                style={{ background: draft.bg }}
+                style={{ background: theme.bg }}
                 aria-hidden
               />
               <span>{t("themePicker.customBgColor")}</span>
@@ -274,7 +249,7 @@ export function CustomThemeDialog({
                 bgMode === "image" ? " is-active" : ""
               }`}
               aria-pressed={bgMode === "image"}
-              onClick={() => setBgMode("image")}
+              onClick={() => patchTheme({ bgMode: "image" })}
             >
               <span
                 className={`custom-theme-dialog__bg-mode-swatch custom-theme-dialog__bg-mode-swatch--image${
@@ -296,8 +271,8 @@ export function CustomThemeDialog({
           <div className="custom-theme-dialog__section">
             <ColorSwatchField
               label={t("themePicker.custom.bg")}
-              value={draft.bg}
-              onChange={(next) => updateColor("bg", next)}
+              value={theme.bg}
+              onChange={(next) => patchTheme({ bg: next })}
             />
           </div>
         ) : (
@@ -323,12 +298,12 @@ export function CustomThemeDialog({
                 <span className="custom-theme-dialog__image-cta">
                   {bgBusy
                     ? t("settings.saving")
-                    : draft.bgImage
+                    : theme.bgImage
                       ? t("themePicker.customBgChange")
                       : t("themePicker.customBgChoose")}
                 </span>
               </button>
-              {draft.bgImage ? (
+              {theme.bgImage ? (
                 <button
                   type="button"
                   className="ghost-btn ghost-btn--sm custom-theme-dialog__image-clear"
@@ -349,8 +324,8 @@ export function CustomThemeDialog({
           </div>
         )}
 
-        {bgErr ? (
-          <p className="subtle sm warnline custom-theme-dialog__err">{bgErr}</p>
+        {bgError ? (
+          <p className="subtle sm warnline custom-theme-dialog__err">{bgError}</p>
         ) : null}
 
         <div className="custom-theme-dialog__section">
@@ -358,21 +333,6 @@ export function CustomThemeDialog({
             {t("themePicker.customColorsHeading")}
           </span>
           <div className="custom-theme-dialog__swatch-grid">{colorFields}</div>
-        </div>
-
-        <div className="meta-edit-actions custom-theme-dialog__actions">
-          <button type="button" className="ghost-btn" onClick={onClose}>
-            {t("trackMeta.editCancel")}
-          </button>
-          <button
-            type="button"
-            className="primary-btn"
-            data-custom-theme-primary="1"
-            disabled={bgBusy}
-            onClick={handleSave}
-          >
-            {t("trackMeta.editSave")}
-          </button>
         </div>
       </div>
     </div>,

@@ -482,7 +482,7 @@ export const EN: Record<string, string> = {
   "settings.activityLogHeading": "Server activity log",
   "settings.backupEyebrow": "Backup",
   "settings.backupHeading":
-    "RE-KORD config and library metadata (no audio, all users)",
+    "RE-KORD config, user data, and library metadata (no audio, all users)",
   "settings.backupCta": "BACKUP",
   "settings.backupRunning": "Preparing…",
   "settings.backupSuccess": "Download started: {{name}}",

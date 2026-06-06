@@ -63,6 +63,8 @@ export function ThemePicker({
   const { t } = useI18n();
   const [open, setOpen] = useState(false);
   const [customDialogOpen, setCustomDialogOpen] = useState(false);
+  const [customThemeBgBusy, setCustomThemeBgBusy] = useState(false);
+  const [customThemeBgErr, setCustomThemeBgErr] = useState<string | null>(null);
   const rootRef = useRef<HTMLDivElement>(null);
   const curBase = THEME_CATALOG.find((th) => th.id === value) ?? THEME_CATALOG[0];
   const cur =
@@ -98,13 +100,51 @@ export function ThemePicker({
     [onChange],
   );
 
-  const saveCustomTheme = useCallback(
+  const applyCustomTheme = useCallback(
     (next: CustomThemeSettings) => {
       onCustomThemeChange?.(next);
       if (value !== "custom") onChange("custom");
     },
     [onChange, onCustomThemeChange, value],
   );
+
+  const handleUploadBg = useCallback(
+    async (file: File) => {
+      if (!onCustomThemeBgUpload) {
+        throw new Error("upload unavailable");
+      }
+      if (!/^image\/(jpeg|png|webp|gif)$/i.test(file.type)) {
+        const err = t("themePicker.customBgTypeErr");
+        setCustomThemeBgErr(err);
+        throw new Error(err);
+      }
+      setCustomThemeBgErr(null);
+      setCustomThemeBgBusy(true);
+      try {
+        return await onCustomThemeBgUpload(file);
+      } catch (e: unknown) {
+        setCustomThemeBgErr(e instanceof Error ? e.message : String(e));
+        throw e;
+      } finally {
+        setCustomThemeBgBusy(false);
+      }
+    },
+    [onCustomThemeBgUpload, t],
+  );
+
+  const handleClearBg = useCallback(async () => {
+    if (!onCustomThemeBgClear) return;
+    setCustomThemeBgErr(null);
+    setCustomThemeBgBusy(true);
+    try {
+      await onCustomThemeBgClear();
+    } catch (e: unknown) {
+      setCustomThemeBgErr(e instanceof Error ? e.message : String(e));
+      throw e;
+    } finally {
+      setCustomThemeBgBusy(false);
+    }
+  }, [onCustomThemeBgClear]);
 
   const groups = [
     { id: "dual", label: t("themePicker.groupDual") },
@@ -195,11 +235,13 @@ export function ThemePicker({
       {onCustomThemeBgUpload && onCustomThemeBgClear ? (
         <CustomThemeDialog
           open={customDialogOpen}
-          initialTheme={customTheme}
-          onSave={saveCustomTheme}
+          theme={customTheme}
+          onThemeChange={applyCustomTheme}
           onClose={() => setCustomDialogOpen(false)}
-          onUploadBg={onCustomThemeBgUpload}
-          onClearBg={onCustomThemeBgClear}
+          onUploadBg={handleUploadBg}
+          onClearBg={handleClearBg}
+          bgBusy={customThemeBgBusy}
+          bgError={customThemeBgErr}
         />
       ) : null}
     </div>

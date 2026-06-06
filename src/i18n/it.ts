@@ -490,7 +490,7 @@ export const IT: Record<string, string> = {
   "settings.activityLogHeading": "Registro attività sul server",
   "settings.backupEyebrow": "Backup",
   "settings.backupHeading":
-    "Impostazioni RE-KORD e metadati in libreria (senza audio, tutti gli utenti)",
+    "Config RE-KORD, dati utente e metadati in libreria (senza audio, tutti gli utenti)",
   "settings.backupCta": "BACKUP",
   "settings.backupRunning": "Preparazione in corso…",
   "settings.backupSuccess": "Download avviato: {{name}}",

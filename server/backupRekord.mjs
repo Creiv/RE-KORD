@@ -18,6 +18,7 @@ import {
 } from "./musicRootConfig.mjs"
 import { getActivityLogFilePath } from "./activityLog.mjs"
 import { getUserStateFilePathForAccount, getUserStateFilePathInConfigDir } from "./userState.mjs"
+import { ALBUM_COVER_BASENAMES } from "./musicLibrary.mjs"
 
 const METADATA_BASENAMES = new Set([
   "kord-albuminfo.json",
@@ -26,6 +27,69 @@ const METADATA_BASENAMES = new Set([
   "wpp-trackinfo.json",
   "linked-source.json",
 ])
+
+const LIBRARY_USER_FILE_BASENAMES = new Set([
+  ...METADATA_BASENAMES,
+  ...ALBUM_COVER_BASENAMES,
+])
+
+const CONFIG_EXTRA_FILES = ["youtube-cookies.txt"]
+
+/** File temporanei di scrittura atomica — esclusi dal backup .kord */
+export function isKordTempBackupEntry(name) {
+  const base = String(name || "")
+  if (!base || base === "." || base === "..") return true
+  return /^\..*\.tmp$/i.test(base)
+}
+
+export async function collectKordDataDirBackup(libraryRoot) {
+  const root = path.join(path.resolve(libraryRoot), ".kord")
+  if (!existsSync(root)) return []
+  const out = []
+  async function walk(dir) {
+    let entries
+    try {
+      entries = await fs.readdir(dir, { withFileTypes: true })
+    } catch {
+      return
+    }
+    for (const e of entries) {
+      const full = path.join(dir, e.name)
+      if (e.isDirectory()) {
+        if (isKordTempBackupEntry(e.name)) continue
+        await walk(full)
+        continue
+      }
+      if (!e.isFile()) continue
+      if (isKordTempBackupEntry(e.name)) continue
+      const rel = path.relative(root, full)
+      const relPosix = rel.split(path.sep).join("/")
+      out.push({
+        abs: full,
+        zipName: `kord-db/${relPosix}`,
+      })
+    }
+  }
+  await walk(root)
+  return out
+}
+
+/** @deprecated alias — include now all .kord user data, not only JSON */
+export async function collectKordDbJsonBackup(libraryRoot) {
+  return collectKordDataDirBackup(libraryRoot)
+}
+
+export async function collectServerConfigExtrasBackup() {
+  const entries = []
+  const cfgDir = path.dirname(CONFIG_FILE)
+  for (const name of CONFIG_EXTRA_FILES) {
+    const abs = path.join(cfgDir, name)
+    if (existsSync(abs)) {
+      entries.push({ abs, zipName: `config/${name}` })
+    }
+  }
+  return entries
+}
 
 export async function collectLibraryMetadataForBackup(musicRoot, zipFolderTag) {
   const root = path.resolve(musicRoot)
@@ -51,47 +115,16 @@ export async function collectLibraryMetadataForBackup(musicRoot, zipFolderTag) {
         continue
       }
       if (!e.isFile()) continue
-      if (METADATA_BASENAMES.has(e.name)) {
-        const rel = path.relative(root, full)
-        const relPosix = rel.split(path.sep).join("/")
-        out.push({
-          abs: full,
-          zipName: `libraries/${zipFolderTag}/${relPosix}`,
-        })
-      }
-    }
-  }
-  await go(root)
-  return out
-}
-
-async function collectKordDbJsonBackup(libraryRoot) {
-  const root = path.join(path.resolve(libraryRoot), ".kord")
-  if (!existsSync(root)) return []
-  const out = []
-  async function walk(dir) {
-    let entries
-    try {
-      entries = await fs.readdir(dir, { withFileTypes: true })
-    } catch {
-      return
-    }
-    for (const e of entries) {
-      const full = path.join(dir, e.name)
-      if (e.isDirectory()) {
-        await walk(full)
-        continue
-      }
-      if (!e.isFile() || !e.name.endsWith(".json")) continue
+      if (!LIBRARY_USER_FILE_BASENAMES.has(e.name)) continue
       const rel = path.relative(root, full)
       const relPosix = rel.split(path.sep).join("/")
       out.push({
         abs: full,
-        zipName: `kord-db/${relPosix}`,
+        zipName: `libraries/${zipFolderTag}/${relPosix}`,
       })
     }
   }
-  await walk(root)
+  await go(root)
   return out
 }
 
@@ -104,8 +137,9 @@ export async function buildKordBackupPlan(getAccountsSnapshot) {
   if (existsSync(CONFIG_FILE)) {
     entries.push({ abs: CONFIG_FILE, zipName: "config/music-root.config.json" })
   }
+  for (const e of await collectServerConfigExtrasBackup()) entries.push(e)
   const actPath = getActivityLogFilePath()
-  if (existsSync(actPath)) {
+  if (actPath && existsSync(actPath)) {
     entries.push({ abs: actPath, zipName: "config/kord-activity.log.jsonl" })
   }
   const accounts = Array.isArray(snap.accounts) ? snap.accounts : []
@@ -121,7 +155,7 @@ export async function buildKordBackupPlan(getAccountsSnapshot) {
     _body: JSON.stringify(manifest, null, 2),
     zipName: "config/manifest.json",
   })
-  const dbFiles = await collectKordDbJsonBackup(libRoot)
+  const dbFiles = await collectKordDataDirBackup(libRoot)
   for (const e of dbFiles) entries.push(e)
   for (const acc of accounts) {
     const leg = getUserStateFilePathInConfigDir(acc.id)
@@ -237,6 +271,60 @@ async function readStagedMaybe(stagingRoot, relPosix) {
   }
 }
 
+async function restoreKordDbFromStaging(stagingRoot, libraryRoot, backupVer) {
+  if (backupVer !== 2) return
+  const lr = libraryRoot
+  const all = await stagedEntriesKv(stagingRoot)
+  for (const [relUnix] of all) {
+    const dbPrefix = relUnix.startsWith("kord-db/")
+      ? "kord-db/"
+      : relUnix.startsWith("rekord-db/")
+        ? "rekord-db/"
+        : null
+    if (!dbPrefix) continue
+    const restPath = relUnix.slice(dbPrefix.length)
+    const buf = await readStagedMaybe(stagingRoot, relUnix)
+    if (!buf) continue
+    const dest = path.join(lr, ".kord", restPath.split("/").join(path.sep))
+    const kordRoot = path.join(lr, ".kord")
+    if (!underMusicRoot(dest, kordRoot)) continue
+    const baseName = path.basename(dest)
+    if (isKordTempBackupEntry(baseName)) continue
+    await fs.mkdir(path.dirname(dest), { recursive: true })
+    await fs.writeFile(dest, buf)
+  }
+}
+
+async function restoreConfigExtrasFromStaging(stagingRoot) {
+  const cfgDir = path.dirname(CONFIG_FILE)
+  for (const name of CONFIG_EXTRA_FILES) {
+    const buf = await readStagedMaybe(stagingRoot, `config/${name}`)
+    if (!buf?.length) continue
+    const dest = path.join(cfgDir, name)
+    await fs.mkdir(cfgDir, { recursive: true })
+    await fs.writeFile(dest, buf)
+  }
+}
+
+async function stagedEntriesKv(stagingRoot) {
+  const out = []
+  async function walk(relUnix, abs) {
+    const list = await fs.readdir(abs, { withFileTypes: true }).catch(() => [])
+    for (const ent of list) {
+      const name = ent.name
+      const rp = relUnix ? `${relUnix}/${name}` : name
+      const ap = path.join(abs, name)
+      if (ent.isDirectory()) {
+        await walk(rp, ap)
+      } else {
+        out.push([rp.replace(/\\/g, "/"), ap])
+      }
+    }
+  }
+  await walk("", stagingRoot)
+  return out
+}
+
 /**
  * Ripristina da file ZIP sul disco (`unzipper.Open.file` senza caricare tutto il buffer centrale nell’implementazione unzip).
  * Usa una directory staging in temp prima di applicare modifiche alla config.
@@ -298,55 +386,23 @@ export async function restoreKordFromZipPath(zipPath) {
     }
     reloadConfigFromDisk()
 
+    await restoreConfigExtrasFromStaging(stagingRoot)
+    reloadConfigFromDisk()
+
     const actBuf =
       (await readStagedMaybe(stagingRoot, "config/kord-activity.log.jsonl")) ||
       (await readStagedMaybe(stagingRoot, "config/rekord-activity.log.jsonl"))
     if (actBuf) {
       const p = getActivityLogFilePath()
-      await fs.mkdir(path.dirname(p), { recursive: true })
-      await fs.writeFile(p, actBuf, "utf8")
+      if (p) {
+        await fs.mkdir(path.dirname(p), { recursive: true })
+        await fs.writeFile(p, actBuf)
+      }
     }
     const snap = getAccountsSnapshot()
     const lr = getMusicRoot()
 
-    async function stagedEntriesKv() {
-      const out = []
-      async function walk(relUnix, abs) {
-        const list = await fs.readdir(abs, { withFileTypes: true }).catch(() => [])
-        for (const ent of list) {
-          const name = ent.name
-          const rp = relUnix ? `${relUnix}/${name}` : name
-          const ap = path.join(abs, name)
-          if (ent.isDirectory()) {
-            await walk(rp, ap)
-          } else {
-            out.push([rp.replace(/\\/g, "/"), ap])
-          }
-        }
-      }
-      await walk("", stagingRoot)
-      return out
-    }
-
-    if (backupVer === 2) {
-      const all = await stagedEntriesKv()
-      for (const [relUnix] of all) {
-        const dbPrefix = relUnix.startsWith("kord-db/")
-          ? "kord-db/"
-          : relUnix.startsWith("rekord-db/")
-            ? "rekord-db/"
-            : null
-        if (!dbPrefix) continue
-        const restPath = relUnix.slice(dbPrefix.length)
-        const buf = await readStagedMaybe(stagingRoot, relUnix)
-        if (!buf) continue
-        const dest = path.join(lr, ".kord", restPath.split("/").join(path.sep))
-        const kordRoot = path.join(lr, ".kord")
-        if (!underMusicRoot(dest, kordRoot)) continue
-        await fs.mkdir(path.dirname(dest), { recursive: true })
-        await fs.writeFile(dest, buf, "utf8")
-      }
-    }
+    await restoreKordDbFromStaging(stagingRoot, lr, backupVer)
 
     for (const acc of snap.accounts) {
       const usPrimary = await readStagedMaybe(stagingRoot, `user-state/accounts/${acc.id}/user-state.v1.json`)
@@ -355,12 +411,12 @@ export async function restoreKordFromZipPath(zipPath) {
         const dest = getUserStateFilePathForAccount(lr, acc.id)
         if (dest) {
           await fs.mkdir(path.dirname(dest), { recursive: true })
-          await fs.writeFile(dest, buf, "utf8")
+          await fs.writeFile(dest, buf)
         }
         const leg = getUserStateFilePathInConfigDir(acc.id)
         if (leg) {
           await fs.mkdir(path.dirname(leg), { recursive: true })
-          await fs.writeFile(leg, buf, "utf8")
+          await fs.writeFile(leg, buf)
         }
       }
       const mr = getMusicRootForAccountStrict(acc.id)
@@ -375,17 +431,17 @@ export async function restoreKordFromZipPath(zipPath) {
       if (kordL?.length) {
         const dest = path.join(mr, ".kord", "user-state.v1.json")
         await fs.mkdir(path.dirname(dest), { recursive: true })
-        await fs.writeFile(dest, kordL, "utf8")
+        await fs.writeFile(dest, kordL)
       }
       if (wppL?.length) {
         const dest = path.join(mr, ".wpp", "user-state.v1.json")
         await fs.mkdir(path.dirname(dest), { recursive: true })
-        await fs.writeFile(dest, wppL, "utf8")
+        await fs.writeFile(dest, wppL)
       }
     }
 
     async function stagedLibraryMetadata() {
-      const all = await stagedEntriesKv()
+      const all = await stagedEntriesKv(stagingRoot)
       for (const [relUnix] of all) {
         if (!relUnix.startsWith("libraries/")) continue
         const rest = relUnix.slice("libraries/".length)
@@ -395,14 +451,14 @@ export async function restoreKordFromZipPath(zipPath) {
         const rel = rest.slice(slash + 1)
         if (backupVer === 1 && !findAccountById(accountId)) continue
         const base = path.basename(rel)
-        if (!METADATA_BASENAMES.has(base)) continue
+        if (!LIBRARY_USER_FILE_BASENAMES.has(base)) continue
         const musicRoot = backupVer === 2 ? lr : getMusicRootForAccountStrict(accountId)
         const full = path.join(musicRoot, rel.split("/").join(path.sep))
         if (!underMusicRoot(full, musicRoot)) continue
         const buf = await readStagedMaybe(stagingRoot, relUnix)
         if (!buf) continue
         await fs.mkdir(path.dirname(full), { recursive: true })
-        await fs.writeFile(full, buf, "utf8")
+        await fs.writeFile(full, buf)
       }
     }
     await stagedLibraryMetadata()
