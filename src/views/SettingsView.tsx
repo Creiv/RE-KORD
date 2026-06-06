@@ -10,6 +10,7 @@ import { useAppConfirm } from "../context/AppConfirmContext";
 import { useUserState } from "../context/UserStateContext";
 import { useI18n } from "../i18n/useI18n";
 import {
+  clearCustomThemeBg,
   clearYoutubeCookies,
   createAccount as createApiAccount,
   deleteAccount as deleteApiAccount,
@@ -25,8 +26,10 @@ import {
   setSelectedAccountId,
   startRemoteAccess,
   stopRemoteAccess,
+  uploadCustomThemeBg,
   uploadKordDataRestore,
   uploadYoutubeCookies,
+  customThemeBgImageUrl,
 } from "../lib/api";
 import type {
   Account,
@@ -543,6 +546,16 @@ function SettingsView() {
               onCustomThemeChange={(customTheme) =>
                 user.updateSettings({ theme: "custom", customTheme })
               }
+              customThemeBgPreviewUrl={
+                user.state.settings.customTheme?.bgMode === "image" &&
+                user.state.settings.customTheme?.bgImage
+                  ? customThemeBgImageUrl(
+                      user.state.settings.customTheme.bgImageRev ?? undefined,
+                    )
+                  : null
+              }
+              onCustomThemeBgUpload={uploadCustomThemeBg}
+              onCustomThemeBgClear={clearCustomThemeBg}
             />
           </div>
           <label className="settings-ui-inline-control settings-ui-inline-control--checkbox-row">

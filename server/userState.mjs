@@ -177,14 +177,42 @@ function sanitizeHexColor(raw, fallback) {
   return fallback
 }
 
+function sanitizeBgImageExt(raw) {
+  if (raw == null || raw === "") return null
+  const s = String(raw).trim().toLowerCase()
+  if (s === "jpeg") return "jpg"
+  if (["jpg", "png", "webp", "gif"].includes(s)) return s
+  return null
+}
+
+function sanitizeBgImageRev(raw) {
+  const n = Number(raw)
+  if (!Number.isFinite(n) || n < 1) return null
+  return Math.floor(n)
+}
+
+function sanitizeBgMode(raw, bgImage) {
+  if (raw === "image") return "image"
+  if (raw === "color") return "color"
+  return bgImage ? "image" : "color"
+}
+
 function sanitizeCustomTheme(raw) {
   const src = isObj(raw) ? raw : {}
-  return {
+  const out = {
     bg: sanitizeHexColor(src.bg, DEFAULT_CUSTOM_THEME.bg),
     section: sanitizeHexColor(src.section, DEFAULT_CUSTOM_THEME.section),
     accent: sanitizeHexColor(src.accent, DEFAULT_CUSTOM_THEME.accent),
     accent2: sanitizeHexColor(src.accent2, DEFAULT_CUSTOM_THEME.accent2),
   }
+  const bgImage = sanitizeBgImageExt(src.bgImage)
+  out.bgMode = sanitizeBgMode(src.bgMode, bgImage)
+  if (bgImage && out.bgMode === "image") {
+    out.bgImage = bgImage
+    const rev = sanitizeBgImageRev(src.bgImageRev)
+    if (rev) out.bgImageRev = rev
+  }
+  return out
 }
 
 function normalizeAudioCrossfadeSec(src) {

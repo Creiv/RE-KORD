@@ -124,8 +124,16 @@ export type ArtistAlbumSortMode = "date" | "name" | "plays";
 /** Crossfade audio tra tracce: 0 spento; secondi dell’overlap in uscita. */
 export type AudioCrossfadeSec = 0 | 3 | 5;
 
+export type CustomThemeBgMode = "color" | "image";
+
 export type CustomThemeSettings = {
   bg: string;
+  /** Sfondo a tinta unita o immagine salvata per l'account. */
+  bgMode?: CustomThemeBgMode;
+  /** Estensione file immagine sfondo salvata per l'account (es. webp, jpg). */
+  bgImage?: string | null;
+  /** Revisione cache-bust per l'URL dell'immagine sfondo. */
+  bgImageRev?: number | null;
   section: string;
   accent: string;
   accent2: string;

@@ -9,6 +9,7 @@ import {
   useState,
 } from "react";
 import {
+  customThemeBgImageUrl,
   fetchUserState,
   isBackendUnreachableError,
   patchUserState,
@@ -99,12 +100,36 @@ function normalizeHexColor(raw: unknown, fallback: string): string {
 }
 
 function normalizeCustomTheme(raw: Partial<CustomThemeSettings> | undefined): CustomThemeSettings {
-  return {
+  const out: CustomThemeSettings = {
     bg: normalizeHexColor(raw?.bg, DEFAULT_CUSTOM_THEME.bg),
     section: normalizeHexColor(raw?.section, DEFAULT_CUSTOM_THEME.section),
     accent: normalizeHexColor(raw?.accent, DEFAULT_CUSTOM_THEME.accent),
     accent2: normalizeHexColor(raw?.accent2, DEFAULT_CUSTOM_THEME.accent2),
   };
+  const bgImage =
+    typeof raw?.bgImage === "string" && raw.bgImage.trim()
+      ? raw.bgImage.trim().toLowerCase().replace(/^jpeg$/, "jpg")
+      : null;
+  const hasBgImage =
+    bgImage === "jpg" ||
+    bgImage === "png" ||
+    bgImage === "webp" ||
+    bgImage === "gif";
+  const bgMode: CustomThemeSettings["bgMode"] =
+    raw?.bgMode === "image"
+      ? "image"
+      : raw?.bgMode === "color"
+        ? "color"
+        : hasBgImage
+          ? "image"
+          : "color";
+  out.bgMode = bgMode;
+  if (hasBgImage && bgMode === "image") {
+    out.bgImage = bgImage;
+    const rev = Number(raw?.bgImageRev);
+    if (Number.isFinite(rev) && rev >= 1) out.bgImageRev = Math.floor(rev);
+  }
+  return out;
 }
 
 function normalizeSettings(raw: Partial<UserSettings>): UserSettings {
@@ -870,6 +895,30 @@ export function UserStateProvider({ children }: { children: React.ReactNode }) {
       clearCustomThemeVars(root);
     }
   }, [state.settings.customTheme, state.settings.theme]);
+
+  useEffect(() => {
+    const root = document.documentElement;
+    const custom = state.settings.customTheme;
+    const useBgImage =
+      state.settings.theme === "custom" &&
+      custom?.bgMode === "image" &&
+      Boolean(custom.bgImage);
+    if (useBgImage) {
+      root.style.setProperty(
+        "--page-bg-image",
+        `url("${customThemeBgImageUrl(custom.bgImageRev ?? undefined)}")`,
+      );
+      root.dataset.customBgImage = "1";
+      return;
+    }
+    root.style.removeProperty("--page-bg-image");
+    delete root.dataset.customBgImage;
+  }, [
+    state.settings.customTheme?.bgImage,
+    state.settings.customTheme?.bgImageRev,
+    state.settings.customTheme?.bgMode,
+    state.settings.theme,
+  ]);
 
   useEffect(() => {
     if (state.settings.glassSurfaces) {

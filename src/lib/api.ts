@@ -453,6 +453,38 @@ export async function patchUserSettings(
   return unwrapUserStateMutation(response)
 }
 
+export type CustomThemeBgUploadResult = {
+  bgImage: string
+  bgImageRev: number
+}
+
+export function customThemeBgImageUrl(rev?: number): string {
+  const params: Record<string, string> = {}
+  if (rev != null && Number.isFinite(rev)) params.v = String(Math.floor(rev))
+  return apiUrl("/api/user-state/custom-theme-bg", params)
+}
+
+export async function uploadCustomThemeBg(
+  file: File,
+): Promise<CustomThemeBgUploadResult> {
+  await ensureSelectedAccountId()
+  const fd = new FormData()
+  fd.append("file", file)
+  const response = await apiFetch("/api/user-state/custom-theme-bg", {
+    method: "POST",
+    body: fd,
+  })
+  return unwrap<CustomThemeBgUploadResult>(response)
+}
+
+export async function clearCustomThemeBg(): Promise<void> {
+  await ensureSelectedAccountId()
+  const response = await apiFetch("/api/user-state/custom-theme-bg", {
+    method: "DELETE",
+  })
+  await unwrap<null>(response)
+}
+
 export async function patchUserState(patch: UserStatePatch): Promise<UserStateV1> {
   await ensureSelectedAccountId()
   const response = await apiFetch("/api/user-state", {

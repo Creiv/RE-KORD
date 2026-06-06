@@ -1,16 +1,19 @@
 import { useCallback, useEffect, useRef, useState } from "react";
+import { CustomThemeDialog } from "./CustomThemeDialog";
 import { useI18n } from "../i18n/useI18n";
 import { DEFAULT_CUSTOM_THEME, THEME_CATALOG } from "../lib/themeCatalog";
 import type { CustomThemeSettings, ThemeMode } from "../types";
 
 function ThemeStrip({
   bg,
+  bgImageUrl,
   section,
   accent,
   accent2,
   t,
 }: {
   bg: string;
+  bgImageUrl?: string | null;
   section: string;
   accent: string;
   accent2: string;
@@ -18,7 +21,19 @@ function ThemeStrip({
 }) {
   return (
     <span className="theme-picker__strip" aria-hidden>
-      <span className="theme-picker__strip-seg" style={{ background: bg }} title={t("themePicker.stripBg")} />
+      <span
+        className="theme-picker__strip-seg theme-picker__strip-seg--bg"
+        style={
+          bgImageUrl
+            ? {
+                backgroundImage: `url("${bgImageUrl}")`,
+                backgroundSize: "cover",
+                backgroundPosition: "center",
+              }
+            : { background: bg }
+        }
+        title={t("themePicker.stripBg")}
+      />
       <span className="theme-picker__strip-seg" style={{ background: section }} title={t("themePicker.stripSection")} />
       <span className="theme-picker__strip-seg" style={{ background: accent }} title={t("themePicker.stripAccent1")} />
       <span className="theme-picker__strip-seg" style={{ background: accent2 }} title={t("themePicker.stripAccent2")} />
@@ -31,18 +46,33 @@ export function ThemePicker({
   onChange,
   customTheme = DEFAULT_CUSTOM_THEME,
   onCustomThemeChange,
+  customThemeBgPreviewUrl = null,
+  onCustomThemeBgUpload,
+  onCustomThemeBgClear,
 }: {
   value: ThemeMode;
   onChange: (theme: ThemeMode) => void;
   customTheme?: CustomThemeSettings;
   onCustomThemeChange?: (theme: CustomThemeSettings) => void;
+  customThemeBgPreviewUrl?: string | null;
+  onCustomThemeBgUpload?: (
+    file: File,
+  ) => Promise<{ bgImage: string; bgImageRev: number }>;
+  onCustomThemeBgClear?: () => Promise<void>;
 }) {
   const { t } = useI18n();
   const [open, setOpen] = useState(false);
+  const [customDialogOpen, setCustomDialogOpen] = useState(false);
   const rootRef = useRef<HTMLDivElement>(null);
   const curBase = THEME_CATALOG.find((th) => th.id === value) ?? THEME_CATALOG[0];
   const cur =
     curBase.id === "custom" ? { ...curBase, ...customTheme } : curBase;
+  const bgPreviewUrl =
+    value === "custom" &&
+    customTheme.bgMode === "image" &&
+    customTheme.bgImage
+      ? customThemeBgPreviewUrl
+      : null;
 
   useEffect(() => {
     if (!open) return;
@@ -68,12 +98,12 @@ export function ThemePicker({
     [onChange],
   );
 
-  const updateCustomColor = useCallback(
-    (key: keyof CustomThemeSettings, next: string) => {
-      onCustomThemeChange?.({ ...customTheme, [key]: next });
+  const saveCustomTheme = useCallback(
+    (next: CustomThemeSettings) => {
+      onCustomThemeChange?.(next);
       if (value !== "custom") onChange("custom");
     },
-    [customTheme, onChange, onCustomThemeChange, value],
+    [onChange, onCustomThemeChange, value],
   );
 
   const groups = [
@@ -96,6 +126,7 @@ export function ThemePicker({
         <span className="theme-picker__label">{t(`theme.${cur.id}`)}</span>
         <ThemeStrip
           bg={cur.bg}
+          bgImageUrl={bgPreviewUrl}
           section={cur.section}
           accent={cur.accent}
           accent2={cur.accent2}
@@ -130,6 +161,13 @@ export function ThemePicker({
                           <span className="theme-picker__name">{t(`theme.${entry.id}`)}</span>
                           <ThemeStrip
                             bg={preview.bg}
+                            bgImageUrl={
+                              entry.id === "custom" &&
+                              customTheme.bgMode === "image" &&
+                              customTheme.bgImage
+                                ? customThemeBgPreviewUrl
+                                : null
+                            }
                             section={preview.section}
                             accent={preview.accent}
                             accent2={preview.accent2}
@@ -146,18 +184,23 @@ export function ThemePicker({
         </ul>
       ) : null}
       {value === "custom" ? (
-        <div className="theme-picker__custom" aria-label={t("themePicker.customAria")}>
-          {(["bg", "section", "accent", "accent2"] as const).map((key) => (
-            <label className="theme-picker__color" key={key}>
-              <span>{t(`themePicker.custom.${key}`)}</span>
-              <input
-                type="color"
-                value={customTheme[key]}
-                onChange={(event) => updateCustomColor(key, event.target.value)}
-              />
-            </label>
-          ))}
-        </div>
+        <button
+          type="button"
+          className="ghost-btn ghost-btn--sm theme-picker__customize-btn"
+          onClick={() => setCustomDialogOpen(true)}
+        >
+          {t("themePicker.customEditBtn")}
+        </button>
+      ) : null}
+      {onCustomThemeBgUpload && onCustomThemeBgClear ? (
+        <CustomThemeDialog
+          open={customDialogOpen}
+          initialTheme={customTheme}
+          onSave={saveCustomTheme}
+          onClose={() => setCustomDialogOpen(false)}
+          onUploadBg={onCustomThemeBgUpload}
+          onClearBg={onCustomThemeBgClear}
+        />
       ) : null}
     </div>
   );

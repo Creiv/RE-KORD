@@ -77,6 +77,12 @@ import {
   writeUserTrackMoodsWithCAS,
   writeUserPlectrBestWithCAS,
 } from "./userState.mjs";
+import {
+  deleteCustomThemeBg,
+  findCustomThemeBgPath,
+  mediaTypeForThemeBgPath,
+  saveCustomThemeBg,
+} from "./customThemeBg.mjs";
 import { rekordApiUserAgent } from "./rekordVersion.mjs";
 import {
   existingAlbumTrackInfoPath,
@@ -735,6 +741,11 @@ const uploadRekordBackup = multer({
 const uploadYoutubeCookies = multer({
   storage: multer.memoryStorage(),
   limits: { fileSize: 2 * 1024 * 1024 },
+});
+
+const uploadCustomThemeBg = multer({
+  storage: multer.memoryStorage(),
+  limits: { fileSize: 8 * 1024 * 1024 },
 });
 
 function sendOk(res, data, status = 200) {
@@ -1946,6 +1957,64 @@ app.get("/api/user-state", async (req, res) => {
   try {
     const state = await readUserState(getMusicRoot(), accountIdFromReq(req));
     return sendOk(res, state);
+  } catch (error) {
+    return sendError(res, 500, String(error?.message || error));
+  }
+});
+
+app.get("/api/user-state/custom-theme-bg", async (req, res) => {
+  try {
+    const root = getMusicRoot();
+    if (!root) return sendError(res, 428, "Library not configured");
+    const accId = accountIdFromReq(req);
+    const fp = findCustomThemeBgPath(root, accId);
+    if (!fp) return sendError(res, 404, "Custom theme background not found");
+    const buf = await fs.readFile(fp);
+    res.setHeader("Content-Type", mediaTypeForThemeBgPath(fp));
+    res.setHeader("Cache-Control", "private, max-age=3600");
+    return res.send(buf);
+  } catch (error) {
+    return sendError(res, 500, String(error?.message || error));
+  }
+});
+
+app.post(
+  "/api/user-state/custom-theme-bg",
+  uploadCustomThemeBg.single("file"),
+  async (req, res) => {
+    try {
+      const root = getMusicRoot();
+      if (!root) return sendError(res, 428, "Library not configured");
+      if (!req.file?.buffer?.length) {
+        return sendError(res, 400, "Missing or empty image file");
+      }
+      const accId = accountIdFromReq(req);
+      const bgImage = await saveCustomThemeBg(
+        root,
+        accId,
+        req.file.buffer,
+        req.file.mimetype,
+      );
+      return sendOk(res, { bgImage, bgImageRev: Date.now() });
+    } catch (error) {
+      if (error?.code === "INVALID_IMAGE_TYPE") {
+        return sendError(res, 400, String(error.message || error));
+      }
+      if (error?.code === "IMAGE_TOO_LARGE") {
+        return sendError(res, 413, String(error.message || error));
+      }
+      return sendError(res, 500, String(error?.message || error));
+    }
+  },
+);
+
+app.delete("/api/user-state/custom-theme-bg", async (req, res) => {
+  try {
+    const root = getMusicRoot();
+    if (!root) return sendError(res, 428, "Library not configured");
+    const accId = accountIdFromReq(req);
+    await deleteCustomThemeBg(root, accId);
+    return sendOk(res, null);
   } catch (error) {
     return sendError(res, 500, String(error?.message || error));
   }

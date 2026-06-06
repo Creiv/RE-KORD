@@ -11,6 +11,10 @@
   background: var(--bg);
 }
 
+:global(html[data-custom-bg-image="1"]) .shell {
+  background: transparent;
+}
+
 /* Desktop: sidebar + main side by side */
 .body {
   display: flex;

@@ -974,6 +974,51 @@ body {
   background: linear-gradient(180deg, var(--page-lg-1) 0%, var(--page-lg-2) 100%);
 }
 
+html[data-custom-bg-image="1"] {
+  isolation: isolate;
+  background: transparent;
+}
+
+html[data-custom-bg-image="1"]::before {
+  content: "";
+  position: fixed;
+  inset: 0;
+  z-index: -2;
+  pointer-events: none;
+  background-image: var(--page-bg-image);
+  background-size: cover;
+  background-position: center;
+  background-repeat: no-repeat;
+}
+
+html[data-custom-bg-image="1"]::after {
+  content: "";
+  position: fixed;
+  inset: 0;
+  z-index: -1;
+  pointer-events: none;
+  background: linear-gradient(
+    180deg,
+    color-mix(in srgb, var(--page-lg-1) 24%, transparent) 0%,
+    color-mix(in srgb, var(--page-lg-2) 36%, transparent) 100%
+  );
+}
+
+html[data-custom-bg-image="1"] body {
+  background: transparent;
+}
+
+html[data-custom-bg-image="1"] #root {
+  background: transparent;
+}
+
+html[data-custom-bg-image="1"] .shell,
+html[data-custom-bg-image="1"] .shell__workspace,
+html[data-custom-bg-image="1"] .shell__main,
+html[data-custom-bg-image="1"] .content-shell {
+  background: transparent;
+}
+
 button,
 input {
   font: inherit;
