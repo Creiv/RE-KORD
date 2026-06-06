@@ -14,7 +14,10 @@
 
 ---
 
-## WEBSITE: https://re-kord.com
+## Links
+
+- **[re-kord.com](https://re-kord.com)** — official site: overview, downloads (Server, Client, Docker), and install guides.
+- **[r/RE_KORD](https://www.reddit.com/r/RE_KORD/)** — community on Reddit for support, tips, and release updates.
 
 ---
 
