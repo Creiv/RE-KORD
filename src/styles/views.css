@@ -4056,9 +4056,53 @@ button.settings-network-qr:focus-visible {
   display: block;
   width: 100%;
   height: 7.5rem;
-  background-size: cover;
-  background-position: center;
   background-color: color-mix(in srgb, var(--surface2) 80%, transparent);
+}
+
+.custom-theme-dialog__image-toolbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+  width: 100%;
+}
+
+.custom-theme-dialog__image-toolbar-spacer {
+  flex: 0 0 auto;
+}
+
+.custom-theme-dialog__fit-control {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.45rem;
+  margin-left: auto;
+  font-size: 0.78rem;
+  color: var(--muted-strong);
+}
+
+.custom-theme-dialog__fit-label {
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+.custom-theme-dialog__fit-select {
+  min-width: 8.5rem;
+  padding: 0.28rem 0.45rem;
+  font: inherit;
+  font-size: 0.78rem;
+  color: var(--text);
+  background: var(--surface2);
+  border: 1px solid var(--border);
+  border-radius: 0.45rem;
+}
+
+.custom-theme-dialog__fit-select:disabled {
+  opacity: 0.65;
+  cursor: wait;
+}
+
+.custom-theme-dialog__image-clear {
+  flex: 0 0 auto;
 }
 
 .custom-theme-dialog__image-placeholder {
@@ -4079,11 +4123,7 @@ button.settings-network-qr:focus-visible {
   background: color-mix(in srgb, var(--surface2) 55%, transparent);
 }
 
-.custom-theme-dialog__image-clear {
-  align-self: flex-start;
-}
-
-.custom-theme-dialog__err {
+.custom-theme-dialog__image-placeholder {
   margin: 0;
 }
 

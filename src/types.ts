@@ -126,14 +126,24 @@ export type AudioCrossfadeSec = 0 | 3 | 5;
 
 export type CustomThemeBgMode = "color" | "image";
 
+/** Come l'immagine di sfondo riempie la pagina RE-KORD. */
+export type CustomThemeBgImageFit =
+  | "cover"
+  | "contain"
+  | "fill"
+  | "repeat"
+  | "center";
+
 export type CustomThemeSettings = {
   bg: string;
-  /** Sfondo a tinta unita o immagine salvata per l'account. */
+  /** Sfondo attivo: tinta unita (`color`) o immagine salvata (`image`). */
   bgMode?: CustomThemeBgMode;
   /** Estensione file immagine sfondo salvata per l'account (es. webp, jpg). */
   bgImage?: string | null;
   /** Revisione cache-bust per l'URL dell'immagine sfondo. */
   bgImageRev?: number | null;
+  /** Adattamento immagine sfondo (default cover). */
+  bgImageFit?: CustomThemeBgImageFit;
   section: string;
   accent: string;
   accent2: string;
@@ -155,6 +165,11 @@ export type UserSettings = {
   plectrDisableVizBackdrop: boolean;
   /** Schede e sezioni semitrasparenti con riflessi (sfondo pagina invariato). */
   glassSurfaces: boolean;
+};
+
+/** Patch impostazioni utente: customTheme può essere parziale (merge profondo). */
+export type UserSettingsPatch = Partial<Omit<UserSettings, "customTheme">> & {
+  customTheme?: Partial<CustomThemeSettings>;
 };
 
 export type QueueState = {
@@ -291,7 +306,7 @@ export type LibraryEntityDelta = {
 };
 
 export type UserStatePatch = Partial<Omit<UserStateV1, "version" | "revision" | "settings">> & {
-  settings?: Partial<UserSettings>;
+  settings?: UserSettingsPatch;
 };
 
 export type DashboardAlert = {

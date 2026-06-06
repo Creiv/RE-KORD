@@ -1,4 +1,5 @@
 import type { UserSettings, UserStatePatch, UserStateV1, PlectrBestScore } from "../types";
+import { mergePartialUserSettings, type UserSettingsPatch } from "./userSettingsMerge";
 
 export const FLUSH_DELAY_DEFAULT_MS = 400;
 export const FLUSH_DELAY_QUEUE_MS = 3000;
@@ -22,10 +23,10 @@ export function mergeUserStatePatches(
 ): UserStatePatch {
   const next: UserStatePatch = { ...a, ...b };
   if (a.settings || b.settings) {
-    next.settings = {
-      ...(a.settings || {}),
-      ...(b.settings || {}),
-    };
+    next.settings = mergePartialUserSettings(
+      mergePartialUserSettings(undefined, a.settings ?? {}),
+      b.settings ?? {},
+    );
   }
   if (a.trackMoods || b.trackMoods) {
     next.trackMoods = {
@@ -91,7 +92,7 @@ export function mergeSavedUserState(
 export function applyUserStatePatchFields(
   base: UserStateV1,
   patch: UserStatePatch,
-  normalizeSettings: (raw: Partial<UserSettings>) => UserSettings,
+  normalizeSettings: (raw: Partial<UserSettings> | UserSettingsPatch) => UserSettings,
   normalize: (s: UserStateV1) => UserStateV1
 ): UserStateV1 {
   const compact = compactUserStatePatch(patch);
@@ -103,10 +104,9 @@ export function applyUserStatePatchFields(
   ][]) {
     if (value === undefined) continue;
     if (key === "settings") {
-      next.settings = normalizeSettings({
-        ...next.settings,
-        ...(value as Partial<UserSettings>),
-      });
+      next.settings = normalizeSettings(
+        mergePartialUserSettings(next.settings, value as UserSettingsPatch),
+      );
       continue;
     }
     if (key === "trackMoods") {

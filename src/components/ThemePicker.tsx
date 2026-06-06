@@ -2,11 +2,13 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { CustomThemeDialog } from "./CustomThemeDialog";
 import { useI18n } from "../i18n/useI18n";
 import { DEFAULT_CUSTOM_THEME, THEME_CATALOG } from "../lib/themeCatalog";
-import type { CustomThemeSettings, ThemeMode } from "../types";
+import { customThemeBgImageCss } from "../lib/customThemeBgFit";
+import type { CustomThemeBgImageFit, CustomThemeSettings, ThemeMode } from "../types";
 
 function ThemeStrip({
   bg,
   bgImageUrl,
+  bgImageFit,
   section,
   accent,
   accent2,
@@ -14,11 +16,13 @@ function ThemeStrip({
 }: {
   bg: string;
   bgImageUrl?: string | null;
+  bgImageFit?: CustomThemeBgImageFit;
   section: string;
   accent: string;
   accent2: string;
   t: (k: string) => string;
 }) {
+  const fitCss = customThemeBgImageCss(bgImageFit);
   return (
     <span className="theme-picker__strip" aria-hidden>
       <span
@@ -26,9 +30,11 @@ function ThemeStrip({
         style={
           bgImageUrl
             ? {
+                backgroundColor: bg,
                 backgroundImage: `url("${bgImageUrl}")`,
-                backgroundSize: "cover",
-                backgroundPosition: "center",
+                backgroundSize: fitCss.size,
+                backgroundPosition: fitCss.position,
+                backgroundRepeat: fitCss.repeat,
               }
             : { background: bg }
         }
@@ -167,6 +173,7 @@ export function ThemePicker({
         <ThemeStrip
           bg={cur.bg}
           bgImageUrl={bgPreviewUrl}
+          bgImageFit={value === "custom" ? customTheme.bgImageFit : undefined}
           section={cur.section}
           accent={cur.accent}
           accent2={cur.accent2}
@@ -207,6 +214,9 @@ export function ThemePicker({
                               customTheme.bgImage
                                 ? customThemeBgPreviewUrl
                                 : null
+                            }
+                            bgImageFit={
+                              entry.id === "custom" ? customTheme.bgImageFit : undefined
                             }
                             section={preview.section}
                             accent={preview.accent}

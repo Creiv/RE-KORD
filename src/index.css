@@ -985,10 +985,11 @@ html[data-custom-bg-image="1"]::before {
   inset: 0;
   z-index: -2;
   pointer-events: none;
+  background-color: var(--bg);
   background-image: var(--page-bg-image);
-  background-size: cover;
-  background-position: center;
-  background-repeat: no-repeat;
+  background-size: var(--page-bg-size, cover);
+  background-position: var(--page-bg-position, center);
+  background-repeat: var(--page-bg-repeat, no-repeat);
 }
 
 html[data-custom-bg-image="1"]::after {

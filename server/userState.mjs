@@ -1,8 +1,9 @@
 import fs from "fs/promises"
-import { existsSync } from "fs"
+import { existsSync, statSync } from "fs"
 import path from "path"
 import { atomicWriteFileUtf8, rekordAccountUserStatePath } from "./rekordDataStore.mjs"
 import { CONFIG_FILE } from "./musicRootConfig.mjs"
+import { findCustomThemeBgPath } from "./customThemeBg.mjs"
 
 /** Serie di readUserState sulla stessa coppia (library, account): evita race sulla migrazione lazy. */
 const readUserChains = new Map()
@@ -165,6 +166,8 @@ const DEFAULT_CUSTOM_THEME = {
   section: "#121f31",
   accent: "#ff8f5c",
   accent2: "#64d4ff",
+  bgMode: "color",
+  bgImageFit: "cover",
 }
 
 function sanitizeHexColor(raw, fallback) {
@@ -197,6 +200,57 @@ function sanitizeBgMode(raw, bgImage) {
   return bgImage ? "image" : "color"
 }
 
+function mergePartialUserSettings(prev, patch) {
+  const base = isObj(prev) ? prev : {}
+  const src = isObj(patch) ? patch : {}
+  const next = { ...base, ...src }
+  if (src.customTheme !== undefined && isObj(src.customTheme)) {
+    next.customTheme = {
+      ...(isObj(base.customTheme) ? base.customTheme : {}),
+      ...src.customTheme,
+    }
+  }
+  return next
+}
+
+function hydrateCustomThemeBgFromDisk(musicRoot, accountId, state) {
+  if (!musicRoot || !accountId || !isObj(state?.settings)) return state
+  const fp = findCustomThemeBgPath(musicRoot, accountId)
+  if (!fp) return state
+  const ext = sanitizeBgImageExt(path.extname(fp).slice(1))
+  if (!ext) return state
+  const customTheme = { ...(isObj(state.settings.customTheme) ? state.settings.customTheme : {}) }
+  let changed = false
+  if (!customTheme.bgImage) {
+    customTheme.bgImage = ext
+    changed = true
+  }
+  if (!customTheme.bgImageRev) {
+    try {
+      customTheme.bgImageRev = Math.floor(statSync(fp).mtimeMs)
+    } catch {
+      customTheme.bgImageRev = Date.now()
+    }
+    changed = true
+  }
+  if (!changed) return state
+  return {
+    ...state,
+    settings: {
+      ...state.settings,
+      customTheme,
+    },
+  }
+}
+
+function sanitizeBgImageFit(raw) {
+  const s = String(raw || "").trim()
+  if (s === "cover" || s === "contain" || s === "fill" || s === "repeat" || s === "center") {
+    return s
+  }
+  return "cover"
+}
+
 function sanitizeCustomTheme(raw) {
   const src = isObj(raw) ? raw : {}
   const out = {
@@ -204,10 +258,11 @@ function sanitizeCustomTheme(raw) {
     section: sanitizeHexColor(src.section, DEFAULT_CUSTOM_THEME.section),
     accent: sanitizeHexColor(src.accent, DEFAULT_CUSTOM_THEME.accent),
     accent2: sanitizeHexColor(src.accent2, DEFAULT_CUSTOM_THEME.accent2),
+    bgImageFit: sanitizeBgImageFit(src.bgImageFit),
   }
   const bgImage = sanitizeBgImageExt(src.bgImage)
   out.bgMode = sanitizeBgMode(src.bgMode, bgImage)
-  if (bgImage && out.bgMode === "image") {
+  if (bgImage) {
     out.bgImage = bgImage
     const rev = sanitizeBgImageRev(src.bgImageRev)
     if (rev) out.bgImageRev = rev
@@ -364,7 +419,7 @@ export function mergeUserStateForPut(prev, patch) {
     if (patch[k] === undefined) continue
     if (k === "settings") {
       if (isObj(patch.settings)) {
-        out.settings = { ...prev.settings, ...patch.settings }
+        out.settings = mergePartialUserSettings(prev.settings, patch.settings)
       }
       continue
     }
@@ -499,15 +554,17 @@ async function readUserStateImpl(musicRoot, accountId = null) {
     } else if (state && accountPath) {
       await atomicWriteFileUtf8(accountPath, JSON.stringify(state, null, 2))
     }
-    return state
+    return hydrateCustomThemeBgFromDisk(musicRoot, accountId, state)
   }
-  if (state) return state
+  if (state) {
+    return hydrateCustomThemeBgFromDisk(musicRoot, accountId, state)
+  }
 
   const empty = defaultUserState()
   if (accountId && safeAccountId(accountId) !== "default") {
     empty.migratedLegacy = true
   }
-  return empty
+  return hydrateCustomThemeBgFromDisk(musicRoot, accountId, empty)
 }
 
 export async function readUserState(musicRoot, accountId = null) {

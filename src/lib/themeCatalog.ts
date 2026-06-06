@@ -17,6 +17,8 @@ export const DEFAULT_CUSTOM_THEME: CustomThemeSettings = {
   section: "#121f31",
   accent: "#ff8f5c",
   accent2: "#64d4ff",
+  bgMode: "color",
+  bgImageFit: "cover",
 };
 
 export const THEME_CATALOG: ThemeCatalogEntry[] = [

@@ -19,6 +19,11 @@ import { readLegacyLocalShuffleMigrated, clearLegacyLocalShuffle } from "../lib/
 import { fmtDate } from "../lib/metaFormat";
 import { randomUUID } from "../lib/randomUUID";
 import { normalizeShuffleAlbumKeysWithIndex } from "../lib/shuffleExclusionKeys";
+import {
+  applyCustomThemeBgImageCssVars,
+  clearCustomThemeBgImageCssVars,
+  normalizeCustomThemeBgImageFit,
+} from "../lib/customThemeBgFit";
 import { DEFAULT_CUSTOM_THEME } from "../lib/themeCatalog";
 import { touchListeningActivity } from "../lib/achievements";
 import { enrichedTracksNeedPlayerResync } from "../lib/libraryIndex";
@@ -30,6 +35,7 @@ import {
   mergeSavedUserState,
   mergeUserStatePatches,
 } from "../lib/userStatePatch";
+import { mergePartialUserSettings, type UserSettingsPatch } from "../lib/userSettingsMerge";
 import {
   gameResultToPlectrBest,
   isBetterPlectrScore,
@@ -82,7 +88,7 @@ function defaultSettings(): UserSettings {
   };
 }
 
-function normalizeAudioCrossfadeSec(raw: Partial<UserSettings>): AudioCrossfadeSec {
+function normalizeAudioCrossfadeSec(raw: Partial<UserSettings> | UserSettingsPatch): AudioCrossfadeSec {
   const v = raw.audioCrossfadeSec;
   if (v === 5 || v === 3 || v === 0) return v;
   const legacy = raw as { trackChangeTransitions?: boolean };
@@ -100,15 +106,16 @@ function normalizeHexColor(raw: unknown, fallback: string): string {
 }
 
 function normalizeCustomTheme(raw: Partial<CustomThemeSettings> | undefined): CustomThemeSettings {
+  const src = { ...DEFAULT_CUSTOM_THEME, ...(raw ?? {}) };
   const out: CustomThemeSettings = {
-    bg: normalizeHexColor(raw?.bg, DEFAULT_CUSTOM_THEME.bg),
-    section: normalizeHexColor(raw?.section, DEFAULT_CUSTOM_THEME.section),
-    accent: normalizeHexColor(raw?.accent, DEFAULT_CUSTOM_THEME.accent),
-    accent2: normalizeHexColor(raw?.accent2, DEFAULT_CUSTOM_THEME.accent2),
+    bg: normalizeHexColor(src.bg, DEFAULT_CUSTOM_THEME.bg),
+    section: normalizeHexColor(src.section, DEFAULT_CUSTOM_THEME.section),
+    accent: normalizeHexColor(src.accent, DEFAULT_CUSTOM_THEME.accent),
+    accent2: normalizeHexColor(src.accent2, DEFAULT_CUSTOM_THEME.accent2),
   };
   const bgImage =
-    typeof raw?.bgImage === "string" && raw.bgImage.trim()
-      ? raw.bgImage.trim().toLowerCase().replace(/^jpeg$/, "jpg")
+    typeof src.bgImage === "string" && src.bgImage.trim()
+      ? src.bgImage.trim().toLowerCase().replace(/^jpeg$/, "jpg")
       : null;
   const hasBgImage =
     bgImage === "jpg" ||
@@ -116,23 +123,24 @@ function normalizeCustomTheme(raw: Partial<CustomThemeSettings> | undefined): Cu
     bgImage === "webp" ||
     bgImage === "gif";
   const bgMode: CustomThemeSettings["bgMode"] =
-    raw?.bgMode === "image"
+    src.bgMode === "image"
       ? "image"
-      : raw?.bgMode === "color"
+      : src.bgMode === "color"
         ? "color"
         : hasBgImage
           ? "image"
           : "color";
   out.bgMode = bgMode;
-  if (hasBgImage && bgMode === "image") {
+  out.bgImageFit = normalizeCustomThemeBgImageFit(src.bgImageFit);
+  if (hasBgImage) {
     out.bgImage = bgImage;
-    const rev = Number(raw?.bgImageRev);
+    const rev = Number(src.bgImageRev);
     if (Number.isFinite(rev) && rev >= 1) out.bgImageRev = Math.floor(rev);
   }
   return out;
 }
 
-function normalizeSettings(raw: Partial<UserSettings>): UserSettings {
+function normalizeSettings(raw: Partial<UserSettings> | UserSettingsPatch): UserSettings {
   const locale: AppLocale = (APP_LOCALES as readonly string[]).includes(
     raw.locale as string
   )
@@ -619,7 +627,7 @@ type UserStateContextValue = {
   /** Solo patch `queue` — debounce unificato nel writer (3s). */
   enqueueQueuePatch: (queue: QueueState) => void;
   flushUserStateNow: (opts?: { silent?: boolean }) => void;
-  updateSettings: (patch: Partial<UserSettings>) => void;
+  updateSettings: (patch: UserSettingsPatch) => void;
   createPlaylist: (name: string) => string;
   renamePlaylist: (id: string, name: string) => void;
   deletePlaylist: (id: string) => void;
@@ -908,15 +916,18 @@ export function UserStateProvider({ children }: { children: React.ReactNode }) {
         "--page-bg-image",
         `url("${customThemeBgImageUrl(custom.bgImageRev ?? undefined)}")`,
       );
+      applyCustomThemeBgImageCssVars(root, custom.bgImageFit);
       root.dataset.customBgImage = "1";
       return;
     }
     root.style.removeProperty("--page-bg-image");
+    clearCustomThemeBgImageCssVars(root);
     delete root.dataset.customBgImage;
   }, [
     state.settings.customTheme?.bgImage,
     state.settings.customTheme?.bgImageRev,
     state.settings.customTheme?.bgMode,
+    state.settings.customTheme?.bgImageFit,
     state.settings.theme,
   ]);
 
@@ -1364,16 +1375,23 @@ export function UserStateProvider({ children }: { children: React.ReactNode }) {
   );
 
   const updateSettings = useCallback(
-    (patch: Partial<UserSettings>) => {
+    (patch: UserSettingsPatch) => {
       commit(
         (prev) => ({
           ...prev,
-          settings: normalizeSettings({ ...prev.settings, ...patch }),
+          settings: normalizeSettings(
+            mergePartialUserSettings(prev.settings, patch),
+          ),
         }),
-        { immediate: true, patch: () => ({ settings: patch }) }
+        {
+          immediate: true,
+          patch: (_next, prev) => ({
+            settings: mergePartialUserSettings(prev.settings, patch),
+          }),
+        },
       );
     },
-    [commit]
+    [commit],
   );
 
   const createPlaylist = useCallback(

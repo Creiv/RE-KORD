@@ -6,6 +6,7 @@ import {
   mergeSavedUserState,
   mergeUserStatePatches,
 } from "./userStatePatch";
+import type { UserSettingsPatch } from "./userSettingsMerge";
 import type { UserStateV1 } from "../types";
 
 function baseState(): UserStateV1 {
@@ -76,6 +77,34 @@ describe("userStatePatch", () => {
     );
     expect(merged.favorites).toEqual(["new.mp3"]);
     expect(merged.queue).toEqual({ tracks: [], currentIndex: 0 });
+  });
+
+  it("mergeUserStatePatches deep-merges customTheme", () => {
+    const merged = mergeUserStatePatches(
+      {
+        settings: {
+          customTheme: {
+            bg: "#08111d",
+            section: "#121f31",
+            accent: "#ff8f5c",
+            accent2: "#64d4ff",
+            bgMode: "image",
+            bgImage: "jpg",
+            bgImageRev: 99,
+          },
+        },
+      },
+      {
+        settings: {
+          customTheme: {
+            bgMode: "color",
+          },
+        } satisfies UserSettingsPatch,
+      },
+    );
+    expect(merged.settings?.customTheme?.bgMode).toBe("color");
+    expect(merged.settings?.customTheme?.bgImage).toBe("jpg");
+    expect(merged.settings?.customTheme?.bgImageRev).toBe(99);
   });
 
   it("mergeUserStatePatches merges plectrBests by relPath", () => {
