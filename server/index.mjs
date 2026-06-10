@@ -1,5 +1,4 @@
 import express from "express";
-import cors from "cors";
 import path from "path";
 import fs from "fs/promises";
 import { existsSync, statSync } from "fs";
@@ -322,6 +321,35 @@ function coerceYtdlpUrl(raw) {
     return `https://www.youtube.com/${s}`;
   }
   return s;
+}
+
+/**
+ * Allowlist domini per i download yt-dlp: solo sorgenti musicali note.
+ * Evita che il server esegua yt-dlp verso URL arbitrari o indirizzi
+ * interni della rete (SSRF).
+ */
+const YTDLP_ALLOWED_HOSTS = new Set([
+  "youtube.com",
+  "music.youtube.com",
+  "m.youtube.com",
+  "youtu.be",
+  "soundcloud.com",
+  "bandcamp.com",
+]);
+
+function isAllowedYtdlpDownloadUrl(url) {
+  if (!/^https?:\/\//i.test(String(url || ""))) return false;
+  try {
+    const h = new URL(url).hostname.replace(/^www\./, "").toLowerCase();
+    if (YTDLP_ALLOWED_HOSTS.has(h)) return true;
+    // Sottodomini (es. artista.bandcamp.com, on.soundcloud.com)
+    for (const allowed of YTDLP_ALLOWED_HOSTS) {
+      if (h.endsWith(`.${allowed}`)) return true;
+    }
+  } catch {
+    return false;
+  }
+  return false;
 }
 
 /** Se l'estrattore non espone href completo, ricostruisci da id (playlist / video). */
@@ -740,7 +768,46 @@ function ytdlpCmdDisplay() {
 }
 
 const app = express();
-app.use(cors());
+
+/**
+ * Blocco richieste cross-site dei browser (niente più CORS aperto).
+ * Permesse: richieste senza Origin (navigazione, curl, Electron main,
+ * tag media), stessa origin della richiesta, e origin loopback
+ * (dev Vite :5173 con proxy che riscrive Host, app Electron).
+ */
+function isLoopbackOriginHostname(hostname) {
+  return (
+    hostname === "localhost" ||
+    hostname === "127.0.0.1" ||
+    hostname === "[::1]" ||
+    hostname === "::1"
+  );
+}
+app.use((req, res, next) => {
+  const origin = String(req.headers.origin || "");
+  if (!origin || origin === "null") {
+    if (origin === "null") {
+      return res
+        .status(403)
+        .json({ ok: false, data: null, error: "cross_origin_forbidden" });
+    }
+    return next();
+  }
+  let parsed = null;
+  try {
+    parsed = new URL(origin);
+  } catch {
+    return res
+      .status(403)
+      .json({ ok: false, data: null, error: "cross_origin_forbidden" });
+  }
+  const reqHost = String(req.headers.host || "");
+  if (parsed.host === reqHost) return next();
+  if (isLoopbackOriginHostname(parsed.hostname)) return next();
+  return res
+    .status(403)
+    .json({ ok: false, data: null, error: "cross_origin_forbidden" });
+});
 app.use(express.json({ limit: "2mb" }));
 
 const uploadRekordBackup = multer({
@@ -806,10 +873,33 @@ function accountIdFromReq(req) {
   );
 }
 
+/**
+ * In Docker le interfacce del container (es. 172.21.0.2) non sono
+ * raggiungibili dalla LAN: come hint usa l'host della richiesta corrente.
+ */
+function dockerLanAccessUrlFromReq(req) {
+  const hostHdr = String(req.headers.host || "").trim();
+  if (!hostHdr) return null;
+  const hostname = hostHdr.replace(/:\d+$/, "");
+  if (
+    hostname === "localhost" ||
+    hostname === "127.0.0.1" ||
+    hostname === "[::1]"
+  ) {
+    return null;
+  }
+  return `http://${hostHdr}`;
+}
+
 function buildConfigPayload(req) {
   const admin = isServerAdminRequest(req);
   const snap = getConfigSnapshot(admin);
   snap.localAccess = admin;
+  if (process.env.REKORD_DOCKER === "1") {
+    const url = dockerLanAccessUrlFromReq(req);
+    snap.lanAccessUrl = url;
+    snap.lanAccessUrls = url ? [url] : [];
+  }
   snap.libraryRootWritable = Boolean(admin && !snap.lockedByEnv);
   snap.youtubeCookiesWritable = Boolean(admin && !snap.youtubeCookiesLockedByEnv);
   if (!admin && isLibraryRootConfigured()) {
@@ -2464,6 +2554,8 @@ app.post("/api/download-flat-count", async (req, res) => {
   const url = coerceYtdlpUrl(String(req.body?.url ?? ""));
   if (!/^https?:\/\//i.test(url))
     return sendError(res, 400, "Provide a valid http(s) URL");
+  if (!isAllowedYtdlpDownloadUrl(url))
+    return sendError(res, 400, "URL host not allowed for downloads");
   try {
     const program = resolveYtdlpPath();
     const { timeoutMs } = releaseEnrichConfig();
@@ -2486,6 +2578,8 @@ app.post("/api/download", async (req, res) => {
   let url = coerceYtdlpUrl(String(req.body?.url ?? ""));
   if (!/^https?:\/\//i.test(url))
     return sendError(res, 400, "Provide a valid http(s) URL");
+  if (!isAllowedYtdlpDownloadUrl(url))
+    return sendError(res, 400, "URL host not allowed for downloads");
   const downloadId = String(req.body?.downloadId ?? "").trim();
   if (!isUuidDownloadId(downloadId)) {
     return sendError(res, 400, "Invalid or missing downloadId (UUID)");
