@@ -1705,15 +1705,16 @@ button.settings-network-qr:focus-visible {
 }
 
 .statistics-overview-grid--totals {
-  grid-template-columns: repeat(2, minmax(0, 1fr));
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+
+.statistics-overview-grid--totals .metric-card span {
+  font-size: 0.78rem;
+  line-height: 1.25;
 }
 
 @media (max-width: 399px) {
   .statistics-overview-grid--plays {
-    grid-template-columns: minmax(0, 1fr);
-  }
-
-  .statistics-overview-grid--totals {
     grid-template-columns: minmax(0, 1fr);
   }
 }
@@ -3818,10 +3819,6 @@ button.settings-network-qr:focus-visible {
 
 .theme-picker__strip-seg--bg {
   background-repeat: no-repeat;
-}
-
-.custom-theme-dialog-backdrop {
-  z-index: var(--z-modal);
 }
 
 .custom-theme-dialog {

@@ -6,24 +6,28 @@ import { ToolsActivityProvider } from "./context/ToolsActivityContext";
 import { UserStateProvider } from "./context/UserStateContext";
 import { AppShell } from "./components/AppShell/AppShell";
 import { LibraryRootGate } from "./components/LibraryRootGate/LibraryRootGate";
+import { PortraitLockGate } from "./components/PortraitLockGate";
 import "./App.css";
 import "./responsive.css";
+import "./styles/portrait-lock.css";
 
 export default function App() {
   return (
     <LibraryRootGate>
       <LibrarySyncActivityProvider>
-      <UserStateProvider>
-        <AppConfirmProvider>
-          <PlayerProvider>
-            <RhythmModeProvider>
-              <ToolsActivityProvider>
-                <AppShell />
-              </ToolsActivityProvider>
-            </RhythmModeProvider>
-          </PlayerProvider>
-        </AppConfirmProvider>
-      </UserStateProvider>
+        <UserStateProvider>
+          <PortraitLockGate>
+            <AppConfirmProvider>
+              <PlayerProvider>
+                <RhythmModeProvider>
+                  <ToolsActivityProvider>
+                    <AppShell />
+                  </ToolsActivityProvider>
+                </RhythmModeProvider>
+              </PlayerProvider>
+            </AppConfirmProvider>
+          </PortraitLockGate>
+        </UserStateProvider>
       </LibrarySyncActivityProvider>
     </LibraryRootGate>
   );

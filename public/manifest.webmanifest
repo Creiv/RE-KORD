@@ -7,6 +7,8 @@
   "scope": "/",
   "display": "standalone",
   "display_override": ["standalone", "fullscreen"],
+  "categories": ["music"],
+  "orientation": "portrait",
   "background_color": "#0f1117",
   "theme_color": "#0f1117",
   "icons": [

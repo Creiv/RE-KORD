@@ -95,6 +95,14 @@ export function isStandaloneDisplayMode(): boolean {
   }
 }
 
+export function isAutomotiveDisplayMode(): boolean {
+  try {
+    return window.matchMedia("(display-mode: automotive)").matches;
+  } catch {
+    return false;
+  }
+}
+
 export function useAppRoute() {
   const [route, setRoute] = useState<RouteState>(() => parseRoute());
   useEffect(() => {

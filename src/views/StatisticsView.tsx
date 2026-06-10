@@ -3,6 +3,7 @@ import { useUserState } from "../context/UserStateContext";
 import { useI18n } from "../i18n/useI18n";
 import type { LibraryIndex, LibraryTrackIndex } from "../types";
 import { parseTrackGenres } from "../lib/genres";
+import { countPlectrTracksPlayed } from "../game/lib/plectrStorage";
 import { buildRandomArtistCoverMap } from "../lib/artistCover";
 import { coverUrlForAlbumRelPath, coverUrlForTrackRelPath } from "../lib/api";
 import { versionedUrl } from "../lib/versionedUrl";
@@ -23,12 +24,14 @@ function initials(text: string) {
 
 const STATISTICS_TOP_N = 3;
 
-type StatisticsMetricMode = "plays" | "favorites" | "blocked";
+type StatisticsMetricMode = "plays" | "favorites" | "blocked" | "plectr";
 
 function computeStatisticsRankings(
   index: LibraryIndex,
   scoreByTrackRelPath: Record<string, number>,
-  sortLocale: string
+  sortLocale: string,
+  metricMode: StatisticsMetricMode = "plays",
+  blockedAlbumIds?: Set<string>
 ) {
   const trackRows = index.tracks
     .map((tr) => ({ tr, n: scoreByTrackRelPath[tr.relPath] ?? 0 }))
@@ -56,6 +59,9 @@ function computeStatisticsRankings(
     );
   const albumRows = index.albums
     .map((al) => {
+      if (metricMode === "blocked" && blockedAlbumIds) {
+        return { al, n: blockedAlbumIds.has(al.id) ? 1 : 0 };
+      }
       let n = 0;
       for (const rel of al.tracks) n += scoreByTrackRelPath[rel] ?? 0;
       return { al, n };
@@ -148,6 +154,10 @@ function StatisticsView({
         scoreMap[tr.relPath] = favoritesSet.has(tr.relPath) ? 1 : 0;
         continue;
       }
+      if (metricMode === "plectr") {
+        scoreMap[tr.relPath] = user.state.plectrBests?.[tr.relPath]?.score ?? 0;
+        continue;
+      }
       scoreMap[tr.relPath] =
         blockedTrackSet.has(tr.relPath) || blockedAlbumSet.has(tr.albumId)
           ? 1
@@ -161,10 +171,18 @@ function StatisticsView({
     favoritesSet,
     blockedTrackSet,
     blockedAlbumSet,
+    user.state.plectrBests,
   ]);
   const data = useMemo(
-    () => computeStatisticsRankings(index, scoreByTrackRelPath, sortLocale),
-    [index, scoreByTrackRelPath, sortLocale]
+    () =>
+      computeStatisticsRankings(
+        index,
+        scoreByTrackRelPath,
+        sortLocale,
+        metricMode,
+        blockedAlbumSet
+      ),
+    [index, scoreByTrackRelPath, sortLocale, metricMode, blockedAlbumSet]
   );
   const overviewData = useMemo(
     () => computeStatisticsRankings(index, counts, sortLocale).overview,
@@ -176,13 +194,15 @@ function StatisticsView({
   );
   const totalFavorites = user.state.favorites?.length ?? 0;
   const totalShuffleBlocks = useMemo(() => {
-    const tr = user.state.shuffleExcludedTrackRelPaths?.length ?? 0;
-    const al = user.state.shuffleExcludedAlbumIds?.length ?? 0;
-    return tr + al;
-  }, [
-    user.state.shuffleExcludedTrackRelPaths,
-    user.state.shuffleExcludedAlbumIds,
-  ]);
+    return index.tracks.filter(
+      (tr) =>
+        blockedTrackSet.has(tr.relPath) || blockedAlbumSet.has(tr.albumId)
+    ).length;
+  }, [index.tracks, blockedTrackSet, blockedAlbumSet]);
+  const totalPlectrTracks = useMemo(
+    () => countPlectrTracksPlayed(user.state.plectrBests),
+    [user.state.plectrBests]
+  );
 
   const openTrackInLibrary = (tr: LibraryTrackIndex) => {
     const arId =
@@ -193,16 +213,27 @@ function StatisticsView({
     metricMode === "plays"
       ? t("statistics.modePlays")
       : metricMode === "favorites"
-      ? t("statistics.modeFavorites")
-      : t("statistics.modeBlocked");
+        ? t("statistics.modeFavorites")
+        : metricMode === "plectr"
+          ? t("statistics.modePlectr")
+          : t("statistics.modeBlocked");
   const metricTabs = [
     { id: "plays" as const, label: t("statistics.modePlays") },
     { id: "favorites" as const, label: t("statistics.modeFavorites") },
+    { id: "plectr" as const, label: t("statistics.modePlectr") },
     { id: "blocked" as const, label: t("statistics.modeBlocked") },
   ];
-  const formatMetricValue = (n: number) => {
+  const formatMetricValue = (n: number, relPath?: string) => {
     if (metricMode === "plays") return t("trackRow.playCount", { n });
     if (metricMode === "favorites") return t("statistics.favoriteCount", { n });
+    if (metricMode === "plectr") {
+      const grade = relPath
+        ? user.state.plectrBests?.[relPath]?.grade
+        : undefined;
+      return grade
+        ? t("statistics.plectrScoreWithGrade", { n, grade })
+        : t("statistics.plectrScore", { n });
+    }
     return t("statistics.blockedCount", { n });
   };
 
@@ -243,6 +274,7 @@ function StatisticsView({
 
       <div className="statistics-page__sections">
         <div className="statistics-page__rankings">
+        {metricMode !== "blocked" ? (
         <section className="surface-card statistics-section">
           <div className="statistics-section__head">
             <h3>{t("statistics.sectionTracks")}</h3>
@@ -287,7 +319,7 @@ function StatisticsView({
                         </div>
                       </div>
                       <div className="statistics-rank-row__plays">
-                        {formatMetricValue(row.n)}
+                        {formatMetricValue(row.n, row.tr.relPath)}
                       </div>
                     </button>
                   </li>
@@ -296,6 +328,7 @@ function StatisticsView({
             </ol>
           )}
         </section>
+        ) : null}
 
         <section className="surface-card statistics-section">
           <div className="statistics-section__head">
@@ -474,6 +507,10 @@ function StatisticsView({
               <div className="metric-card">
                 <span>{t("statistics.overviewBlockedTotal")}</span>
                 <strong>{totalShuffleBlocks}</strong>
+              </div>
+              <div className="metric-card">
+                <span>{t("statistics.overviewPlectrTracks")}</span>
+                <strong>{totalPlectrTracks}</strong>
               </div>
             </div>
           </div>

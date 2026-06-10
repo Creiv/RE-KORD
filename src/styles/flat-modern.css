@@ -150,18 +150,18 @@
   transform: none;
 }
 
-/* ── Banda superiore pagine: sfumatura accent / accent2 del tema ── */
-.page-top-band,
-.view-page__intro > .hero-card,
-.view-page__intro > .achievements-hero,
-.view-page__toolbar-band > :first-child,
-.view-page--studio > .surface-card:first-child,
-.settings-page > .surface-card:first-child,
-.library-page__chrome > :first-child,
-.library-view > .album-hero:first-child,
-.library-view > .surface-card.surface-card--toolbar-only:first-child,
-.library-page.library-view--search-results > :first-child,
-.view-page--listen .listen-page > .listen-stage {
+/* ── Banda superiore pagine: sfumatura accent / accent2 del tema (solo senza glass) ── */
+:root:not([data-glass-surfaces="1"]) .page-top-band,
+:root:not([data-glass-surfaces="1"]) .view-page__intro > .hero-card,
+:root:not([data-glass-surfaces="1"]) .view-page__intro > .achievements-hero,
+:root:not([data-glass-surfaces="1"]) .view-page__toolbar-band > :first-child,
+:root:not([data-glass-surfaces="1"]) .view-page--studio > .surface-card:first-child,
+:root:not([data-glass-surfaces="1"]) .settings-page > .surface-card:first-child,
+:root:not([data-glass-surfaces="1"]) .library-page__chrome > :first-child,
+:root:not([data-glass-surfaces="1"]) .library-view > .album-hero:first-child,
+:root:not([data-glass-surfaces="1"]) .library-view > .surface-card.surface-card--toolbar-only:first-child,
+:root:not([data-glass-surfaces="1"]) .library-page.library-view--search-results > :first-child,
+:root:not([data-glass-surfaces="1"]) .view-page--listen .listen-page > .listen-stage {
   background:
     radial-gradient(
       ellipse 85% 140% at 0% 50%,

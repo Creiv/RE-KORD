@@ -2067,6 +2067,13 @@
   box-sizing: border-box;
 }
 
+.meta-edit-backdrop.custom-theme-dialog-backdrop {
+  z-index: var(--z-modal);
+  background: transparent;
+  backdrop-filter: none;
+  -webkit-backdrop-filter: none;
+}
+
 .meta-edit-backdrop--lyrics-portal {
   z-index: var(--z-overlay-raised);
 }

@@ -9,6 +9,29 @@ const SCHEMA_VERSION = 1;
 
 const cacheEpoch = new Map();
 const bgRefreshRunning = new Set();
+const cacheMutationChains = new Map();
+
+function cacheMutationKey(musicRoot) {
+  try {
+    return path.resolve(String(musicRoot));
+  } catch {
+    return String(musicRoot);
+  }
+}
+
+async function withLibraryIndexCacheMutation(musicRoot, fn) {
+  const key = cacheMutationKey(musicRoot);
+  const prev = cacheMutationChains.get(key) ?? Promise.resolve();
+  const next = prev.catch(() => {}).then(() => fn());
+  cacheMutationChains.set(key, next);
+  try {
+    return await next;
+  } finally {
+    if (cacheMutationChains.get(key) === next) {
+      cacheMutationChains.delete(key);
+    }
+  }
+}
 
 function cacheFilePath(musicRoot) {
   return path.join(musicRoot, ".kord", CACHE_FILENAME);
@@ -101,25 +124,28 @@ export async function invalidateLibraryIndexCache(musicRoot) {
  */
 export async function patchTrackInLibraryIndexCache(musicRoot, relPath, patch = {}) {
   if (process.env.REKORD_INDEX_CACHE === "0") return false;
-  const cached = await readLibraryIndexCache(musicRoot);
-  if (!cached || !relPath) return false;
-  let found = false;
-  const tracks = cached.tracks.map((track) => {
-    if (track.relPath !== relPath) return track;
-    found = true;
-    const nextMeta =
-      patch.meta && typeof patch.meta === "object"
-        ? { ...(track.meta || {}), ...patch.meta }
-        : track.meta;
-    return {
-      ...track,
-      ...(patch.title ? { title: patch.title } : {}),
-      ...(nextMeta ? { meta: nextMeta } : {}),
-    };
+  if (!relPath) return false;
+  return withLibraryIndexCacheMutation(musicRoot, async () => {
+    const cached = await readLibraryIndexCache(musicRoot);
+    if (!cached) return false;
+    let found = false;
+    const tracks = cached.tracks.map((track) => {
+      if (track.relPath !== relPath) return track;
+      found = true;
+      const nextMeta =
+        patch.meta && typeof patch.meta === "object"
+          ? { ...(track.meta || {}), ...patch.meta }
+          : track.meta;
+      return {
+        ...track,
+        ...(patch.title ? { title: patch.title } : {}),
+        ...(nextMeta ? { meta: nextMeta } : {}),
+      };
+    });
+    if (!found) return false;
+    await writeLibraryIndexCache(musicRoot, { ...cached, tracks });
+    return true;
   });
-  if (!found) return false;
-  await writeLibraryIndexCache(musicRoot, { ...cached, tracks });
-  return true;
 }
 
 /**
@@ -129,30 +155,32 @@ export async function patchTrackInLibraryIndexCache(musicRoot, relPath, patch = 
  */
 export async function patchTracksInLibraryIndexCache(musicRoot, patches) {
   if (process.env.REKORD_INDEX_CACHE === "0" || !patches?.length) return false;
-  const cached = await readLibraryIndexCache(musicRoot);
-  if (!cached) return false;
-  const byPath = new Map(
-    patches.filter((p) => p?.relPath).map((p) => [p.relPath, p]),
-  );
-  if (!byPath.size) return false;
-  let found = false;
-  const tracks = cached.tracks.map((track) => {
-    const patch = byPath.get(track.relPath);
-    if (!patch) return track;
-    found = true;
-    const nextMeta =
-      patch.meta && typeof patch.meta === "object"
-        ? { ...(track.meta || {}), ...patch.meta }
-        : track.meta;
-    return {
-      ...track,
-      ...(patch.title ? { title: patch.title } : {}),
-      ...(nextMeta ? { meta: nextMeta } : {}),
-    };
+  return withLibraryIndexCacheMutation(musicRoot, async () => {
+    const cached = await readLibraryIndexCache(musicRoot);
+    if (!cached) return false;
+    const byPath = new Map(
+      patches.filter((p) => p?.relPath).map((p) => [p.relPath, p]),
+    );
+    if (!byPath.size) return false;
+    let found = false;
+    const tracks = cached.tracks.map((track) => {
+      const patch = byPath.get(track.relPath);
+      if (!patch) return track;
+      found = true;
+      const nextMeta =
+        patch.meta && typeof patch.meta === "object"
+          ? { ...(track.meta || {}), ...patch.meta }
+          : track.meta;
+      return {
+        ...track,
+        ...(patch.title ? { title: patch.title } : {}),
+        ...(nextMeta ? { meta: nextMeta } : {}),
+      };
+    });
+    if (!found) return false;
+    await writeLibraryIndexCache(musicRoot, { ...cached, tracks });
+    return true;
   });
-  if (!found) return false;
-  await writeLibraryIndexCache(musicRoot, { ...cached, tracks });
-  return true;
 }
 
 /**
@@ -167,46 +195,49 @@ export async function patchAlbumInLibraryIndexCache(
   patch = {},
 ) {
   if (process.env.REKORD_INDEX_CACHE === "0") return false;
-  const cached = await readLibraryIndexCache(musicRoot);
-  if (!cached || !albumRelPath) return false;
-  let found = false;
-  const now = Date.now();
-  const albums = cached.albums.map((album) => {
-    if (album.relPath !== albumRelPath) return album;
-    found = true;
-    const next = { ...album, ...patch };
+  if (!albumRelPath) return false;
+  return withLibraryIndexCacheMutation(musicRoot, async () => {
+    const cached = await readLibraryIndexCache(musicRoot);
+    if (!cached) return false;
+    let found = false;
+    const now = Date.now();
+    const albums = cached.albums.map((album) => {
+      if (album.relPath !== albumRelPath) return album;
+      found = true;
+      const next = { ...album, ...patch };
+      if (patch.coverRelPath) {
+        next.coverRelPath = patch.coverRelPath;
+        next.hasCover = true;
+        next.updatedAt = now;
+      }
+      if (patch.title && String(patch.title).trim()) {
+        next.name = String(patch.title).trim();
+      }
+      if (patch.hasAlbumMeta === true) next.hasAlbumMeta = true;
+      return next;
+    });
+    if (!found) return false;
+    let tracks = cached.tracks;
+    let artists = cached.artists;
     if (patch.coverRelPath) {
-      next.coverRelPath = patch.coverRelPath;
-      next.hasCover = true;
-      next.updatedAt = now;
-    }
-    if (patch.title && String(patch.title).trim()) {
-      next.name = String(patch.title).trim();
-    }
-    if (patch.hasAlbumMeta === true) next.hasAlbumMeta = true;
-    return next;
-  });
-  if (!found) return false;
-  let tracks = cached.tracks;
-  let artists = cached.artists;
-  if (patch.coverRelPath) {
-    const albumPrefix = `${albumRelPath}/`;
-    tracks = tracks.map((track) =>
-      track.relPath.startsWith(albumPrefix)
-        ? { ...track, updatedAt: now }
-        : track,
-    );
-    const albumRow = albums.find((a) => a.relPath === albumRelPath);
-    if (albumRow?.artistId) {
-      artists = artists.map((artist) =>
-        artist.id === albumRow.artistId
-          ? { ...artist, coverRelPath: patch.coverRelPath }
-          : artist,
+      const albumPrefix = `${albumRelPath}/`;
+      tracks = tracks.map((track) =>
+        track.relPath.startsWith(albumPrefix)
+          ? { ...track, updatedAt: now }
+          : track,
       );
+      const albumRow = albums.find((a) => a.relPath === albumRelPath);
+      if (albumRow?.artistId) {
+        artists = artists.map((artist) =>
+          artist.id === albumRow.artistId
+            ? { ...artist, coverRelPath: patch.coverRelPath }
+            : artist,
+        );
+      }
     }
-  }
-  await writeLibraryIndexCache(musicRoot, { ...cached, albums, tracks, artists });
-  return true;
+    await writeLibraryIndexCache(musicRoot, { ...cached, albums, tracks, artists });
+    return true;
+  });
 }
 
 /**

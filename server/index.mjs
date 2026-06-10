@@ -219,6 +219,15 @@ function stopRemoteAccess() {
 
 function startRemoteAccess() {
   if (cloudflaredChild && !cloudflaredChild.killed) return;
+  const distIndex = path.join(__dirname, "..", "dist", "index.html");
+  if (!existsSync(distIndex)) {
+    remoteAccessState.enabled = false;
+    remoteAccessState.status = "error";
+    remoteAccessState.error =
+      "UI non compilata: esegui npm run build prima di avviare il tunnel.";
+    remoteAccessState.publicUrl = null;
+    return;
+  }
   remoteAccessState.enabled = true;
   void setCloudflareTunnelEnabled(true);
   remoteAccessState.status = "starting";
@@ -3570,20 +3579,36 @@ app.post("/api/studio/sanitize-track-titles", async (req, res) => {
   }
 });
 
-const distPath = path.join(
-  __dirname,
-  "..",
-  "dist"
-);
-if (existsSync(path.join(distPath, "index.html"))) {
+const distPath = path.join(__dirname, "..", "dist");
+const distIndexPath = path.join(distPath, "index.html");
+if (existsSync(distIndexPath)) {
   app.use(express.static(distPath));
   app.use((req, res, next) => {
     if (req.path.startsWith("/api") || req.path.startsWith("/media"))
       return next();
     if (req.method !== "GET" && req.method !== "HEAD") return next();
-    return res.sendFile(path.join(distPath, "index.html"), (error) => {
-      if (error) res.status(500).end();
+    if (res.headersSent) return;
+    res.sendFile("index.html", { root: distPath }, (error) => {
+      if (!error) return;
+      if (error.code === "ECONNABORTED" || error.code === "EPIPE") return;
+      console.error("[rekord] SPA fallback failed:", error?.message || error);
+      if (!res.headersSent) {
+        res
+          .status(503)
+          .type("text/plain")
+          .send("RE-KORD UI unavailable. Run npm run build and restart the server.");
+      }
     });
+  });
+} else {
+  app.use((req, res, next) => {
+    if (req.path.startsWith("/api") || req.path.startsWith("/media"))
+      return next();
+    if (req.method !== "GET" && req.method !== "HEAD") return next();
+    res
+      .status(503)
+      .type("text/plain")
+      .send("RE-KORD UI not built. Run npm run build and restart the server.");
   });
 }
 

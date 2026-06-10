@@ -16,10 +16,10 @@ import { isTrackAlbumShuffleExcluded } from "../lib/randomExclusions";
 import {
   type MediaSessionBridge,
   registerMediaSessionActions,
-  setMediaSessionMetadata,
-  setMediaSessionPlaybackState,
-  setMediaSessionPosition,
+  resolveMediaSessionPauseAction,
+  syncMediaSessionState,
 } from "../lib/mediaSession";
+import { isAutomotiveDisplayMode } from "../lib/routing";
 import { fisherYatesShuffle } from "../lib/smartShuffle";
 import {
   resetPlayerProgressTime,
@@ -209,6 +209,13 @@ export function PlayerProvider({ children }: { children: React.ReactNode }) {
 
   const audioCtxRef = useRef<AudioContext | null>(null);
   const keepPlayingRef = useRef(true);
+  const isPlayingRef = useRef(false);
+  const mediaMutedRef = useRef(false);
+  const appInitiatedPauseRef = useRef(false);
+  const syncMediaSessionNowRef = useRef<() => void>(() => {
+    /* bound in effect */
+  });
+  const trackLoadingRef = useRef(false);
   const restoredRef = useRef(false);
   const repeatRef = useRef<RepeatMode>("all");
   const lastTrackBoundaryAdvanceAtRef = useRef(0);
@@ -230,6 +237,12 @@ export function PlayerProvider({ children }: { children: React.ReactNode }) {
       return;
     },
     pause: () => {
+      return;
+    },
+    mute: () => {
+      return;
+    },
+    unmute: () => {
       return;
     },
     next: () => {
@@ -273,6 +286,10 @@ export function PlayerProvider({ children }: { children: React.ReactNode }) {
   useEffect(() => {
     shuffleRef.current = shuffle;
   }, [shuffle]);
+
+  useEffect(() => {
+    isPlayingRef.current = isPlaying;
+  }, [isPlaying]);
 
   useEffect(() => {
     repeatRef.current = repeat;
@@ -374,6 +391,11 @@ export function PlayerProvider({ children }: { children: React.ReactNode }) {
   }, [pushRecent, snapGainsToSolo]);
 
   const abortCrossfade = useCallback(() => {
+    const wasActive = crossfadeBusyRef.current;
+    const incomingIdx = crossfadeNextIdxRef.current;
+    const incomingDeckIx = crossfadeInIxRef.current;
+    const outgoingDeckIx = crossfadeOutIxRef.current;
+
     crossfadeGenRef.current += 1;
     window.clearTimeout(crossfadeTimerRef.current);
     crossfadeTimerRef.current = 0;
@@ -401,6 +423,8 @@ export function PlayerProvider({ children }: { children: React.ReactNode }) {
       void inactiveEl.load();
     }
     prefetchedRelPathRef.current = null;
+
+    return { wasActive, incomingIdx, incomingDeckIx, outgoingDeckIx };
   }, [snapGainsToSolo]);
 
   const prefetchNextOnInactiveDeck = useCallback(() => {
@@ -691,49 +715,64 @@ export function PlayerProvider({ children }: { children: React.ReactNode }) {
     if (!outEl || !inEl) return;
 
     const run = async () => {
-      const url = mediaUrl(track.relPath);
-      const alreadyBuffered =
-        prefetchedRelPathRef.current === track.relPath &&
-        audioReadyEnough(inEl);
-      if (!alreadyBuffered) {
-        prefetchedRelPathRef.current = track.relPath;
-        inEl.src = url;
-        inEl.load();
-        try {
-          await waitForAudioReady(inEl);
-        } catch {
-          if (gen !== trackLoadGenRef.current) return;
-          setIsPlaying(false);
-          return;
+      trackLoadingRef.current = true;
+      syncMediaSessionNowRef.current();
+      try {
+        const url = mediaUrl(track.relPath);
+        const alreadyBuffered =
+          prefetchedRelPathRef.current === track.relPath &&
+          audioReadyEnough(inEl);
+        if (!alreadyBuffered) {
+          prefetchedRelPathRef.current = track.relPath;
+          inEl.src = url;
+          inEl.load();
+          try {
+            await waitForAudioReady(inEl);
+          } catch {
+            if (gen !== trackLoadGenRef.current) return;
+            setIsPlaying(false);
+            syncMediaSessionNowRef.current();
+            return;
+          }
         }
-      }
-      if (gen !== trackLoadGenRef.current) return;
+        if (gen !== trackLoadGenRef.current) return;
 
-      outEl.pause();
-      outEl.removeAttribute("src");
-      void outEl.load();
+        snapGainsToSolo(inIx);
+        activeDeckRef.current = inIx;
+        setActiveDeckIx(inIx);
 
-      snapGainsToSolo(inIx);
-      activeDeckRef.current = inIx;
-      setActiveDeckIx(inIx);
-
-      if (Number.isFinite(inEl.duration) && inEl.duration > 0) {
-        setDuration(inEl.duration);
-      }
-      const deckT = inEl.currentTime;
-      setCurrentTime(deckT);
-      setPlayerProgressTime(deckT, true);
-      if (keepPlayingRef.current) {
-        const ctx = audioCtxRef.current;
-        if (ctx && ctx.state === "suspended") await ctx.resume();
-        try {
-          await inEl.play();
-          if (gen !== trackLoadGenRef.current) return;
-          setIsPlaying(true);
-          pushRecent(track);
-        } catch {
-          if (gen !== trackLoadGenRef.current) return;
-          setIsPlaying(false);
+        if (Number.isFinite(inEl.duration) && inEl.duration > 0) {
+          setDuration(inEl.duration);
+        }
+        const deckT = inEl.currentTime;
+        setCurrentTime(deckT);
+        setPlayerProgressTime(deckT, true);
+        if (keepPlayingRef.current) {
+          const ctx = audioCtxRef.current;
+          if (ctx && ctx.state === "suspended") await ctx.resume();
+          try {
+            await inEl.play();
+            if (gen !== trackLoadGenRef.current) return;
+            outEl.pause();
+            outEl.removeAttribute("src");
+            void outEl.load();
+            setIsPlaying(true);
+            pushRecent(track);
+            syncMediaSessionNowRef.current();
+          } catch {
+            if (gen !== trackLoadGenRef.current) return;
+            setIsPlaying(false);
+            syncMediaSessionNowRef.current();
+          }
+        } else {
+          outEl.pause();
+          outEl.removeAttribute("src");
+          void outEl.load();
+        }
+      } finally {
+        if (gen === trackLoadGenRef.current) {
+          trackLoadingRef.current = false;
+          syncMediaSessionNowRef.current();
         }
       }
     };
@@ -807,13 +846,40 @@ export function PlayerProvider({ children }: { children: React.ReactNode }) {
         }
         advanceAfterTrackCompleted();
       };
+      const onExternalPause = () => {
+        if (appInitiatedPauseRef.current) return;
+        if (ixFor(audio) !== activeDeckRef.current) return;
+        if (!keepPlayingRef.current || !currentRef.current) return;
+        if (isAutomotiveDisplayMode()) {
+          audio.muted = true;
+          mediaMutedRef.current = true;
+          void audio.play().catch(() => {
+            /* */
+          });
+        } else {
+          keepPlayingRef.current = false;
+          setIsPlaying(false);
+        }
+        syncMediaSessionNowRef.current();
+      };
+      const onVolumeChange = () => {
+        if (ixFor(audio) !== activeDeckRef.current) return;
+        if (!audio.muted && mediaMutedRef.current) {
+          mediaMutedRef.current = false;
+          syncMediaSessionNowRef.current();
+        }
+      };
       audio.addEventListener("timeupdate", onTime);
       audio.addEventListener("loadedmetadata", onMeta);
       audio.addEventListener("ended", onEnd);
+      audio.addEventListener("pause", onExternalPause);
+      audio.addEventListener("volumechange", onVolumeChange);
       return () => {
         audio.removeEventListener("timeupdate", onTime);
         audio.removeEventListener("loadedmetadata", onMeta);
         audio.removeEventListener("ended", onEnd);
+        audio.removeEventListener("pause", onExternalPause);
+        audio.removeEventListener("volumechange", onVolumeChange);
       };
     };
 
@@ -847,7 +913,10 @@ export function PlayerProvider({ children }: { children: React.ReactNode }) {
         void audio
           .play()
           .then(() => setIsPlaying(true))
-          .catch(() => setIsPlaying(false));
+          .catch(() => setIsPlaying(false))
+          .finally(() => syncMediaSessionNowRef.current());
+      } else {
+        syncMediaSessionNowRef.current();
       }
     };
     document.addEventListener("visibilitychange", recoverAfterForeground);
@@ -867,8 +936,53 @@ export function PlayerProvider({ children }: { children: React.ReactNode }) {
     return () => window.clearInterval(id);
   }, [advanceAfterTrackCompleted]);
 
+  const syncMediaSessionNow = useCallback(() => {
+    const track = currentRef.current;
+    if (!track) {
+      syncMediaSessionState({ track: null, playbackState: "none" });
+      return;
+    }
+    const audio = audioRef.current;
+    const rawDur = audio?.duration;
+    const dur =
+      Number.isFinite(duration) && duration > 0
+        ? duration
+        : rawDur && Number.isFinite(rawDur) && rawDur > 0
+          ? rawDur
+          : 0;
+    const pos = audio ? readPlayerProgressTime() : 0;
+    const keepPlaying = keepPlayingRef.current;
+    const loading = trackLoadingRef.current;
+    syncMediaSessionState({
+      track,
+      playbackState:
+        keepPlaying && (isPlayingRef.current || loading) ? "playing" : "paused",
+      duration: dur > 0 ? dur : undefined,
+      position: dur > 0 ? pos : undefined,
+      playbackRate: audio?.playbackRate || 1,
+      skipPosition: loading,
+    });
+  }, [duration]);
+
+  useEffect(() => {
+    syncMediaSessionNowRef.current = syncMediaSessionNow;
+  }, [syncMediaSessionNow]);
+
+  const applyMediaMute = useCallback(
+    (muted: boolean) => {
+      mediaMutedRef.current = muted;
+      const a0 = audioDeck0Ref.current;
+      const a1 = audioDeck1Ref.current;
+      if (a0) a0.muted = muted;
+      if (a1) a1.muted = muted;
+      syncMediaSessionNow();
+    },
+    [syncMediaSessionNow],
+  );
+
   const play = useCallback(async () => {
     void abortCrossfade();
+    if (mediaMutedRef.current) applyMediaMute(false);
     const ix = activeDeckRef.current;
     const audio = ix === 0 ? audioDeck0Ref.current : audioDeck1Ref.current;
     if (!audio) return;
@@ -880,18 +994,41 @@ export function PlayerProvider({ children }: { children: React.ReactNode }) {
       setIsPlaying(true);
       const cur = currentRef.current;
       if (cur) pushRecent(cur);
+      syncMediaSessionNow();
     } catch {
       setIsPlaying(false);
+      syncMediaSessionNow();
     }
-  }, [abortCrossfade, pushRecent]);
+  }, [abortCrossfade, applyMediaMute, pushRecent, syncMediaSessionNow]);
 
   const pause = useCallback(() => {
+    appInitiatedPauseRef.current = true;
     void abortCrossfade();
     audioDeck0Ref.current?.pause();
     audioDeck1Ref.current?.pause();
     keepPlayingRef.current = false;
     setIsPlaying(false);
-  }, [abortCrossfade]);
+    appInitiatedPauseRef.current = false;
+    syncMediaSessionNow();
+  }, [abortCrossfade, syncMediaSessionNow]);
+
+  const pauseForMediaSession = useCallback(() => {
+    const action = resolveMediaSessionPauseAction({
+      isAutomotive: isAutomotiveDisplayMode(),
+      isPlaying: isPlayingRef.current,
+      isMuted: mediaMutedRef.current,
+    });
+    if (action === "mute") {
+      applyMediaMute(true);
+      return;
+    }
+    pause();
+  }, [applyMediaMute, pause]);
+
+  const playForMediaSession = useCallback(() => {
+    if (mediaMutedRef.current) applyMediaMute(false);
+    void play();
+  }, [applyMediaMute, play]);
 
   const toggle = useCallback(() => {
     if (isPlaying) pause();
@@ -910,7 +1047,8 @@ export function PlayerProvider({ children }: { children: React.ReactNode }) {
     audio.currentTime = t;
     setCurrentTime(t);
     setPlayerProgressTime(t, true);
-  }, [abortCrossfade]);
+    syncMediaSessionNow();
+  }, [abortCrossfade, syncMediaSessionNow]);
 
   const seekRatio = useCallback(
     (ratio: number) => {
@@ -1103,13 +1241,13 @@ export function PlayerProvider({ children }: { children: React.ReactNode }) {
   }, []);
 
   const next = useCallback(() => {
-    void abortCrossfade();
+    const crossfade = abortCrossfade();
     if (!queue.length) return;
-    const nextIndex = pickNextIndex(
-      queue.length,
-      currentIndex,
-      repeat,
-    );
+    const baseIndex =
+      crossfade.wasActive && crossfade.incomingIdx != null
+        ? crossfade.incomingIdx
+        : currentIndex;
+    const nextIndex = pickNextIndex(queue.length, baseIndex, repeat);
     if (nextIndex == null) {
       keepPlayingRef.current = false;
       setIsPlaying(false);
@@ -1118,6 +1256,7 @@ export function PlayerProvider({ children }: { children: React.ReactNode }) {
     setCurrentIndex(nextIndex);
     setCurrent(queue[nextIndex] || null);
     keepPlayingRef.current = true;
+    syncMediaSessionNowRef.current();
   }, [abortCrossfade, currentIndex, queue, repeat]);
 
   const setShuffle = useCallback((enable: boolean) => {
@@ -1166,25 +1305,37 @@ export function PlayerProvider({ children }: { children: React.ReactNode }) {
 
   const prev = useCallback(() => {
     if (!queue.length) return;
-    void abortCrossfade();
-    const audio = audioRef.current;
-    if (audio && audio.currentTime > 3) {
-      audio.currentTime = 0;
-      return;
+    const crossfade = abortCrossfade();
+    if (!crossfade.wasActive) {
+      const audio = audioRef.current;
+      if (audio && audio.currentTime > 3) {
+        audio.currentTime = 0;
+        return;
+      }
     }
     const prevIndex = pickPrevIndex(queue.length, currentIndex, repeat);
     if (prevIndex == null) return;
     setCurrentIndex(prevIndex);
     setCurrent(queue[prevIndex] || null);
     keepPlayingRef.current = true;
+    syncMediaSessionNowRef.current();
   }, [abortCrossfade, currentIndex, queue, repeat]);
 
   useEffect(() => {
     mediaBridgeRef.current = {
       play: () => {
-        void play();
+        void playForMediaSession();
       },
-      pause,
+      pause: pauseForMediaSession,
+      mute: () => {
+        applyMediaMute(true);
+      },
+      unmute: () => {
+        applyMediaMute(false);
+        if (keepPlayingRef.current && audioRef.current?.paused) {
+          void play();
+        }
+      },
       next,
       prev,
       seek: (t) => {
@@ -1218,8 +1369,10 @@ export function PlayerProvider({ children }: { children: React.ReactNode }) {
       },
     };
   }, [
+    applyMediaMute,
     play,
-    pause,
+    playForMediaSession,
+    pauseForMediaSession,
     next,
     prev,
     seek,
@@ -1236,45 +1389,25 @@ export function PlayerProvider({ children }: { children: React.ReactNode }) {
 
   useEffect(() => {
     if (!current) {
-      setMediaSessionMetadata(null);
-      setMediaSessionPlaybackState("none");
       lastMediaPosAtRef.current = 0;
       lastMediaRelPathRef.current = null;
+      syncMediaSessionNow();
       return;
     }
-    setMediaSessionMetadata(current);
-    setMediaSessionPlaybackState(
-      isPlaying || keepPlayingRef.current ? "playing" : "paused",
-    );
-  }, [current, isPlaying]);
-
-  useEffect(() => {
-    if (!current) return;
     if (current.relPath !== lastMediaRelPathRef.current) {
       lastMediaRelPathRef.current = current.relPath;
       lastMediaPosAtRef.current = 0;
     }
-    const tick = () => {
-      const a = audioRef.current;
-      if (!a) return;
-      const dur = Number.isFinite(duration) && duration > 0
-        ? duration
-        : a.duration;
-      if (!dur || Number.isNaN(dur) || dur <= 0) return;
-      const pos = readPlayerProgressTime();
-      const now = performance.now();
-      const needSeekBar =
-        !isPlaying || now - lastMediaPosAtRef.current > 1000;
-      if (needSeekBar) {
-        lastMediaPosAtRef.current = now;
-        setMediaSessionPosition(dur, pos, a.playbackRate || 1);
-      }
-    };
-    tick();
-    if (!isPlaying) return;
-    const id = window.setInterval(tick, 1000);
+    syncMediaSessionNow();
+  }, [current, syncMediaSessionNow]);
+
+  useEffect(() => {
+    if (!current) return;
+    syncMediaSessionNow();
+    const ms = isPlaying ? 1000 : 2500;
+    const id = window.setInterval(() => syncMediaSessionNow(), ms);
     return () => window.clearInterval(id);
-  }, [current, isPlaying, duration]);
+  }, [current, isPlaying, syncMediaSessionNow]);
 
   const value = useMemo<Ctx>(
     () => ({

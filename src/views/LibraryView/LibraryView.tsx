@@ -282,11 +282,16 @@ export default function LibraryView({
   }, [albumTracks]);
 
   const applyAlbumGenreToAllTracks = useCallback(
-    async (genreToken: string, applyMode: "add" | "remove") => {
+    async (
+      genreToken: string,
+      applyMode: "add" | "remove",
+      targetTracks = albumTracks
+    ) => {
       const albumPath = album?.relPath;
-      if (!albumPath || albumTracks.length === 0) return;
+      if (!albumPath || targetTracks.length === 0) return;
       const token = genreToken.trim();
       if (!token) return;
+      const low = token.toLowerCase();
       setAlbumGenreBusy(true);
       setAlbumGenreErr(null);
       try {
@@ -295,25 +300,26 @@ export default function LibraryView({
           "sync.activity.updatingGenres",
           async () => {
             const trackPatches: NonNullable<LibraryEntityDelta["tracks"]> = [];
-            await Promise.all(
-              albumTracks.map(async (tr) => {
-                const cur = parseTrackGenres(tr.meta?.genre);
-                const low = token.toLowerCase();
-                const next =
-                  applyMode === "add"
-                    ? cur.some((g) => g.toLowerCase() === low)
-                      ? cur
-                      : [...cur, token]
-                    : cur.filter((g) => g.toLowerCase() !== low);
-                const nextSerialized = serializeTrackGenres(next);
-                const saved = await saveTrackInfoManual(tr.relPath, {
-                  genre: nextSerialized || null,
-                });
-                if (saved.track) trackPatches.push(saved.track);
-              })
-            );
+            for (const tr of targetTracks) {
+              const cur = parseTrackGenres(tr.meta?.genre);
+              const hasGenre = cur.some((g) => g.toLowerCase() === low);
+              if (applyMode === "add" && hasGenre) continue;
+              if (applyMode === "remove" && !hasGenre) continue;
+              const next =
+                applyMode === "add"
+                  ? [...cur, token]
+                  : cur.filter((g) => g.toLowerCase() !== low);
+              const nextSerialized = serializeTrackGenres(next);
+              const saved = await saveTrackInfoManual(tr.relPath, {
+                genre: nextSerialized || null,
+              });
+              if (saved.track) trackPatches.push(saved.track);
+            }
             if (trackPatches.length && onLibraryDelta) {
               onLibraryDelta({ tracks: trackPatches }, false);
+            }
+            if (trackPatches.length) {
+              await onReconcileLibrary({ mode: "now" });
             } else if (!onLibraryDelta) {
               await onReconcileLibrary({ mode: "debounced" });
             }
@@ -357,22 +363,22 @@ export default function LibraryView({
       const token = genreToken.trim();
       if (!token) return;
       const low = token.toLowerCase();
-      const missing = albumTracks.filter(
+      const missingTracks = albumTracks.filter(
         (tr) =>
           !parseTrackGenres(tr.meta?.genre).some((g) => g.toLowerCase() === low)
-      ).length;
-      if (missing === 0) return;
+      );
+      if (missingTracks.length === 0) return;
       if (
         !(await appConfirm({
           message: t("albumMeta.addGenreMissingConfirm", {
             g: genreToken,
-            n: missing,
+            n: missingTracks.length,
           }),
         }))
       ) {
         return;
       }
-      await applyAlbumGenreToAllTracks(token, "add");
+      await applyAlbumGenreToAllTracks(token, "add", missingTracks);
     },
     [albumTracks, appConfirm, applyAlbumGenreToAllTracks, t]
   );

@@ -1,0 +1,65 @@
+/* PWA installata: blocca l'uso in landscape su telefono (fallback se orientation.lock non è supportato). */
+@media (display-mode: standalone), (display-mode: fullscreen) {
+  @media (orientation: landscape) and (max-height: 600px) and (pointer: coarse) {
+    html[data-portrait-lock="1"] body {
+      overflow: hidden;
+    }
+  }
+}
+
+html[data-portrait-lock="1"] .portrait-lock-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 2147483000;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: max(1.25rem, env(safe-area-inset-top))
+    max(1.25rem, env(safe-area-inset-right))
+    max(1.25rem, env(safe-area-inset-bottom))
+    max(1.25rem, env(safe-area-inset-left));
+  background: color-mix(in srgb, var(--bg) 92%, black 8%);
+  -webkit-backdrop-filter: blur(12px);
+  backdrop-filter: blur(12px);
+}
+
+html[data-portrait-lock="1"] .portrait-lock-overlay__card {
+  max-width: 20rem;
+  text-align: center;
+  padding: 1.5rem 1.25rem;
+  border-radius: var(--radius-lg, 1rem);
+  border: 1px solid var(--border);
+  background: var(--surface1);
+  box-shadow: var(--shadow-elev-2, 0 16px 48px rgb(0 0 0 / 0.35));
+}
+
+html[data-portrait-lock="1"] .portrait-lock-overlay__icon {
+  display: flex;
+  justify-content: center;
+  margin-bottom: 0.75rem;
+  color: var(--accent);
+  animation: portrait-lock-wiggle 1.8s ease-in-out infinite;
+}
+
+html[data-portrait-lock="1"] .portrait-lock-overlay__title {
+  margin: 0 0 0.5rem;
+  font-size: 1.05rem;
+  font-weight: 700;
+}
+
+html[data-portrait-lock="1"] .portrait-lock-overlay__body {
+  margin: 0;
+  font-size: 0.92rem;
+  line-height: 1.45;
+  color: var(--muted);
+}
+
+@keyframes portrait-lock-wiggle {
+  0%,
+  100% {
+    transform: rotate(-12deg);
+  }
+  50% {
+    transform: rotate(12deg);
+  }
+}

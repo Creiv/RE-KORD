@@ -131,48 +131,63 @@ export const RhythmDockPanel = memo(function RhythmDockPanel({
   }, [p.isPlaying]);
 
   const persistRunScore = useCallback(
-    (relPath: string, result: GameResult, showLast = false) => {
+    async (
+      relPath: string,
+      result: GameResult,
+      opts?: { showLast?: boolean; awaitPersist?: boolean }
+    ) => {
       if (result.score <= 0 && result.hits <= 0) return;
       lastRunRef.current = result;
       const accountBest = plectrBestFromUserState(user.state.plectrBests, relPath);
       saveSessionTrackBest(relPath, result);
-      if (showLast && relPath === track.relPath) setLastResult(result);
+      if (opts?.showLast && relPath === track.relPath) setLastResult(result);
       if (!isBetterPlectrScore(result, accountBest)) return;
       user.savePlectrBest(relPath, result);
-      const persist = () => {
-        void persistPlectrBest(relPath, result, accountBest).then(({ delta }) => {
+      const persist = async () => {
+        try {
+          const { delta } = await persistPlectrBest(relPath, result, accountBest);
           if (delta && onLibraryDelta) onLibraryDelta(delta, false);
-        });
+          if (opts?.awaitPersist) {
+            user.flushUserStateNow({ silent: true });
+          }
+        } catch (err: unknown) {
+          console.warn(
+            "[plectr] persist failed:",
+            err instanceof Error ? err.message : String(err)
+          );
+        }
       };
+      if (opts?.awaitPersist) {
+        await persist();
+        return;
+      }
       if (typeof requestIdleCallback === "function") {
-        requestIdleCallback(persist, { timeout: 2500 });
+        requestIdleCallback(() => {
+          void persist();
+        }, { timeout: 2500 });
       } else {
-        window.setTimeout(persist, 0);
+        window.setTimeout(() => {
+          void persist();
+        }, 0);
       }
     },
     [onLibraryDelta, track.relPath, user]
   );
 
   const flushPendingRun = useCallback(
-    (relPath: string) => {
+    async (relPath: string) => {
       const pending = lastRunRef.current;
       if (!pending) return;
-      persistRunScore(relPath, pending, false);
+      await persistRunScore(relPath, pending, { awaitPersist: true });
       lastRunRef.current = null;
-      user.flushUserStateNow({ silent: true });
     },
-    [persistRunScore, user]
+    [persistRunScore]
   );
 
   useLayoutEffect(() => {
     const prevRel = prevTrackRelRef.current;
     if (prevRel !== track.relPath) {
-      const flush = () => flushPendingRun(prevRel);
-      if (typeof requestIdleCallback === "function") {
-        requestIdleCallback(flush, { timeout: 1200 });
-      } else {
-        window.setTimeout(flush, 0);
-      }
+      void flushPendingRun(prevRel);
       prevTrackRelRef.current = track.relPath;
       setLastResult(null);
       lastRunRef.current = null;
@@ -305,7 +320,10 @@ export const RhythmDockPanel = memo(function RhythmDockPanel({
 
   const onFinish = useCallback(
     (result: GameResult) => {
-      persistRunScore(track.relPath, result, true);
+      void persistRunScore(track.relPath, result, {
+        showLast: true,
+        awaitPersist: true,
+      });
     },
     [persistRunScore, track.relPath]
   );
@@ -321,7 +339,7 @@ export const RhythmDockPanel = memo(function RhythmDockPanel({
   flushUserStateNowRef.current = user.flushUserStateNow;
 
   const onClose = useCallback(() => {
-    flushPendingRun(track.relPath);
+    void flushPendingRun(track.relPath);
     user.flushUserStateNow({ silent: true });
     setOpen(false);
     if (resumePlaybackOnCloseRef.current && !p.isPlaying) {
