@@ -134,7 +134,6 @@ export function GameCanvas({
   const labels = { ...DEFAULT_LABELS, ...labelsProp };
   const usePlayer = Boolean(playerSync);
   const playerSyncRef = useRef(playerSync);
-  playerSyncRef.current = playerSync;
   const gameRef = useRef<HTMLElement | null>(null);
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
   const audioRef = useRef<HTMLAudioElement | null>(null);
@@ -167,7 +166,11 @@ export function GameCanvas({
   const canvasLayoutRef = useRef({ width: 0, height: 0, dpr: 1, bufferW: 0, bufferH: 0 });
   const vizBackdropEngineRef = useRef(new PlectrVizBackdrop());
   const vizBackdropRef = useRef(vizBackdrop);
-  vizBackdropRef.current = vizBackdrop;
+
+  useLayoutEffect(() => {
+    playerSyncRef.current = playerSync;
+    vizBackdropRef.current = vizBackdrop;
+  });
 
   const syncLanePadUi = useCallback(() => {
     const s = stateRef.current;
@@ -179,6 +182,7 @@ export function GameCanvas({
     lanePadUiNotifier.sync = syncLanePadUi;
     return () => {
       lanePadUiNotifier.sync = null;
+      clearLaneFlashTimers();
     };
   }, [syncLanePadUi]);
   const [waitingForStart, setWaitingForStart] = useState(true);
@@ -836,11 +840,9 @@ export function GameCanvas({
     const up = (event: KeyboardEvent) => {
       const lane = keyMap.get(event.key.toLowerCase());
       if (lane === undefined) return;
-      const state = stateRef.current;
-      if (state) {
-        state.pressedLanes[lane] = false;
-        syncLanePadUi();
-      }
+      // Come onPointerUp: oltre a resettare la lane, giudica il rilascio
+      // delle note hold (altrimenti gli hold da tastiera restano appesi).
+      releaseLanePress(lane);
     };
     window.addEventListener("keydown", down);
     window.addEventListener("keyup", up);
@@ -848,7 +850,7 @@ export function GameCanvas({
       window.removeEventListener("keydown", down);
       window.removeEventListener("keyup", up);
     };
-  }, [judgeLane, syncLanePadUi]);
+  }, [judgeLane, releaseLanePress]);
 
   return (
     <main
@@ -1008,6 +1010,14 @@ const laneFlashClearTimers: Array<ReturnType<typeof setTimeout> | null> = [
   null,
   null,
 ];
+
+function clearLaneFlashTimers(): void {
+  for (let lane = 0; lane < laneFlashClearTimers.length; lane += 1) {
+    const pending = laneFlashClearTimers[lane];
+    if (pending) clearTimeout(pending);
+    laneFlashClearTimers[lane] = null;
+  }
+}
 
 function flashLane(state: RunState, lane: number, kind: "hit" | "miss"): void {
   const until = performance.now() + 420;
@@ -1667,14 +1677,18 @@ function judgeTap(state: RunState, laneIndex: number): void {
   const songTime = state.songTime;
   let best: ChartNote | null = null;
   let bestDelta = Infinity;
-  for (const note of state.notes) {
+  // Binary search sulla finestra di hit, come judgeHoldStart (evita la
+  // scansione O(n) di tutte le note a ogni tap).
+  const start = lowerBoundNoteIndex(state.notes, songTime - HIT_WINDOWS.ok);
+  const end = upperBoundNoteIndex(state.notes, songTime + HIT_WINDOWS.ok);
+  for (let i = start; i < end; i += 1) {
+    const note = state.notes[i];
     if (note.type !== "tap" || note.lane !== laneIndex || note.hit || note.missed) continue;
     const delta = Math.abs(note.time - songTime);
     if (delta < bestDelta) {
       best = note;
       bestDelta = delta;
     }
-    if (note.time - songTime > HIT_WINDOWS.ok) break;
   }
   if (!best || bestDelta > HIT_WINDOWS.ok) {
     flashLane(state, laneIndex, "miss");

@@ -1051,7 +1051,7 @@ export async function runYtdlpDownload(
     throw new Error(msg)
   }
   if (ct.includes("application/json")) {
-    return (await response.json()) as DownloadRes
+    return readResponseJson<DownloadRes>(response)
   }
   const reader = response.body?.getReader()
   if (!reader) throw new Error("Download: unreadable body")
@@ -1249,8 +1249,7 @@ export async function createMusicSubdir(
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ parent, name }),
   })
-  const json = (await response.json()) as { error?: string; relPath?: string }
-  if (!response.ok) throw new Error(json.error || "Failed to create folder")
+  const json = await unwrap<{ relPath?: string }>(response)
   return { relPath: json.relPath || "" }
 }
 
@@ -1304,24 +1303,12 @@ export async function fetchAlbumInfo(
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ albumPath, artist, album }),
   })
-  const json = (await response.json()) as
-    | {
-        ok: true;
-        albumPath: string;
-        meta: FetchedAlbumMeta;
-        album?: LibraryEntityDelta["album"];
-      }
-    | { error?: string }
-  if (!response.ok)
-    throw new Error(
-      "error" in json ? json.error || "Failed to fetch album metadata" : "Failed to fetch album metadata",
-    )
-  return json as {
+  return unwrap<{
     ok: true;
     albumPath: string;
     meta: FetchedAlbumMeta;
     album?: LibraryEntityDelta["album"];
-  }
+  }>(response)
 }
 
 export async function saveAlbumInfoManual(
@@ -1352,26 +1339,12 @@ export async function fetchTrackInfo(
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ relPath }),
   })
-  const json = (await response.json()) as
-    | {
-        ok: true;
-        relPath: string;
-        meta: FetchedTrackMeta;
-        track?: LibraryEntityDelta["track"];
-      }
-    | { error?: string }
-  if (!response.ok)
-    throw new Error(
-      "error" in json
-        ? json.error || "Failed to fetch track metadata"
-        : "Failed to fetch track metadata",
-    )
-  return json as {
+  return unwrap<{
     ok: true;
     relPath: string;
     meta: FetchedTrackMeta;
     track?: LibraryEntityDelta["track"];
-  }
+  }>(response)
 }
 
 export async function fetchTrackLyrics(
@@ -1411,16 +1384,7 @@ export async function saveTrackInfoManual(
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ relPath, patch }),
   })
-  const json = (await response.json()) as
-    | { ok: true; relPath: string; meta: Record<string, unknown>; track?: LibraryEntityDelta["track"]; album?: LibraryEntityDelta["album"] }
-    | { error?: string }
-  if (!response.ok)
-    throw new Error(
-      "error" in json
-        ? json.error || "Failed to save track metadata"
-        : "Failed to save track metadata",
-    )
-  return json as { ok: true; relPath: string; meta: Record<string, unknown>; track?: LibraryEntityDelta["track"]; album?: LibraryEntityDelta["album"] }
+  return unwrap<{ ok: true; relPath: string; meta: Record<string, unknown>; track?: LibraryEntityDelta["track"]; album?: LibraryEntityDelta["album"] }>(response)
 }
 
 export async function savePlectrBestScore(
@@ -1445,25 +1409,12 @@ export async function savePlectrBestScore(
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ relPath, result }),
   });
-  const json = (await response.json()) as
-    | {
-        ok: true;
-        relPath: string;
-        meta: Record<string, unknown>;
-        track?: LibraryEntityDelta["track"];
-      }
-    | { error?: string };
-  if (!response.ok) {
-    throw new Error(
-      "error" in json ? json.error || "Failed to save Plectr score" : "Failed to save Plectr score",
-    );
-  }
-  return json as {
+  return unwrap<{
     ok: true;
     relPath: string;
     meta: Record<string, unknown>;
     track?: LibraryEntityDelta["track"];
-  };
+  }>(response);
 }
 
 export async function pruneOrphanTrackMetaForAlbum(

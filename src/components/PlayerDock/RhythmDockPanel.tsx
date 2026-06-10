@@ -43,12 +43,19 @@ function makePlaceholderChart(
 ): Chart {
   const difficulty =
     DIFFICULTIES.find((d) => d.id === difficultyId) ?? DIFFICULTIES[1];
+  // Durata reale del brano quando nota, così la fine run stimata non si
+  // discosta dalla traccia mentre l'analisi è in corso.
+  const durationMs = track.meta?.durationMs;
+  const durationSec =
+    durationMs != null && Number.isFinite(durationMs)
+      ? Math.max(1, Math.round(durationMs / 1000))
+      : 180;
   return {
     songId: `placeholder:${track.relPath}:${difficultyId}`,
     baseSongId: track.relPath,
     difficulty,
     title: track.title || track.relPath,
-    duration: 180,
+    duration: durationSec,
     notes: [],
     stats: { bpm: 0, rmsAvg: 0, density: 0 },
   };
@@ -111,7 +118,9 @@ export const RhythmDockPanel = memo(function RhythmDockPanel({
   }, [chartRelPath, chartSet, playMode, track.relPath]);
 
   const lastChartRef = useRef<{ relPath: string; chart: Chart } | null>(null);
-  if (chart) lastChartRef.current = { relPath: track.relPath, chart };
+  useLayoutEffect(() => {
+    if (chart) lastChartRef.current = { relPath: track.relPath, chart };
+  }, [chart, track.relPath]);
 
   const placeholderChart = useMemo(
     () => makePlaceholderChart(track, playMode),
@@ -197,8 +206,6 @@ export const RhythmDockPanel = memo(function RhythmDockPanel({
   }, [track.relPath, user.state.plectrBests, flushPendingRun]);
 
   const trackRelRef = useRef(track.relPath);
-  trackRelRef.current = track.relPath;
-
   const playerBridgeRef = useRef({
     audioRef: p.audioRef,
     seek: p.seek,
@@ -206,13 +213,16 @@ export const RhythmDockPanel = memo(function RhythmDockPanel({
     pause: p.pause,
     isPlaying: p.isPlaying,
   });
-  playerBridgeRef.current = {
-    audioRef: p.audioRef,
-    seek: p.seek,
-    play: p.play,
-    pause: p.pause,
-    isPlaying: p.isPlaying,
-  };
+  useLayoutEffect(() => {
+    trackRelRef.current = track.relPath;
+    playerBridgeRef.current = {
+      audioRef: p.audioRef,
+      seek: p.seek,
+      play: p.play,
+      pause: p.pause,
+      isPlaying: p.isPlaying,
+    };
+  });
 
   const playerSync = useMemo(
     () => ({
