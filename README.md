@@ -110,18 +110,30 @@ Library root: `MUSIC_ROOT` or Settings. Server config dir: `REKORD_USER_CONFIG_D
 ### Docker
 
 ```bash
+cp .env.docker.example .env
+# Edit REKORD_MUSIC_HOST to your music folder on the host
+
 npm run docker:build
 npm run docker:up
 # → http://localhost:3001 (or REKORD_PORT)
 ```
 
-`docker-compose.yml` mounts named volumes for the library (`/music`) and server config (`/config`). Set `REKORD_YTDLP_COOKIES` to a cookies file path inside `/config` when needed.
+By default, `docker-compose.yml` **bind-mounts host folders** (no manual `docker cp`):
+
+| Host (`.env`) | Container | Purpose |
+| --- | --- | --- |
+| `REKORD_MUSIC_HOST` (default `./docker-data/music`) | `/music` | Music library |
+| `REKORD_CONFIG_HOST` (default `./docker-data/config`) | `/config` | Server config, accounts, cookies |
+
+On first start, the entrypoint creates `/config/music-root.config.json` pointing at `/music`. Settings in the UI work from `http://localhost:3001` (Docker admin access). Optional `MUSIC_ROOT` in compose locks the library path via environment.
 
 | Variable | Effect |
 | --- | --- |
+| `REKORD_MUSIC_HOST` / `REKORD_CONFIG_HOST` | Host paths for bind mounts |
 | `REKORD_LISTEN_HOST=127.0.0.1` | Loopback only (no LAN) |
 | `REKORD_PORT` / `KORD_PORT` / `PORT` | HTTP port |
-| `REKORD_YTDLP_COOKIES` | Netscape cookies file for downloads |
+| `REKORD_YTDLP_COOKIES` | Netscape cookies file path inside `/config` |
+| `MUSIC_ROOT` (optional in compose) | Lock library folder (disables in-app path change) |
 | `REKORD_LISTEN_ON_LAN=1` | Expose Vite dev server on LAN |
 
 ### Build and release 3.5

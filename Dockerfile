@@ -20,8 +20,9 @@ WORKDIR /app
 ENV NODE_ENV=production \
     PORT=3001 \
     REKORD_LISTEN_HOST=0.0.0.0 \
-    MUSIC_ROOT=/music \
-    REKORD_USER_CONFIG_DIR=/config
+    REKORD_USER_CONFIG_DIR=/config \
+    REKORD_DOCKER=1 \
+    REKORD_DOCKER_MUSIC_DIR=/music
 
 RUN apt-get update \
   && apt-get install -y --no-install-recommends ca-certificates \
@@ -35,6 +36,8 @@ RUN npm ci --omit=dev && npm cache clean --force
 COPY --from=builder /app/dist ./dist
 COPY --from=builder /app/server ./server
 COPY --from=builder /app/public ./public
+COPY scripts/docker-entrypoint.sh ./scripts/docker-entrypoint.sh
+RUN chmod +x scripts/docker-entrypoint.sh
 
 USER node
 
@@ -43,4 +46,4 @@ EXPOSE 3001
 HEALTHCHECK --interval=30s --timeout=5s --start-period=45s --retries=3 \
   CMD node -e "fetch('http://127.0.0.1:'+(process.env.PORT||3001)+'/api/health').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"
 
-CMD ["node", "server/index.mjs"]
+ENTRYPOINT ["scripts/docker-entrypoint.sh"]

@@ -90,6 +90,7 @@ import {
 } from "./trackInfoPaths.mjs";
 import { resolveYtdlpPath } from "./ytdlpPath.mjs";
 import { buildLanAccessUrls } from "./lanNetwork.mjs";
+import { isServerAdminRequest } from "./requestAccess.mjs";
 import {
   appendActivityLog,
   diffUserStatePlaylistsAndSettings,
@@ -805,25 +806,13 @@ function accountIdFromReq(req) {
   );
 }
 
-function isLocalRequest(req) {
-  const a = String(
-    req.socket?.remoteAddress || req.connection?.remoteAddress || ""
-  );
-  return (
-    a === "127.0.0.1" ||
-    a === "::1" ||
-    a === "::ffff:127.0.0.1" ||
-    a.endsWith("127.0.0.1")
-  );
-}
-
 function buildConfigPayload(req) {
-  const local = isLocalRequest(req);
-  const snap = getConfigSnapshot(local);
-  snap.localAccess = local;
-  snap.libraryRootWritable = Boolean(local && !snap.lockedByEnv);
-  snap.youtubeCookiesWritable = Boolean(local && !snap.youtubeCookiesLockedByEnv);
-  if (!local && isLibraryRootConfigured()) {
+  const admin = isServerAdminRequest(req);
+  const snap = getConfigSnapshot(admin);
+  snap.localAccess = admin;
+  snap.libraryRootWritable = Boolean(admin && !snap.lockedByEnv);
+  snap.youtubeCookiesWritable = Boolean(admin && !snap.youtubeCookiesLockedByEnv);
+  if (!admin && isLibraryRootConfigured()) {
     const root = getMusicRoot();
     if (root)
       snap.libraryRootLabel = path.basename(path.resolve(String(root)));
@@ -1169,7 +1158,7 @@ app.get("/api/health", async (req, res) => {
         accountId,
       };
       if (envToken && queryToken === envToken) payload.startupToken = envToken;
-      if (isLocalRequest(req)) payload.musicRoot = null;
+      if (isServerAdminRequest(req)) payload.musicRoot = null;
       return sendOk(res, payload);
     }
     const root = getMusicRoot();
@@ -1181,7 +1170,7 @@ app.get("/api/health", async (req, res) => {
       accountId,
     };
     if (envToken && queryToken === envToken) payload.startupToken = envToken;
-    if (isLocalRequest(req)) payload.musicRoot = root;
+    if (isServerAdminRequest(req)) payload.musicRoot = root;
     return sendOk(res, payload);
   } catch (error) {
     return sendError(res, 500, String(error?.message || error));
@@ -1262,7 +1251,7 @@ app.get("/api/remote-access", (req, res) => {
 });
 
 app.post("/api/remote-access/login", (req, res) => {
-  if (!isLocalRequest(req)) {
+  if (!isServerAdminRequest(req)) {
     return sendError(res, 403, "Remote access settings are local-only.");
   }
   const url = "https://dash.cloudflare.com/";
@@ -1278,7 +1267,7 @@ app.post("/api/remote-access/login", (req, res) => {
 });
 
 app.post("/api/remote-access/logout", (req, res) => {
-  if (!isLocalRequest(req)) {
+  if (!isServerAdminRequest(req)) {
     return sendError(res, 403, "Remote access settings are local-only.");
   }
   setCloudflareLoggedIn(false)
@@ -1290,7 +1279,7 @@ app.post("/api/remote-access/logout", (req, res) => {
 });
 
 app.post("/api/remote-access/start", (req, res) => {
-  if (!isLocalRequest(req)) {
+  if (!isServerAdminRequest(req)) {
     return sendError(res, 403, "Remote access settings are local-only.");
   }
   if (remoteAccessState.status === "running" || remoteAccessState.status === "starting") {
@@ -1312,7 +1301,7 @@ app.post("/api/remote-access/start", (req, res) => {
 });
 
 app.post("/api/remote-access/stop", (req, res) => {
-  if (!isLocalRequest(req)) {
+  if (!isServerAdminRequest(req)) {
     return sendError(res, 403, "Remote access settings are local-only.");
   }
   stopRemoteAccess();
@@ -1330,7 +1319,7 @@ app.put("/api/config", async (req, res) => {
     const body = req.body || {};
     let did = false;
     if (body.musicRoot != null) {
-      if (!isLocalRequest(req)) {
+      if (!isServerAdminRequest(req)) {
         return sendError(
           res,
           403,
@@ -1370,7 +1359,7 @@ app.post(
   uploadYoutubeCookies.single("file"),
   async (req, res) => {
     try {
-      if (!isLocalRequest(req)) {
+      if (!isServerAdminRequest(req)) {
         return sendError(
           res,
           403,
@@ -1400,7 +1389,7 @@ app.post(
 
 app.delete("/api/config/youtube-cookies", async (req, res) => {
   try {
-    if (!isLocalRequest(req)) {
+    if (!isServerAdminRequest(req)) {
       return sendError(
         res,
         403,
@@ -3620,10 +3609,23 @@ app.use((error, _req, res, _next) => {
 async function startListening() {
   await waitForInitialLayoutMigration();
 
+  if (process.env.REKORD_DOCKER === "1" && isLibraryRootConfigured()) {
+    const root = getMusicRoot();
+    void getLibraryIndex(root).catch((err) => {
+      console.warn(
+        "[music-server] docker library warmup:",
+        err?.message ?? err,
+      );
+    });
+  }
+
   const LISTEN_HOST = getListenHost();
   const httpServer = app.listen(PORT, LISTEN_HOST, () => {
+    const rootLabel = isLibraryRootConfigured()
+      ? getMusicRoot()
+      : "(library not configured)";
     console.log(
-      `[music-server] http://${LISTEN_HOST}:${PORT} -> ${getMusicRoot()}`
+      `[music-server] http://${LISTEN_HOST}:${PORT} -> ${rootLabel}`,
     );
     const lanUrls = buildLanAccessUrls(PORT);
     if (lanUrls.length) {

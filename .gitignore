@@ -19,6 +19,10 @@ coverage
 .env
 .env.*
 !.env.example
+!.env.docker.example
+
+# Docker bind-mount data (local)
+docker-data/
 
 *.local
 

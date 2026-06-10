@@ -7,14 +7,13 @@ services:
     environment:
       PORT: 3001
       REKORD_LISTEN_HOST: ${REKORD_LISTEN_HOST:-0.0.0.0}
-      MUSIC_ROOT: /music
       REKORD_USER_CONFIG_DIR: /config
+      REKORD_DOCKER: "1"
+      REKORD_DOCKER_MUSIC_DIR: /music
+      # Opzionale: fissa la libreria (blocca modifica da Impostazioni)
+      # MUSIC_ROOT: /music
       # REKORD_YTDLP_COOKIES: /config/youtube-cookies.txt
     volumes:
-      - rekord_music:/music
-      - rekord_config:/config
+      - ${REKORD_MUSIC_HOST:-./docker-data/music}:/music
+      - ${REKORD_CONFIG_HOST:-./docker-data/config}:/config
     restart: unless-stopped
-
-volumes:
-  rekord_music:
-  rekord_config:
