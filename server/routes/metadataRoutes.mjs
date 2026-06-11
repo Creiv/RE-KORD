@@ -20,6 +20,14 @@ import {
   saveTrackManualMeta,
 } from "../albumInfo.mjs";
 import { aggregateArtworkSearch } from "../artworkSearch.mjs";
+import {
+  downloadArtistImage,
+  loadAlbumInfoItems,
+  loadArtistInfoBundle,
+  mutateAlbumInfo,
+  mutateArtistInfo,
+  searchEntityInfoSources,
+} from "../entityInfo.mjs";
 import { getAudioFileDurationMs } from "../audioDuration.mjs";
 import { normalizeStoredGenreString, parseTrackGenres } from "../genres.mjs";
 import { accountIdFromReq, actLog, sendError, sendOk } from "../httpUtils.mjs";
@@ -683,4 +691,97 @@ export function registerMetadataRoutes(app) {
     }
   });
 
+  /* Info e curiosità per artista/album (kord-artistinfo.json / chiave `info`
+     in kord-albuminfo.json). `artist` è la cartella artista; `album` la
+     cartella album (opzionale: senza, si opera sull'artista). */
+  const resolveEntityDirs = (root, artistRaw, albumRaw) => {
+    const artistSeg = safeRelSeg(String(artistRaw || "").trim());
+    if (!artistSeg || artistSeg.includes("/")) return { error: "invalid artist" };
+    const artistDir = path.join(root, artistSeg);
+    if (!underRoot(artistDir, root) || !existsSync(artistDir)) {
+      return { error: "artist not found", status: 404 };
+    }
+    const albumStr = String(albumRaw || "").trim();
+    if (!albumStr) return { artistSeg, artistDir, albumSeg: null, albumDir: null };
+    const albumSeg = safeRelSeg(albumStr);
+    if (!albumSeg || albumSeg.includes("/")) return { error: "invalid album" };
+    const albumDir = path.join(artistDir, albumSeg);
+    if (!underRoot(albumDir, root) || !existsSync(albumDir)) {
+      return { error: "album not found", status: 404 };
+    }
+    return { artistSeg, artistDir, albumSeg, albumDir };
+  };
+
+  app.get("/api/entity-info", async (req, res) => {
+    try {
+      const root = getMusicRoot();
+      if (!root) return sendError(res, 503, "music root not configured");
+      const r = resolveEntityDirs(root, req.query.artist, req.query.album);
+      if (r.error) return sendError(res, r.status || 400, r.error);
+      if (r.albumDir) {
+        const items = await loadAlbumInfoItems(r.albumDir);
+        return sendOk(res, { items, image: null });
+      }
+      const bundle = await loadArtistInfoBundle(r.artistDir);
+      return sendOk(res, bundle);
+    } catch (error) {
+      return sendError(res, 500, String(error?.message || error));
+    }
+  });
+
+  app.post("/api/entity-info/search", async (req, res) => {
+    try {
+      const artist = String(req.body?.artist || "").trim();
+      const album = String(req.body?.album || "").trim();
+      const lang = String(req.body?.lang || "").trim() === "en" ? "en" : "it";
+      if (!artist) return sendError(res, 400, "artist required");
+      const candidates = await searchEntityInfoSources({
+        artist,
+        album: album || null,
+        lang,
+      });
+      return sendOk(res, { candidates });
+    } catch (error) {
+      return sendError(res, 500, String(error?.message || error));
+    }
+  });
+
+  app.post("/api/entity-info/save", async (req, res) => {
+    try {
+      const root = getMusicRoot();
+      if (!root) return sendError(res, 503, "music root not configured");
+      const r = resolveEntityDirs(root, req.body?.artist, req.body?.album);
+      if (r.error) return sendError(res, r.status || 400, r.error);
+      const add = Array.isArray(req.body?.add) ? req.body.add : [];
+      const removeIds = Array.isArray(req.body?.removeIds)
+        ? req.body.removeIds
+        : [];
+      if (r.albumDir) {
+        const items = await mutateAlbumInfo(r.albumDir, { add, removeIds });
+        void actLog(req, {
+          kind: "studio",
+          action: add.length ? "entity_info_save" : "entity_info_clear",
+          folder: `${r.artistSeg}/${r.albumSeg}`,
+        });
+        return sendOk(res, { items, image: null });
+      }
+      // Foto artista: scaricata in cartella (kord-artistinfo.jpg), mai URL remoti.
+      const imageFile = add.length
+        ? await downloadArtistImage(r.artistDir, req.body?.imageUrl)
+        : null;
+      const bundle = await mutateArtistInfo(r.artistDir, {
+        add,
+        removeIds,
+        imageFile,
+      });
+      void actLog(req, {
+        kind: "studio",
+        action: add.length ? "entity_info_save" : "entity_info_clear",
+        folder: r.artistSeg,
+      });
+      return sendOk(res, bundle);
+    } catch (error) {
+      return sendError(res, 500, String(error?.message || error));
+    }
+  });
 }

@@ -34,6 +34,7 @@ import {
   TrackListRow,
 } from "../../components/AppSharedUi";
 import { AlbumListTile, ArtistListTile, GenreListTile } from "../../components/library";
+import { EntityInfoAction } from "../../components/EntityInfoAction";
 import { SectionHeadLead } from "../../components/SectionHeadLead";
 import { VirtualTrackList } from "../../components/VirtualTrackList";
 import { ExcludeShuffleIcon } from "../../components/ExcludeShuffleIcon";
@@ -940,6 +941,13 @@ export default function LibraryView({
                       >
                         {t("library.playAlbum")}
                       </button>
+                      {album.relPath ? (
+                        <EntityInfoAction
+                          artistDir={artist.id}
+                          albumDir={album.relPath.split("/").slice(1).join("/")}
+                          title={album.name}
+                        />
+                      ) : null}
                       <button
                         type="button"
                         className="ghost-btn ghost-btn--icon-only"
@@ -1148,6 +1156,7 @@ export default function LibraryView({
                 >
                   {t("playback.playArtist")}
                 </button>
+                <EntityInfoAction artistDir={artist.id} title={artist.name} />
               </div>
             </div>
           </div>

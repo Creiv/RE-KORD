@@ -25,6 +25,8 @@ const METADATA_BASENAMES = new Set([
   "wpp-albuminfo.json",
   "kord-trackinfo.json",
   "wpp-trackinfo.json",
+  "kord-artistinfo.json",
+  "kord-artistinfo.jpg",
   "linked-source.json",
 ])
 

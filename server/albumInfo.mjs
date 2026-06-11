@@ -125,7 +125,7 @@ function metaMutationKey(fp) {
   }
 }
 
-async function withMetaMutation(fp, fn) {
+export async function withMetaMutation(fp, fn) {
   const key = metaMutationKey(fp)
   const prev = metaMutationChains.get(key) ?? Promise.resolve()
   const next = prev

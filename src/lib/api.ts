@@ -1,5 +1,8 @@
 import type {
   DashboardPayload,
+  EntityInfoBundle,
+  EntityInfoCandidate,
+  EntityInfoItem,
   LibraryCatalogResponse,
   LibraryEntityDelta,
   LibraryIndex,
@@ -1296,6 +1299,64 @@ export async function saveAlbumInfoManual(
     response,
   )
   return data
+}
+
+/** Info/curiosità per artista (album omesso) o album. `artist` e `album` sono nomi cartella. */
+export async function getEntityInfo(
+  artist: string,
+  album?: string | null,
+): Promise<EntityInfoBundle> {
+  const response = await apiFetch("/api/entity-info", undefined, {
+    artist,
+    ...(album ? { album } : {}),
+  })
+  const data = await unwrap<EntityInfoBundle>(response)
+  return {
+    items: Array.isArray(data.items) ? data.items : [],
+    image: data.image ?? null,
+  }
+}
+
+export async function searchEntityInfo(
+  artist: string,
+  album?: string | null,
+  lang?: string,
+): Promise<EntityInfoCandidate[]> {
+  const response = await apiFetch("/api/entity-info/search", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ artist, album: album || undefined, lang }),
+  })
+  const data = await unwrap<{ candidates: EntityInfoCandidate[] }>(response)
+  return Array.isArray(data.candidates) ? data.candidates : []
+}
+
+/** Aggiunge/rimuove voci; per gli artisti può scaricare la foto (imageUrl). */
+export async function saveEntityInfo(
+  artist: string,
+  album: string | null,
+  ops: {
+    add?: Pick<EntityInfoItem, "lang" | "title" | "text">[];
+    removeIds?: string[];
+    imageUrl?: string | null;
+  },
+): Promise<EntityInfoBundle> {
+  const response = await apiFetch("/api/entity-info/save", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      artist,
+      album: album || undefined,
+      add: ops.add ?? [],
+      removeIds: ops.removeIds ?? [],
+      imageUrl: ops.imageUrl || undefined,
+    }),
+  })
+  const data = await unwrap<EntityInfoBundle>(response)
+  return {
+    items: Array.isArray(data.items) ? data.items : [],
+    image: data.image ?? null,
+  }
 }
 
 export async function fetchTrackInfo(

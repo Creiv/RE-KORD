@@ -79,6 +79,30 @@ export type EnrichedTrack = LibTrack & {
   updatedAt?: number | null;
 };
 
+/** Voce di info/curiosità salvata per artista (kord-artistinfo.json) o album (chiave `infoItems` in kord-albuminfo.json). */
+export type EntityInfoItem = {
+  id: string;
+  /** Lingua della voce: il dialog mostra solo quelle della lingua dell'app. */
+  lang: string;
+  title?: string | null;
+  text: string;
+  savedAt?: string;
+};
+
+export type EntityInfoBundle = {
+  items: EntityInfoItem[];
+  /** Foto artista locale (kord-artistinfo.jpg) — presente solo per artisti. */
+  image?: string | null;
+};
+
+export type EntityInfoCandidate = {
+  kind?: "trivia" | "bio" | "desc" | "section";
+  lang: string;
+  title?: string | null;
+  text: string;
+  thumbnail?: string | null;
+};
+
 export type UserPlaylist = {
   id: string;
   name: string;

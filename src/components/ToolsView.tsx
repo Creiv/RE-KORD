@@ -144,6 +144,7 @@ import {
 } from "./toolsViewShared";
 import { DlDestFolderGlyph, DlDestUpIcon } from "./toolsViewGlyphs";
 import { StudioCoversPane } from "./StudioCoversPane";
+import { StudioEntityInfoCard } from "./StudioEntityInfoCard";
 export function ToolsView({
   library,
   libraryIndex,
@@ -3016,6 +3017,23 @@ export function ToolsView({
                       </button>
                     </div>
                   </div>
+
+                  <div className="studio-log">
+                    <label className="subtle sm">{t("tools.logLabel")}</label>
+                    <textarea
+                      className="log"
+                      value={metaLog}
+                      onChange={(e) => setMetaLog(e.target.value)}
+                      rows={3}
+                    />
+                    <button
+                      type="button"
+                      className="linkbtn"
+                      onClick={() => setMetaLog("")}
+                    >
+                      {t("tools.clear")}
+                    </button>
+                  </div>
                 </div>
 
                 <div className="studio-meta-split__secondary">
@@ -3084,25 +3102,9 @@ export function ToolsView({
                             </div>
                           ) : null}
                         </div>
+                        <StudioEntityInfoCard artists={library?.artists ?? []} />
                       </div>
                     ) : null}
-                  </div>
-
-                  <div className="studio-log">
-                    <label className="subtle sm">{t("tools.logLabel")}</label>
-                    <textarea
-                      className="log"
-                      value={metaLog}
-                      onChange={(e) => setMetaLog(e.target.value)}
-                      rows={3}
-                    />
-                    <button
-                      type="button"
-                      className="linkbtn"
-                      onClick={() => setMetaLog("")}
-                    >
-                      {t("tools.clear")}
-                    </button>
                   </div>
                 </div>
               </div>

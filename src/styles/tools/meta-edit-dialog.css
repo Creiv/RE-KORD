@@ -369,3 +369,67 @@
   flex: 1 1 0.5rem;
   min-width: 0.5rem;
 }
+
+/* Dialog "Curiosità" (info artista/album, sola lettura) */
+.entity-info-btn__ic {
+  width: 1rem;
+  height: 1rem;
+  flex-shrink: 0;
+}
+
+.entity-info-dialog {
+  max-width: 560px;
+}
+
+.entity-info-dialog__head {
+  align-items: flex-start;
+}
+
+.entity-info-dialog__lead {
+  display: flex;
+  align-items: center;
+  gap: 0.85rem;
+  min-width: 0;
+}
+
+.entity-info-dialog__photo {
+  width: 76px;
+  height: 76px;
+  object-fit: cover;
+  border-radius: 50%;
+  flex-shrink: 0;
+  box-shadow: 0 4px 18px color-mix(in srgb, var(--bg) 55%, transparent);
+}
+
+.entity-info-dialog__body {
+  display: grid;
+  gap: 0.6rem;
+  max-height: min(48vh, 420px);
+  overflow-y: auto;
+  line-height: 1.55;
+  margin-top: 0.7rem;
+}
+
+.entity-info-dialog__body p {
+  margin: 0;
+}
+
+/* Voci multiple nel dialog Curiosità */
+.entity-info-dialog__item {
+  display: grid;
+  gap: 0.45rem;
+  padding: 0.65rem 0;
+}
+
+.entity-info-dialog__item + .entity-info-dialog__item {
+  border-top: 1px solid color-mix(in srgb, var(--border) 60%, transparent);
+}
+
+.entity-info-dialog__item-title {
+  margin: 0;
+  font-size: 0.8rem;
+  font-weight: 750;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: var(--accent);
+}
