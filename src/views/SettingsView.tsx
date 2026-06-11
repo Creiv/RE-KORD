@@ -75,6 +75,7 @@ function SettingsView() {
   );
   const [youtubeCookiesOk, setYoutubeCookiesOk] = useState<string | null>(null);
   const youtubeCookiesInputRef = useRef<HTMLInputElement | null>(null);
+  const [customThemeDialogOpen, setCustomThemeDialogOpen] = useState(false);
   const [lanAccessUrl, setLanAccessUrl] = useState<string | null>(null);
   const [remoteAccess, setRemoteAccess] = useState<RemoteAccessState | null>(
     null
@@ -536,26 +537,55 @@ function SettingsView() {
               ))}
             </select>
           </label>
-          <div className="settings-ui-inline-control">
-            <span>{t("settings.theme")}</span>
-            <ThemePicker
-              value={user.state.settings.theme}
-              onChange={(theme) => user.updateSettings({ theme })}
-              customTheme={user.state.settings.customTheme}
-              onCustomThemeChange={(customTheme) =>
-                user.updateSettings({ theme: "custom", customTheme })
-              }
-              customThemeBgPreviewUrl={
-                user.state.settings.customTheme?.bgMode === "image" &&
-                user.state.settings.customTheme?.bgImage
-                  ? customThemeBgImageUrl(
-                      user.state.settings.customTheme.bgImageRev ?? undefined,
-                    )
-                  : null
-              }
-              onCustomThemeBgUpload={uploadCustomThemeBg}
-              onCustomThemeBgClear={clearCustomThemeBg}
-            />
+          <div className="settings-theme-style-row">
+            <div className="settings-ui-inline-control">
+              <span>{t("settings.theme")}</span>
+              <ThemePicker
+                value={user.state.settings.theme}
+                onChange={(theme) => user.updateSettings({ theme })}
+                customTheme={user.state.settings.customTheme}
+                onCustomThemeChange={(customTheme) =>
+                  user.updateSettings({ theme: "custom", customTheme })
+                }
+                customThemeBgPreviewUrl={
+                  user.state.settings.customTheme?.bgMode === "image" &&
+                  user.state.settings.customTheme?.bgImage
+                    ? customThemeBgImageUrl(
+                        user.state.settings.customTheme.bgImageRev ?? undefined,
+                      )
+                    : null
+                }
+                onCustomThemeBgUpload={uploadCustomThemeBg}
+                onCustomThemeBgClear={clearCustomThemeBg}
+                showCustomizeButton={false}
+                customizeOpen={customThemeDialogOpen}
+                onCustomizeOpenChange={setCustomThemeDialogOpen}
+              />
+            </div>
+            <label className="settings-ui-inline-control">
+              <span>{t("settings.uiStyle")}</span>
+              <select
+                value={user.state.settings.uiStyle}
+                onChange={(event) =>
+                  user.updateSettings({
+                    uiStyle:
+                      event.target.value === "modern" ? "modern" : "classic",
+                  })
+                }
+              >
+                <option value="classic">{t("settings.uiStyleClassic")}</option>
+                <option value="modern">{t("settings.uiStyleModern")}</option>
+              </select>
+            </label>
+            {user.state.settings.theme === "custom" ? (
+              <button
+                type="button"
+                className="ghost-btn ghost-btn--sm settings-theme-style-row__customize"
+                onClick={() => setCustomThemeDialogOpen(true)}
+              >
+                {t("themePicker.customEditBtn")}
+              </button>
+            ) : null}
           </div>
           <label className="settings-ui-inline-control settings-ui-inline-control--checkbox-row">
             <input

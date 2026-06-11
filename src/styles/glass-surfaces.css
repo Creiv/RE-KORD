@@ -134,6 +134,20 @@
   box-shadow: inset 0 1px 0 var(--glass-shine);
 }
 
+/* Il dialog Personalizza tema resta opaco anche in modalità vetro:
+   anteprima fedele dei colori, niente riflessi né blur. */
+:root[data-glass-surfaces="1"] .meta-edit-dialog.custom-theme-dialog {
+  background: var(--surface2);
+  -webkit-backdrop-filter: none;
+  backdrop-filter: none;
+  border-color: var(--border);
+  box-shadow: var(--shadow-elev-2);
+}
+
+:root[data-glass-surfaces="1"] .meta-edit-dialog.custom-theme-dialog::before {
+  content: none;
+}
+
 /* Banda superiore: vetro accent (toolbar, intro, chrome libreria) */
 :root[data-glass-surfaces="1"] .view-page__toolbar-band > :first-child,
 :root[data-glass-surfaces="1"] .view-page__intro > .hero-card,

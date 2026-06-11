@@ -55,6 +55,9 @@ export function ThemePicker({
   customThemeBgPreviewUrl = null,
   onCustomThemeBgUpload,
   onCustomThemeBgClear,
+  customizeOpen,
+  onCustomizeOpenChange,
+  showCustomizeButton = true,
 }: {
   value: ThemeMode;
   onChange: (theme: ThemeMode) => void;
@@ -65,10 +68,17 @@ export function ThemePicker({
     file: File,
   ) => Promise<{ bgImage: string; bgImageRev: number }>;
   onCustomThemeBgClear?: () => Promise<void>;
+  /** Apertura dialog Personalizza controllata dall'esterno (es. bottone sotto le colonne Tema/Stile). */
+  customizeOpen?: boolean;
+  onCustomizeOpenChange?: (open: boolean) => void;
+  showCustomizeButton?: boolean;
 }) {
   const { t } = useI18n();
   const [open, setOpen] = useState(false);
-  const [customDialogOpen, setCustomDialogOpen] = useState(false);
+  const [internalCustomDialogOpen, setInternalCustomDialogOpen] =
+    useState(false);
+  const customDialogOpen = customizeOpen ?? internalCustomDialogOpen;
+  const setCustomDialogOpen = onCustomizeOpenChange ?? setInternalCustomDialogOpen;
   const [customThemeBgBusy, setCustomThemeBgBusy] = useState(false);
   const [customThemeBgErr, setCustomThemeBgErr] = useState<string | null>(null);
   const rootRef = useRef<HTMLDivElement>(null);
@@ -233,7 +243,7 @@ export function ThemePicker({
           })}
         </ul>
       ) : null}
-      {value === "custom" ? (
+      {value === "custom" && showCustomizeButton ? (
         <button
           type="button"
           className="ghost-btn ghost-btn--sm theme-picker__customize-btn"

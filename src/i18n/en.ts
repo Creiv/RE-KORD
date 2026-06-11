@@ -516,6 +516,9 @@ export const EN: Record<string, string> = {
   "settings.uiEyebrow": "Interface preferences",
   "settings.uiHeading": "Theme and visualizer",
   "settings.theme": "Theme",
+  "settings.uiStyle": "Style",
+  "settings.uiStyleClassic": "Classic",
+  "settings.uiStyleModern": "Modern",
   "settings.glassSurfaces":
     "Glass style (semi-transparent cards with reflections)",
   "settings.visualizer": "Visualizer",

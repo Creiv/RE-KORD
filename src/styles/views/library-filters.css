@@ -425,6 +425,25 @@
   gap: 0.55rem;
 }
 
+/* Tema e Stile affiancati; "Personalizza…" (tema custom) sotto entrambe le colonne */
+.settings-theme-style-row {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: var(--space-4);
+  align-items: start;
+}
+
+.settings-theme-style-row__customize {
+  grid-column: 1 / -1;
+  justify-self: start;
+}
+
+@media (max-width: 560px) {
+  .settings-theme-style-row {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
 .settings-ui-inline-control--checkbox-row {
   display: flex;
   flex-direction: row;

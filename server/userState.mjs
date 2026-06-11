@@ -317,6 +317,7 @@ function sanitizeSettings(settings) {
     audioCrossfadeSec: normalizeAudioCrossfadeSec(src),
     plectrDisableVizBackdrop: src.plectrDisableVizBackdrop === true,
     glassSurfaces: src.glassSurfaces === true,
+    uiStyle: src.uiStyle === "modern" ? "modern" : "classic",
   }
 }
 

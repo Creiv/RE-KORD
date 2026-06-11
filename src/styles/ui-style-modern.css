@@ -1,0 +1,247 @@
+/**
+ * Stile UI "Moderno" (Impostazioni → Stile) — restyle completo, CSS-only.
+ * Attivo con html[data-ui-style="modern"] (UserStateContext); il "Classico"
+ * è lo stile base. Direzione: arioso, morbido, accent-forward —
+ * geometria a pillola, spaziature ampie, gradienti d'accento, dock flottante.
+ * Nessun cambio di markup: solo override su classi globali e variabili.
+ */
+
+/* ── 1. Geometria e respiro ─────────────────────────────────────────── */
+:root[data-ui-style="modern"] {
+  --radius-xs: 8px;
+  --radius-sm: 12px;
+  --radius-md: 16px;
+  /* track-row usa calc(var(--radius-lg) + 8px) → 26px */
+  --radius-lg: 18px;
+  --radius-xl: 24px;
+  --radius-pill: 999px;
+
+  /* Scala spaziature più ariosa (gap e padding di tutta l'app) */
+  --space-3: 0.75rem;
+  --space-4: 1.05rem;
+  --space-5: 1.45rem;
+  --space-6: 2rem;
+
+  /* Ombre soffuse e profonde al posto di quelle piatte */
+  --shadow-elev-1: 0 6px 24px rgba(0, 0, 0, 0.18),
+    0 1px 2px rgba(0, 0, 0, 0.12);
+  --shadow-elev-2: 0 18px 48px rgba(0, 0, 0, 0.26);
+
+}
+
+/* Plectr (gioco) mantiene le dimensioni dello stile classico:
+   ripristino locale di spaziature e raggi dentro i contenitori di gioco. */
+:root[data-ui-style="modern"] .rhythm-dock-panel,
+:root[data-ui-style="modern"] .game-screen {
+  --radius-xs: 2px;
+  --radius-sm: 4px;
+  --radius-md: 6px;
+  --radius-lg: 8px;
+  --radius-xl: 10px;
+  --radius-pill: 6px;
+  --space-3: 0.625rem;
+  --space-4: 0.875rem;
+  --space-5: 1.125rem;
+  --space-6: 1.5rem;
+}
+
+/* ── 2. Sfondo pagina: alone d'accento in alto ──────────────────────── */
+:root[data-ui-style="modern"] body {
+  background:
+    radial-gradient(
+      1100px 520px at 82% -12%,
+      color-mix(in srgb, var(--accent) 13%, transparent),
+      transparent 62%
+    ),
+    radial-gradient(
+      900px 480px at -8% 4%,
+      color-mix(in srgb, var(--accent2) 9%, transparent),
+      transparent 58%
+    ),
+    var(--bg);
+  background-attachment: fixed;
+}
+
+/* ── 3. Card e superfici ────────────────────────────────────────────── */
+:root[data-ui-style="modern"] .surface-card:not(.custom-theme-dialog),
+:root[data-ui-style="modern"] .hero-card,
+:root[data-ui-style="modern"] .listen-stage,
+:root[data-ui-style="modern"] .album-hero,
+:root[data-ui-style="modern"] .alert-card,
+:root[data-ui-style="modern"] .studio-panel {
+  border-radius: 24px;
+  border-color: color-mix(in srgb, var(--accent) 14%, var(--border));
+}
+
+:root[data-ui-style="modern"] .metric-card {
+  border-radius: 20px;
+  border-color: color-mix(in srgb, var(--accent) 14%, var(--border));
+}
+
+/* Tile interattive: sollevamento al passaggio */
+:root[data-ui-style="modern"] .library-list-tile,
+:root[data-ui-style="modern"] .artcard,
+:root[data-ui-style="modern"] .artcard2,
+:root[data-ui-style="modern"] .playlist-row,
+:root[data-ui-style="modern"] .studio-catalog-list-tile {
+  border-radius: 20px;
+  transition:
+    transform 0.16s ease,
+    box-shadow 0.16s ease,
+    border-color 0.16s ease;
+}
+
+:root[data-ui-style="modern"] .library-list-tile:hover,
+:root[data-ui-style="modern"] .artcard:hover,
+:root[data-ui-style="modern"] .artcard2:hover,
+:root[data-ui-style="modern"] .studio-catalog-list-tile:hover {
+  transform: translateY(-2px);
+  box-shadow: var(--shadow-elev-2);
+  border-color: color-mix(in srgb, var(--accent) 32%, var(--border));
+}
+
+/* ── 4. Tipografia e intestazioni ───────────────────────────────────── */
+:root[data-ui-style="modern"] .section-head h2 {
+  font-size: 1.45rem;
+  letter-spacing: -0.03em;
+}
+
+/* Eyebrow → chip d'accento: la firma visiva dello stile */
+:root[data-ui-style="modern"] .eyebrow {
+  display: inline-block;
+  width: fit-content;
+  padding: 0.22rem 0.7rem;
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--accent) 16%, transparent);
+  color: color-mix(in srgb, var(--accent) 78%, var(--text) 22%);
+  border: 1px solid color-mix(in srgb, var(--accent) 26%, transparent);
+}
+
+/* Il dialog Personalizza tema resta com'è in classico: eyebrow normale */
+:root[data-ui-style="modern"] .custom-theme-dialog .eyebrow {
+  display: block;
+  width: auto;
+  padding: 0;
+  border: 0;
+  border-radius: 0;
+  background: none;
+  color: var(--accent2);
+}
+
+/* Numeri dashboard: grandi, con gradiente d'accento */
+:root[data-ui-style="modern"] .metric-card strong {
+  font-size: 2.3rem;
+  background: linear-gradient(120deg, var(--accent), var(--accent2));
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+}
+
+/* ── 5. Controlli: bottoni, input, select ───────────────────────────── */
+:root[data-ui-style="modern"] .primary-btn {
+  background: linear-gradient(
+    120deg,
+    var(--accent),
+    color-mix(in srgb, var(--accent2) 72%, var(--accent) 28%)
+  );
+  border-color: transparent;
+  padding-inline: 1.15rem;
+  box-shadow: 0 6px 18px color-mix(in srgb, var(--accent) 32%, transparent);
+}
+
+:root[data-ui-style="modern"] .primary-btn:hover:not(:disabled) {
+  box-shadow: 0 8px 24px color-mix(in srgb, var(--accent) 44%, transparent);
+}
+
+:root[data-ui-style="modern"] .ghost-btn {
+  padding-inline: 1rem;
+  border-color: color-mix(in srgb, var(--accent) 20%, var(--border));
+}
+
+:root[data-ui-style="modern"] .ghost-btn:hover:not(:disabled) {
+  background: color-mix(in srgb, var(--accent) 10%, transparent);
+}
+
+:root[data-ui-style="modern"] .ghost-input,
+:root[data-ui-style="modern"] .select,
+:root[data-ui-style="modern"] select {
+  border-radius: 14px;
+}
+
+/* ── 6. Tracklist: righe morbide con feedback d'accento ─────────────── */
+:root[data-ui-style="modern"] .track-row {
+  transition:
+    background 0.14s ease,
+    border-color 0.14s ease;
+}
+
+:root[data-ui-style="modern"] .track-row:hover {
+  background: color-mix(in srgb, var(--accent) 7%, var(--surface2));
+  border-color: color-mix(in srgb, var(--accent) 24%, var(--border));
+}
+
+:root[data-ui-style="modern"] .track-row__art {
+  border-radius: 16px;
+}
+
+/* Chip e badge a pillola tinta */
+:root[data-ui-style="modern"] .lib-meta-chip,
+:root[data-ui-style="modern"] .track-meta-mood-chip,
+:root[data-ui-style="modern"] .meta-edit-genre-chip {
+  border-radius: 999px;
+}
+
+/* Copertine: più morbide */
+:root[data-ui-style="modern"] .album-cover {
+  border-radius: 26px;
+}
+
+/* ── 7. Player: dock flottante staccato dai bordi (solo desktop) ──────
+   Su mobile la barra resta a filo con fondo e lati, come in classico. */
+@media (min-width: 901px) {
+  :root[data-ui-style="modern"] {
+    /* Spazio extra sotto il contenuto per il dock flottante */
+    --content-pad-bottom: calc(
+      env(safe-area-inset-bottom, 0px) + 0.75rem + var(--bar-h) + 0.5rem + 14px
+    );
+  }
+
+  :root[data-ui-style="modern"] .player-dock2 {
+    padding: 0 14px calc(env(safe-area-inset-bottom, 0px) + 14px);
+  }
+
+  :root[data-ui-style="modern"] .player-bar2 {
+    border-radius: 24px;
+    border: 1px solid color-mix(in srgb, var(--accent) 18%, var(--border));
+    box-shadow: var(--shadow-elev-2);
+    background: color-mix(in srgb, var(--sidebar-bg) 92%, var(--accent) 8%);
+  }
+}
+
+/* ── 8. Dialoghi e overlay ──────────────────────────────────────────
+   Il dialog Personalizza tema (custom-theme-dialog) resta com'è in classico. */
+:root[data-ui-style="modern"] .meta-edit-dialog:not(.custom-theme-dialog),
+:root[data-ui-style="modern"] .app-dialog {
+  border-radius: 26px;
+  border-color: color-mix(in srgb, var(--accent) 20%, var(--border));
+  box-shadow: var(--shadow-elev-2);
+}
+
+/* ── 9. Dettagli: scrollbar sottile d'accento (WebKit) ──────────────── */
+:root[data-ui-style="modern"] ::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+
+:root[data-ui-style="modern"] ::-webkit-scrollbar-thumb {
+  background: color-mix(in srgb, var(--accent) 28%, var(--surface3));
+  border-radius: 999px;
+}
+
+:root[data-ui-style="modern"] ::-webkit-scrollbar-thumb:hover {
+  background: color-mix(in srgb, var(--accent) 44%, var(--surface3));
+}
+
+:root[data-ui-style="modern"] ::-webkit-scrollbar-track {
+  background: transparent;
+}

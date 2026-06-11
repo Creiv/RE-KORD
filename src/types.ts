@@ -151,9 +151,14 @@ export type CustomThemeSettings = {
   accent2: string;
 };
 
+/** Stile UI: "classic" = geometria attuale (squadrata), "modern" = raggi morbidi e bottoni a pillola. */
+export type UiStyleMode = "classic" | "modern";
+
 export type UserSettings = {
   theme: ThemeMode;
   customTheme?: CustomThemeSettings;
+  /** Geometria interfaccia (indipendente dal tema colore). */
+  uiStyle: UiStyleMode;
   vizMode: VizMode;
   restoreSession: boolean;
   defaultTab: string;

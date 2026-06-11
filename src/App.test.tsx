@@ -124,6 +124,7 @@ const userState: UserStateV1 = {
     audioCrossfadeSec: 3,
     plectrDisableVizBackdrop: false,
     glassSurfaces: false,
+    uiStyle: "classic",
   },
   migratedLegacy: true,
 };

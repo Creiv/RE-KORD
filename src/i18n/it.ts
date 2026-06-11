@@ -525,6 +525,9 @@ export const IT: Record<string, string> = {
   "settings.uiEyebrow": "Preferenze interfaccia",
   "settings.uiHeading": "Tema e visualizer",
   "settings.theme": "Tema",
+  "settings.uiStyle": "Stile",
+  "settings.uiStyleClassic": "Classico",
+  "settings.uiStyleModern": "Moderno",
   "settings.glassSurfaces":
     "Stile vetro (schede semitrasparenti con riflessi)",
   "settings.visualizer": "Visualizer",

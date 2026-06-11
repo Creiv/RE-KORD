@@ -77,6 +77,7 @@ function defaultSettings(): UserSettings {
   return {
     theme: "midnight",
     customTheme: DEFAULT_CUSTOM_THEME,
+    uiStyle: "classic",
     vizMode: "hmb",
     restoreSession: true,
     defaultTab: "dashboard",
@@ -197,6 +198,7 @@ function normalizeSettings(raw: Partial<UserSettings> | UserSettingsPatch): User
     audioCrossfadeSec: normalizeAudioCrossfadeSec(raw),
     plectrDisableVizBackdrop: raw.plectrDisableVizBackdrop === true,
     glassSurfaces: raw.glassSurfaces === true,
+    uiStyle: raw.uiStyle === "modern" ? "modern" : "classic",
   };
 }
 
@@ -978,6 +980,14 @@ export function UserStateProvider({ children }: { children: React.ReactNode }) {
       delete document.documentElement.dataset.glassBackdrop;
     }
   }, [state.settings.glassSurfaces]);
+
+  useEffect(() => {
+    if (state.settings.uiStyle === "modern") {
+      document.documentElement.dataset.uiStyle = "modern";
+    } else {
+      delete document.documentElement.dataset.uiStyle;
+    }
+  }, [state.settings.uiStyle]);
 
   useEffect(() => {
     if (!state.settings.glassSurfaces) return;
