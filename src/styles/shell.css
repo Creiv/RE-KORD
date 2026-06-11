@@ -469,8 +469,6 @@
 .album-hero,
 .metric-card,
 .alert-card,
-/* .inline-banner: definizione unica in views.css */
-
 .player-bar2 {
   border: 1px solid var(--border);
 }

@@ -1,7 +1,7 @@
 /**
  * Layout strutturale RE-KORD — gerarchia pagine, griglie, player dock.
  * Breakpoint width: 640 · 900 · 1100 · 1280 · 1600 (+ container queries su rekord-page).
- * Complementa views.css (componenti) e aspect-layout.css (aspect ratio).
+ * Complementa styles/views/ (componenti) e aspect-layout.css (aspect ratio).
  */
 
 .content-shell__inner {

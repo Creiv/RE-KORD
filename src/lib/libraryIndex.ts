@@ -105,6 +105,18 @@ export function libraryIndexRehydrateSig(index: LibraryIndex): string {
   return `${index.indexEpoch ?? 0}|${index.tracks.length}|${index.albums.length}|${index.stats.trackCount}`;
 }
 
+/** Versione cache-busting (?v=) per la cover di un album: updatedAt dall'indice. */
+export function albumCoverVersion(
+  index: LibraryIndex | null,
+  albumRelPath: string | null | undefined
+): number | null {
+  if (!index || !albumRelPath) return null;
+  return (
+    index.albums.find((album) => album.relPath === albumRelPath)?.updatedAt ??
+    null
+  );
+}
+
 export function applyLibraryDeltasToIndex(
   prev: LibraryIndex | null,
   deltas: LibraryEntityDelta[]

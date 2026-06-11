@@ -45,6 +45,7 @@ import {
   UiChevronLeft,
   UiClose,
   UiDateRange,
+  UiImage,
   UiMusicNote,
   UiPalette,
   UiPerson,
@@ -54,6 +55,7 @@ import {
 } from "../../components/RekordUiIcons";
 import {
   saveTrackInfoManual,
+  uploadAlbumCover,
 } from "../../lib/api";
 import { isTrackAlbumShuffleExcluded } from "../../lib/randomExclusions";
 import { eligibleTracksForIntelligentRandom } from "../../lib/randomExclusions";
@@ -148,6 +150,9 @@ export default function LibraryView({
   const [selectedGenreKey, setSelectedGenreKey] = useState<string | null>(null);
   const [moodFilterIds, setMoodFilterIds] = useState<TrackMoodId[]>([]);
   const [moodMatchMode, setMoodMatchMode] = useState<"any" | "all">("any");
+  const coverFileInputRef = useRef<HTMLInputElement | null>(null);
+  const [coverUploadBusy, setCoverUploadBusy] = useState(false);
+  const [coverUploadErr, setCoverUploadErr] = useState<string | null>(null);
   const normalizedQuery = query.trim().toLowerCase();
 
   useEffect(() => {
@@ -228,6 +233,20 @@ export default function LibraryView({
         (item) => item.name === route.album || item.id === route.album
       ) || null
     : null;
+
+  const onCoverFilePicked = (file: File | null) => {
+    if (!file || !album || coverUploadBusy) return;
+    setCoverUploadBusy(true);
+    setCoverUploadErr(null);
+    uploadAlbumCover(album.relPath, file)
+      .then((delta) => {
+        onLibraryDelta?.(delta, false);
+      })
+      .catch((e) => {
+        setCoverUploadErr(String(e?.message || e));
+      })
+      .finally(() => setCoverUploadBusy(false));
+  };
 
   const albumTracks = useMemo(
     () =>
@@ -848,7 +867,37 @@ export default function LibraryView({
         <section className="album-hero">
           <div className="album-hero__body">
             <div className="album-hero__top-band">
-              <AlbumCover album={album} />
+              <button
+                type="button"
+                className={`album-hero__cover-btn${
+                  coverUploadBusy ? " is-busy" : ""
+                }`}
+                onClick={() => coverFileInputRef.current?.click()}
+                disabled={coverUploadBusy}
+                title={t("library.coverUploadTitle")}
+                aria-label={t("library.coverUploadAria")}
+              >
+                <AlbumCover album={album} />
+                <span className="album-hero__cover-edit-badge" aria-hidden>
+                  <UiImage />
+                </span>
+                {coverUploadErr ? (
+                  <span className="album-hero__cover-edit-err">
+                    {t("library.coverUploadErr")}
+                  </span>
+                ) : null}
+              </button>
+              <input
+                ref={coverFileInputRef}
+                type="file"
+                accept="image/jpeg,image/png"
+                hidden
+                onChange={(event) => {
+                  const file = event.target.files?.[0] ?? null;
+                  event.target.value = "";
+                  onCoverFilePicked(file);
+                }}
+              />
               <div className="album-hero__top-right">
                 <div className="section-head section-head--page-toolbar album-hero__toprow">
                   <div className="page-toolbar__lead page-toolbar__lead--backrow">

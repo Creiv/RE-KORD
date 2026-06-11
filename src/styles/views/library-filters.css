@@ -1,0 +1,511 @@
+/* views/library-filters.css — Pannello filtri libreria, mood, segmented, account row.
+   Split da views.css (Fase 6): ordine di cascata preservato via index.css. */
+
+.library-filter-panel {
+  display: flex;
+  flex-direction: column;
+  gap: 0.4rem;
+  margin: 0 0 1.1rem;
+  padding: 0 0 0.85rem;
+  border: none;
+  border-radius: 0;
+  background: transparent;
+  box-shadow: none;
+  border-bottom: 1px solid color-mix(in srgb, var(--border) 45%, transparent);
+}
+
+.library-filter-panel--tight {
+  margin-bottom: 1rem;
+  padding-bottom: 0.75rem;
+}
+
+.library-genre-tracklist-headrow {
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 0;
+  gap: 0.75rem 1rem;
+}
+
+.library-filter-panel.library-sort-panel.library-genre-tracklist-toolbar {
+  align-items: stretch;
+}
+
+.library-filter-panel.library-sort-panel.library-genre-tracklist-toolbar
+  .library-genre-tracklist-headrow {
+  width: 100%;
+}
+
+.library-genre-tracklist-headrow > :first-child {
+  margin: 0;
+}
+
+.library-genre-tracklist-headrow .eyebrow,
+.library-genre-tracklist-headrow h2 {
+  margin: 0;
+}
+
+.library-filter-group {
+  display: flex;
+  flex-direction: column;
+  gap: 0.28rem;
+  min-width: 0;
+}
+
+.library-filter-panel__eyebrow {
+  display: block;
+  font-size: 0.75rem;
+  font-weight: 500;
+  letter-spacing: 0.01em;
+  text-transform: none;
+  color: var(--muted);
+  line-height: 1.35;
+}
+
+.library-filter-panel .segmented--joined {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.35rem;
+  width: 100%;
+  max-width: 100%;
+}
+
+.library-filter-panel .segmented--joined button {
+  position: relative;
+  flex: 0 0 auto;
+  min-width: 0;
+  margin: 0;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid color-mix(in srgb, var(--border) 72%, transparent);
+  border-radius: var(--radius-sm);
+  background: color-mix(in srgb, var(--surface2) 55%, transparent);
+  padding: 0.38rem 0.62rem;
+  cursor: pointer;
+  font-family: inherit;
+  font-weight: 750;
+  font-size: clamp(0.92rem, 1vw, 1.05rem);
+  letter-spacing: 0;
+  line-height: 1.2;
+  color: color-mix(in srgb, var(--muted) 78%, var(--text) 22%);
+  transition: color 0.16s ease, opacity 0.16s ease, background 0.16s ease,
+    border-color 0.16s ease;
+}
+
+.library-filter-panel .segmented--joined button:hover:not(.is-on) {
+  color: color-mix(in srgb, var(--muted-strong) 85%, var(--text) 15%);
+  border-color: color-mix(in srgb, var(--border-strong) 72%, transparent);
+  background: color-mix(in srgb, var(--surface3) 65%, transparent);
+}
+
+.library-filter-panel .segmented--joined button.is-on {
+  color: var(--text);
+  background: linear-gradient(135deg, var(--segmented-1), var(--segmented-2));
+  border-color: color-mix(in srgb, var(--accent) 32%, var(--border-strong) 68%);
+  box-shadow: var(--shadow-elev-1);
+}
+
+.library-filter-panel .segmented--joined button.is-on::after {
+  content: none;
+}
+
+.library-filter-panel .segmented--joined button:focus-visible {
+  outline: 2px solid var(--focus-ring);
+  outline-offset: 4px;
+  border-radius: 6px;
+}
+
+/* Risultati ricerca: tab come navigazione libreria (stesso tratto degli Artisti / Generi) */
+.library-filter-panel .segmented--filter {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.35rem;
+}
+
+.library-filter-panel .segmented--filter button {
+  position: relative;
+  flex: 0 0 auto;
+  min-width: 0;
+  margin: 0;
+  padding: 0.38rem 0.62rem;
+  border: 1px solid color-mix(in srgb, var(--border) 72%, transparent);
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--surface2) 55%, transparent);
+  cursor: pointer;
+  font-family: inherit;
+  font-weight: 750;
+  font-size: clamp(0.92rem, 1vw, 1.05rem);
+  letter-spacing: 0;
+  line-height: 1.2;
+  color: color-mix(in srgb, var(--muted) 78%, var(--text) 22%);
+  transition: color 0.16s ease;
+}
+
+.library-filter-panel .segmented--filter button:hover:not(.is-on) {
+  color: color-mix(in srgb, var(--muted-strong) 85%, var(--text) 15%);
+  border-color: color-mix(in srgb, var(--border-strong) 72%, transparent);
+  background: color-mix(in srgb, var(--surface3) 65%, transparent);
+}
+
+.library-filter-panel .segmented--filter button.is-on {
+  color: var(--text);
+  background: linear-gradient(135deg, var(--segmented-1), var(--segmented-2));
+  box-shadow: var(--shadow-elev-1);
+  border-color: color-mix(in srgb, var(--accent) 32%, var(--border-strong) 68%);
+}
+
+.library-filter-panel .segmented--filter button.is-on::after {
+  content: none;
+}
+
+.library-filter-panel .segmented--filter button:focus-visible {
+  outline: 2px solid var(--focus-ring);
+  outline-offset: 4px;
+  border-radius: 6px;
+}
+
+.library-filter-panel .segmented--filter .segmented__ic {
+  width: 1em;
+  height: 1em;
+}
+
+.library-filter-panel .segmented--filter button:not(.is-on) .segmented__ic {
+  opacity: 0.62;
+}
+
+.library-filter-panel .segmented--filter button.is-on .segmented__ic {
+  opacity: 1;
+  color: color-mix(in srgb, var(--accent2) 75%, var(--accent) 25%);
+}
+
+.library-filter-panel .segmented--joined button:not(.is-on) .segmented__ic {
+  opacity: 0.62;
+}
+
+.library-filter-panel .segmented--joined button.is-on .segmented__ic {
+  opacity: 1;
+  color: color-mix(in srgb, var(--accent2) 75%, var(--accent) 25%);
+}
+
+.library-mood-browse {
+  display: flex;
+  flex-direction: column;
+  gap: 0.85rem;
+}
+
+.library-mood-match-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.55rem 1rem;
+}
+
+.library-mood-match-row .segmented--joined {
+  display: inline-flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 0.25rem 1.15rem;
+}
+
+.library-mood-match-row .segmented--joined button {
+  position: relative;
+  flex: 0 0 auto;
+  margin: 0;
+  border: none;
+  border-radius: 0;
+  background: transparent;
+  cursor: pointer;
+  font-family: inherit;
+  padding: 0.12rem 0;
+  font-weight: 800;
+  font-size: 1.32rem;
+  letter-spacing: -0.03em;
+  line-height: 1.2;
+  color: color-mix(in srgb, var(--muted) 78%, var(--text) 22%);
+  transition: color 0.16s ease;
+}
+
+.library-mood-match-row .segmented--joined button:hover:not(.is-on) {
+  color: color-mix(in srgb, var(--muted-strong) 85%, var(--text) 15%);
+}
+
+.library-mood-match-row .segmented--joined button.is-on {
+  color: var(--text);
+  background: transparent;
+  box-shadow: none;
+}
+
+.library-mood-match-row .segmented--joined button.is-on::after {
+  content: "";
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: -0.06rem;
+  height: 2px;
+  border-radius: 99px;
+  background: linear-gradient(
+    90deg,
+    color-mix(in srgb, var(--accent) 85%, transparent),
+    color-mix(in srgb, var(--accent2) 85%, transparent)
+  );
+}
+
+.library-mood-match-row .segmented--joined button:focus-visible {
+  outline: 2px solid var(--focus-ring);
+  outline-offset: 4px;
+  border-radius: 6px;
+}
+
+.library-mood-match-row .library-filter-panel__eyebrow {
+  flex: 0 0 auto;
+}
+
+.library-mood-explainer {
+  margin: -0.2rem 0 0;
+  width: 100%;
+  max-width: none;
+  line-height: 1.5;
+}
+
+.library-mood-clear {
+  flex: 0 0 auto;
+  margin-inline-start: auto;
+}
+
+.library-mood-filter-grid {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-start;
+  align-content: flex-start;
+  gap: 0.45rem;
+  width: 100%;
+}
+
+.library-mood-filter-btn {
+  flex: 0 0 5.85rem;
+  width: 5.85rem;
+  box-sizing: border-box;
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  justify-content: center;
+  min-height: 2.75rem;
+  padding: 0.45rem 0.52rem;
+  border-radius: var(--radius-md);
+  border: 1px solid color-mix(in srgb, var(--border) 62%, transparent);
+  background: color-mix(in srgb, var(--surface2) 88%, transparent);
+  cursor: pointer;
+  line-height: 0;
+  transition: border-color 0.15s ease, background 0.15s ease,
+    box-shadow 0.15s ease;
+}
+
+.library-mood-filter-btn:not(.library-mood-filter-btn--on)
+  .library-mood-filter-btn__glyph-row {
+  color: color-mix(in srgb, var(--muted) 78%, var(--text) 22%);
+}
+
+.library-mood-filter-btn--on .library-mood-filter-btn__glyph-row {
+  color: color-mix(in srgb, var(--mood-c) 90%, var(--text));
+}
+
+.library-mood-filter-btn__glyph-row .library-mood-filter-btn__count {
+  color: inherit;
+}
+
+.library-mood-filter-btn:not(.library-mood-filter-btn--on):hover:not(
+    :disabled
+  ) {
+  border-color: color-mix(in srgb, var(--border) 78%, transparent);
+  background: color-mix(in srgb, var(--surface3) 76%, transparent);
+}
+
+.library-mood-filter-btn--on {
+  border-color: color-mix(in srgb, var(--mood-c) 58%, var(--border) 42%);
+  background: color-mix(in srgb, var(--mood-c) 16%, transparent);
+  box-shadow: 0 0 0 1px color-mix(in srgb, var(--mood-c) 22%, transparent);
+}
+
+.library-mood-filter-btn__glyph-row {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.42rem;
+  width: 100%;
+}
+
+.library-mood-filter-btn__glyph-row > span svg {
+  width: 1.22rem;
+  height: 1.22rem;
+  flex-shrink: 0;
+}
+
+.library-mood-filter-btn .track-meta-mood-chip__glyph {
+  display: inline-flex;
+}
+
+.library-mood-filter-btn__count {
+  font-size: 0.75rem;
+  font-weight: 800;
+  font-variant-numeric: tabular-nums;
+  line-height: 1;
+}
+
+.library-mood-filter-btn:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
+.library-mood-tracklist-head {
+  padding-top: 0.35rem;
+}
+
+.segmented__btn-inner {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.38rem;
+  min-width: 0;
+  line-height: 1.2;
+}
+
+.segmented__ic {
+  width: 1.05em;
+  height: 1.05em;
+  flex-shrink: 0;
+  opacity: 0.88;
+  color: color-mix(in srgb, var(--accent2) 62%, var(--accent) 38%);
+}
+
+.segmented button.is-on .segmented__ic {
+  opacity: 1;
+  color: color-mix(in srgb, var(--accent2) 78%, var(--accent) 22%);
+}
+
+.segmented--filter {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.4rem 0.45rem;
+}
+
+.segmented--filter button {
+  display: inline-flex;
+  padding: 0.5rem 0.7rem 0.5rem 0.6rem;
+}
+
+.segmented--filter .segmented__ic {
+  width: 0.95em;
+  height: 0.95em;
+}
+
+.segmented {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+}
+
+.segmented button {
+  padding: 0.55rem 0.9rem;
+  border-radius: 999px;
+  border: 1px solid var(--border);
+  color: var(--muted);
+  transition: color 0.16s ease, border-color 0.16s ease, background 0.16s ease;
+}
+
+.segmented button.is-on {
+  color: var(--text);
+  border-color: color-mix(in srgb, var(--accent) 32%, var(--border-strong) 68%);
+  background: linear-gradient(135deg, var(--segmented-1), var(--segmented-2));
+}
+
+.settings-ui-inline-control {
+  display: grid;
+  gap: 0.55rem;
+}
+
+.settings-ui-inline-control--checkbox-row {
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  gap: 0.55rem;
+}
+
+.settings-ui-inline-control--checkbox-row > span {
+  min-width: 0;
+}
+
+.settings-ui-inline-control .settings-checkbox {
+  width: 1.125rem;
+  height: 1.125rem;
+  flex-shrink: 0;
+  accent-color: color-mix(in srgb, var(--accent) 88%, transparent);
+  cursor: pointer;
+  justify-self: start;
+}
+
+.account-list {
+  display: grid;
+  gap: 0.7rem;
+}
+
+.account-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 0.7rem;
+  align-items: center;
+  padding: 0.8rem;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  background: color-mix(in srgb, var(--surface2) 78%, transparent);
+}
+
+.account-row.is-selected {
+  border-color: color-mix(in srgb, var(--accent) 42%, var(--border) 58%);
+  background: color-mix(in srgb, var(--accent) 11%, var(--surface2) 89%);
+}
+
+.account-row__main {
+  min-width: 0;
+  display: grid;
+  grid-template-columns: 2.25rem minmax(0, 1fr);
+  gap: 0.75rem;
+  align-items: center;
+  text-align: left;
+}
+
+.account-row__avatar {
+  display: grid;
+  width: 2.25rem;
+  height: 2.25rem;
+  place-items: center;
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--accent) 18%, var(--surface3) 82%);
+  color: var(--accent);
+  font-weight: 850;
+}
+
+.account-row__text {
+  display: grid;
+  gap: 0.15rem;
+  min-width: 0;
+}
+
+.account-row__text strong,
+.account-row__text span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.account-row__text span {
+  color: var(--muted);
+  font-size: 0.84rem;
+}
+
+.settings-merge-block--first {
+  margin-top: 0;
+  padding-top: 0;
+  border-top: 0;
+}

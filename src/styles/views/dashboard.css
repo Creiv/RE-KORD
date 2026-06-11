@@ -1,0 +1,248 @@
+/* views/dashboard.css — Dashboard: metric card, scheda Mix, alert, colophon impostazioni.
+   Split da views.css (Fase 6): ordine di cascata preservato via index.css. */
+
+.metric-card {
+  padding: 1rem 1.1rem;
+  border-radius: var(--radius-lg);
+  display: grid;
+  gap: 0.35rem;
+}
+
+.metric-card span {
+  font-size: 0.7rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.14em;
+  color: var(--muted);
+}
+
+.metric-card strong {
+  font-size: 1.85rem;
+  font-weight: 800;
+  font-variant-numeric: tabular-nums;
+  letter-spacing: -0.04em;
+  line-height: 1.1;
+}
+
+.dashboard-grid {
+  display: grid;
+  grid-template-columns: repeat(var(--layout-cols-dashboard, 2), minmax(0, 1fr));
+  gap: var(--space-5);
+  min-width: 0;
+}
+
+.dashboard-grid > .surface-card {
+  min-width: 0;
+  max-width: 100%;
+}
+
+.listen-dashboard-row > .surface-card {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+
+@media (min-width: 901px) {
+  .dashboard-grid > .surface-card {
+    min-height: 0;
+    align-self: stretch;
+  }
+
+  .dashboard-grid > .dashboard-session-card.surface-card {
+    display: flex;
+    flex-direction: column;
+    min-height: 0;
+    align-self: stretch;
+    overflow: hidden;
+  }
+
+  .dashboard-session-body {
+    flex: 1 1 auto;
+    min-height: 0;
+    overflow-y: auto;
+    -webkit-overflow-scrolling: touch;
+  }
+
+  .dashboard-session-body > .panel-empty {
+    flex-shrink: 0;
+  }
+}
+
+/* Dashboard — scheda Mix (generi / mood) */
+.dashboard-mix-body {
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+}
+
+.dashboard-mix-scroll {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow-y: auto;
+  -webkit-overflow-scrolling: touch;
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+}
+
+.dashboard-mix-footer {
+  flex-shrink: 0;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.65rem 1rem;
+  padding-top: 0.85rem;
+  margin-top: 0.2rem;
+  border-top: 1px solid var(--border);
+}
+
+.dashboard-mix-block {
+  display: flex;
+  flex-direction: column;
+  gap: 0.52rem;
+  min-width: 0;
+}
+
+.dashboard-mix-block__head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 0.35rem 0.75rem;
+}
+
+.dashboard-mix-block__head .library-mood-clear {
+  margin-inline-start: 0;
+}
+
+.dashboard-mix-genre-chips {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-start;
+  gap: 0.38rem;
+}
+
+.dashboard-mix-genre-chip__ic {
+  width: 0.92rem;
+  height: 0.92rem;
+  flex-shrink: 0;
+  opacity: 0.88;
+}
+
+.dashboard-mix-genre-chip.is-on .dashboard-mix-genre-chip__ic {
+  opacity: 1;
+}
+
+.dashboard-mix-genre-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  max-width: 100%;
+  padding: 0.32rem 0.62rem;
+  border-radius: var(--radius-md);
+  border: 1px solid color-mix(in srgb, var(--border) 65%, transparent);
+  background: color-mix(in srgb, var(--surface2) 88%, transparent);
+  font-family: inherit;
+  font-size: 0.86rem;
+  font-weight: 700;
+  line-height: 1.25;
+  color: var(--text);
+  cursor: pointer;
+  transition: border-color 0.15s ease, background 0.15s ease,
+    box-shadow 0.15s ease;
+}
+
+.dashboard-mix-genre-chip:hover:not(.is-on) {
+  border-color: color-mix(in srgb, var(--border) 82%, transparent);
+  background: color-mix(in srgb, var(--surface3) 72%, transparent);
+}
+
+.dashboard-mix-genre-chip.is-on {
+  border-color: color-mix(in srgb, var(--accent) 52%, var(--border) 48%);
+  background: color-mix(in srgb, var(--accent) 14%, transparent);
+  box-shadow: 0 0 0 1px color-mix(in srgb, var(--accent) 18%, transparent);
+}
+
+.dashboard-mix-genre-chip__label {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.dashboard-mix-genre-chip__count {
+  flex-shrink: 0;
+  font-size: 0.72rem;
+  font-variant-numeric: tabular-nums;
+  opacity: 0.85;
+}
+
+.dashboard-mix-selection-note {
+  margin: -0.12rem 0 0;
+}
+
+.dashboard-mix-footer .primary-btn {
+  flex-shrink: 0;
+}
+
+.dashboard-mix-footer__count {
+  margin: 0;
+  flex: 1 1 auto;
+}
+
+@media (max-width: 900px) {
+  .dashboard-mix-footer {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .dashboard-mix-footer .primary-btn {
+    width: 100%;
+  }
+}
+
+.settings-colophon {
+  grid-column: 1 / -1;
+  margin: 0.5rem 0 0;
+  padding: 1.1rem 0.5rem 0.35rem;
+  text-align: center;
+  border-top: 1px solid var(--border);
+  min-width: 0;
+}
+
+.settings-colophon__line {
+  margin: 0 0 0.35rem;
+  font-size: 0.78rem;
+  line-height: 1.45;
+  color: var(--muted);
+  font-weight: 500;
+  letter-spacing: 0.01em;
+  max-width: 90vw;
+  margin-inline: auto;
+}
+
+.settings-colophon__subtle {
+  margin: 0;
+  line-height: 1.4;
+  max-width: 90vw;
+  margin-inline: auto;
+  opacity: 0.9;
+}
+
+.settings-page .settings-activity-section {
+  grid-column: 1 / -1;
+  min-width: 0;
+}
+
+@media (min-width: 901px) {
+  .settings-page.view-page .settings-youtube-cookies-section {
+    grid-column: 1;
+  }
+
+  /* Cookie YT ora visibile (read-only) anche per client/LAN/tunnel:
+     la rete sta sempre a fianco, niente più riga intera in vista remota. */
+  .settings-page.view-page .settings-network-section {
+    grid-column: 2;
+  }
+}

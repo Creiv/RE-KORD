@@ -43,11 +43,30 @@ function isLoopbackRequest(req) {
 }
 
 /**
+ * Richiesta arrivata attraverso il tunnel Cloudflare: cloudflared gira
+ * sull'host e inoltra da loopback, quindi senza questo check chiunque
+ * conosca l'URL pubblico risulterebbe admin. Si riconosce dagli header
+ * che cloudflared aggiunge sempre (cf-connecting-ip / cf-ray) o dall'host
+ * *.trycloudflare.com. Header spoofati da un client LAN possono solo
+ * DECLASSARE a non-admin, mai promuovere.
+ * @param {import("express").Request} req
+ */
+export function isCloudflareTunnelRequest(req) {
+  const h = req.headers || {};
+  if (h["cf-connecting-ip"] || h["cf-ray"]) return true;
+  const host = String(h.host || "").toLowerCase();
+  return host === "trycloudflare.com" || host.endsWith(".trycloudflare.com");
+}
+
+/**
  * Admin dal server stesso o, in Docker, dal browser sull'host (gateway bridge).
  * I client LAN restano client normali, come nell'avvio non-Docker.
+ * Le richieste via tunnel Cloudflare non sono mai admin anche se arrivano
+ * da loopback (è cloudflared a inoltrarle).
  * @param {import("express").Request} req
  */
 export function isServerAdminRequest(req) {
+  if (isCloudflareTunnelRequest(req)) return false;
   if (isLoopbackRequest(req)) return true;
   if (process.env.REKORD_DOCKER === "1") {
     return isDockerGatewayAddress(getClientAddress(req));

@@ -1,0 +1,12 @@
+/* Viste: libreria, dashboard, ascolta, statistiche, dialoghi.
+   L'ordine degli import replica la cascata del vecchio views.css — non riordinare. */
+@import "./sections-toolbars.css";
+@import "./library-tiles.css";
+@import "./listen.css";
+@import "./dashboard.css";
+@import "./statistics.css";
+@import "./tracklist.css";
+@import "./album-hero.css";
+@import "./visualizer.css";
+@import "./library-filters.css";
+@import "./theme-settings.css";

@@ -336,6 +336,9 @@ export const EN: Record<string, string> = {
   "library.subAlbums": "Albums",
   "library.subTracks": "Tracks",
   "library.albumDetailEyebrow": "Album detail",
+  "library.coverUploadTitle": "Upload album cover from your device (JPEG/PNG)",
+  "library.coverUploadAria": "Upload album cover",
+  "library.coverUploadErr": "Cover upload failed",
   "library.playAlbum": "Play album",
   "library.genreRandomExcludeTitle":
     "Block or unblock all tracks in this genre from shuffle",
@@ -439,6 +442,8 @@ export const EN: Record<string, string> = {
   "settings.youtubeCookiesMissing": "No cookie file configured.",
   "settings.youtubeCookiesEnvLocked":
     "Active from REKORD_YTDLP_COOKIES: remove the environment variable and restart the server to manage it in the app.",
+  "settings.youtubeCookiesReadOnly":
+    "Remote view: cookies can only be managed from the server PC.",
   "settings.youtubeCookiesChoose": "Choose cookies.txt",
   "settings.youtubeCookiesClear": "Remove cookies",
   "settings.youtubeCookiesSaved": "YouTube cookies saved on the server.",

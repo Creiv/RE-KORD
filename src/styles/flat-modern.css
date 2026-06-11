@@ -49,7 +49,7 @@
   margin-bottom: var(--space-4);
 }
 
-/* .section-head h2: definito in views.css */
+/* .section-head h2: definito in views/sections-toolbars.css */
 
 .section-head--page-toolbar h2 {
   font-size: 1.18rem;
@@ -97,7 +97,7 @@
   border-radius: var(--radius-md);
 }
 
-/* .track-row (padding/gap): definito in views.css */
+/* .track-row (padding/gap): definito in views/tracklist.css */
 
 /* ── Tipografia: titoli sezione ── */
 

@@ -1,0 +1,8 @@
+/* Studio (tools) e dialoghi: l'ordine degli import replica la cascata del vecchio tools-settings.css — non riordinare. */
+@import "./studio-catalog.css";
+@import "./tools-meta.css";
+@import "./tools-download.css";
+@import "./studio-panels.css";
+@import "./tools-artwork.css";
+@import "./meta-edit-dialog.css";
+@import "./splash-panels.css";

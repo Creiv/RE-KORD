@@ -343,6 +343,9 @@ export const IT: Record<string, string> = {
   "library.subAlbums": "Album",
   "library.subTracks": "Brani",
   "library.albumDetailEyebrow": "Dettaglio album",
+  "library.coverUploadTitle": "Carica copertina dal dispositivo (JPEG/PNG)",
+  "library.coverUploadAria": "Carica copertina album",
+  "library.coverUploadErr": "Caricamento copertina non riuscito",
   "library.playAlbum": "Riproduci album",
   "library.genreRandomExcludeTitle":
     "Blocca o sblocca tutti i brani di questo genere dallo shuffle",
@@ -447,6 +450,8 @@ export const IT: Record<string, string> = {
   "settings.youtubeCookiesMissing": "Nessun file cookie configurato.",
   "settings.youtubeCookiesEnvLocked":
     "Attivo da variabile REKORD_YTDLP_COOKIES: per modificarlo dall'app, rimuovi la variabile e riavvia il server.",
+  "settings.youtubeCookiesReadOnly":
+    "Visualizzazione remota: i cookie si gestiscono solo dal PC del server.",
   "settings.youtubeCookiesChoose": "Scegli cookies.txt",
   "settings.youtubeCookiesClear": "Rimuovi cookie",
   "settings.youtubeCookiesSaved": "Cookie YouTube salvati sul server.",

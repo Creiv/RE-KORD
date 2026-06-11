@@ -112,11 +112,17 @@ export function TrackFileMetaChip({ meta }: { meta?: TrackMeta | null }) {
   );
 }
 
-function TrackRowArt({ relPath }: { relPath: string }) {
+function TrackRowArt({
+  relPath,
+  version,
+}: {
+  relPath: string;
+  version?: number | null;
+}) {
   return (
     <CoverImg
       className="track-row__art"
-      src={coverUrlForTrackRelPath(relPath)}
+      src={versionedUrl(coverUrlForTrackRelPath(relPath), version)}
       alt=""
       fallbackClassName="track-row__art track-row__art--fallback"
       fallback={<UiMusicNote className="track-row__art-fallback-ic" />}
@@ -126,10 +132,12 @@ function TrackRowArt({ relPath }: { relPath: string }) {
 
 function TrackRowArtPlay({
   relPath,
+  version,
   onPlay,
   isNowPlaying = false,
 }: {
   relPath: string;
+  version?: number | null;
   onPlay: () => void;
   isNowPlaying?: boolean;
 }) {
@@ -139,7 +147,7 @@ function TrackRowArtPlay({
 
   return (
     <div className="track-row__art-wrap">
-      <TrackRowArt relPath={relPath} />
+      <TrackRowArt relPath={relPath} version={version} />
       {showStudio ? (
         <button
           type="button"
@@ -465,6 +473,7 @@ export const TrackListRow = memo(function TrackListRow({
     >
       <TrackRowArtPlay
         relPath={track.relPath}
+        version={track.updatedAt}
         onPlay={onPlay}
         isNowPlaying={rowActive}
       />

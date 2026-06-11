@@ -5,6 +5,7 @@ import type { LibraryIndex, LibraryTrackIndex } from "../types";
 import { parseTrackGenres } from "../lib/genres";
 import { countPlectrTracksPlayed } from "../game/lib/plectrStorage";
 import { buildRandomArtistCoverMap } from "../lib/artistCover";
+import { albumCoverVersion } from "../lib/libraryIndex";
 import { coverUrlForAlbumRelPath, coverUrlForTrackRelPath } from "../lib/api";
 import { versionedUrl } from "../lib/versionedUrl";
 import { CoverImg } from "../components/CoverImg";
@@ -357,7 +358,10 @@ function StatisticsView({
                       {coverRel ? (
                         <CoverImg
                           className="statistics-rank-row__art"
-                          src={coverUrlForAlbumRelPath(coverRel)}
+                          src={versionedUrl(
+                            coverUrlForAlbumRelPath(coverRel),
+                            albumCoverVersion(index, coverRel),
+                          )}
                           alt=""
                           fallbackClassName="statistics-rank-row__art statistics-rank-row__art--fallback"
                           fallback={initials(row.ar.name)}
@@ -410,7 +414,10 @@ function StatisticsView({
                     <span className="statistics-rank-row__pos">{i + 1}</span>
                     <CoverImg
                       className="statistics-rank-row__art"
-                      src={coverUrlForAlbumRelPath(row.al.relPath)}
+                      src={versionedUrl(
+                        coverUrlForAlbumRelPath(row.al.relPath),
+                        row.al.updatedAt,
+                      )}
                       alt=""
                       fallbackClassName="statistics-rank-row__art statistics-rank-row__art--fallback"
                       fallback={

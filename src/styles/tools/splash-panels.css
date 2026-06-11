@@ -1,0 +1,287 @@
+/* tools/splash-panels.css — Splash, loading vista, pannelli recenti/lyrics Ascolta.
+   Split da tools-settings.css (Fase 6): ordine di cascata preservato via index.css. */
+
+.content-shell:has(> .rekord-splash) {
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+}
+
+.rekord-splash {
+  align-self: center;
+  width: 100%;
+  max-width: 36rem;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: clamp(0.85rem, 3vw, 1.35rem);
+  padding: clamp(0.85rem, 3vw, 1.85rem);
+  margin: clamp(1rem, 4vh, 2.75rem) auto;
+  text-align: center;
+  box-sizing: border-box;
+}
+
+.rekord-splash__carousel {
+  width: 100%;
+  min-height: 4.5rem;
+  display: grid;
+  place-items: center;
+}
+
+.rekord-splash__tip {
+  grid-area: 1 / 1;
+  margin: 0 auto;
+  max-width: 32rem;
+  font-size: clamp(0.94rem, 2.4vw, 1.06rem);
+  font-weight: 550;
+  line-height: 1.42;
+  color: color-mix(in srgb, var(--accent) 74%, var(--text) 26%);
+  text-wrap: balance;
+  animation: rekordSplashTipIn 0.55s cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+
+@keyframes rekordSplashTipIn {
+  from {
+    opacity: 0;
+    transform: translateY(14px);
+  }
+
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .rekord-splash__tip {
+    animation-duration: 0.01ms;
+    animation: none;
+  }
+}
+
+.rekord-splash__title {
+  margin: 0;
+  font-size: clamp(1.6rem, 4.5vw, 2rem);
+  font-weight: 700;
+  letter-spacing: -0.02em;
+  line-height: 1.18;
+}
+
+.rekord-splash__lead {
+  margin: 0;
+  font-size: 0.96rem;
+  line-height: 1.52;
+  color: color-mix(in srgb, var(--muted) 88%, var(--text) 12%);
+}
+
+.rekord-splash__spinner {
+  box-sizing: border-box;
+  width: 3.25rem;
+  height: 3.25rem;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  margin-top: 0.35rem;
+}
+
+.rekord-splash__ring {
+  box-sizing: border-box;
+  width: 100%;
+  height: 100%;
+  border-radius: 50%;
+  border: 3px solid color-mix(in srgb, var(--border) 78%, transparent);
+  border-top-color: color-mix(in srgb, var(--accent) 92%, var(--border) 8%);
+  border-right-color: color-mix(in srgb, var(--accent) 48%, var(--border) 52%);
+  animation: rekordSplashSpin 0.88s linear infinite;
+}
+
+@keyframes rekordSplashSpin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .rekord-splash__ring {
+    animation-duration: 2.4s;
+    animation-timing-function: linear;
+  }
+}
+
+.rekord-view-loading {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 0.75rem;
+  padding: 2.5rem 1rem;
+  min-height: 12rem;
+}
+
+.rekord-view-loading__spinner {
+  width: 2.25rem;
+  height: 2.25rem;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.rekord-view-loading__label {
+  margin: 0;
+  font-size: 0.9rem;
+  color: color-mix(in srgb, var(--muted) 88%, var(--text) 12%);
+}
+
+.listen-recent-panel__lead {
+  align-items: center;
+}
+
+.listen-queue-panel .section-head.library-genre-tracklist-headrow {
+  margin-bottom: var(--space-4);
+}
+
+.listen-recent-panel__head .listen-recent-panel__nav {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+.listen-recent-panel__nav {
+  margin-top: 0.08rem;
+  padding-bottom: 0;
+  border-bottom: none;
+}
+
+/* Make the "Recent / Lyrics" tabs match the h2 size of sibling section heads. */
+.listen-recent-panel .section-nav-tab {
+  font-size: 1.18rem;
+}
+
+.listen-recent-panel .section-nav-tab:disabled {
+  opacity: 0.38;
+  cursor: not-allowed;
+}
+
+.listen-recent-panel__body {
+  margin-top: 0;
+  display: flex;
+  flex-direction: column;
+  flex: 1 1 auto;
+  min-height: 0;
+}
+
+@media (min-width: 901px) {
+  .listen-page__panels.listen-dashboard-row > .listen-recent-panel.surface-card {
+    display: flex;
+    flex-direction: column;
+    align-self: start;
+    height: auto;
+  }
+
+  .listen-recent-panel__body {
+    flex: 0 1 auto;
+    min-height: 0;
+  }
+
+  .listen-recent-lyrics {
+    flex: 0 1 auto;
+    display: flex;
+    flex-direction: column;
+    min-height: 0;
+    height: auto;
+  }
+
+  .listen-recent-lyrics__lrc,
+  .listen-recent-lyrics__plain {
+    flex: 0 1 auto;
+    max-height: min(52vh, 28rem);
+    min-height: 0;
+    height: auto;
+    padding-bottom: 0.15rem;
+  }
+}
+
+.listen-recent-panel__lrc-state {
+  font-size: 0.72rem;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  user-select: none;
+}
+
+.listen-recent-panel__lrc-state.is-on {
+  color: var(--text);
+  opacity: 1;
+}
+
+.listen-recent-panel__lrc-state.is-off {
+  color: var(--text);
+  opacity: 0.28;
+}
+
+.listen-recent-lyrics {
+  margin: 0;
+  padding: 0;
+}
+
+.listen-recent-lyrics__lrc {
+  position: relative;
+  max-height: min(52vh, 28rem);
+  overflow-y: auto;
+  overflow-x: hidden;
+  -webkit-overflow-scrolling: touch;
+  display: flex;
+  flex-direction: column;
+  gap: 0.28rem;
+  padding: 0.15rem 0.1rem 0.35rem;
+}
+
+.listen-recent-lyrics__line {
+  margin: 0;
+  font-size: 0.92rem;
+  line-height: 1.45;
+  color: var(--muted);
+  transition: color 0.14s ease;
+}
+
+.listen-recent-lyrics__line.is-current {
+  font-weight: 800;
+  color: color-mix(in srgb, var(--accent) 72%, var(--text) 28%);
+  text-shadow: 0 0 22px color-mix(in srgb, var(--accent) 28%, transparent);
+}
+
+.listen-recent-lyrics__plain {
+  margin: 0;
+  max-height: min(52vh, 28rem);
+  overflow: auto;
+  white-space: pre-wrap;
+  line-height: 1.5;
+  font-family: inherit;
+  -webkit-overflow-scrolling: touch;
+}
+
+/* Phone: metadati brano compatti nel dock (layout in responsive.css) */
+@media (max-width: 560px) {
+  .player-bar2__art {
+    width: 38px;
+    height: 38px;
+    border-radius: 10px;
+  }
+
+  .player-bar2__title-line strong {
+    font-size: 0.85rem;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    display: block;
+  }
+
+  .player-bar2__byline {
+    font-size: 0.72rem;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+
+  .player-bar2__times {
+    font-size: 0.68rem;
+  }
+}

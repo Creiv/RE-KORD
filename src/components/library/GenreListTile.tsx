@@ -8,10 +8,18 @@ import {
 import { CoverImg } from "../CoverImg";
 import { UiStyle } from "../RekordUiIcons";
 import { coverUrlForAlbumRelPath } from "../../lib/api";
+import { albumCoverVersion } from "../../lib/libraryIndex";
+import { versionedUrl } from "../../lib/versionedUrl";
 import { useI18n } from "../../i18n/useI18n";
 import type { LibraryIndex } from "../../types";
 
-function MiniSlot({ relPath }: { relPath: string | null }) {
+function MiniSlot({
+  relPath,
+  version,
+}: {
+  relPath: string | null;
+  version?: number | null;
+}) {
   const [failed, setFailed] = useState(false);
   if (!relPath || failed) {
     return (
@@ -24,7 +32,7 @@ function MiniSlot({ relPath }: { relPath: string | null }) {
   return (
     <div className="library-list-tile__genre-slot">
       <CoverImg
-        src={coverUrlForAlbumRelPath(relPath)}
+        src={versionedUrl(coverUrlForAlbumRelPath(relPath), version)}
         alt=""
         onError={() => setFailed(true)}
       />
@@ -72,7 +80,11 @@ export const GenreListTile = memo(function GenreListTile({
     >
       <div className="library-list-tile__genre-quad" aria-hidden>
         {slots.map((rel, i) => (
-          <MiniSlot key={`${genreKey}-${i}`} relPath={rel} />
+          <MiniSlot
+            key={`${genreKey}-${i}`}
+            relPath={rel}
+            version={albumCoverVersion(libraryIndex, rel)}
+          />
         ))}
       </div>
       <div className="library-list-tile__body">

@@ -53,7 +53,6 @@ import { partitionYoutubeReleaseEntries } from "../lib/youtubeReleases";
 import type {
   CatalogArtistEntry,
   LibArtist,
-  LibTrack,
   LibraryCatalogResponse,
   LibraryEntityDelta,
   LibraryIndex,
@@ -67,9 +66,7 @@ import {
 import { ytdlpLogDetailForUser } from "../lib/ytdlpLogFilter";
 import { formatTrackGenresForDisplay } from "../lib/genres";
 import {
-  buildStudioDownloadConfirm,
   isValidDownloadDestPath,
-  joinMusicDestRelPath,
   normalizeDownloadDestPath,
   relPathLooksLikeAlbumFolderDest,
   resolveStudioDownloadOutputDir,
@@ -90,7 +87,6 @@ import {
   UiNavHeadphones,
   UiNote,
 } from "./RekordUiIcons";
-import { CoverImg } from "./CoverImg";
 import {
   StudioCatalogAlbumTile,
   StudioCatalogArtistTile,
@@ -112,378 +108,42 @@ type P = {
   onOpenSection?: (section: AppSection) => void;
 };
 
-function sourceLabel(s: string | undefined): string {
-  if (s === "itunes") return "iTunes";
-  if (s === "deezer") return "Deezer";
-  if (s === "musicbrainz") return "MusicBrainz";
-  if (s === "theaudiodb") return "TheAudioDB";
-  if (s === "coverart") return "CAA / MB";
-  return s || "—";
-}
-
-function extLinkLabel(url: string, openWord: string): string {
-  try {
-    const h = new URL(url).hostname;
-    if (h.includes("apple.com")) return "iTunes / Apple";
-    if (h.includes("deezer.com")) return "Deezer";
-    if (h.includes("musicbrainz.org")) return "MusicBrainz";
-    return h.replace("www.", "") || openWord;
-  } catch {
-    return openWord;
-  }
-}
-
-function findLibTrack(
-  library: LibraryResponse,
-  relPath: string
-): LibTrack | null {
-  for (const a of library.artists) {
-    for (const al of a.albums) {
-      for (const t of al.tracks) {
-        if (t.relPath === relPath) return t;
-      }
-    }
-  }
-  return null;
-}
-
-function artistNameForAlbumRelPath(
-  library: LibraryResponse,
-  albumRelPath: string,
-): string {
-  for (const a of library.artists) {
-    for (const al of a.albums) {
-      const rp = al.relPath || `${a.name}/${al.name}`;
-      if (rp === albumRelPath) return a.name;
-    }
-  }
-  return "";
-}
-
-const REKORD_DL_OK = "rekord-dl-committed";
-const LEGACY_DL_OK = "wpp-dl-committed";
-const REKORD_DL_OUT = "rekord-dl-out";
-const LEGACY_DL_OUT = "wpp-dl-out";
-const K_COVER_ALB = "rekord-cover-album";
-const LEGACY_COVER_ALB = "wpp-cover-album";
-const REKORD_DL_STUDIO_MODE = "rekord-dl-studio-mode";
-const REKORD_CATALOG_STUDIO_MODE = "rekord-catalog-studio-mode";
-
-function migrateSessionKey(primary: string, legacy: string): string | null {
-  try {
-    const current = sessionStorage.getItem(primary);
-    if (current != null) return current;
-    const legacyVal = sessionStorage.getItem(legacy);
-    if (legacyVal == null) return null;
-    sessionStorage.setItem(primary, legacyVal);
-    sessionStorage.removeItem(legacy);
-    return legacyVal;
-  } catch {
-    return null;
-  }
-}
-
-function migrateSessionFlag(primary: string, legacy: string): boolean {
-  try {
-    if (sessionStorage.getItem(primary) === "1") return true;
-    if (sessionStorage.getItem(legacy) !== "1") return false;
-    sessionStorage.setItem(primary, "1");
-    sessionStorage.removeItem(legacy);
-    return true;
-  } catch {
-    return false;
-  }
-}
-
-function clearLegacySessionKeys() {
-  try {
-    sessionStorage.removeItem(LEGACY_DL_OK);
-    sessionStorage.removeItem(LEGACY_DL_OUT);
-    sessionStorage.removeItem(LEGACY_COVER_ALB);
-  } catch {
-    /* ignore */
-  }
-}
-
-type StudioPane = StudioPaneId;
-type DlStudioMode = "classic" | "explore";
-type CatalogStudioMode = "local" | "web";
-
-function readStoredDlStudioMode(): DlStudioMode {
-  try {
-    const v = localStorage.getItem(REKORD_DL_STUDIO_MODE);
-    if (v === "explore") return "explore";
-  } catch {
-    /* ignore */
-  }
-  return "classic";
-}
-
-function readStoredCatalogStudioMode(): CatalogStudioMode {
-  try {
-    const v = localStorage.getItem(REKORD_CATALOG_STUDIO_MODE);
-    if (v === "web") return "web";
-  } catch {
-    /* ignore */
-  }
-  return "local";
-}
-
-function readStoredStudioPane(): StudioPane | null {
-  try {
-    const v = localStorage.getItem(REKORD_STUDIO_PANE);
-    if (v === "shared") return "catalog";
-    if (
-      v === "listen" ||
-      v === "catalog" ||
-      v === "download" ||
-      v === "meta" ||
-      v === "covers"
-    ) {
-      return v;
-    }
-  } catch {
-    /* ignore */
-  }
-  return null;
-}
-
-function isRekordClientEmbed(): boolean {
-  try {
-    return sessionStorage.getItem("rekord-embed") === "client";
-  } catch {
-    return false;
-  }
-}
-
-function selectionHasArtist(sel: LibrarySelectionV1 | null, artistId: string) {
-  if (!sel) return false;
-  if (sel.includeAll) return true;
-  return sel.artists.includes(artistId);
-}
-
-function selectionHasAlbum(
-  sel: LibrarySelectionV1 | null,
-  albumRel: string,
-  artistId: string,
-) {
-  if (!sel) return false;
-  if (sel.includeAll) return true;
-  if (sel.artists.includes(artistId)) return true;
-  return sel.albums.includes(albumRel);
-}
-
-function indexHasArtist(index: LibraryIndex | null, artistId: string) {
-  if (!index?.artists?.length) return false;
-  return index.artists.some((a) => a.id === artistId);
-}
-
-function indexHasAlbum(index: LibraryIndex | null, relPath: string) {
-  if (!index?.albums?.length) return false;
-  return index.albums.some((a) => a.relPath === relPath);
-}
-
-function catalogArtistCoverRel(ar: CatalogArtistEntry): string | null {
-  if (ar.coverRelPath?.trim()) return ar.coverRelPath;
-  const c = ar.relAlbums.find((x) => x.coverRelPath);
-  if (c?.coverRelPath) return c.coverRelPath;
-  return ar.relAlbums[0]?.relPath ?? null;
-}
-
-/** Artist not in account selection, or at least one catalog album folder missing from local index. */
-function catalogArtistNeedsAttention(
-  ar: CatalogArtistEntry,
-  index: LibraryIndex | null,
-  sel: LibrarySelectionV1 | null,
-) {
-  const notInSelection = !selectionHasArtist(sel, ar.id);
-  const missingAlbum =
-    ar.relAlbums.length > 0 &&
-    ar.relAlbums.some((al) => !indexHasAlbum(index, al.relPath));
-  return notInSelection || missingAlbum;
-}
-
-function exploreTypeLabel(
-  type: YoutubeExploreResult["type"],
-  t: (key: string, vars?: Record<string, string | number>) => string,
-) {
-  if (type === "album") return t("tools.exploreTypeAlbum");
-  if (type === "artist") return t("tools.exploreTypeArtist");
-  return t("tools.exploreTypeSong");
-}
-
-function exploreScopeForItem(item: YoutubeExploreResult): StudioDownloadScope {
-  return item.type === "song" ? "single" : "playlist";
-}
-
-function exploreDownloadPreamble(
-  item: YoutubeExploreResult,
-  t: (key: string, vars?: Record<string, string | number>) => string,
-): string {
-  const typeLabel = exploreTypeLabel(item.type, t);
-  let msg = t("tools.exploreConfirmLead", {
-    type: typeLabel,
-    title: item.title,
-  });
-  if (item.subtitle?.trim()) {
-    msg +=
-      "\n" +
-      t("tools.exploreConfirmSubtitle", {
-        subtitle: item.subtitle.trim(),
-      });
-  }
-  if (item.url?.trim()) {
-    msg += "\n" + t("tools.exploreConfirmUrl", { url: item.url.trim() });
-  }
-  return msg;
-}
-
-function buildReleasesArtistFolderConfirm(args: {
-  dlPath: string;
-  entries: { title: string }[];
-  libraryIndex: LibraryIndex | null;
-  t: (key: string, vars?: Record<string, string | number>) => string;
-}): string {
-  const norm = normalizeDownloadDestPath(args.dlPath);
-  const rows: { path: string; exists: boolean }[] = [];
-  const seen = new Set<string>();
-  for (const e of args.entries) {
-    const rel = joinMusicDestRelPath(norm, e.title);
-    if (!rel || seen.has(rel)) continue;
-    seen.add(rel);
-    rows.push({
-      path: rel,
-      exists: indexHasAlbum(args.libraryIndex, rel),
-    });
-  }
-  rows.sort((a, b) => a.path.localeCompare(b.path));
-  const max = 45;
-  const shown = rows.slice(0, max);
-  const lines = shown.map((r) =>
-    r.exists
-      ? args.t("tools.dlReleasesRowUpdate", { path: r.path })
-      : args.t("tools.dlReleasesRowNew", { path: r.path }),
-  );
-  let msg =
-    args.t("tools.dlReleasesArtistConfirmLead", {
-      count: rows.length,
-      base: norm,
-    }) +
-    "\n\n" +
-    lines.join("\n");
-  if (rows.length > max) {
-    msg += "\n" + args.t("tools.dlReleasesRowMore", { n: rows.length - max });
-  }
-  msg +=
-    "\n\n" +
-    args.t("tools.dlReleasesFolderNameHint") +
-    "\n\n" +
-    args.t("tools.dlReleasesProceedQ");
-  return msg;
-}
-
-async function prepareStudioDownload(args: {
-  hasValidDownloadDest: boolean;
-  dlPath: string;
-  scope: StudioDownloadScope;
-  releaseTitle?: string;
-  trackCount: number | null;
-  preamble?: string;
-  t: (key: string, vars?: Record<string, string | number>) => string;
-  appConfirm: (opts: {
-    variant?: "danger" | "warning";
-    message: string;
-  }) => Promise<boolean>;
-  onLog: (updater: (prev: string) => string) => void;
-}): Promise<boolean> {
-  if (!args.hasValidDownloadDest) {
-    args.onLog((x) => x + args.t("tools.dlPickFolder"));
-    return false;
-  }
-  const confirmOpts = buildStudioDownloadConfirm({
-    dlPath: args.dlPath,
-    scope: args.scope,
-    releaseTitle: args.releaseTitle,
-    trackCount: args.trackCount,
-    t: args.t,
-    preamble: args.preamble,
-  });
-  if (!(await args.appConfirm(confirmOpts))) {
-    return false;
-  }
-  if (args.scope === "playlist" && args.trackCount != null && args.trackCount > 35) {
-    if (
-      !(await args.appConfirm({
-        message: args.t("tools.dlPlaylistManyConfirm", { n: args.trackCount }),
-      }))
-    ) {
-      return false;
-    }
-  }
-  return true;
-}
-
-function normalizeDlProgress(
-  p: { current: number; total: number } | null
-): { cur: number; tot: number; pct: number } | null {
-  if (!p) return null;
-  const tot = Math.max(1, Math.floor(Number(p.total) || 1));
-  const cur = Math.min(tot, Math.max(0, Math.floor(Number(p.current) || 0)));
-  return { cur, tot, pct: Math.max(3, Math.min(100, (cur / tot) * 100)) };
-}
-
-/** Brani nel singolo album (release batch); se total non noto ancora, pct leggera fissa. */
-function normalizeTrackInAlbumProgress(
-  p: { current: number; total: number } | null
-): { cur: number; tot: number; pct: number; hasTotal: boolean } | null {
-  if (!p) return null;
-  const tot = Math.floor(Number(p.total) || 0);
-  const cur = Math.max(0, Math.floor(Number(p.current) || 0));
-  if (tot <= 0) {
-    return { cur, tot: 0, pct: 10, hasTotal: false };
-  }
-  return {
-    cur: Math.min(tot, cur),
-    tot,
-    hasTotal: true,
-    pct: Math.max(3, Math.min(100, (cur / tot) * 100)),
-  };
-}
-
-function DlDestFolderGlyph({ className }: { className?: string }) {
-  return (
-    <svg
-      className={className}
-      viewBox="0 0 24 24"
-      width="20"
-      height="20"
-      fill="none"
-      aria-hidden
-    >
-      <path
-        d="M4.25 5.5h5.1l1.1 1.1h8.3c.6 0 1.1.45 1.1 1v9.15c0 .6-.5 1.1-1.1 1.1H4.25c-.6 0-1.1-.5-1.1-1.1V6.6c0-.6.5-1.1 1.1-1.1Z"
-        fill="currentColor"
-        opacity="0.9"
-      />
-    </svg>
-  );
-}
-
-function DlDestUpIcon() {
-  return (
-    <svg
-      className="tools-dl-dest__up-ic"
-      viewBox="0 0 24 24"
-      width="20"
-      height="20"
-      fill="currentColor"
-      aria-hidden
-    >
-      <path d="M12 5.5L6.5 11H10v5.5h4V11h3.4L12 5.5z" />
-    </svg>
-  );
-}
-
+import {
+  findLibTrack,
+  artistNameForAlbumRelPath,
+  REKORD_DL_OK,
+  REKORD_DL_OUT,
+  K_COVER_ALB,
+  LEGACY_DL_OK,
+  LEGACY_DL_OUT,
+  LEGACY_COVER_ALB,
+  REKORD_DL_STUDIO_MODE,
+  REKORD_CATALOG_STUDIO_MODE,
+  migrateSessionKey,
+  migrateSessionFlag,
+  clearLegacySessionKeys,
+  readStoredDlStudioMode,
+  readStoredCatalogStudioMode,
+  readStoredStudioPane,
+  isRekordClientEmbed,
+  selectionHasArtist,
+  selectionHasAlbum,
+  indexHasArtist,
+  indexHasAlbum,
+  catalogArtistCoverRel,
+  catalogArtistNeedsAttention,
+  exploreScopeForItem,
+  exploreDownloadPreamble,
+  buildReleasesArtistFolderConfirm,
+  prepareStudioDownload,
+  normalizeDlProgress,
+  normalizeTrackInAlbumProgress,
+  type StudioPane,
+  type DlStudioMode,
+  type CatalogStudioMode,
+} from "./toolsViewShared";
+import { DlDestFolderGlyph, DlDestUpIcon } from "./toolsViewGlyphs";
+import { StudioCoversPane } from "./StudioCoversPane";
 export function ToolsView({
   library,
   libraryIndex,
@@ -3443,164 +3103,21 @@ export function ToolsView({
           ) : null}
 
           {studioPane === "covers" ? (
-            <div
-              className="studio-pane tools-art"
-              role="region"
-              aria-label={t("tools.coversTitle")}
-            >
-              <div className="studio-covers-split">
-                <div className="studio-panel">
-                  <h4 className="studio-panel-title">
-                    {t("tools.coversSave")}
-                  </h4>
-                  <div className="studio-picker-picks tools-studio-pair-picks tools-cover-save-picks">
-                    <div>
-                      <label
-                        className="subtle sm block-label"
-                        htmlFor="cover-artist-sel"
-                      >
-                        {t("tools.pickerArtist")}
-                      </label>
-                      <select
-                        id="cover-artist-sel"
-                        className="select"
-                        value={coverPickArtist}
-                        onChange={(e) => {
-                          setCoverPickArtist(e.target.value);
-                          setAlbumForCover("");
-                        }}
-                        aria-label={t("tools.pickerArtist")}
-                      >
-                        <option value="">
-                          {t("tools.pickerPlaceholder")}
-                        </option>
-                        {libraryArtistsSorted.map((a) => (
-                          <option key={a.name} value={a.name}>
-                            {a.name}
-                          </option>
-                        ))}
-                      </select>
-                    </div>
-                    <div>
-                      <label
-                        className="subtle sm block-label"
-                        htmlFor="cover-album-sel"
-                      >
-                        {t("tools.pickerAlbum")}
-                      </label>
-                      <select
-                        id="cover-album-sel"
-                        className="select"
-                        value={albumForCover}
-                        onChange={(e) => setAlbumForCover(e.target.value)}
-                        disabled={!coverPickArtist}
-                        aria-label={t("tools.coversPickAria")}
-                      >
-                        {!coverPickArtist ? (
-                          <option value="">
-                            {t("tools.pickerAlbumNeedArtist")}
-                          </option>
-                        ) : (
-                          <>
-                            <option value="">{t("tools.pickAlbum")}</option>
-                            {coverAlbumsForPick.map((o) => (
-                              <option key={o.relPath} value={o.relPath}>
-                                {o.name}
-                              </option>
-                            ))}
-                          </>
-                        )}
-                      </select>
-                    </div>
-                  </div>
-                  {albumForCover ? (
-                    <p className="art-target sm">
-                      <code>{albumForCover}</code>
-                    </p>
-                  ) : null}
-                </div>
-
-                <div className="studio-panel">
-                  <h4 className="studio-panel-title">
-                    {t("tools.coversSearch")}
-                  </h4>
-                  <div className="art-fields">
-                    <label className="art-field art-field--full">
-                      <span className="subtle sm block-label">
-                        {t("tools.coverSearchLabel")}
-                      </span>
-                      <input
-                        type="text"
-                        className="flex1"
-                        value={artQuery}
-                        onChange={(e) => setArtQuery(e.target.value)}
-                        placeholder={t("tools.coverSearchPh")}
-                      />
-                    </label>
-                  </div>
-                  <div className="studio-inline-actions studio-inline-actions--spaced">
-                    <button
-                      type="button"
-                      className="ghost-btn ghost-btn--sm"
-                      onClick={useCurrentForArt}
-                    >
-                      {t("tools.fillFromPlayback")}
-                    </button>
-                    <button
-                      type="button"
-                      className="primary-btn"
-                      onClick={doArtSearch}
-                      disabled={artBusy}
-                    >
-                      {artBusy ? t("tools.searching") : t("tools.searchCovers")}
-                    </button>
-                  </div>
-                </div>
-              </div>
-
-              <div className="artgrid2">
-                {artRes.map((a, i) => (
-                  <div key={i + a.artwork} className="artcard2">
-                    <div className="artcard2-img">
-                      <CoverImg src={a.artwork} alt="" decoding="async" />
-                      {a.source ? (
-                        <span className="art-src">{sourceLabel(a.source)}</span>
-                      ) : null}
-                    </div>
-                    <div className="artcap2">
-                      <strong>{a.artist}</strong>
-                      <br />
-                      {a.name}
-                    </div>
-                    <div className="art-actions">
-                      <a
-                        className="extlink"
-                        href={a.url}
-                        target="_blank"
-                        rel="noreferrer"
-                      >
-                        {extLinkLabel(a.url, t("common.open"))}
-                      </a>
-                      <button
-                        type="button"
-                        className="primary-btn primary-btn--sm"
-                        disabled={artBusy || !albumForCover}
-                        onClick={() => applyCover(a.artwork)}
-                      >
-                        {t("tools.saveCover")}
-                      </button>
-                    </div>
-                  </div>
-                ))}
-              </div>
-              {artRes.length === 0 &&
-              !artBusy &&
-              artQuery.length > 0 ? (
-                <p className="subtle sm studio-panel-gap">
-                  {t("tools.noCoverResults")}
-                </p>
-              ) : null}
-            </div>
+            <StudioCoversPane
+              coverPickArtist={coverPickArtist}
+              setCoverPickArtist={setCoverPickArtist}
+              albumForCover={albumForCover}
+              setAlbumForCover={setAlbumForCover}
+              libraryArtistsSorted={libraryArtistsSorted}
+              coverAlbumsForPick={coverAlbumsForPick}
+              artQuery={artQuery}
+              setArtQuery={setArtQuery}
+              artBusy={artBusy}
+              artRes={artRes}
+              onUseCurrentForArt={useCurrentForArt}
+              onArtSearch={doArtSearch}
+              onApplyCover={applyCover}
+            />
           ) : null}
         </div>
       </section>

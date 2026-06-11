@@ -8,6 +8,8 @@ import {
 } from "../AppSharedUi";
 import { UiPerson } from "../RekordUiIcons";
 import { coverUrlForAlbumRelPath } from "../../lib/api";
+import { albumCoverVersion } from "../../lib/libraryIndex";
+import { versionedUrl } from "../../lib/versionedUrl";
 import { initials } from "../../lib/initials";
 import { useI18n } from "../../i18n/useI18n";
 import type { LibraryArtistIndex, LibraryIndex } from "../../types";
@@ -45,7 +47,10 @@ export const ArtistListTile = memo(function ArtistListTile({
         {coverAlbumRelPath ? (
           <CoverImg
             className="library-list-tile__cover"
-            src={coverUrlForAlbumRelPath(coverAlbumRelPath)}
+            src={versionedUrl(
+              coverUrlForAlbumRelPath(coverAlbumRelPath),
+              albumCoverVersion(libraryIndex, coverAlbumRelPath),
+            )}
             alt=""
             fallbackClassName="library-list-tile__badge"
             fallback={initials(artist.name)}

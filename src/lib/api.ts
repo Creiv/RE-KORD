@@ -486,6 +486,8 @@ export type AppConfig = {
   lockedByEnv: boolean
   libraryRootConfigured?: boolean
   localAccess?: boolean
+  /** Richiesta arrivata via tunnel Cloudflare: vista client + cookie YT read-only. */
+  remoteTunnelAccess?: boolean
   libraryRootWritable?: boolean
   libraryRootLabel?: string | null
   youtubeCookiesConfigured?: boolean
@@ -1191,6 +1193,21 @@ export async function applyArtwork(
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ albumPath, imageUrl }),
+  })
+  return unwrap<LibraryEntityDelta & { saved: string; abs?: string }>(response)
+}
+
+/** Upload manuale cover album (JPEG/PNG) dalla pagina album. */
+export async function uploadAlbumCover(
+  albumPath: string,
+  file: File,
+): Promise<LibraryEntityDelta & { saved: string; abs?: string }> {
+  const fd = new FormData()
+  fd.append("albumPath", albumPath)
+  fd.append("file", file)
+  const response = await apiFetch("/api/artwork/upload", {
+    method: "POST",
+    body: fd,
   })
   return unwrap<LibraryEntityDelta & { saved: string; abs?: string }>(response)
 }

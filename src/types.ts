@@ -75,6 +75,8 @@ export type EnrichedTrack = LibTrack & {
   /** Stable from library index (`artist::folder`); for shuffle exclusion. */
   albumId?: string;
   albumMeta?: AlbumMeta;
+  /** mtime dall'indice: cache-busting copertine (?v=) dopo un cambio cover. */
+  updatedAt?: number | null;
 };
 
 export type UserPlaylist = {

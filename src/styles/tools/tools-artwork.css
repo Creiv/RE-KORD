@@ -1,0 +1,392 @@
+/* tools/tools-artwork.css — Studio Copertine: art-target, artcard, link esterni.
+   Split da tools-settings.css (Fase 6): ordine di cascata preservato via index.css. */
+
+.art-target {
+  font-size: 0.86rem;
+  color: var(--accent2);
+  margin: 0.35rem 0 0.55rem;
+}
+
+.art-fields {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 8.5rem), 1fr));
+  gap: 0.55rem;
+  margin-bottom: 0.5rem;
+}
+
+.art-field {
+  display: flex;
+  min-width: 0;
+  flex-direction: column;
+  gap: 0.35rem;
+}
+
+.art-field .block-label {
+  margin: 0;
+}
+
+.art-field--full {
+  grid-column: 1 / -1;
+}
+
+.art-fields .flex1 {
+  min-width: 0;
+}
+
+.artgrid2 {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(min(100%, 10.5rem), 1fr));
+  gap: 0.75rem 0.85rem;
+  margin-top: 0.75rem;
+}
+
+@media (min-width: 901px) {
+  .artgrid2 {
+    grid-template-columns: repeat(auto-fill, minmax(12.5rem, 1fr));
+  }
+}
+
+.tools-art .artgrid2 {
+  margin-top: 0.5rem;
+}
+
+.artcard2 {
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  overflow: hidden;
+  background: var(--surface3);
+  box-shadow: var(--shadow-elev-1);
+  transition: border-color 0.16s ease, box-shadow 0.16s ease;
+}
+
+.artcard2:hover {
+  border-color: var(--border-strong);
+}
+
+.artcard2-img {
+  position: relative;
+}
+
+.artcard2-img img {
+  width: 100%;
+  aspect-ratio: 1;
+  object-fit: cover;
+  display: block;
+  background: #0a1018;
+}
+
+.art-src {
+  position: absolute;
+  right: 6px;
+  bottom: 6px;
+  font-size: 0.6rem;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  font-weight: 700;
+  padding: 0.22rem 0.4rem;
+  border-radius: 6px;
+  background: rgba(4, 8, 14, 0.88);
+  color: var(--accent2);
+  border: 1px solid var(--border);
+  pointer-events: none;
+}
+
+.artcap2 {
+  padding: 0.5rem 0.65rem;
+  font-size: 0.78rem;
+  line-height: 1.35;
+  color: var(--text);
+  border-top: 1px solid var(--border);
+  /* Titoli/artisti lunghissimi dai provider: max 3 righe, niente card chilometriche */
+  display: -webkit-box;
+  -webkit-line-clamp: 3;
+  line-clamp: 3;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+  overflow-wrap: anywhere;
+}
+
+.art-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.45rem;
+  padding: 0.5rem 0.6rem 0.6rem;
+  border-top: 1px solid var(--border);
+  background: color-mix(in srgb, var(--surface2) 78%, var(--bg));
+}
+
+.extlink {
+  color: var(--accent2);
+  font-size: 0.8rem;
+}
+
+.extlink:hover {
+  text-decoration: underline;
+}
+
+.dl-progress-wrap {
+  margin: 0.5rem 0 0.75rem;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  padding: 0.55rem 0.7rem;
+  background: var(--meta-strip-bg);
+  box-shadow: inset 0 1px 0 color-mix(in srgb, var(--border) 40%, transparent);
+}
+
+.dl-progress-stop-row {
+  display: flex;
+  justify-content: flex-end;
+  margin-bottom: 0.45rem;
+}
+
+.dl-progress-wrap--dual {
+  display: flex;
+  flex-direction: column;
+  gap: 0.6rem;
+}
+
+.dl-progress-block + .dl-progress-block {
+  padding-top: 0.5rem;
+  border-top: 1px solid color-mix(in srgb, var(--border) 55%, transparent);
+}
+
+.dl-progress-top {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem;
+  font-size: 0.82rem;
+  margin-bottom: 0.4rem;
+  color: var(--muted-strong);
+}
+
+.dl-progress-rail {
+  width: 100%;
+  height: 9px;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.07);
+  overflow: hidden;
+  box-shadow: inset 0 1px 2px rgba(0, 0, 0, 0.2);
+}
+
+.dl-progress-fill {
+  height: 100%;
+  border-radius: 999px;
+  background: linear-gradient(90deg, var(--accent), var(--accent2));
+  transition: width 0.28s ease;
+}
+
+@media (min-width: 901px) {
+  .studio-action-row .primary-btn:not(.primary-btn--sm) {
+    min-width: 10rem;
+  }
+}
+
+.tools-art .row.gap {
+  align-items: center;
+}
+
+@media (min-width: 1920px) and (min-aspect-ratio: 2/1) {
+  .content-shell {
+    padding-inline: clamp(1rem, 2.2vw, 3.25rem);
+  }
+
+  .player-bar2 {
+    width: 100%;
+    box-sizing: border-box;
+  }
+
+  .listen-page {
+    --listen-2col: minmax(0, 1.12fr) minmax(300px, 0.88fr);
+  }
+
+  .listen-stage {
+    --listen-art-size: min(196px, 22vw);
+  }
+
+  .listen-page .listen-stage,
+  .listen-page .listen-dashboard-row {
+    gap: 1.2rem;
+  }
+
+  .listen-stage__viz {
+    height: var(--listen-art-size);
+    max-height: var(--listen-art-size);
+  }
+
+  .dashboard-grid {
+    gap: 1.15rem;
+  }
+}
+
+@media (max-width: 900px) {
+  .hero-card {
+    grid-template-columns: 1fr;
+  }
+
+  .hero-card__actions {
+    justify-content: flex-start;
+  }
+
+  .dashboard-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .stats-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .listen-page .listen-stage,
+  .listen-page .listen-dashboard-row {
+    grid-template-columns: 1fr;
+  }
+
+  .listen-stage__viz {
+    height: min(240px, 52vw);
+    max-height: 320px;
+  }
+
+  .ghost-input.compact {
+    width: 100%;
+    max-width: 100%;
+  }
+
+  .rekord-brand-logo--topbar {
+    height: 36px;
+    width: auto;
+    max-width: min(220px, 42vw);
+  }
+
+  .library-search-bar__field {
+    flex: 1 1 100%;
+    margin-left: 0;
+    min-width: 0;
+  }
+
+  .topbar2__search-btn {
+    min-width: 2.2rem;
+    min-height: 2.2rem;
+  }
+
+  .topbar2__install-btn {
+    flex: 1 1 auto;
+    justify-content: center;
+    min-width: 0;
+  }
+
+  .ghost-btn--toolbar {
+    min-height: 30px;
+    padding: 0.28rem 0.65rem;
+    font-size: 0.78rem;
+  }
+}
+
+@media (max-width: 760px) {
+  .content-shell {
+    padding: 1rem max(1rem, env(safe-area-inset-right))
+      var(--content-pad-bottom) max(1rem, env(safe-area-inset-left));
+  }
+
+  /* gap/padding-left rimossi: erano già annullati da flat-modern.css
+     (regola successiva nella cascata, ora consolidata in views/tracklist.css). */
+  .track-row {
+    grid-template-columns: 40px minmax(0, 1fr) auto;
+  }
+
+  .track-row__art {
+    width: 40px;
+    height: 40px;
+  }
+
+  .playlist-row {
+    grid-template-columns: 1fr;
+  }
+
+  .track-row__actions {
+    justify-content: flex-start;
+  }
+
+  .metric-card strong {
+    font-size: clamp(1.35rem, 6vw, 1.85rem);
+  }
+}
+
+@media (max-width: 560px) {
+  .section-head {
+    flex-direction: column;
+    align-items: flex-start;
+  }
+
+  .section-head--page-toolbar {
+    align-items: stretch;
+  }
+
+  .section-head--page-toolbar .section-head__tools {
+    width: 100%;
+    max-width: 100%;
+    margin-left: 0;
+    justify-content: flex-end;
+  }
+
+  .queue-hero-actions {
+    width: 100%;
+  }
+
+  .queue-name-input {
+    max-width: 100%;
+  }
+
+  .playlist-rename-input {
+    flex: 1 1 auto;
+    min-width: 0;
+    max-width: 100%;
+  }
+}
+
+@media (max-width: 560px) {
+  .stats-grid:not(.statistics-overview-grid) {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .ghost-btn--toolbar {
+    min-height: 28px;
+    padding: 0.22rem 0.55rem;
+    font-size: 0.74rem;
+  }
+
+  .topbar2__install-btn {
+    flex: 0 1 auto;
+    max-width: 9.5rem;
+  }
+
+  .topbar2__install-label {
+    display: none;
+  }
+
+  .listen-stage {
+    --listen-art-size: min(148px, 42vw);
+  }
+
+  .listen-stage__head {
+    flex-direction: row;
+    align-items: center;
+  }
+}
+
+@media (max-height: 460px) and (orientation: landscape) {
+  .listen-stage__viz {
+    height: min(160px, 38vh);
+    max-height: min(160px, 38vh);
+  }
+  }
+
+.track-row__ic--meta {
+  opacity: 0.55;
+}
+
+.track-row__ic--meta:hover {
+  opacity: 1;
+  color: var(--text);
+}

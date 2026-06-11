@@ -1,0 +1,365 @@
+/* tools/meta-edit-dialog.css — Dialog metadati brano e app-dialog.
+   Split da tools-settings.css (Fase 6): ordine di cascata preservato via index.css. */
+
+.meta-edit-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: var(--z-overlay);
+  background: color-mix(in srgb, var(--bg) 50%, rgba(0, 0, 0, 0.42));
+  display: grid;
+  place-items: center;
+  padding: 1rem;
+  box-sizing: border-box;
+}
+
+.meta-edit-backdrop.custom-theme-dialog-backdrop {
+  z-index: var(--z-modal);
+  background: transparent;
+  backdrop-filter: none;
+  -webkit-backdrop-filter: none;
+}
+
+.meta-edit-backdrop--lyrics-portal {
+  z-index: var(--z-overlay-raised);
+}
+
+.meta-edit-dialog {
+  position: relative;
+  width: min(28rem, 100%);
+  max-height: min(90dvh, 100%);
+  overflow: auto;
+  margin: 0;
+}
+
+.app-dialog-backdrop {
+  z-index: var(--z-modal);
+}
+
+.app-dialog {
+  padding: 1.2rem 1.35rem;
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+}
+
+.app-dialog__eyebrow {
+  margin: 0;
+}
+
+.app-dialog__body {
+  margin: 0;
+  font-size: 0.93rem;
+  line-height: 1.5;
+  color: var(--text);
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
+.app-dialog__actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  justify-content: flex-end;
+}
+
+.app-dialog__btn--danger {
+  background: color-mix(in srgb, var(--danger, #c44) 82%, var(--bg) 18%);
+  border-color: color-mix(in srgb, var(--danger, #c44) 50%, var(--border) 50%);
+  color: #fff;
+}
+
+.app-dialog__btn--danger:hover {
+  filter: brightness(1.06);
+}
+
+.app-dialog__btn--warning {
+  background: color-mix(in srgb, #d1a32d 86%, var(--bg) 14%);
+  border-color: color-mix(in srgb, #d1a32d 55%, var(--border) 45%);
+  color: #1a1102;
+}
+
+.app-dialog__btn--warning:hover {
+  filter: brightness(1.04);
+}
+
+.meta-edit-path {
+  word-break: break-all;
+  margin: 0.35rem 0 0;
+}
+
+.meta-edit-form {
+  display: flex;
+  flex-direction: column;
+  gap: 0.85rem;
+  margin-top: 0.75rem;
+}
+
+.meta-edit-lyrics-row {
+  margin: -0.15rem 0 0;
+}
+
+.meta-edit-lyrics-actions {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  width: 100%;
+}
+
+.meta-edit-lyrics-btn {
+  flex: 1 1 0;
+  width: 100%;
+  min-width: 0;
+  box-sizing: border-box;
+}
+
+.meta-edit-lyrics-status-dot {
+  width: 0.72rem;
+  height: 0.72rem;
+  border-radius: 999px;
+  border: 1px solid transparent;
+  display: inline-block;
+}
+
+.meta-edit-lyrics-status-dot--idle {
+  background: color-mix(in srgb, var(--muted) 35%, transparent);
+  border-color: color-mix(in srgb, var(--muted) 45%, transparent);
+}
+
+.meta-edit-lyrics-status-dot--okLrc {
+  background: var(--success);
+  border-color: var(--success);
+}
+
+.meta-edit-lyrics-status-dot--okPlain {
+  background: var(--warning);
+  border-color: var(--warning);
+}
+
+.meta-edit-lyrics-status-dot--missing,
+.meta-edit-lyrics-status-dot--error {
+  background: var(--danger-strong);
+  border-color: var(--danger-strong);
+}
+
+.meta-edit-lyrics-dialog {
+  width: min(42rem, calc(100vw - 2rem));
+}
+
+.meta-edit-lyrics-textarea {
+  width: 100%;
+}
+
+.meta-edit-field {
+  display: flex;
+  flex-direction: column;
+  gap: 0.28rem;
+  font-size: 0.88rem;
+}
+
+.meta-edit-field span {
+  color: var(--muted);
+  font-weight: 600;
+}
+
+.meta-edit-genre-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.4rem;
+  margin-bottom: 0.5rem;
+  min-width: 0;
+}
+
+.meta-edit-genre-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.2rem;
+  max-width: 100%;
+  padding: 0.2rem 0.2rem 0.2rem 0.5rem;
+  border-radius: var(--radius-md);
+  border: 1px solid var(--border);
+  background: color-mix(in srgb, var(--surface-elev-a) 92%, var(--border) 8%);
+  font-size: 0.84rem;
+}
+
+.meta-edit-genre-chip__text {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  max-width: 14rem;
+}
+
+.meta-edit-genre-chip__browse {
+  border: none;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  padding: 0;
+  cursor: pointer;
+  text-align: left;
+}
+
+.meta-edit-genre-chip__browse:hover:not(:disabled) {
+  color: var(--accent2);
+}
+
+.meta-edit-genre-chip__browse:disabled {
+  cursor: not-allowed;
+  opacity: 0.55;
+}
+
+.meta-edit-genre-chip__x {
+  flex-shrink: 0;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  line-height: 1;
+  min-width: 1.5rem;
+  min-height: 1.5rem;
+  border: none;
+  border-radius: var(--radius-sm);
+  background: transparent;
+  color: var(--muted);
+  cursor: pointer;
+  padding: 0;
+}
+
+.meta-edit-genre-chip__x-ic {
+  width: 1rem;
+  height: 1rem;
+  display: block;
+}
+
+.meta-edit-genre-chip__x:hover {
+  color: var(--text);
+  background: color-mix(in srgb, var(--border) 35%, transparent);
+}
+
+.meta-edit-genre-add {
+  margin-bottom: 0.5rem;
+  display: inline-flex;
+  align-items: center;
+  position: relative;
+}
+
+.meta-edit-genre-chip--add {
+  padding: 0.2rem 0.5rem;
+  cursor: pointer;
+}
+
+.meta-edit-genre-chip__add-ic {
+  width: 0.95rem;
+  height: 0.95rem;
+  display: block;
+}
+
+.meta-edit-genre-option-list {
+  min-width: 16rem;
+  max-width: min(22rem, 90vw);
+  max-height: 12.5rem;
+  overflow: auto;
+}
+
+.meta-edit-genre-option-item {
+  font-size: 0.84rem;
+}
+
+.meta-edit-genre-select {
+  color: var(--text);
+  background-color: var(--ghost-input-bg);
+}
+
+.meta-edit-genre-select option {
+  color: var(--text);
+  background: var(--surface2);
+}
+
+.meta-edit-genre-select option:disabled {
+  color: var(--muted);
+}
+
+.meta-edit-genre-custom {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.45rem;
+  align-items: center;
+  margin-bottom: 0.3rem;
+}
+
+.meta-edit-genre-custom .ghost-input {
+  flex: 1 1 10rem;
+  min-width: 0;
+}
+
+.meta-edit-mood-grid {
+  display: grid;
+  grid-template-columns: repeat(7, minmax(0, 1fr));
+  gap: 0.4rem;
+  margin-top: 0.35rem;
+  max-width: 100%;
+}
+
+.meta-edit-mood-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 2.35rem;
+  padding: 0.3rem;
+  border-radius: var(--radius-md);
+  cursor: pointer;
+  line-height: 0;
+}
+
+.meta-edit-mood-btn--color {
+  --mood-c: var(--muted);
+}
+
+.meta-edit-mood-btn--color:not(.meta-edit-mood-btn--on) {
+  opacity: 0.3;
+  border: 1px solid color-mix(in srgb, var(--border) 82%, var(--mood-c) 18%);
+  background: color-mix(in srgb, var(--surface2) 97%, var(--muted) 3%);
+  color: color-mix(in srgb, var(--muted) 58%, var(--mood-c) 42%);
+  filter: grayscale(0.55) brightness(0.9);
+  box-shadow: none;
+}
+
+.meta-edit-mood-btn--color:not(.meta-edit-mood-btn--on):hover {
+  opacity: 0.52;
+  border-color: color-mix(in srgb, var(--border) 58%, var(--mood-c) 42%);
+  background: color-mix(in srgb, var(--mood-c) 9%, var(--surface2) 91%);
+  color: color-mix(in srgb, var(--mood-c) 65%, var(--muted) 35%);
+  filter: grayscale(0.22) brightness(0.98);
+}
+
+.meta-edit-mood-btn svg {
+  width: 1.1rem;
+  height: 1.1rem;
+  display: block;
+}
+
+.meta-edit-mood-btn--color.meta-edit-mood-btn--on {
+  opacity: 1;
+  filter: none;
+  border: 1px solid color-mix(in srgb, var(--mood-c) 68%, var(--border) 32%);
+  background: color-mix(in srgb, var(--mood-c) 36%, var(--surface2) 64%);
+  box-shadow: 0 0 0 1px color-mix(in srgb, var(--mood-c) 35%, transparent);
+  color: color-mix(in srgb, var(--mood-c) 96%, #000);
+}
+
+.meta-edit-mood-btn--color.meta-edit-mood-btn--on:hover {
+  border-color: color-mix(in srgb, var(--mood-c) 75%, var(--border) 25%);
+  filter: brightness(1.04);
+}
+
+.meta-edit-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  justify-content: flex-end;
+  margin-top: 0.25rem;
+  align-items: center;
+}
+
+.meta-edit-actions__spacer {
+  flex: 1 1 0.5rem;
+  min-width: 0.5rem;
+}

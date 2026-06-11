@@ -161,11 +161,10 @@ function SettingsView() {
   }, []);
 
   useEffect(() => {
-    if (isKordClientEmbed) return;
     queueMicrotask(() => {
       loadActivityLog();
     });
-  }, [isKordClientEmbed, loadActivityLog]);
+  }, [loadActivityLog]);
 
   const selectedAccount: Account | null =
     accounts?.accounts.find((account) => account.id === selectedAccountId) ||
@@ -686,15 +685,14 @@ function SettingsView() {
           </div>
         </div>
       </section>
-      {isKordClientEmbed ? null : (
-        <section className="surface-card">
+      <section className="surface-card">
           <div className="section-head section-head--page-toolbar">
             <div>
               <p className="eyebrow">{t("settings.libraryEyebrow")}</p>
               <h2>{t("settings.libraryHeading")}</h2>
             </div>
           </div>
-          {!libraryRootWritable ? (
+          {!libraryRootWritable || isKordClientEmbed ? (
             libLocked ? (
               <p className="subtle sm">
                 {t("settings.libLocked", {
@@ -776,11 +774,7 @@ function SettingsView() {
             </>
           )}
         </section>
-      )}
-      {!isKordClientEmbed &&
-      serverLocalAccess &&
-      (youtubeCookiesWritable || youtubeCookiesLockedByEnv) ? (
-        <section className="surface-card settings-youtube-cookies-section">
+      <section className="surface-card settings-youtube-cookies-section">
           <div className="section-head section-head--page-toolbar">
             <div>
               <p className="eyebrow">{t("settings.youtubeCookiesEyebrow")}</p>
@@ -797,6 +791,8 @@ function SettingsView() {
           </p>
           {youtubeCookiesLockedByEnv ? (
             <p className="subtle sm">{t("settings.youtubeCookiesEnvLocked")}</p>
+          ) : !youtubeCookiesWritable || isKordClientEmbed ? (
+            <p className="subtle sm">{t("settings.youtubeCookiesReadOnly")}</p>
           ) : (
             <div className="row gap flex-wrap">
               <input
@@ -833,7 +829,6 @@ function SettingsView() {
             <p className="subtle sm warnline">{youtubeCookiesErr}</p>
           ) : null}
         </section>
-      ) : null}
       <section className="surface-card settings-network-section">
         <div className="section-head section-head--page-toolbar">
           <div>
@@ -955,8 +950,7 @@ function SettingsView() {
           ) : null}
         </div>
       </section>
-      {isKordClientEmbed ? null : (
-        <section
+      <section
           className="surface-card settings-activity-section"
           aria-label={t("settings.backupHeading")}
         >
@@ -1006,9 +1000,7 @@ function SettingsView() {
           ) : null}
           {restoreOk ? <p className="subtle sm">{restoreOk}</p> : null}
         </section>
-      )}
-      {isKordClientEmbed ? null : (
-        <section
+      <section
           className="surface-card settings-activity-section"
           aria-label={t("settings.activityLogHeading")}
         >
@@ -1086,7 +1078,6 @@ function SettingsView() {
             </div>
           ) : null}
         </section>
-      )}
       <footer
         className="settings-colophon"
         role="contentinfo"

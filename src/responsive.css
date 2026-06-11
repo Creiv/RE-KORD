@@ -612,6 +612,17 @@ body,
     max-width: 42%;
   }
 
+  .album-hero__top-band .album-hero__cover-btn {
+    flex: 0 0 auto;
+    width: clamp(104px, 28vw, 148px);
+    max-width: 42%;
+  }
+
+  .album-hero__top-band .album-hero__cover-btn .album-cover {
+    width: 100%;
+    max-width: none;
+  }
+
   .album-hero__top-right {
     flex: 1 1 0;
     min-width: 0;

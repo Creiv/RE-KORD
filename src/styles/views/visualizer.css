@@ -1,0 +1,246 @@
+/* views/visualizer.css — Visualizer, discowall, overlay karaoke/lyrics.
+   Split da views.css (Fase 6): ordine di cascata preservato via index.css. */
+
+.listen-stage__viz .listen-stage__viz-placeholder {
+  flex: 1;
+  min-height: 0;
+  width: 100%;
+  pointer-events: none;
+  visibility: hidden;
+}
+
+.listen-stage__viz .viz-canvas {
+  min-height: 0;
+  flex: 1;
+}
+
+.viz-discowall-status {
+  position: absolute;
+  inset: 0;
+  z-index: 2;
+  display: grid;
+  place-items: center;
+  padding: 1rem;
+  text-align: center;
+  pointer-events: none;
+  background: color-mix(in srgb, var(--listen-viz-bg) 72%, transparent);
+  backdrop-filter: blur(10px);
+}
+
+.viz-discowall-status p {
+  margin: 0.55rem 0 0;
+  font-size: 0.82rem;
+  font-weight: 700;
+  color: color-mix(in srgb, var(--text) 88%, transparent);
+  letter-spacing: 0.02em;
+}
+
+.viz-wrap.is-discowall .viz-canvas {
+  width: 100%;
+  height: 100%;
+  flex: 1;
+  min-height: 0;
+}
+
+.viz-wrap.is-discowall--dormant {
+  flex: 1;
+  min-height: 0;
+  background: linear-gradient(
+    145deg,
+    color-mix(in srgb, var(--page-lg-1) 92%, black),
+    color-mix(in srgb, var(--page-lg-2) 88%, black)
+  );
+}
+
+.viz-wrap {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  position: relative;
+  align-self: stretch;
+  cursor: zoom-in;
+  outline: none;
+}
+
+.viz-wrap:focus-visible {
+  box-shadow: inset 0 0 0 2px
+      color-mix(in srgb, var(--accent2) 76%, transparent),
+    0 0 0 3px color-mix(in srgb, var(--accent2) 18%, transparent);
+}
+
+.viz-wrap.is-expanded {
+  position: fixed;
+  top: 0;
+  right: 0;
+  bottom: 0;
+  /* Allineato al bordo destro della sidebar (portal su body: --side-w su :root da AppShell) */
+  left: var(--side-w, 0px);
+  z-index: 19;
+  box-sizing: border-box;
+  margin: 0;
+  border: none;
+  border-radius: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  justify-content: stretch;
+  padding: env(safe-area-inset-top, 0px) env(safe-area-inset-right, 0px)
+    max(env(safe-area-inset-bottom, 0px), var(--viz-expanded-bottom-clear, 0px))
+    env(safe-area-inset-left, 0px);
+  min-height: 100vh;
+  min-height: 100dvh;
+  background: radial-gradient(
+      circle at 50% 50%,
+      color-mix(in srgb, var(--hero-rg-2) 94%, transparent),
+      transparent 55%
+    ),
+    linear-gradient(180deg, var(--page-lg-1) 0%, var(--page-lg-2) 100%);
+  cursor: zoom-out;
+}
+
+.viz-wrap.is-expanded .viz-canvas {
+  width: 100%;
+  height: 100%;
+  min-height: 0;
+  flex: 1 1 auto;
+  border-radius: 0;
+  align-self: center;
+}
+
+.viz-lyrics-overlay {
+  position: absolute;
+  left: max(1rem, env(safe-area-inset-left, 0px) + 0.6rem);
+  right: max(1rem, env(safe-area-inset-right, 0px) + 0.6rem);
+  bottom: calc(
+    max(env(safe-area-inset-bottom, 0px), var(--viz-expanded-bottom-clear, 0px)) +
+      1.5rem
+  );
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+  align-items: center;
+  text-align: center;
+  pointer-events: none;
+  z-index: 2;
+}
+
+.viz-lyrics-overlay__prev,
+.viz-lyrics-overlay__current {
+  margin: 0;
+  max-width: 90vw;
+  text-wrap: balance;
+  line-height: 1.2;
+  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.62), 0 6px 26px rgba(0, 0, 0, 0.55);
+}
+
+.viz-lyrics-overlay__prev {
+  font-size: clamp(0.92rem, 1.55vw, 1.35rem);
+  color: color-mix(in srgb, var(--text) 56%, transparent);
+  opacity: 0.52;
+}
+
+.viz-lyrics-overlay__current {
+  font-size: clamp(1.12rem, 2.2vw, 2.05rem);
+  font-weight: 800;
+  color: color-mix(in srgb, var(--accent) 76%, var(--text) 24%);
+}
+
+.viz-wrap.is-karaoke .viz-canvas {
+  filter: saturate(0.88) brightness(0.58);
+}
+
+.viz-karaoke-overlay {
+  position: absolute;
+  inset: 0;
+  z-index: 2;
+  display: grid;
+  grid-template-rows: minmax(0, 0.7fr) auto auto auto minmax(0, 1.3fr);
+  align-content: center;
+  justify-items: center;
+  gap: clamp(0.35rem, 1.2vh, 0.9rem);
+  padding: clamp(1rem, 4vw, 3rem);
+  text-align: center;
+  pointer-events: none;
+}
+
+.viz-karaoke-overlay__line {
+  margin: 0;
+  max-width: 90vw;
+  text-wrap: balance;
+  line-height: 1.12;
+  text-shadow: 0 2px 3px rgba(0, 0, 0, 0.72), 0 10px 34px rgba(0, 0, 0, 0.62);
+}
+
+.viz-karaoke-overlay__line--prev {
+  grid-row: 2;
+}
+
+.viz-karaoke-overlay__line--current {
+  grid-row: 3;
+}
+
+.viz-karaoke-overlay__line--next {
+  grid-row: 4;
+}
+
+.viz-karaoke-overlay__line--prev,
+.viz-karaoke-overlay__line--next {
+  font-size: clamp(0.95rem, 2.2vw, 1.8rem);
+  color: color-mix(in srgb, var(--text) 58%, transparent);
+  opacity: 0.56;
+}
+
+.viz-karaoke-overlay__line--current {
+  font-size: clamp(1.55rem, 5vw, 4.8rem);
+  font-weight: 850;
+  color: color-mix(in srgb, var(--accent) 82%, var(--text) 18%);
+}
+
+.viz-wrap.is-expanded .viz-karaoke-overlay__line--current {
+  font-size: clamp(2.2rem, 6.8vw, 7.2rem);
+}
+
+.viz-wrap:not(.is-expanded) .viz-karaoke-overlay {
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0.9rem;
+}
+
+.viz-wrap:not(.is-expanded) .viz-karaoke-overlay__line--current {
+  font-size: clamp(1.9rem, 3.6vw, 2.7rem);
+  font-weight: 800;
+  color: color-mix(in srgb, var(--accent) 74%, var(--text) 26%);
+}
+
+.rekord-brand-logo {
+  display: block;
+}
+
+.rekord-brand-logo--topbar {
+  height: 42px;
+  width: auto;
+  max-width: min(240px, 42vw);
+  flex-shrink: 0;
+  object-fit: contain;
+  object-position: left center;
+  filter: drop-shadow(0 2px 8px rgba(0, 0, 0, 0.22));
+}
+
+.viz-canvas {
+  display: block;
+  width: 100%;
+  flex: 1;
+  min-height: 200px;
+  align-self: stretch;
+}
+
+.subsection {
+  display: grid;
+  gap: 0.85rem;
+  margin-top: 1rem;
+}
+
+/* Libreria: tab testuali + sottolineatura, niente card / pill piene */
