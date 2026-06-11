@@ -49,11 +49,6 @@ body,
       max(0.875rem, env(safe-area-inset-right));
   }
 
-  .inline-banner {
-    margin-left: max(0.75rem, env(safe-area-inset-left));
-    margin-right: max(0.75rem, env(safe-area-inset-right));
-  }
-
   .player-dock2 {
     padding-inline: 0;
   }
@@ -491,38 +486,6 @@ body,
     justify-content: stretch;
   }
 
-  .library-content-head {
-    flex-direction: column;
-    align-items: stretch;
-    gap: 0.5rem;
-  }
-
-  .library-content-head .segmented--joined {
-    width: 100%;
-    justify-content: stretch;
-  }
-
-  .library-content-head .segmented--joined button {
-    flex: 1 1 50%;
-    min-height: 44px;
-  }
-
-  .library-filter-panel__row--split {
-    grid-template-columns: 1fr;
-    gap: 1.05rem;
-  }
-
-  .library-filter-panel__row--split .library-filter-group:first-child {
-    padding-inline-end: 0;
-    margin-inline-end: 0;
-    border-inline-end: none;
-  }
-
-  .library-filter-panel__row--split .library-filter-group:last-child {
-    justify-self: stretch;
-    width: auto;
-  }
-
   .library-filter-group .segmented--joined {
     width: 100%;
   }
@@ -708,14 +671,7 @@ body,
     --bar-h: 11.5rem;
   }
 
-  .topbar2__end .account-badge {
-    width: 40px;
-    height: 40px;
-    flex: 0 0 40px;
-  }
-
-  .ghost-btn--toolbar,
-  .ghost-input--topbar {
+  .ghost-btn--toolbar {
     min-height: var(--tap-min);
   }
 
@@ -788,7 +744,6 @@ body,
     font-size: 1.1rem;
     line-height: 1.25;
   }
-
 }
 
 /* --- Landscape su telefono: meno altezza player bar --- */

@@ -1,5 +1,5 @@
 /** @param {import("express").Request} req */
-export function getClientAddress(req) {
+function getClientAddress(req) {
   const raw = String(
     req.socket?.remoteAddress || req.connection?.remoteAddress || "",
   );
@@ -38,7 +38,7 @@ export function isDockerGatewayAddress(addr) {
 }
 
 /** @param {import("express").Request} req */
-export function isLoopbackRequest(req) {
+function isLoopbackRequest(req) {
   return isLoopbackAddress(getClientAddress(req));
 }
 

@@ -1,5 +1,5 @@
 /** Valori permessi per `moods` in kord-trackinfo.json (stesso ordinamento dell’UI). */
-export const TRACK_MOOD_IDS = [
+const TRACK_MOOD_IDS = [
   "energy_boost",
   "party_dance",
   "chill_relax",
@@ -16,12 +16,12 @@ export const TRACK_MOOD_IDS = [
   "motivational_drive",
 ]
 
-export const MAX_TRACK_MOODS = 3
+const MAX_TRACK_MOODS = 3
 
 const SET = new Set(TRACK_MOOD_IDS)
 
 /** @param {unknown} v */
-export function normalizeTrackMood(v) {
+function normalizeTrackMood(v) {
   if (v == null) return null
   const raw = String(v).trim()
   const s = raw === "uplifting_happy" ? "motivational_drive" : raw

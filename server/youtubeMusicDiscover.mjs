@@ -274,7 +274,7 @@ function classifyDiscoverKind(item, sourceKind) {
   return "album"
 }
 
-export function normalizeDiscoverLabel(value) {
+function normalizeDiscoverLabel(value) {
   return String(value ?? "")
     .normalize("NFD")
     .replace(/\p{M}/gu, "")
@@ -283,7 +283,7 @@ export function normalizeDiscoverLabel(value) {
     .trim()
 }
 
-export function buildLibraryDiscoverLookup(index) {
+function buildLibraryDiscoverLookup(index) {
   const artists = new Set()
   const albumKeys = new Set()
   for (const a of index?.artists ?? []) {

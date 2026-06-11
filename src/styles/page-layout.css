@@ -40,7 +40,6 @@
 }
 
 /* Banda superiore pagina (titolo / toolbar): sfumatura colore tema — dettaglio in flat-modern.css */
-.page-top-band,
 .view-page__intro > .hero-card,
 .view-page__intro > .achievements-hero,
 .view-page__toolbar-band > :first-child,
@@ -56,75 +55,6 @@
 }
 
 /* —— Griglia adattiva (container + viewport) —— */
-.layout-adaptive-grid {
-  display: grid;
-  gap: var(--space-5);
-  grid-template-columns: minmax(0, 1fr);
-  min-width: 0;
-  align-items: start;
-}
-
-.layout-adaptive-grid > * {
-  min-width: 0;
-}
-
-@container rekord-page (min-width: 640px) {
-  .layout-adaptive-grid--2 {
-    grid-template-columns: repeat(2, minmax(0, 1fr));
-  }
-
-  .layout-adaptive-grid--3 {
-    grid-template-columns: repeat(2, minmax(0, 1fr));
-  }
-}
-
-@container rekord-page (min-width: 901px) {
-  .layout-adaptive-grid--2 {
-    grid-template-columns: repeat(2, minmax(0, 1fr));
-  }
-
-  .layout-adaptive-grid--3 {
-    grid-template-columns: repeat(3, minmax(0, 1fr));
-  }
-}
-
-@container rekord-page (min-width: 1280px) {
-  .layout-adaptive-grid--4 {
-    grid-template-columns: repeat(4, minmax(0, 1fr));
-  }
-}
-
-@media (min-width: 640px) {
-  .layout-adaptive-grid--2 {
-    grid-template-columns: repeat(2, minmax(0, 1fr));
-  }
-}
-
-@media (min-width: 901px) {
-  .layout-adaptive-grid--3 {
-    grid-template-columns: repeat(3, minmax(0, 1fr));
-  }
-}
-
-@media (min-width: 1100px) {
-  .layout-adaptive-grid--2 {
-    grid-template-columns: repeat(2, minmax(0, 1fr));
-  }
-
-  .layout-adaptive-grid--3 {
-    grid-template-columns: repeat(3, minmax(0, 1fr));
-  }
-}
-
-@media (min-width: 1280px) {
-  .layout-adaptive-grid--4 {
-    grid-template-columns: repeat(4, minmax(0, 1fr));
-  }
-}
-
-.layout-span-full {
-  grid-column: 1 / -1;
-}
 
 /* —— Toolbar pagina (coda, playlist, raccolte) —— */
 .page-toolbar {
@@ -698,7 +628,6 @@
   }
 }
 
-
 /* —— Impostazioni —— */
 .settings-page.view-page {
   display: grid;
@@ -716,20 +645,8 @@
   box-sizing: border-box;
 }
 
-.settings-page__cluster > .surface-card {
-  height: auto;
-}
-
 .settings-page > .surface-card,
-.settings-page > .settings-page__cluster,
 .settings-page > .settings-colophon {
-  min-width: 0;
-}
-
-.settings-page__cluster {
-  display: grid;
-  gap: var(--space-5);
-  grid-template-columns: minmax(0, 1fr);
   min-width: 0;
 }
 
@@ -743,22 +660,12 @@
     align-items: stretch;
   }
 
-  .settings-page > .surface-card,
-  .settings-page__cluster > .surface-card {
+  .settings-page > .surface-card {
     align-self: stretch;
   }
 
-  .settings-page__cluster--wide,
   .settings-page .settings-colophon,
   .settings-page .settings-activity-section {
-    grid-column: 1 / -1;
-  }
-
-  .settings-page__cluster {
-    grid-template-columns: repeat(2, minmax(0, 1fr));
-  }
-
-  .settings-page__cluster > .surface-card:only-child {
     grid-column: 1 / -1;
   }
 }
@@ -769,12 +676,10 @@
     align-items: stretch;
   }
 
-  .settings-page > .surface-card,
-  .settings-page__cluster > .surface-card {
+  .settings-page > .surface-card {
     align-self: stretch;
   }
 
-  .settings-page__cluster--wide,
   .settings-page .settings-colophon,
   .settings-page .settings-activity-section {
     grid-column: 1 / -1;
@@ -786,8 +691,7 @@ html:not([data-glass-surfaces="1"]):has(.settings-page) {
   overflow-y: hidden;
 }
 
-html:not([data-glass-surfaces="1"]) .settings-page > .surface-card,
-html:not([data-glass-surfaces="1"]) .settings-page__cluster > .surface-card {
+html:not([data-glass-surfaces="1"]) .settings-page > .surface-card {
   position: relative;
   isolation: isolate;
 }
@@ -797,8 +701,7 @@ html:not([data-glass-surfaces="1"]) .settings-page__cluster > .surface-card {
     align-items: start;
   }
 
-  html:not([data-glass-surfaces="1"]) .settings-page > .surface-card,
-  html:not([data-glass-surfaces="1"]) .settings-page__cluster > .surface-card {
+  html:not([data-glass-surfaces="1"]) .settings-page > .surface-card {
     align-self: start;
   }
 }

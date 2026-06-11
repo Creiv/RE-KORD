@@ -1,7 +1,7 @@
 import { memo } from "react";
 
 /** Asset in `public/REKORDlogo.png` (stesso path in dev e dopo `vite build`). */
-export const REKORD_BRAND_LOGO_SRC = "/REKORDlogo.png";
+const REKORD_BRAND_LOGO_SRC = "/REKORDlogo.png";
 
 type RekordBrandLogoProps = {
   className?: string;

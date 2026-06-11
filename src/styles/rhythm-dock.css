@@ -663,8 +663,6 @@
   color: var(--accent);
 }
 
-.rhythm-dock-panel .game-screen--dock .time-readout,
-.rhythm-dock-panel .game-screen--dock .song-progress,
 .rhythm-dock-panel .game-screen--dock .combo-burst,
 .rhythm-dock-panel .game-screen--dock .start-overlay {
   display: none !important;
@@ -672,11 +670,6 @@
 
 .rhythm-dock-panel .game-screen--dock .feedback.feedback-neutral {
   display: none;
-}
-
-.rhythm-dock-panel .game-screen--dock .fever-button {
-  width: 56px;
-  height: 56px;
 }
 
 .rhythm-dock-panel .game-screen--dock .feedback--compact {

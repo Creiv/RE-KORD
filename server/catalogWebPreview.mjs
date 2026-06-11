@@ -38,7 +38,8 @@ function walkCollect(node, key, out) {
   for (const k of Object.keys(node)) walkCollect(node[k], key, out)
 }
 
-function parseYtdlpJsonStdout(buf) {
+/** Estrae JSON da stdout di yt-dlp -J (BOM, warning occasionali in coda al buffer). */
+export function parseYtdlpJsonStdout(buf) {
   const s0 = String(buf ?? "").replace(/^\uFEFF/, "")
   const s = s0.trim()
   if (!s) return null
@@ -433,11 +434,8 @@ export async function fetchCatalogWebReleaseTracks({
 }
 
 /** Formato leggero muxato: webm/m4a in stdout per avvio rapido (streaming chunked). */
-export const CATALOG_WEB_PREVIEW_YTDLP_FORMAT =
+const CATALOG_WEB_PREVIEW_YTDLP_FORMAT =
   "bestaudio[ext=webm]/bestaudio[ext=m4a]/bestaudio/best"
-
-/** Anteprima Discover: solo i primi 30 secondi (meno dati). */
-export const CATALOG_WEB_PREVIEW_MAX_SECONDS = 30
 
 /**
  * Argomenti yt-dlp per anteprima in pipe (-o -): il browser riceve i primi byte subito.
@@ -467,7 +465,7 @@ export function buildCatalogWebPreviewYtdlpArgs(watchUrl, ytdlpExtraArgs) {
   }
 }
 
-export function prunePreviewStreamCache() {
+function prunePreviewStreamCache() {
   const now = Date.now()
   for (const [k, v] of previewStreamCache) {
     if (v.expires <= now) previewStreamCache.delete(k)

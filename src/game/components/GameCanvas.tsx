@@ -27,7 +27,7 @@ import type { VizMode } from "../../types";
 import type { Chart, ChartNote, GameResult, Lane } from "../types";
 import { FeedbackBadge } from "./FeedbackBadge";
 
-export interface PlayerSyncBridge {
+interface PlayerSyncBridge {
   getCurrentTime: () => number;
   getAudio: () => HTMLAudioElement | null;
   seek: (seconds: number) => void;

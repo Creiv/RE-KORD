@@ -30,7 +30,7 @@ export function serializeTrackGenres(genres: readonly string[] | null | undefine
   return s || null
 }
 
-export function hasParsedGenre(raw: string | null | undefined): boolean {
+function hasParsedGenre(raw: string | null | undefined): boolean {
   return parseTrackGenres(raw).length > 0
 }
 

@@ -2,12 +2,12 @@ import fs from "fs"
 import fsp from "fs/promises"
 import path from "path"
 
-export const REKORD_SCHEMA_VERSION = 2
+const REKORD_SCHEMA_VERSION = 2
 
 /** Cartella dati in libreria (nome storico invariato). */
-export const KORD_DATA_DIR = ".kord"
+const KORD_DATA_DIR = ".kord"
 
-export function safeRekordAccountId(accountId) {
+function safeRekordAccountId(accountId) {
   const id = String(accountId || "").trim()
   if (!id) return null
   return id.replace(/[^a-zA-Z0-9._-]/g, "_")
@@ -39,7 +39,7 @@ export function rekordGlobalAccountsPath(libraryRoot) {
   return path.join(rekordGlobalInfoDir(libraryRoot), "accounts.json")
 }
 
-export function rekordSchemaPath(libraryRoot) {
+function rekordSchemaPath(libraryRoot) {
   return path.join(rekordBaseDir(libraryRoot), "schema-version.json")
 }
 
@@ -51,11 +51,6 @@ export function rekordAccountDir(libraryRoot, accountId) {
   const id = safeRekordAccountId(accountId)
   if (!id) return null
   return path.join(rekordBaseDir(libraryRoot), `${id}_info`)
-}
-
-export function rekordAccountProfilePath(libraryRoot, accountId) {
-  const d = rekordAccountDir(libraryRoot, accountId)
-  return d ? path.join(d, "profile.json") : null
 }
 
 export function rekordAccountUserStatePath(libraryRoot, accountId) {
@@ -148,9 +143,4 @@ export async function ensureRekordSchemaFile(libraryRoot) {
     p,
     JSON.stringify({ version: REKORD_SCHEMA_VERSION, updatedAt: new Date().toISOString() }, null, 2),
   )
-}
-
-export async function writeRekordConfigJson(libraryRoot, data) {
-  const p = rekordConfigPath(libraryRoot)
-  await atomicWriteFileUtf8(p, JSON.stringify(data, null, 2))
 }

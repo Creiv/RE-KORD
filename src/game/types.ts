@@ -39,7 +39,7 @@ export interface ChartNote {
   completed: boolean;
 }
 
-export interface ChartStats {
+interface ChartStats {
   bpm: number;
   rmsAvg: number;
   density: number;
@@ -72,10 +72,4 @@ export interface GameResult {
   misses: number;
   accuracy: number;
   grade: string;
-}
-
-export interface AnalysisState {
-  status: "idle" | "analyzing" | "ready" | "error";
-  progress: number;
-  message: string;
 }

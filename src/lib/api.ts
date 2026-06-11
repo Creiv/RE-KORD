@@ -4,7 +4,6 @@ import type {
   LibraryEntityDelta,
   LibraryIndex,
   LibrarySelectionV1,
-  UserSettings,
   UserStatePatch,
   UserStateV1,
 } from "../types"
@@ -94,7 +93,7 @@ async function readResponseJson<T>(response: Response): Promise<T> {
   return parsed as T
 }
 
-export class UserStateRevisionConflict extends Error {
+class UserStateRevisionConflict extends Error {
   readonly currentState: UserStateV1
   constructor(currentState: UserStateV1) {
     super("USER_STATE_REVISION_CONFLICT")
@@ -304,7 +303,7 @@ export async function fetchLibraryCatalog(opts: { summary?: boolean; artistId?: 
   return unwrap<LibraryCatalogResponse>(response)
 }
 
-export type CatalogWebDiscoverEntry = {
+type CatalogWebDiscoverEntry = {
   id: string
   type?: 'album' | 'song'
   title: string
@@ -440,19 +439,6 @@ export async function fetchUserState(): Promise<UserStateV1> {
   return inflightUserStateFetch
 }
 
-export async function patchUserSettings(
-  expectedRevision: number,
-  patch: Partial<UserSettings>,
-): Promise<UserStateV1> {
-  await ensureSelectedAccountId()
-  const response = await apiFetch("/api/user-state/settings", {
-    method: "PATCH",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ expectedRevision, settings: patch }),
-  })
-  return unwrapUserStateMutation(response)
-}
-
 export type CustomThemeBgUploadResult = {
   bgImage: string
   bgImageRev: number
@@ -491,24 +477,6 @@ export async function patchUserState(patch: UserStatePatch): Promise<UserStateV1
     method: "PATCH",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ state: patch }),
-  })
-  return unwrapUserStateMutation(response)
-}
-
-export async function saveUserState(state: UserStateV1, omitPlaylists = false): Promise<UserStateV1> {
-  await ensureSelectedAccountId()
-  const { settings: _drop, ...rest } = state
-  void _drop
-  const patch: Record<string, unknown> = { ...rest }
-  if (omitPlaylists) delete patch.playlists
-  const exp =
-    typeof state.revision === "number" && Number.isFinite(state.revision) && state.revision >= 1
-      ? Math.floor(state.revision)
-      : 1
-  const response = await apiFetch("/api/user-state", {
-    method: "PUT",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ expectedRevision: exp, state: patch }),
   })
   return unwrapUserStateMutation(response)
 }
@@ -637,19 +605,6 @@ export async function createAccount(input: { name: string }): Promise<AccountsRe
   })
   const data = await unwrap<AccountsResponse>(response)
   if (data.createdAccountId) setSelectedAccountId(data.createdAccountId)
-  return data
-}
-
-export async function updateAccount(
-  id: string,
-  patch: { name?: string },
-): Promise<AccountsResponse> {
-  const response = await apiFetch(`/api/accounts/${encodeURIComponent(id)}`, {
-    method: "PUT",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify(patch),
-  })
-  const data = await unwrap<AccountsResponse>(response)
   return data
 }
 

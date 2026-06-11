@@ -25,7 +25,3 @@ export function setCachedChart(relPath: string, chartSet: ChartSet): void {
     cache.delete(oldest);
   }
 }
-
-export function clearChartCache(): void {
-  cache.clear();
-}

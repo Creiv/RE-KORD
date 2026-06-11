@@ -32,7 +32,7 @@ export function parseLrcLyrics(raw: string): KaraokeLyricLine[] {
   return out;
 }
 
-export function plainLyricsLines(raw: string): string[] {
+function plainLyricsLines(raw: string): string[] {
   return raw
     .split(/\r?\n/)
     .map((line) => line.replace(/\[[^\]]*]/g, "").trim())

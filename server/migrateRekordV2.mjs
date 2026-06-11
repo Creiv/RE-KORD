@@ -25,7 +25,7 @@ function sameResolved(a, b) {
   }
 }
 
-export async function migrateMoodsFromTrackInfoToUserState(libraryRoot, userStateJsonPath) {
+async function migrateMoodsFromTrackInfoToUserState(libraryRoot, userStateJsonPath) {
   if (!userStateJsonPath || !fs.existsSync(userStateJsonPath)) return
   const state = await readJsonFile(userStateJsonPath)
   if (!state || typeof state !== "object") return

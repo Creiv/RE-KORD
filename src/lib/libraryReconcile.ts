@@ -1,5 +1,5 @@
 /** Modalità riconciliazione indice libreria (AppShell). */
-export type LibraryReconcileMode = "debounced" | "now" | "manual";
+type LibraryReconcileMode = "debounced" | "now" | "manual";
 
 export type LibraryReconcileOptions = {
   mode?: LibraryReconcileMode;

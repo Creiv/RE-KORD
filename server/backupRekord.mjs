@@ -36,13 +36,13 @@ const LIBRARY_USER_FILE_BASENAMES = new Set([
 const CONFIG_EXTRA_FILES = ["youtube-cookies.txt"]
 
 /** File temporanei di scrittura atomica — esclusi dal backup .kord */
-export function isKordTempBackupEntry(name) {
+function isKordTempBackupEntry(name) {
   const base = String(name || "")
   if (!base || base === "." || base === "..") return true
   return /^\..*\.tmp$/i.test(base)
 }
 
-export async function collectKordDataDirBackup(libraryRoot) {
+async function collectKordDataDirBackup(libraryRoot) {
   const root = path.join(path.resolve(libraryRoot), ".kord")
   if (!existsSync(root)) return []
   const out = []
@@ -75,11 +75,7 @@ export async function collectKordDataDirBackup(libraryRoot) {
 }
 
 /** @deprecated alias — include now all .kord user data, not only JSON */
-export async function collectKordDbJsonBackup(libraryRoot) {
-  return collectKordDataDirBackup(libraryRoot)
-}
-
-export async function collectServerConfigExtrasBackup() {
+async function collectServerConfigExtrasBackup() {
   const entries = []
   const cfgDir = path.dirname(CONFIG_FILE)
   for (const name of CONFIG_EXTRA_FILES) {
@@ -91,7 +87,7 @@ export async function collectServerConfigExtrasBackup() {
   return entries
 }
 
-export async function collectLibraryMetadataForBackup(musicRoot, zipFolderTag) {
+async function collectLibraryMetadataForBackup(musicRoot, zipFolderTag) {
   const root = path.resolve(musicRoot)
   try {
     const st = await fs.stat(root)

@@ -96,10 +96,6 @@ const CLEANUP_RULES: Record<Difficulty["id"], CleanupRules> = {
   },
 };
 
-function fileFingerprint(file: File, duration: number): string {
-  return `${file.name}:${file.size}:${Math.round(duration * 1000)}:${file.lastModified || 0}`;
-}
-
 function trackFingerprint(relPath: string, duration: number): string {
   return `rekord:${relPath}:${Math.round(duration * 1000)}`;
 }
@@ -663,13 +659,6 @@ async function buildChartSetFromBuffer(
   }
 
   return { baseSongId: meta.baseSongId, title: meta.title, duration: buffer.duration, charts };
-}
-
-export async function analyzeAudio(buffer: AudioBuffer, file: File): Promise<ChartSet> {
-  return buildChartSetFromBuffer(buffer, {
-    baseSongId: fileFingerprint(file, buffer.duration),
-    title: file.name.replace(/\.(mp3|m4a|mp4|aac)$/i, ""),
-  });
 }
 
 export async function analyzeLibraryBuffer(

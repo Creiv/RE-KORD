@@ -725,14 +725,6 @@
   --ghost-input-bg: rgba(163, 255, 63, 0.07);
 }
 
-
-
-
-
-
-
-
-
 :root[data-theme="slate-light"] {
   color-scheme: light;
   --bg: #f4f6f9;
@@ -953,7 +945,6 @@
   --player-art-fb: rgba(255, 160, 170, 0.12);
 }
 
-
 html,
 body,
 #root {
@@ -1138,21 +1129,6 @@ ul {
   padding: 0;
 }
 
-.h2,
-.h3 {
-  font-size: 1.15rem;
-  font-weight: 700;
-  margin: 0 0 0.75rem;
-  letter-spacing: -0.02em;
-  color: var(--text);
-  font-family: var(--font-ui);
-}
-
-.h2 {
-  font-size: 1.35rem;
-  margin: 0 0 1rem;
-}
-
 .subtle {
   color: var(--muted);
   font-size: 0.9rem;
@@ -1170,12 +1146,6 @@ ul {
   min-width: 0;
 }
 
-.tool-block {
-  border-radius: var(--radius-md);
-  padding: var(--space-5) var(--space-5) var(--space-6);
-  border: 1px solid var(--border);
-}
-
 .glass {
   background: var(--surface2);
   box-shadow: var(--shadow-elev-1);
@@ -1190,11 +1160,6 @@ ul {
 
 .row.gap {
   gap: 0.7rem;
-}
-
-.row.j-between {
-  justify-content: space-between;
-  width: 100%;
 }
 
 .codebox {
@@ -1334,15 +1299,6 @@ ul {
   font-size: 0.9rem;
 }
 
-.panel-msg {
-  color: var(--muted);
-  padding: 1rem 0;
-}
-
-.panel-msg.err {
-  color: var(--danger);
-}
-
 /* Pulsanti: src/styles/buttons.css (primary-btn, ghost-btn, alias .btn) */
 
 .mini.danger,
@@ -1380,12 +1336,10 @@ textarea {
   line-height: 1.25;
 }
 
-.subtext,
 .subtle {
   color: var(--muted);
 }
 
-.panel-msg,
 .panel-empty {
   padding: var(--space-5);
   border-radius: var(--radius-md);
@@ -1418,10 +1372,6 @@ kbd {
   border-radius: var(--radius-sm);
   background: color-mix(in srgb, var(--surface2) 55%, var(--bg));
   border: 1px solid var(--border);
-}
-
-.tool-block {
-  padding: var(--card-pad);
 }
 
 .dirlist,

@@ -45,7 +45,7 @@ export function parseRoute(): RouteState {
   };
 }
 
-export function buildHref(route: RouteState) {
+function buildHref(route: RouteState) {
   const params = new URLSearchParams();
   if (route.artist) params.set("artist", route.artist);
   if (route.album) params.set("album", route.album);

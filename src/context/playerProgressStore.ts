@@ -1,6 +1,6 @@
 /** Store leggero per la UI di avanzamento — evita setState globale a ogni timeupdate. */
 
-export type PlayerProgressSnapshot = {
+type PlayerProgressSnapshot = {
   time: number;
   version: number;
 };

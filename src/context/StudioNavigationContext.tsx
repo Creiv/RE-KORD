@@ -33,7 +33,7 @@ export function useStudioNavigation() {
   return useContext(StudioNavigationContext);
 }
 
-export function stashStudioPane(pane: StudioPaneId) {
+function stashStudioPane(pane: StudioPaneId) {
   try {
     localStorage.setItem(REKORD_STUDIO_PANE, pane);
   } catch {

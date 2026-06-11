@@ -24,9 +24,6 @@ export const ACHIEVEMENT_XP_TIERS: AchievementXpTier[] = [
   { title: "KING OF RE-KORD", xpMin: 5500, xpMax: null },
 ];
 
-/** @deprecated Usa {@link ACHIEVEMENT_XP_TIERS}. */
-export const ACHIEVEMENT_RANKS = ACHIEVEMENT_XP_TIERS;
-
 export const ACHIEVEMENT_TITLES = ACHIEVEMENT_XP_TIERS.map((t) => t.title);
 
 export type AchievementRank = {
@@ -94,7 +91,7 @@ export function numericLevelForXp(xp: number): number {
   return 1;
 }
 
-export function xpMinForNumericLevel(level: number): number {
+function xpMinForNumericLevel(level: number): number {
   if (level <= 20) {
     return scaledLevelXp(NUMERIC_LEVEL_XP_MINS[level - 1]);
   }
@@ -102,7 +99,7 @@ export function xpMinForNumericLevel(level: number): number {
   return postKingMin + (level - 20) * scaledPostTitleLevelSpan();
 }
 
-export function xpMaxForNumericLevel(level: number): number {
+function xpMaxForNumericLevel(level: number): number {
   return xpMinForNumericLevel(level + 1) - 1;
 }
 
@@ -674,13 +671,13 @@ export type AchievementSignals = {
   plectrTracksPlayed: number;
 };
 
-export function sumTrackPlayCounts(counts: Record<string, number>): number {
+function sumTrackPlayCounts(counts: Record<string, number>): number {
   let n = 0;
   for (const v of Object.values(counts)) n += v;
   return n;
 }
 
-export function computeAchievementSignals(
+function computeAchievementSignals(
   state: Pick<
     UserStateV1,
     | "trackPlayCounts"
@@ -821,7 +818,7 @@ const LEGACY_STREAK_STORAGE_KEY = "rekord-resonance-streak";
 const LEGACY_KORD_STREAK_KEY = "kord-achievements-streak";
 const LEGACY_KORD_RESONANCE_KEY = "kord-resonance-streak";
 
-export function readStreakState(): StreakState {
+function readStreakState(): StreakState {
   try {
     const raw =
       localStorage.getItem(STREAK_STORAGE_KEY) ??
@@ -862,7 +859,7 @@ export function touchListeningActivity(at = new Date()): StreakState {
   return next;
 }
 
-export function effectiveStreakCount(
+function effectiveStreakCount(
   stored: StreakState,
   at = new Date()
 ): number {
@@ -915,12 +912,4 @@ export function buildAchievementsSnapshot(
     })),
     streak,
   };
-}
-
-export function isAchievementUnlocked(
-  id: string,
-  signals: AchievementSignals
-): boolean {
-  const def = ACHIEVEMENT_DEFINITIONS.find((a) => a.id === id);
-  return def ? def.check(signals) : false;
 }

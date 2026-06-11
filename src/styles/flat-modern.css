@@ -19,8 +19,7 @@
 .listen-stage,
 .album-hero,
 .metric-card,
-.alert-card,
-.setting-card {
+.alert-card {
   border-radius: var(--radius-md);
   box-shadow: var(--shadow-elev-1);
   background: var(--surface2);
@@ -52,7 +51,6 @@
 
 /* .section-head h2: definito in views.css */
 
-.studio-hero__title,
 .section-head--page-toolbar h2 {
   font-size: 1.18rem;
 }
@@ -74,8 +72,7 @@
 }
 
 /* ── Messaggi panel ── */
-.panel-empty,
-.panel-msg {
+.panel-empty {
   border-radius: var(--radius-md);
 }
 
@@ -103,16 +100,6 @@
 /* .track-row (padding/gap): definito in views.css */
 
 /* ── Tipografia: titoli sezione ── */
-.h2 {
-  font-size: 1.2rem;
-  margin: 0 0 var(--space-4);
-}
-
-.h3,
-.h2.h3 {
-  font-size: 1.05rem;
-  margin: 0 0 var(--space-3);
-}
 
 /* ── Eyebrow label ── */
 /* .eyebrow: definizione unica in index.css */
@@ -137,7 +124,6 @@
 }
 
 /* ── Banda superiore pagine: sfumatura accent / accent2 del tema (solo senza glass) ── */
-:root:not([data-glass-surfaces="1"]) .page-top-band,
 :root:not([data-glass-surfaces="1"]) .view-page__intro > .hero-card,
 :root:not([data-glass-surfaces="1"]) .view-page__intro > .achievements-hero,
 :root:not([data-glass-surfaces="1"]) .view-page__toolbar-band > :first-child,

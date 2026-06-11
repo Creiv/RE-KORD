@@ -1,4 +1,4 @@
-import type { Difficulty, SwipeDirection } from "../types";
+import type { Difficulty } from "../types";
 import { REKORD_LANES } from "./rekordLanes";
 
 export const LANES = REKORD_LANES;
@@ -70,6 +70,3 @@ export const DOCK_HIT_LINE_BOTTOM_MAX_PX = 52;
 export const HOLD_WIDTH = 18;
 export const COUNTDOWN_SECONDS = 3;
 export const CHART_LEAD_IN_SECONDS = 4;
-export const FAIL_GRACE_SECONDS = 15;
-export const SWIPE_THRESHOLD = 34;
-export const SWIPE_DIRECTIONS: SwipeDirection[] = ["left", "up", "right"];

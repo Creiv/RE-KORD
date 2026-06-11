@@ -69,7 +69,6 @@
   flex-direction: column;
 }
 
-.player-bar2__track-block,
 .player-bar2__identity {
   display: flex;
   align-items: center;
@@ -230,19 +229,6 @@
   background: var(--control-hover-bg);
 }
 
-.volume2 {
-  display: flex;
-  align-items: center;
-}
-
-.player-bar2__output {
-  display: inline-flex;
-  align-items: center;
-  gap: 0.4rem;
-  min-width: 0;
-  justify-self: end;
-}
-
 .player-bar2__transport--mobile {
   display: none;
 }
@@ -379,33 +365,6 @@
   opacity: 0.34;
 }
 
-.player-bar2__ic--cast.is-on {
-  color: var(--accent2);
-}
-
-.player-bar2__ic--cast.is-unavailable {
-  opacity: 0.62;
-}
-
-.player-bar2__ic--cast.is-unsupported,
-.player-bar2__ic--cast.is-unsupported:disabled {
-  opacity: 0.22;
-  color: var(--muted);
-  filter: grayscale(0.42);
-  cursor: not-allowed;
-}
-
-.player-bar2__ic--cast.is-unsupported:hover,
-.player-bar2__ic--cast.is-unsupported:disabled:hover {
-  opacity: 0.3;
-  background: transparent;
-  filter: grayscale(0.38);
-}
-
-.player-bar2__ic--cast.is-unavailable:hover:not(.is-unsupported) {
-  opacity: 0.9;
-}
-
 .player-bar2__ic--play {
   min-width: 2.5rem;
   min-height: 2.5rem;
@@ -467,11 +426,6 @@
   align-items: stretch;
   flex: 1 1 auto;
   gap: 0.2rem;
-}
-
-.player-bar2__row--top .volume2 {
-  flex: 0 0 auto;
-  gap: 0.4rem;
 }
 
 .progress2 {
@@ -543,6 +497,3 @@
   justify-content: space-between;
 }
 
-.volume2 {
-  color: var(--muted);
-}

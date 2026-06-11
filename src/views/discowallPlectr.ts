@@ -56,7 +56,7 @@ export function buildTriads(seed: number, bpm: number | null = null): DiscoTriad
   });
 }
 
-export function laneX(lane: number) {
+function laneX(lane: number) {
   return LANE_X[Math.max(0, Math.min(3, lane))] ?? 0.5;
 }
 
@@ -169,7 +169,7 @@ export function seededNoise(seed: number, i: number) {
 }
 
 /** Hue che scorre su beat, tempo di brano e nudge sulle note. */
-export function hueSlotAt(
+function hueSlotAt(
   triads: DiscoTriad[],
   beatIndex: number,
   slot: 0 | 1 | 2,
@@ -411,7 +411,7 @@ function constellationInfluenceFromTaps(
   return { v: sum, cw };
 }
 
-export function samplePlectrField(
+function samplePlectrField(
   motifs: MotifInstance[],
   styleW: Record<DiscoSceneStyle, number>,
   xn: number,

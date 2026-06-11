@@ -1,4 +1,4 @@
-export type FeedbackTone =
+type FeedbackTone =
   | "neutral"
   | "pause"
   | "perfect"

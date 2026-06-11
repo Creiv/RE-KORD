@@ -61,7 +61,7 @@ function stripRedundantArtistPrefix(artist, title) {
  * Unicode / YouTube: rende i titoli più cercabili.
  * @param {string} [artist] se indicato, rimuove il prefisso "Artista -" ridondante (stesso criterio di stripRedundantArtistPrefix).
  */
-export function cleanTrackTitleForSearch(raw, artist) {
+function cleanTrackTitleForSearch(raw, artist) {
   let s = String(raw || "")
   const ar = String(artist || "").trim()
   if (ar.length >= 2) s = stripRedundantArtistPrefix(ar, s)
@@ -615,7 +615,7 @@ export async function sanitizeTrackTitlesInAlbumDir(albumDir, dryRun) {
 /**
  * @param {string} musicRoot
  */
-export async function listAlbumRelPathsUnderRoot(musicRoot) {
+async function listAlbumRelPathsUnderRoot(musicRoot) {
   const out = []
   const top = await fs.readdir(musicRoot, { withFileTypes: true })
   for (const t of top) {
@@ -697,7 +697,7 @@ function mbReleaseHasTracklist(info) {
   return mc != null && mc > 0
 }
 
-export async function fetchReleaseMetadataMusicBrainz(artist, album) {
+async function fetchReleaseMetadataMusicBrainz(artist, album) {
   const a = String(artist || "").trim()
   const b = String(album || "").trim()
   if (a.length < 1 && b.length < 1) return { error: "Artist or album missing" }
@@ -833,7 +833,7 @@ function theAudioDbAlbumToPayload(pick, al) {
   }
 }
 
-export async function fetchReleaseMetadataTheAudioDB(artist, album) {
+async function fetchReleaseMetadataTheAudioDB(artist, album) {
   const ar = String(artist || "").trim()
   const al = String(album || "").trim()
   if (al.length < 1) return { error: "Album missing" }
@@ -917,7 +917,7 @@ async function attachExpectedTracksItunes(payload, pick, country) {
   payload.expectedTrackCount = expectedTracks.length
 }
 
-export async function fetchReleaseMetadataItunesAlbum(artist, album) {
+async function fetchReleaseMetadataItunesAlbum(artist, album) {
   const ar = String(artist || "").trim()
   const al = cleanAlbumNameForSearch(String(album || ""))
   if (al.length < 1) return { error: "Album missing" }
@@ -1031,7 +1031,7 @@ export async function fetchReleaseMetadata(artist, album) {
   return { error: err || "No album metadata found" }
 }
 
-export async function fetchTrackMetadataItunes(artist, title, album) {
+async function fetchTrackMetadataItunes(artist, title, album) {
   const ar = String(artist || "").trim()
   const tt0 = String(title || "").trim()
   const clean = cleanTrackTitleForSearch(tt0, ar) || tt0
@@ -1119,7 +1119,7 @@ function pickBestDeezerRow(rows, ar, al, clean) {
   return rows[0]
 }
 
-export async function fetchTrackMetadataDeezer(artist, title, album, titleFromFile) {
+async function fetchTrackMetadataDeezer(artist, title, album, titleFromFile) {
   const ar = String(artist || "").trim()
   const tMain = String(title || "").trim()
   const tFile = String(titleFromFile != null ? titleFromFile : tMain).trim()
@@ -1201,7 +1201,7 @@ function mbCreditNamesLower(rec) {
     .toLowerCase()
 }
 
-export async function fetchTrackMetadataMusicBrainz(artist, title) {
+async function fetchTrackMetadataMusicBrainz(artist, title) {
   const ar = String(artist || "").trim()
   const tt0 = String(title || "").trim()
   if (tt0.length < 1) return { error: "Title missing" }
@@ -1268,7 +1268,7 @@ export async function fetchTrackMetadataMusicBrainz(artist, title) {
   return { error: "No results" }
 }
 
-export async function fetchTrackMetadataTheAudioDB(artist, title, album, titleFromFile) {
+async function fetchTrackMetadataTheAudioDB(artist, title, album, titleFromFile) {
   const ar = String(artist || "").trim()
   const t0 = String(title || "").trim()
   const tFile = String(titleFromFile != null ? titleFromFile : t0).trim()

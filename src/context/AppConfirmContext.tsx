@@ -40,7 +40,7 @@ type QueueEntry =
       resolve: () => void;
     };
 
-export type AppConfirmContextValue = {
+type AppConfirmContextValue = {
   confirm: (
     options: AppConfirmOptions | string,
     overrides?: Omit<Partial<AppConfirmOptions>, "message">,

@@ -353,11 +353,11 @@ function sanitizeStoredRevision(raw) {
 }
 
 /** Revisione ottimistic locking sullo stato utente (≥ 1). */
-export function currentRevision(prev) {
+function currentRevision(prev) {
   return sanitizeStoredRevision(prev?.revision)
 }
 
-export function stripRevisionFromPatch(patch) {
+function stripRevisionFromPatch(patch) {
   if (!isObj(patch) || Array.isArray(patch)) return patch
   const { revision: _r, ...rest } = patch
   void _r
@@ -443,7 +443,7 @@ export function mergeUserStateForPut(prev, patch) {
   return out
 }
 
-export function sanitizeUserState(input) {
+function sanitizeUserState(input) {
   const base = defaultUserState()
   const src = isObj(input) ? input : {}
   const queueTracks = Array.isArray(src.queue?.tracks)

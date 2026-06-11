@@ -1,7 +1,7 @@
 import { useLayoutEffect, useRef, useState, type RefObject } from "react";
 
 /** Limite massimo album nella sezione «Ultimi movimenti» della dashboard. */
-export const DASHBOARD_UPDATED_ALBUMS_MAX = 20;
+const DASHBOARD_UPDATED_ALBUMS_MAX = 20;
 
 const MOBILE_MAX_ALBUMS = 5;
 /** Da ~8 tile con ~2 colonne (16:9, card affiancate) salendo fino a 20 quando la griglia è larga. */

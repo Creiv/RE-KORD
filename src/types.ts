@@ -117,9 +117,9 @@ export type VizMode =
 export const APP_LOCALES = ["en", "it"] as const;
 export type AppLocale = (typeof APP_LOCALES)[number];
 
-export type LibraryBrowseMode = "artists" | "genres" | "moods";
-export type LibraryOverviewSortMode = "name" | "plays";
-export type ArtistAlbumSortMode = "date" | "name" | "plays";
+type LibraryBrowseMode = "artists" | "genres" | "moods";
+type LibraryOverviewSortMode = "name" | "plays";
+type ArtistAlbumSortMode = "date" | "name" | "plays";
 
 /** Crossfade audio tra tracce: 0 spento; secondi dell’overlap in uscita. */
 export type AudioCrossfadeSec = 0 | 3 | 5;
@@ -248,7 +248,7 @@ export type LibraryTrackIndex = EnrichedTrack & {
   updatedAt: number | null;
 };
 
-export type LibraryStats = {
+type LibraryStats = {
   artistCount: number;
   albumCount: number;
   trackCount: number;
@@ -269,29 +269,6 @@ export type LibraryIndex = {
   stats: LibraryStats;
 };
 
-export type LibraryOverview = {
-  musicRoot?: string;
-  artists: LibraryArtistIndex[];
-  stats: LibraryStats;
-};
-
-export type LibraryArtistDetail = {
-  artist: LibraryArtistIndex;
-  albums: LibraryAlbumIndex[];
-  tracks: LibraryTrackIndex[];
-};
-
-export type LibraryAlbumDetail = {
-  album: LibraryAlbumIndex;
-  tracks: LibraryTrackIndex[];
-};
-
-export type LibrarySearchResult = {
-  artists: LibraryArtistIndex[];
-  albums: LibraryAlbumIndex[];
-  tracks: LibraryTrackIndex[];
-};
-
 export type LibraryEntityDelta = {
   albumPath?: string;
   relPath?: string;
@@ -309,7 +286,7 @@ export type UserStatePatch = Partial<Omit<UserStateV1, "version" | "revision" | 
   settings?: UserSettingsPatch;
 };
 
-export type DashboardAlert = {
+type DashboardAlert = {
   id: string;
   label: string;
   count: number;

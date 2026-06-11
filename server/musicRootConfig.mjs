@@ -306,7 +306,7 @@ export function getDefaultAccountId() {
   return state.accounts[0]?.id ?? "";
 }
 
-export function getAccount(accountId) {
+function getAccount(accountId) {
   const id = String(accountId || "").trim();
   const account = state.accounts.find((item) => item.id === id) || state.accounts[0];
   if (!account) {
@@ -396,7 +396,7 @@ export function getYoutubeCookiesPath() {
 }
 
 /** True se il file è in formato Netscape (richiesto da yt-dlp --cookies). */
-export function isNetscapeCookiesFile(filePath) {
+function isNetscapeCookiesFile(filePath) {
   const p = String(filePath ?? "").trim();
   if (!p) return false;
   try {

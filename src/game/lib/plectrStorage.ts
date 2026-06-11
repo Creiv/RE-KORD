@@ -15,7 +15,7 @@ export function hasPlectrPlayRecord(
   return raw.score > 0 || (raw.hits ?? 0) > 0;
 }
 
-export function plectrBestFromRaw(
+function plectrBestFromRaw(
   raw: PlectrBestScore | null | undefined
 ): GameResult | null {
   if (!hasPlectrPlayRecord(raw)) {

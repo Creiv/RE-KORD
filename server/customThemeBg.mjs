@@ -3,7 +3,7 @@ import { existsSync } from "fs"
 import path from "path"
 import { rekordAccountDir } from "./rekordDataStore.mjs"
 
-export const THEME_BG_BASENAME = "theme-bg"
+const THEME_BG_BASENAME = "theme-bg"
 const ALLOWED_EXT = new Set(["jpg", "jpeg", "png", "webp", "gif"])
 const MAX_BYTES = 8 * 1024 * 1024
 
@@ -14,24 +14,10 @@ const MIME_TO_EXT = {
   "image/gif": "gif",
 }
 
-export function extFromMime(mimeType) {
+function extFromMime(mimeType) {
   const mime = String(mimeType || "").trim().toLowerCase()
   const ext = MIME_TO_EXT[mime]
   return ext && ALLOWED_EXT.has(ext) ? ext : null
-}
-
-export function sanitizeBgImageExt(raw) {
-  if (raw == null || raw === "") return null
-  const s = String(raw).trim().toLowerCase()
-  if (s === "jpeg") return "jpg"
-  if (ALLOWED_EXT.has(s)) return s === "jpeg" ? "jpg" : s
-  return null
-}
-
-export function sanitizeBgImageRev(raw) {
-  const n = Number(raw)
-  if (!Number.isFinite(n) || n < 1) return null
-  return Math.floor(n)
 }
 
 function themeBgPathInDir(dir, ext) {

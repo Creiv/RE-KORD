@@ -112,7 +112,7 @@ export function TrackFileMetaChip({ meta }: { meta?: TrackMeta | null }) {
   );
 }
 
-export function TrackRowArt({ relPath }: { relPath: string }) {
+function TrackRowArt({ relPath }: { relPath: string }) {
   return (
     <CoverImg
       className="track-row__art"

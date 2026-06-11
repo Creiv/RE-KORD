@@ -73,11 +73,6 @@ export function useLibrarySyncActivity() {
   return ctx;
 }
 
-/** Per provider opzionale (test). */
-export function useLibrarySyncActivityOptional() {
-  return useContext(LibrarySyncActivityContext);
-}
-
 export async function runWithLibrarySyncActivity<T>(
   beginActivity: LibrarySyncActivityContextValue["beginActivity"],
   labelKey: string,

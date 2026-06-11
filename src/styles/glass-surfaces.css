@@ -71,9 +71,6 @@
 :root[data-glass-surfaces="1"] .album-hero,
 :root[data-glass-surfaces="1"] .metric-card,
 :root[data-glass-surfaces="1"] .alert-card,
-:root[data-glass-surfaces="1"] .setting-card,
-:root[data-glass-surfaces="1"] .inline-banner,
-:root[data-glass-surfaces="1"] .tool-block,
 :root[data-glass-surfaces="1"] .meta-edit-dialog,
 :root[data-glass-surfaces="1"] .account-row,
 :root[data-glass-surfaces="1"] .studio-panel,
@@ -82,11 +79,9 @@
 :root[data-glass-surfaces="1"] .artcard,
 :root[data-glass-surfaces="1"] .library-list-tile,
 :root[data-glass-surfaces="1"] .panel-empty,
-:root[data-glass-surfaces="1"] .panel-msg,
 :root[data-glass-surfaces="1"] .player-bar2,
 :root[data-glass-surfaces="1"] .rhythm-dock-panel__head,
 :root[data-glass-surfaces="1"] .rhythm-dock-panel__diff,
-:root[data-glass-surfaces="1"] .page-top-band,
 :root[data-glass-surfaces="1"] .view-page__intro > .hero-card,
 :root[data-glass-surfaces="1"] .view-page__intro > .achievements-hero,
 :root[data-glass-surfaces="1"] .view-page__toolbar-band > :first-child,
@@ -111,9 +106,6 @@
 :root[data-glass-surfaces="1"] .library-search-hero,
 :root[data-glass-surfaces="1"] .metric-card,
 :root[data-glass-surfaces="1"] .alert-card,
-:root[data-glass-surfaces="1"] .setting-card,
-:root[data-glass-surfaces="1"] .inline-banner,
-:root[data-glass-surfaces="1"] .tool-block,
 :root[data-glass-surfaces="1"] .meta-edit-dialog {
   border-color: var(--glass-edge);
   box-shadow:
@@ -129,9 +121,6 @@
 :root[data-glass-surfaces="1"] .library-search-hero::before,
 :root[data-glass-surfaces="1"] .metric-card::before,
 :root[data-glass-surfaces="1"] .alert-card::before,
-:root[data-glass-surfaces="1"] .setting-card::before,
-:root[data-glass-surfaces="1"] .inline-banner::before,
-:root[data-glass-surfaces="1"] .tool-block::before,
 :root[data-glass-surfaces="1"] .meta-edit-dialog::before {
   content: "";
   position: absolute;
@@ -146,7 +135,6 @@
 }
 
 /* Banda superiore: vetro accent (toolbar, intro, chrome libreria) */
-:root[data-glass-surfaces="1"] .page-top-band,
 :root[data-glass-surfaces="1"] .view-page__toolbar-band > :first-child,
 :root[data-glass-surfaces="1"] .view-page__intro > .hero-card,
 :root[data-glass-surfaces="1"] .view-page__intro > .achievements-hero,
@@ -161,7 +149,6 @@
     inset 1px 0 0 color-mix(in srgb, var(--accent) 12%, transparent);
 }
 
-:root[data-glass-surfaces="1"] .page-top-band::before,
 :root[data-glass-surfaces="1"] .view-page__toolbar-band > :first-child::before,
 :root[data-glass-surfaces="1"] .view-page__intro > .hero-card::before,
 :root[data-glass-surfaces="1"] .view-page__intro > .achievements-hero::before,
@@ -188,8 +175,7 @@
 :root[data-glass-surfaces="1"] .playlist-row,
 :root[data-glass-surfaces="1"] .artcard,
 :root[data-glass-surfaces="1"] .library-list-tile,
-:root[data-glass-surfaces="1"] .panel-empty,
-:root[data-glass-surfaces="1"] .panel-msg {
+:root[data-glass-surfaces="1"] .panel-empty {
   border-color: var(--glass-edge);
   box-shadow:
     inset 0 1px 0 var(--glass-shine-soft),
@@ -202,8 +188,7 @@
 :root[data-glass-surfaces="1"] .playlist-row::before,
 :root[data-glass-surfaces="1"] .artcard::before,
 :root[data-glass-surfaces="1"] .library-list-tile::before,
-:root[data-glass-surfaces="1"] .panel-empty::before,
-:root[data-glass-surfaces="1"] .panel-msg::before {
+:root[data-glass-surfaces="1"] .panel-empty::before {
   content: "";
   position: absolute;
   inset: 0;

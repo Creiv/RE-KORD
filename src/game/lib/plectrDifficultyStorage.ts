@@ -40,8 +40,3 @@ export function savePlectrPlayMode(id: PlectrPlayMode): void {
 export function loadPlectrDifficulty(): DifficultyId {
   return loadPlectrPlayMode();
 }
-
-/** @deprecated use savePlectrPlayMode */
-export function savePlectrDifficulty(id: DifficultyId): void {
-  savePlectrPlayMode(id);
-}

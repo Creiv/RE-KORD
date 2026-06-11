@@ -28,7 +28,7 @@ function toAbsoluteUrl(path: string): string {
   return new URL(path, window.location.origin).href
 }
 
-export function canUseMediaSession(): boolean {
+function canUseMediaSession(): boolean {
   return typeof navigator !== "undefined" && "mediaSession" in navigator
 }
 
@@ -71,14 +71,14 @@ export function setMediaSessionMetadata(
   }
 }
 
-export function setMediaSessionPlaybackState(
+function setMediaSessionPlaybackState(
   state: "none" | "paused" | "playing",
 ): void {
   if (!canUseMediaSession()) return
   navigator.mediaSession.playbackState = state
 }
 
-export function setMediaSessionPosition(
+function setMediaSessionPosition(
   duration: number,
   position: number,
   playbackRate = 1,

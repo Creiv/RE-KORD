@@ -30,7 +30,3 @@ export function hydrateSessionTrackBest(
   const merged = pickBetterPlectrScore(seed, current);
   if (merged) bestByTrack.set(relPath, merged);
 }
-
-export function clearSessionScores(): void {
-  bestByTrack.clear();
-}

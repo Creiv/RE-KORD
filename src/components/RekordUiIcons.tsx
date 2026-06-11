@@ -167,7 +167,7 @@ export function UiInstallMobile({ className }: { className?: string }) {
   );
 }
 
-export function UiNavHome({ className }: { className?: string }) {
+function UiNavHome({ className }: { className?: string }) {
   return (
     <svg className={className} viewBox="0 0 24 24" fill="none" aria-hidden>
       <path
@@ -228,7 +228,7 @@ export function UiNavList({ className }: { className?: string }) {
   );
 }
 
-export function UiNavMore({ className }: { className?: string }) {
+function UiNavMore({ className }: { className?: string }) {
   return (
     <svg className={className} viewBox="0 0 24 24" fill="currentColor" aria-hidden>
       <circle cx="6" cy="12" r="1.8" />
@@ -349,7 +349,7 @@ export function UiEmojiEvents({ className }: { className?: string }) {
   );
 }
 
-export function UiSettings({ className }: { className?: string }) {
+function UiSettings({ className }: { className?: string }) {
   return (
     <svg className={className} viewBox="0 0 24 24" aria-hidden="true">
       <path

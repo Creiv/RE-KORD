@@ -1,7 +1,6 @@
 /* Viste: libreria, dashboard, ascolta, impostazioni, dialoghi */
 /* Active shell + views. Legacy: legacy-shell.css (non importato). */
 
-
 .track-row__meta,
 .track-row__badges,
 .album-card__meta,
@@ -58,7 +57,6 @@
   box-shadow: 0 1px 2px color-mix(in srgb, var(--bg) 52%, transparent);
 }
 
-
 .sr-only {
   position: absolute;
   width: 1px;
@@ -70,8 +68,6 @@
   white-space: nowrap;
   border-width: 0;
 }
-
-
 
 /* Card libreria (artisti, album, generi), righe brano e playlist: vetro + bordo accent */
 .track-row,
@@ -101,36 +97,6 @@
   letter-spacing: -0.02em;
 }
 
-.studio-hero {
-  display: block;
-  margin: 0;
-  padding: var(--space-4);
-}
-
-.studio-hero__lead {
-  display: flex;
-  flex-direction: row;
-  align-items: center;
-  gap: 0.7rem;
-  min-width: 0;
-}
-
-.studio-hero__text {
-  display: flex;
-  flex-direction: column;
-  gap: 0.2rem;
-  min-width: 0;
-}
-
-.studio-hero .eyebrow {
-  margin: 0 0 0.2rem;
-}
-
-.studio-hero__text .eyebrow {
-  margin: 0;
-}
-
-.studio-hero__title,
 .section-head--page-toolbar h2 {
   font-size: 1.32rem;
   font-weight: 800;
@@ -309,12 +275,6 @@
   line-height: 1.25;
 }
 
-.album-hero__toolbar-meta {
-  margin: 0;
-  line-height: 1.4;
-  max-width: min(100%, 56ch);
-}
-
 .lib-badge-cluster--toolbar-left {
   justify-content: flex-start;
 }
@@ -407,10 +367,6 @@
   margin-left: auto;
   align-items: center;
   justify-content: flex-end;
-}
-
-.btn--collection-play {
-  flex-shrink: 0;
 }
 
 .surface-card--toolbar-only .section-head--page-toolbar {
@@ -1002,18 +958,12 @@
   background: var(--control-hover-bg);
 }
 
-.hero-card__copy {
-  max-width: 62ch;
-  color: var(--muted-strong);
-}
-
 .hero-card__actions {
   display: flex;
   flex-wrap: wrap;
   gap: 0.65rem 0.85rem;
   align-items: center;
 }
-
 
 .stats-grid {
   display: grid;
@@ -1109,12 +1059,6 @@
     min-height: 0;
     overflow-y: auto;
     -webkit-overflow-scrolling: touch;
-  }
-
-  .dashboard-session-body--empty {
-    display: flex;
-    flex-direction: column;
-    justify-content: flex-start;
   }
 
   .dashboard-session-body > .panel-empty {
@@ -1593,19 +1537,6 @@ button.settings-network-qr:focus-visible {
   box-shadow: 0 2px 10px color-mix(in srgb, #000 12%, transparent);
 }
 
-.statistics-rank-row__art--album {
-  display: grid;
-  place-items: center;
-  overflow: hidden;
-  padding: 0;
-}
-
-.statistics-rank-row__art--album .album-cover {
-  width: 100%;
-  height: 100%;
-  border-radius: 11px;
-}
-
 .statistics-rank-row__art--fallback {
   display: grid;
   place-items: center;
@@ -1618,15 +1549,6 @@ button.settings-network-qr:focus-visible {
     color-mix(in srgb, var(--badge-1) 88%, var(--surface3) 12%),
     color-mix(in srgb, var(--badge-2) 88%, var(--surface3) 12%)
   );
-}
-
-.statistics-rank-row__art--genre {
-  font-size: 0.68rem;
-  font-weight: 800;
-  letter-spacing: 0.12em;
-  color: color-mix(in srgb, var(--accent2) 55%, var(--muted) 45%);
-  background: color-mix(in srgb, var(--accent2) 10%, var(--surface3) 90%);
-  border-color: color-mix(in srgb, var(--accent2) 28%, var(--border) 72%);
 }
 
 .statistics-rank-row__text {
@@ -1676,16 +1598,6 @@ button.settings-network-qr:focus-visible {
   gap: 0.28em;
 }
 
-.statistics-rank-row__dur {
-  font-weight: 600;
-  opacity: 0.92;
-}
-
-.statistics-rank-row__dur-sep {
-  opacity: 0.6;
-  font-weight: 500;
-}
-
 .statistics-overview {
   display: flex;
   flex-direction: column;
@@ -1733,8 +1645,7 @@ button.settings-network-qr:focus-visible {
     align-self: center;
   }
 
-  .statistics-rank-row__art,
-  .statistics-rank-row__art--album {
+  .statistics-rank-row__art {
     grid-row: 1 / span 2;
     width: 52px;
     height: 52px;
@@ -1926,7 +1837,6 @@ button.settings-network-qr:focus-visible {
     0 0 0 1px color-mix(in srgb, var(--accent) 22%, transparent),
     0 12px 36px color-mix(in srgb, var(--bg) 55%, transparent);
 }
-
 
 .alert-list {
   display: grid;
@@ -2468,10 +2378,6 @@ button.settings-network-qr:focus-visible {
   cursor: grabbing;
 }
 
-.lib-badge-cluster--title-left {
-  justify-content: flex-start;
-}
-
 .lib-badge-cluster--card-foot .lib-meta-badges {
   justify-content: flex-start;
   flex-wrap: nowrap;
@@ -2621,26 +2527,6 @@ button.settings-network-qr:focus-visible {
 .track-row__stats .lib-meta-chip {
   flex: 0 0 auto;
   align-self: center;
-}
-
-.cover-img--loading {
-  background: linear-gradient(
-    110deg,
-    var(--surface3) 0%,
-    color-mix(in srgb, var(--surface3) 70%, var(--surface2) 30%) 45%,
-    var(--surface3) 90%
-  );
-  background-size: 200% 100%;
-  animation: cover-img-shimmer 1.1s ease-in-out infinite;
-}
-
-@keyframes cover-img-shimmer {
-  0% {
-    background-position: 100% 0;
-  }
-  100% {
-    background-position: -100% 0;
-  }
 }
 
 .album-cover {
@@ -2880,21 +2766,6 @@ button.settings-network-qr:focus-visible {
   letter-spacing: 0.02em;
 }
 
-.viz-discowall-status__spinner {
-  width: 1.35rem;
-  height: 1.35rem;
-  border-radius: 50%;
-  border: 2px solid color-mix(in srgb, var(--muted) 35%, transparent);
-  border-top-color: var(--accent2);
-  animation: viz-discowall-spin 0.85s linear infinite;
-}
-
-@keyframes viz-discowall-spin {
-  to {
-    transform: rotate(360deg);
-  }
-}
-
 .viz-wrap.is-discowall .viz-canvas {
   width: 100%;
   height: 100%;
@@ -3103,27 +2974,6 @@ button.settings-network-qr:focus-visible {
   margin-top: 1rem;
 }
 
-.library-content-head {
-  display: flex;
-  justify-content: center;
-  align-items: center;
-  margin-bottom: 0.85rem;
-}
-
-.library-content-head .segmented--joined {
-  flex-wrap: nowrap;
-  gap: 0;
-}
-
-.library-content-head .segmented--joined button:first-of-type {
-  border-radius: 999px 0 0 999px;
-}
-
-.library-content-head .segmented--joined button:last-of-type {
-  margin-inline-start: -1px;
-  border-radius: 0 999px 999px 0;
-}
-
 /* Libreria: tab testuali + sottolineatura, niente card / pill piene */
 .library-filter-panel {
   display: flex;
@@ -3141,25 +2991,6 @@ button.settings-network-qr:focus-visible {
 .library-filter-panel--tight {
   margin-bottom: 1rem;
   padding-bottom: 0.75rem;
-}
-
-.library-filter-panel__row--split {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) auto;
-  align-items: end;
-  gap: 0.85rem 2.25rem;
-}
-
-.library-filter-panel__row--split .library-filter-group:last-child {
-  justify-self: end;
-  width: max-content;
-  max-width: 100%;
-}
-
-.library-filter-panel__row--split
-  .library-filter-group:last-child
-  .segmented--joined {
-  justify-content: flex-end;
 }
 
 .library-genre-tracklist-headrow {
@@ -3563,20 +3394,6 @@ button.settings-network-qr:focus-visible {
   background: linear-gradient(135deg, var(--segmented-1), var(--segmented-2));
 }
 
-.playlist-create {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) auto;
-  gap: 0.9rem;
-  margin-bottom: 1rem;
-}
-
-.setting-card {
-  display: grid;
-  gap: 0.55rem;
-  padding: 1rem 1.1rem;
-  border-radius: var(--radius-lg);
-}
-
 .settings-ui-inline-control {
   display: grid;
   gap: 0.55rem;
@@ -3600,11 +3417,6 @@ button.settings-network-qr:focus-visible {
   accent-color: color-mix(in srgb, var(--accent) 88%, transparent);
   cursor: pointer;
   justify-self: start;
-}
-
-.setting-card.checkbox {
-  grid-template-columns: auto 1fr;
-  align-items: center;
 }
 
 .account-list {
@@ -4131,13 +3943,4 @@ button.settings-network-qr:focus-visible {
 }
 
 /* Definizione unica (prima sparsa tra shell.css, flat-modern.css e qui). */
-.inline-banner {
-  margin: 0.8rem 1.3rem 0;
-  padding: 0.85rem 1rem;
-  border: 1px solid var(--border);
-  border-radius: var(--radius-md);
-  background: var(--surface2);
-  box-shadow: var(--shadow-elev-1);
-  color: var(--warning);
-}
 

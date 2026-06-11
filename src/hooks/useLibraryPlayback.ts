@@ -106,11 +106,3 @@ export function useLibraryPlayback(
     excludedTracks,
   };
 }
-
-/** @deprecated Usa useLibraryPlayback */
-export function useLibraryCardPlayback(
-  libraryTracks: readonly EnrichedTrack[] | undefined
-) {
-  const { playGlobalRadio } = useLibraryPlayback(libraryTracks);
-  return playGlobalRadio;
-}

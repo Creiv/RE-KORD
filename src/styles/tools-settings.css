@@ -1,6 +1,3 @@
-.tool-block {
-  line-height: 1.5;
-}
 
 .tools.tool-studio-layout {
   gap: 1.35rem;
@@ -62,10 +59,6 @@
 
 .studio-catalog-browse .library-overview-cols {
   width: 100%;
-}
-
-.studio-catalog-view-toggle {
-  margin-top: 0.9rem;
 }
 
 .studio-catalog-toolbar {
@@ -197,10 +190,6 @@
 
 .studio-catalog-web-tile__release {
   text-transform: capitalize;
-}
-
-.studio-catalog-web-tile__tracks {
-  margin-top: 0.12rem;
 }
 
 .studio-catalog-web-tile:hover {
@@ -644,20 +633,6 @@
   font-size: 0.92rem;
 }
 
-.tools-dl-dest__actions {
-  margin-top: 0.1rem;
-  padding-top: 0.6rem;
-  border-top: 1px solid color-mix(in srgb, var(--border) 88%, transparent);
-}
-
-.tools-dl-dest__actions-row {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  justify-content: space-between;
-  gap: 0.5rem 1rem;
-}
-
 .tools-dl-dest__picked {
   margin: 0.1rem 0 0;
   padding: 0.55rem 0.7rem;
@@ -671,14 +646,6 @@
 
 .tools-dl-dest__warn {
   margin: 0;
-}
-
-.tools-dl-detected {
-  margin: 0 0 0.5rem;
-}
-
-.tools-dl-detected__label {
-  color: var(--muted);
 }
 
 .tools-dl-dest__head {
@@ -1015,30 +982,12 @@
   margin: 0;
 }
 
-.tools-dl-mode__label {
-  width: 100%;
-  margin: 0;
-  color: var(--muted);
-}
-
-@media (min-width: 520px) {
-  .tools-dl-mode__label {
-    width: auto;
-    margin-right: 0.15rem;
-  }
-}
-
 .tools-dl-mode__seg {
   display: flex;
   flex-wrap: wrap;
   gap: 0.35rem;
   flex: 1 1 auto;
   min-width: min(100%, 12rem);
-}
-
-.tools-dl-mode__seg--one .tools-dl-mode__btn {
-  flex: 1 1 12rem;
-  max-width: 20rem;
 }
 
 .tools-dl-mode__btn {
@@ -1241,58 +1190,6 @@
   font-size: 0.75rem;
   font-weight: 500;
   opacity: 0.85;
-}
-
-.tools-dl-releases__row--skeleton {
-  pointer-events: none;
-}
-
-.tools-dl-releases__check--skeleton {
-  cursor: default;
-  grid-template-columns: auto 1fr auto;
-}
-
-.tools-dl-releases__sk-pad {
-  width: 1rem;
-  min-height: 1rem;
-  border-radius: 3px;
-  background: color-mix(in srgb, var(--border) 80%, var(--bg));
-  opacity: 0.5;
-  align-self: start;
-  margin-top: 0.12rem;
-}
-
-.tools-dl-releases__sk-text {
-  min-width: 0;
-  display: flex;
-  flex-direction: column;
-  gap: 0.35rem;
-}
-
-.tools-dl-releases__skeleton-bar {
-  height: 0.7rem;
-  max-width: 100%;
-  border-radius: 4px;
-  background: linear-gradient(
-    100deg,
-    color-mix(in srgb, var(--border) 90%, var(--bg)) 0%,
-    color-mix(in srgb, var(--muted) 28%, var(--border)) 40%,
-    color-mix(in srgb, var(--border) 90%, var(--bg)) 80%
-  );
-  background-size: 220% 100%;
-  animation: tools-dl-releases-skel 1.1s ease-in-out infinite;
-}
-
-.tools-dl-releases__skeleton-bar--sub {
-  width: min(100%, 12rem);
-  height: 0.48rem;
-  opacity: 0.72;
-}
-
-.tools-dl-releases__skeleton-bcount {
-  width: 2.2rem;
-  min-width: 2.2rem;
-  height: 0.6rem;
 }
 
 @keyframes tools-dl-releases-skel {
@@ -1570,18 +1467,12 @@
   margin-top: 0.45rem;
 }
 
-.studio-pane .row,
-.tool-block .row {
+.studio-pane .row {
   margin-bottom: 0.5rem;
 }
 
-.studio-pane .row:last-child,
-.tool-block .row:last-child {
+.studio-pane .row:last-child {
   margin-bottom: 0;
-}
-
-.row.align-end {
-  align-items: flex-end;
 }
 
 .h4 {
@@ -1774,18 +1665,11 @@
   }
 }
 
-.tools-download .row.j-between,
 .tools-art .row.gap {
   align-items: center;
 }
 
 @media (min-width: 1920px) and (min-aspect-ratio: 2/1) {
-  .main-shell {
-    max-width: min(100%, 2520px);
-    margin-inline: auto;
-    width: 100%;
-  }
-
   .content-shell {
     padding-inline: clamp(1rem, 2.2vw, 3.25rem);
   }
@@ -1850,41 +1734,10 @@
     max-width: 100%;
   }
 
-  .topbar2.topbar2--toolbar {
-    padding: max(0.32rem, env(safe-area-inset-top))
-      max(0.55rem, env(safe-area-inset-right)) 0.32rem
-      max(0.55rem, env(safe-area-inset-left));
-    gap: 0;
-  }
-
-  .topbar2__row {
-    flex-direction: row;
-    flex-wrap: wrap;
-    align-items: center;
-    gap: 0.3rem 0.45rem;
-  }
-
-  .topbar2__start {
-    flex: 1 1 0;
-    flex-direction: row;
-    flex-wrap: nowrap;
-    align-items: center;
-    gap: 0.35rem;
-    min-width: 0;
-  }
-
   .rekord-brand-logo--topbar {
     height: 36px;
     width: auto;
     max-width: min(220px, 42vw);
-  }
-
-  .topbar2__end {
-    flex: 1 1 100%;
-    margin-left: 0;
-    justify-content: stretch;
-    gap: 0.3rem;
-    flex-wrap: nowrap;
   }
 
   .library-search-bar__field {
@@ -1904,12 +1757,6 @@
     min-width: 0;
   }
 
-  .ghost-input--topbar {
-    min-height: 30px;
-    padding: 0.16rem 0.5rem;
-    font-size: 0.76rem;
-  }
-
   .ghost-btn--toolbar {
     min-height: 30px;
     padding: 0.28rem 0.65rem;
@@ -1921,17 +1768,6 @@
   .content-shell {
     padding: 1rem max(1rem, env(safe-area-inset-right))
       var(--content-pad-bottom) max(1rem, env(safe-area-inset-left));
-  }
-
-  .playlist-create {
-    display: grid;
-    grid-template-columns: 1fr;
-    min-width: 0;
-  }
-
-  .inline-banner {
-    margin-left: max(1rem, env(safe-area-inset-left));
-    margin-right: max(1rem, env(safe-area-inset-right));
   }
 
   /* gap/padding-left rimossi: erano già annullati da flat-modern.css
@@ -1995,21 +1831,6 @@
     grid-template-columns: minmax(0, 1fr);
   }
 
-  .topbar2.topbar2--toolbar {
-    padding: max(0.28rem, env(safe-area-inset-top))
-      max(0.45rem, env(safe-area-inset-right)) 0.28rem
-      max(0.45rem, env(safe-area-inset-left));
-  }
-
-  .topbar2__row {
-    gap: 0.25rem 0.35rem;
-  }
-
-  .ghost-input--topbar {
-    min-height: 28px;
-    font-size: 0.72rem;
-  }
-
   .ghost-btn--toolbar {
     min-height: 28px;
     padding: 0.22rem 0.55rem;
@@ -2040,12 +1861,7 @@
     height: min(160px, 38vh);
     max-height: min(160px, 38vh);
   }
-
-  .topbar2.topbar2--toolbar {
-    padding-top: max(0.22rem, env(safe-area-inset-top));
-    padding-bottom: 0.22rem;
   }
-}
 
 .track-row__ic--meta {
   opacity: 0.55;
@@ -2214,12 +2030,6 @@
 .meta-edit-field span {
   color: var(--muted);
   font-weight: 600;
-}
-
-.meta-edit-field-hint {
-  display: block;
-  margin-top: 0.2rem;
-  font-size: 0.8rem;
 }
 
 .meta-edit-genre-chips {

@@ -109,6 +109,7 @@ import {
   fetchCatalogWebReleaseTracks,
   getPreviewStreamForToken,
   normalizeCatalogWebUrl,
+  parseYtdlpJsonStdout,
 } from "./catalogWebPreview.mjs";
 import {
   fetchYoutubeWebReleasesList,
@@ -411,27 +412,6 @@ function forceKillStudioYtdlp(child) {
     /* ignore */
   }
 }
-
-/** Estrae JSON da stdout di yt-dlp -J (BOM, warning occasionali in coda al buffer). */
-function parseYtdlpJsonStdout(buf) {
-  const s0 = String(buf ?? "").replace(/^\uFEFF/, "");
-  const s = s0.trim();
-  if (!s) return null;
-  const tryParse = (x) => {
-    try {
-      return JSON.parse(x);
-    } catch {
-      return null;
-    }
-  };
-  let o = tryParse(s);
-  if (o) return o;
-  const i = s.indexOf("{");
-  if (i < 0) return null;
-  o = tryParse(s.slice(i));
-  return o;
-}
-
 function releaseEnrichConfig() {
   const raw = String(
     process.env.REKORD_YTDLP_RELEASE_MAX_COUNT_ENRICH ?? "0"

@@ -5,7 +5,7 @@ import { fileURLToPath } from "node:url"
 const root = path.join(path.dirname(fileURLToPath(import.meta.url)), "..")
 
 /** Semver da package.json (es. 3.5.0). */
-export const REKORD_VERSION = (() => {
+const REKORD_VERSION = (() => {
   try {
     const pkg = JSON.parse(
       readFileSync(path.join(root, "package.json"), "utf8"),
@@ -18,7 +18,7 @@ export const REKORD_VERSION = (() => {
 })()
 
 /** Major.minor per User-Agent API (es. 3.0). */
-export const REKORD_VERSION_SHORT = REKORD_VERSION.split(".").slice(0, 2).join(".")
+const REKORD_VERSION_SHORT = REKORD_VERSION.split(".").slice(0, 2).join(".")
 
 export function rekordApiUserAgent(extra = "") {
   const base = `RE-KORD/${REKORD_VERSION_SHORT}`
