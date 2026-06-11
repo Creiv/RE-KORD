@@ -35,9 +35,14 @@
   outline: none;
 }
 
-.rhythm-dock-panel .lane-pad:focus,
-.rhythm-dock-panel .lane-pad:focus-visible {
+.rhythm-dock-panel .lane-pad:focus {
   outline: none;
+}
+
+/* Navigazione da tastiera: focus visibile (il tap/click non lo mostra). */
+.rhythm-dock-panel .lane-pad:focus-visible {
+  outline: 2px solid var(--accent2);
+  outline-offset: -2px;
 }
 
 .rhythm-dock-panel .lane-pip {

@@ -5,6 +5,8 @@
   /* Aspect: portrait <9/16 · 4:3 & 12:9 ~1.33 · 16:9+ widescreen — src/styles/aspect-layout.css */
   --bg: #0a0e14;
   --surface: #121820;
+  /* Alias: segue --surface in ogni tema (anche custom). */
+  --surface1: var(--surface);
   --surface2: #161d28;
   --surface3: #1c2532;
   --border: rgba(148, 163, 184, 0.16);
@@ -16,6 +18,8 @@
   --accent2: #38bdf8;
   --warning: #eab308;
   --danger: #f87171;
+  --success: #2e7d32;
+  --danger-strong: #c62828;
   --bar-h: 96px;
   --content-pad-bottom: calc(
     env(safe-area-inset-bottom, 0px) + 0.75rem + var(--bar-h) + 0.5rem
@@ -1369,9 +1373,11 @@ textarea {
 .eyebrow {
   color: var(--accent2);
   text-transform: uppercase;
-  letter-spacing: 0.16em;
-  font-size: 0.72rem;
-  font-weight: 800;
+  letter-spacing: 0.1em;
+  font-size: 0.68rem;
+  font-weight: 700;
+  margin: 0;
+  line-height: 1.25;
 }
 
 .subtext,

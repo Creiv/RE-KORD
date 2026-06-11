@@ -754,6 +754,8 @@ export const EN: Record<string, string> = {
   "player.prevTitle": "Previous",
   "player.pauseTitle": "Pause",
   "player.playTitle": "Play",
+  "player.vizExpandAria": "Expand visualizer",
+  "player.vizCollapseAria": "Close expanded visualizer",
   "player.nextTitle": "Next",
   "player.repeatOff": "Repeat: off",
   "player.repeatAll": "Repeat: entire queue",

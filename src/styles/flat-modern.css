@@ -20,8 +20,7 @@
 .album-hero,
 .metric-card,
 .alert-card,
-.setting-card,
-.inline-banner {
+.setting-card {
   border-radius: var(--radius-md);
   box-shadow: var(--shadow-elev-1);
   background: var(--surface2);
@@ -51,10 +50,7 @@
   margin-bottom: var(--space-4);
 }
 
-.section-head h2 {
-  font-size: 1.12rem;
-  letter-spacing: -0.02em;
-}
+/* .section-head h2: definito in views.css */
 
 .studio-hero__title,
 .section-head--page-toolbar h2 {
@@ -104,11 +100,7 @@
   border-radius: var(--radius-md);
 }
 
-/* ── Track row: padding touch-friendly ── */
-.track-row {
-  padding: var(--space-3) var(--space-5);
-  gap: var(--space-3);
-}
+/* .track-row (padding/gap): definito in views.css */
 
 /* ── Tipografia: titoli sezione ── */
 .h2 {
@@ -123,13 +115,7 @@
 }
 
 /* ── Eyebrow label ── */
-.eyebrow {
-  letter-spacing: 0.1em;
-  font-size: 0.68rem;
-  font-weight: 700;
-  margin: 0;
-  line-height: 1.25;
-}
+/* .eyebrow: definizione unica in index.css */
 
 /* ── Library list tile ── */
 .library-list-tile {

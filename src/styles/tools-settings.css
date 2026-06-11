@@ -814,7 +814,7 @@
   }
 }
 
-@media (min-width: 900px) {
+@media (min-width: 901px) {
   .tools-dl-explore__list {
     grid-template-columns: repeat(3, minmax(0, 1fr));
   }
@@ -1637,7 +1637,7 @@
   margin-top: 0.75rem;
 }
 
-@media (min-width: 900px) {
+@media (min-width: 901px) {
   .artgrid2 {
     grid-template-columns: repeat(auto-fill, minmax(12.5rem, 1fr));
   }
@@ -1768,7 +1768,7 @@
   transition: width 0.28s ease;
 }
 
-@media (min-width: 900px) {
+@media (min-width: 901px) {
   .studio-action-row .primary-btn:not(.primary-btn--sm) {
     min-width: 10rem;
   }
@@ -1934,10 +1934,10 @@
     margin-right: max(1rem, env(safe-area-inset-right));
   }
 
+  /* gap/padding-left rimossi: erano già annullati da flat-modern.css
+     (regola successiva nella cascata, ora consolidata in views.css). */
   .track-row {
     grid-template-columns: 40px minmax(0, 1fr) auto;
-    gap: 0.5rem 0.5rem;
-    padding-left: 2.45rem;
   }
 
   .track-row__art {
@@ -2181,19 +2181,19 @@
 }
 
 .meta-edit-lyrics-status-dot--okLrc {
-  background: #2e7d32;
-  border-color: #2e7d32;
+  background: var(--success);
+  border-color: var(--success);
 }
 
 .meta-edit-lyrics-status-dot--okPlain {
-  background: #f0be67;
-  border-color: #f0be67;
+  background: var(--warning);
+  border-color: var(--warning);
 }
 
 .meta-edit-lyrics-status-dot--missing,
 .meta-edit-lyrics-status-dot--error {
-  background: #c62828;
-  border-color: #c62828;
+  background: var(--danger-strong);
+  border-color: var(--danger-strong);
 }
 
 .meta-edit-lyrics-dialog {
@@ -2330,12 +2330,12 @@
 }
 
 .meta-edit-genre-select option {
-  color: #111827;
-  background: #ffffff;
+  color: var(--text);
+  background: var(--surface2);
 }
 
 .meta-edit-genre-select option:disabled {
-  color: #6b7280;
+  color: var(--muted);
 }
 
 .meta-edit-genre-custom {

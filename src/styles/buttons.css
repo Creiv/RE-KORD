@@ -159,3 +159,26 @@
 .round {
   min-width: 50px;
 }
+
+/* —— Stato remote access (Impostazioni): colori da tema, niente inline style —— */
+.settings-remote-btn {
+  min-width: 11.5rem;
+}
+
+.settings-remote-btn.is-remote-on {
+  background: var(--success);
+  border-color: var(--success);
+  color: #fff;
+}
+
+.settings-remote-btn.is-remote-on:hover:not(:disabled) {
+  background: var(--danger-strong);
+  border-color: var(--danger-strong);
+  color: #fff;
+}
+
+.settings-remote-btn.is-remote-starting {
+  background: var(--warning);
+  border-color: var(--warning);
+  color: rgb(10 10 10 / 0.9);
+}

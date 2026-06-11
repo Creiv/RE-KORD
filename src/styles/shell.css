@@ -562,11 +562,7 @@
 .metric-card,
 .alert-card,
 .setting-card,
-.inline-banner {
-  border: 1px solid var(--border);
-  background: var(--surface2);
-  box-shadow: var(--shadow-elev-1);
-}
+/* .inline-banner: definizione unica in views.css */
 
 .player-bar2 {
   border: 1px solid var(--border);

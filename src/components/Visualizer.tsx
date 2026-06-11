@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { usePlayer } from "../context/PlayerContext";
 import { usePlayerProgressTime } from "../hooks/usePlayerProgressTime";
+import { useI18n } from "../i18n/useI18n";
 import {
   shouldPauseBackgroundVisualizersForPlectr,
   subscribeRhythmModeOpen,
@@ -12,6 +13,7 @@ import { VizCanvasEngine } from "../lib/vizCanvasEngine";
 import type { VizMode } from "../types";
 
 export function Visualizer({ mode }: { mode: VizMode }) {
+  const { t } = useI18n();
   const { getAnalyser, isPlaying, current, duration } = usePlayer();
   const progressTime = usePlayerProgressTime();
   const currentLyricsRaw = String(current?.meta?.lyrics || "").trim();
@@ -172,8 +174,8 @@ export function Visualizer({ mode }: { mode: VizMode }) {
       tabIndex={0}
       aria-label={
         expanded
-          ? "Chiudi visualizzatore espanso"
-          : "Espandi visualizzatore"
+          ? t("player.vizCollapseAria")
+          : t("player.vizExpandAria")
       }
       onClick={() => toggleExpanded()}
       onKeyDown={(event) => {

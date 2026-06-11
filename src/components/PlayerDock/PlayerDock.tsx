@@ -214,6 +214,13 @@ export const PlayerDock = memo(function PlayerDock({
                         ? t("player.repeatAll")
                         : t("player.repeatOne")
                   }
+                  aria-label={
+                    p.repeat === "off"
+                      ? t("player.repeatOff")
+                      : p.repeat === "all"
+                        ? t("player.repeatAll")
+                        : t("player.repeatOne")
+                  }
                 >
                   <span
                     className="player-bar2__ic-glyph player-bar2__ic-glyph--svg"
@@ -227,6 +234,7 @@ export const PlayerDock = memo(function PlayerDock({
                   className="player-bar2__ic"
                   onClick={() => p.prev()}
                   title={t("player.prevTitle")}
+                  aria-label={t("player.prevTitle")}
                 >
                   <span
                     className="player-bar2__ic-glyph player-bar2__ic-glyph--svg"
@@ -244,6 +252,11 @@ export const PlayerDock = memo(function PlayerDock({
                       ? t("player.pauseTitle")
                       : t("player.playTitle")
                   }
+                  aria-label={
+                    p.isPlaying
+                      ? t("player.pauseTitle")
+                      : t("player.playTitle")
+                  }
                 >
                   <span
                     className="player-bar2__ic-glyph player-bar2__ic-glyph--svg"
@@ -257,6 +270,7 @@ export const PlayerDock = memo(function PlayerDock({
                   className="player-bar2__ic"
                   onClick={() => p.next()}
                   title={t("player.nextTitle")}
+                  aria-label={t("player.nextTitle")}
                 >
                   <span
                     className="player-bar2__ic-glyph player-bar2__ic-glyph--svg"
@@ -270,6 +284,7 @@ export const PlayerDock = memo(function PlayerDock({
                   className={`player-bar2__ic ${p.shuffle ? "is-on" : ""}`}
                   onClick={() => p.setShuffle(!p.shuffle)}
                   title={t("player.shuffleTitle")}
+                  aria-label={t("player.shuffleTitle")}
                   aria-pressed={p.shuffle}
                 >
                   <span
@@ -335,6 +350,11 @@ export const PlayerDock = memo(function PlayerDock({
                 className="player-bar2__ic player-bar2__ic--play"
                 onClick={() => p.toggle()}
                 title={
+                  p.isPlaying
+                    ? t("player.pauseTitle")
+                    : t("player.playTitle")
+                }
+                aria-label={
                   p.isPlaying
                     ? t("player.pauseTitle")
                     : t("player.playTitle")

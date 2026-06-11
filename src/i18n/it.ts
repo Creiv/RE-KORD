@@ -763,6 +763,8 @@ export const IT: Record<string, string> = {
   "player.prevTitle": "Precedente",
   "player.pauseTitle": "Pausa",
   "player.playTitle": "Riproduci",
+  "player.vizExpandAria": "Espandi visualizzatore",
+  "player.vizCollapseAria": "Chiudi visualizzatore espanso",
   "player.nextTitle": "Successivo",
   "player.repeatOff": "Ripetizione: off",
   "player.repeatAll": "Ripetizione: tutta la coda",

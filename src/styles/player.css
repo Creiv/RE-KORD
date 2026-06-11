@@ -323,6 +323,19 @@
   background: var(--control-hover-bg);
 }
 
+/* Touch target ≥44px solo su dispositivi touch: desktop invariato. */
+@media (pointer: coarse) {
+  .player-bar2__ic {
+    min-width: 44px;
+    min-height: 44px;
+  }
+
+  .player-bar2__fav {
+    width: 44px;
+    height: 44px;
+  }
+}
+
 .player-bar2__ic:focus-visible {
   outline: 2px solid var(--focus-ring);
   outline-offset: 2px;

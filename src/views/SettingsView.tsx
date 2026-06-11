@@ -863,7 +863,9 @@ function SettingsView() {
                 >
                   <button
                     type="button"
-                    className="ghost-btn ghost-btn--sm"
+                    className={`ghost-btn ghost-btn--sm settings-remote-btn${
+                      remoteAccess?.cloudflareLoggedIn ? " is-remote-on" : ""
+                    }`}
                     disabled={remoteAccessBusy}
                     onMouseEnter={() => setRemoteLoginHover(true)}
                     onMouseLeave={() => setRemoteLoginHover(false)}
@@ -874,20 +876,6 @@ function SettingsView() {
                         runRemoteCloudflareLogin();
                       }
                     }}
-                    style={
-                      remoteAccess?.cloudflareLoggedIn
-                        ? {
-                            minWidth: "11.5rem",
-                            backgroundColor: remoteLoginHover
-                              ? "#c62828"
-                              : "#2e7d32",
-                            color: "#fff",
-                            borderColor: remoteLoginHover
-                              ? "#c62828"
-                              : "#2e7d32",
-                          }
-                        : { minWidth: "11.5rem" }
-                    }
                   >
                     {remoteAccess?.cloudflareLoggedIn
                       ? remoteLoginHover
@@ -897,32 +885,17 @@ function SettingsView() {
                   </button>
                   <button
                     type="button"
-                    className="primary-btn primary-btn--sm"
+                    className={`primary-btn primary-btn--sm settings-remote-btn${
+                      remoteAccess?.status === "starting"
+                        ? " is-remote-starting"
+                        : remoteAccess?.status === "running"
+                        ? " is-remote-on"
+                        : ""
+                    }`}
                     disabled={remoteAccessBusy}
                     onMouseEnter={() => setRemoteShareHover(true)}
                     onMouseLeave={() => setRemoteShareHover(false)}
                     onClick={toggleRemoteAccess}
-                    style={
-                      remoteAccess?.status === "starting"
-                        ? {
-                            minWidth: "11.5rem",
-                            background: "#f0be67",
-                            color: "#1a1a1a",
-                            border: "1px solid #f0be67",
-                          }
-                        : remoteAccess?.status === "running"
-                        ? {
-                            minWidth: "11.5rem",
-                            background: remoteShareHover
-                              ? "#c62828"
-                              : "#2e7d32",
-                            color: "#fff",
-                            border: `1px solid ${
-                              remoteShareHover ? "#c62828" : "#2e7d32"
-                            }`,
-                          }
-                        : { minWidth: "11.5rem" }
-                    }
                   >
                     {remoteAccess?.status === "starting"
                       ? "Starting"

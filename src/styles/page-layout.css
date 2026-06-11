@@ -78,7 +78,7 @@
   }
 }
 
-@container rekord-page (min-width: 900px) {
+@container rekord-page (min-width: 901px) {
   .layout-adaptive-grid--2 {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
@@ -100,7 +100,7 @@
   }
 }
 
-@media (min-width: 900px) {
+@media (min-width: 901px) {
   .layout-adaptive-grid--3 {
     grid-template-columns: repeat(3, minmax(0, 1fr));
   }
@@ -668,7 +668,7 @@
   }
 }
 
-@container rekord-page (min-width: 900px) {
+@container rekord-page (min-width: 901px) {
   .statistics-page__rankings {
     grid-template-columns: repeat(3, minmax(0, 1fr));
   }
@@ -692,7 +692,7 @@
   }
 }
 
-@media (min-width: 900px) {
+@media (min-width: 901px) {
   .statistics-page__rankings {
     grid-template-columns: repeat(3, minmax(0, 1fr));
   }
@@ -737,7 +737,7 @@
   grid-template-columns: minmax(0, 1fr);
 }
 
-@container rekord-page (min-width: 900px) {
+@container rekord-page (min-width: 901px) {
   .settings-page.view-page {
     grid-template-columns: repeat(2, minmax(0, 1fr));
     align-items: stretch;
@@ -763,7 +763,7 @@
   }
 }
 
-@media (min-width: 900px) {
+@media (min-width: 901px) {
   .settings-page.view-page {
     grid-template-columns: repeat(2, minmax(0, 1fr));
     align-items: stretch;
@@ -792,7 +792,7 @@ html:not([data-glass-surfaces="1"]) .settings-page__cluster > .surface-card {
   isolation: isolate;
 }
 
-@media (min-width: 900px) {
+@media (min-width: 901px) {
   html:not([data-glass-surfaces="1"]) .settings-page.view-page {
     align-items: start;
   }
@@ -812,13 +812,13 @@ html:not([data-glass-surfaces="1"]) .settings-page__cluster > .surface-card {
   align-items: start;
 }
 
-@container rekord-page (min-width: 900px) {
+@container rekord-page (min-width: 901px) {
   .playlists-page__main {
     grid-template-columns: minmax(0, 0.95fr) minmax(0, 1.05fr);
   }
 }
 
-@media (min-width: 900px) {
+@media (min-width: 901px) {
   .playlists-page__main {
     grid-template-columns: minmax(0, 0.95fr) minmax(0, 1.05fr);
   }
@@ -861,7 +861,7 @@ html:not([data-glass-surfaces="1"]) .settings-page__cluster > .surface-card {
   min-width: 0;
 }
 
-@container rekord-page (min-width: 900px) {
+@container rekord-page (min-width: 901px) {
   .listen-page__stage.listen-stage,
   .listen-page__panels.listen-dashboard-row {
     grid-template-columns: var(
@@ -871,7 +871,7 @@ html:not([data-glass-surfaces="1"]) .settings-page__cluster > .surface-card {
   }
 }
 
-@media (min-width: 900px) {
+@media (min-width: 901px) {
   .listen-page__stage.listen-stage,
   .listen-page__panels.listen-dashboard-row {
     grid-template-columns: var(
