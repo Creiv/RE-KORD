@@ -6,7 +6,7 @@ import { trackBelongsToGenreKey, parseTrackGenres } from "../lib/genres";
 import {
   isTrackAlbumShuffleExcluded,
 } from "../lib/randomExclusions";
-import { buildSmartRandomQueue } from "../lib/smartShuffle";
+import { buildSmartRandomQueue, splitQueueWindow } from "../lib/smartShuffle";
 import {
   TRACK_MOOD_COLORS,
   TRACK_MOOD_IDS,
@@ -155,7 +155,12 @@ export function DashboardMixCard({
       currentArtist: p.current?.artist,
       recentRelPaths,
     });
-    p.playTrack(shuffled[0], shuffled, 0, { preserveQueueOrder: true });
+    const { window, remainder } = splitQueueWindow(shuffled);
+    if (!window[0]) return;
+    p.playTrack(window[0], window, 0, {
+      preserveQueueOrder: true,
+      refillRemainder: remainder,
+    });
   }, [shuffleEligible, user.state.recent, p]);
 
   const selectedGenreLabel =

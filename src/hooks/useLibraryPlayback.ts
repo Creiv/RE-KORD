@@ -6,6 +6,7 @@ import {
   buildCardPlayQueueFromSeed,
   buildShuffleQueueFromSeed,
   buildSmartRandomQueue,
+  splitQueueWindow,
 } from "../lib/smartShuffle";
 import { filterTracksForShuffleExclusions } from "../lib/randomExclusions";
 
@@ -45,6 +46,19 @@ export function useLibraryPlayback(
     [p]
   );
 
+  /** Coda generata → finestra subito in player, resto travasato a lotti. */
+  const playWindowed = useCallback(
+    (full: readonly EnrichedTrack[]) => {
+      if (!full.length) return;
+      const { window, remainder } = splitQueueWindow(full);
+      p.playTrack(window[0]!, window, 0, {
+        preserveQueueOrder: true,
+        refillRemainder: remainder,
+      });
+    },
+    [p]
+  );
+
   const playGlobalRadio = useCallback(
     (seed: EnrichedTrack, respectExclusions = true) => {
       if (!libraryTracks?.length) {
@@ -56,10 +70,9 @@ export function useLibraryPlayback(
         excludedAlbums,
         excludedTracks,
       });
-      if (!q.length) return;
-      p.playTrack(q[0]!, q, 0, { preserveQueueOrder: true });
+      playWindowed(q);
     },
-    [libraryTracks, p, excludedAlbums, excludedTracks]
+    [libraryTracks, p, excludedAlbums, excludedTracks, playWindowed]
   );
 
   const playCollectionShuffle = useCallback(
@@ -73,10 +86,9 @@ export function useLibraryPlayback(
         ...shuffleOpts(),
         respectExclusions,
       });
-      if (!q.length) return;
-      p.playTrack(q[0]!, q, 0, { preserveQueueOrder: true });
+      playWindowed(q);
     },
-    [p, shuffleOpts]
+    [playWindowed, shuffleOpts]
   );
 
   const playPoolShuffle = useCallback(
@@ -92,9 +104,9 @@ export function useLibraryPlayback(
       }
       if (!eligible.length) return;
       const shuffled = buildSmartRandomQueue(eligible, shuffleOpts());
-      p.playTrack(shuffled[0]!, shuffled, 0, { preserveQueueOrder: true });
+      playWindowed(shuffled);
     },
-    [p, shuffleOpts, excludedTracks, excludedAlbums]
+    [playWindowed, shuffleOpts, excludedTracks, excludedAlbums]
   );
 
   return {

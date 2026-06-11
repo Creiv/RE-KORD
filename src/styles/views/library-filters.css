@@ -425,22 +425,43 @@
   gap: 0.55rem;
 }
 
-/* Tema e Stile affiancati; "Personalizza…" (tema custom) sotto entrambe le colonne */
+/* Tema e Stile affiancati; "Personalizza…" sotto entrambe (desktop) o sotto Tema (mobile) */
 .settings-theme-style-row {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: var(--space-4);
-  align-items: start;
+  align-items: end;
+}
+
+.settings-theme-style-row__theme {
+  grid-column: 1;
+  grid-row: 1;
+}
+
+.settings-theme-style-row__style {
+  grid-column: 2;
+  grid-row: 1;
 }
 
 .settings-theme-style-row__customize {
   grid-column: 1 / -1;
-  justify-self: start;
+  grid-row: 2;
+  width: 100%;
+  min-height: 42px;
+  justify-self: stretch;
+  box-sizing: border-box;
 }
 
 @media (max-width: 560px) {
   .settings-theme-style-row {
     grid-template-columns: minmax(0, 1fr);
+  }
+
+  .settings-theme-style-row__theme,
+  .settings-theme-style-row__style,
+  .settings-theme-style-row__customize {
+    grid-column: auto;
+    grid-row: auto;
   }
 }
 

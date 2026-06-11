@@ -150,6 +150,40 @@
   background-repeat: no-repeat;
 }
 
+/* Selettore Stile UI — stessa silhouette del theme picker (label + strip a destra) */
+.settings-ui-style-picker {
+  position: relative;
+  width: 100%;
+  margin-top: 0.15rem;
+}
+
+.settings-ui-style-picker__select {
+  appearance: none;
+  -webkit-appearance: none;
+  width: 100%;
+  min-height: 38px;
+  padding: 0.45rem 5.2rem 0.45rem 0.75rem;
+  border-radius: var(--radius-md);
+  background: var(--surface3);
+  border: 1px solid var(--border);
+  color: var(--text);
+  cursor: pointer;
+  font: inherit;
+  font-size: 0.9rem;
+  font-weight: 650;
+  text-align: left;
+  box-sizing: border-box;
+}
+
+.settings-ui-style-picker__select:hover {
+  border-color: var(--border-strong);
+}
+
+.settings-ui-style-picker__select:focus-visible {
+  outline: 2px solid var(--focus-ring);
+  outline-offset: 2px;
+}
+
 .custom-theme-dialog {
   width: min(26rem, 100%);
   padding: 1.15rem 1.25rem 1.05rem;

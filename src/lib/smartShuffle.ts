@@ -5,6 +5,31 @@ import { parseTrackMoods } from "./trackMoods";
 
 const CARD_QUEUE_CAP = 500;
 
+/**
+ * Finestra scorrevole della coda: in PlayerContext vivono solo i primi
+ * QUEUE_WINDOW_LENGTH brani; il resto della coda generata resta come
+ * "remainder" in memoria e viene travasato a lotti man mano che l'ascolto
+ * avanza. Così persistenza (PUT stato utente) e stato React restano piccoli
+ * senza ridurre la durata d'ascolto.
+ */
+export const QUEUE_WINDOW_LENGTH = 50;
+/** Brani travasati dal remainder a ogni rabbocco. */
+export const QUEUE_REFILL_BATCH = 30;
+/** Rabbocca quando davanti al corrente restano così pochi brani. */
+export const QUEUE_REFILL_THRESHOLD = 10;
+/** Brani già riprodotti tenuti dietro al corrente (per "precedente"/storia). */
+export const QUEUE_HISTORY_KEEP = 20;
+
+export function splitQueueWindow(full: readonly EnrichedTrack[]): {
+  window: EnrichedTrack[];
+  remainder: EnrichedTrack[];
+} {
+  return {
+    window: full.slice(0, QUEUE_WINDOW_LENGTH),
+    remainder: full.slice(QUEUE_WINDOW_LENGTH),
+  };
+}
+
 export function fisherYatesShuffle<T>(items: readonly T[]): T[] {
   const a = [...items];
   for (let i = a.length - 1; i > 0; i -= 1) {

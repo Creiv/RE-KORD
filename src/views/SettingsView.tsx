@@ -538,7 +538,7 @@ function SettingsView() {
             </select>
           </label>
           <div className="settings-theme-style-row">
-            <div className="settings-ui-inline-control">
+            <div className="settings-ui-inline-control settings-theme-style-row__theme">
               <span>{t("settings.theme")}</span>
               <ThemePicker
                 value={user.state.settings.theme}
@@ -562,30 +562,33 @@ function SettingsView() {
                 onCustomizeOpenChange={setCustomThemeDialogOpen}
               />
             </div>
-            <label className="settings-ui-inline-control">
-              <span>{t("settings.uiStyle")}</span>
-              <select
-                value={user.state.settings.uiStyle}
-                onChange={(event) =>
-                  user.updateSettings({
-                    uiStyle:
-                      event.target.value === "modern" ? "modern" : "classic",
-                  })
-                }
-              >
-                <option value="classic">{t("settings.uiStyleClassic")}</option>
-                <option value="modern">{t("settings.uiStyleModern")}</option>
-              </select>
-            </label>
             {user.state.settings.theme === "custom" ? (
               <button
                 type="button"
-                className="ghost-btn ghost-btn--sm settings-theme-style-row__customize"
+                className="ghost-btn settings-theme-style-row__customize"
                 onClick={() => setCustomThemeDialogOpen(true)}
               >
                 {t("themePicker.customEditBtn")}
               </button>
             ) : null}
+            <label className="settings-ui-inline-control settings-theme-style-row__style">
+              <span>{t("settings.uiStyle")}</span>
+              <div className="settings-ui-style-picker">
+                <select
+                  className="settings-ui-style-picker__select"
+                  value={user.state.settings.uiStyle}
+                  onChange={(event) =>
+                    user.updateSettings({
+                      uiStyle:
+                        event.target.value === "modern" ? "modern" : "classic",
+                    })
+                  }
+                >
+                  <option value="classic">{t("settings.uiStyleClassic")}</option>
+                  <option value="modern">{t("settings.uiStyleModern")}</option>
+                </select>
+              </div>
+            </label>
           </div>
           <label className="settings-ui-inline-control settings-ui-inline-control--checkbox-row">
             <input

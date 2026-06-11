@@ -1,7 +1,9 @@
 import { useMemo } from "react";
 import { DashboardMixCard } from "../../components/DashboardMixCard";
+import { usePlayer } from "../../context/PlayerContext";
 import { useUserState } from "../../context/UserStateContext";
 import { useLibraryPlayback } from "../../hooks/useLibraryPlayback";
+import { eligibleTracksForIntelligentRandom } from "../../lib/randomExclusions";
 import { useMatchMedia } from "../../hooks/useMatchMedia";
 import { MOBILE_LAYOUT_MQ } from "../../lib/breakpoints";
 import {
@@ -16,6 +18,7 @@ import {
   UiAutorenew,
   UiBuild,
   UiFavorite,
+  UiPlayArrow,
 } from "../../components/RekordUiIcons";
 import { emitStudioPane } from "../../context/StudioNavigationContext";
 import type { AppSection, DashboardPayload, LibraryIndex } from "../../types";
@@ -34,7 +37,9 @@ export default function DashboardView({
 }: DashboardViewProps) {
   const { t } = useI18n();
   const user = useUserState();
-  const { playGlobalRadio } = useLibraryPlayback(index?.tracks);
+  const player = usePlayer();
+  const { playGlobalRadio, playPoolShuffle, excludedAlbums, excludedTracks } =
+    useLibraryPlayback(index?.tracks);
   const isDashboardMobileLayout = useMatchMedia(MOBILE_LAYOUT_MQ);
   const {
     ref: updatedAlbumsGridRef,
@@ -60,6 +65,22 @@ export default function DashboardView({
   if (!dashboard || !index)
     return <div className="panel-empty">{t("loading.dashboard")}</div>;
 
+  const heroListenPaused = Boolean(player.current) && !player.isPlaying;
+  const handleHeroListen = () => {
+    if (!player.current) {
+      const eligible = eligibleTracksForIntelligentRandom(
+        index,
+        excludedAlbums,
+        excludedTracks
+      );
+      playPoolShuffle(eligible, true);
+    } else if (!player.isPlaying) {
+      player.toggle();
+    }
+    emitStudioPane("listen");
+    onOpenSection("studio");
+  };
+
   return (
     <div className="view-page dashboard-page">
       <header className="dashboard-page__intro view-page__intro">
@@ -71,20 +92,13 @@ export default function DashboardView({
         <div className="hero-card__actions">
           <button
             type="button"
-            className="primary-btn"
-            onClick={() => {
-              emitStudioPane("listen");
-              onOpenSection("studio");
-            }}
+            className="primary-btn dashboard-hero-listen-btn"
+            onClick={handleHeroListen}
           >
-            {t("dashboard.resumeListen")}
-          </button>
-          <button
-            type="button"
-            className="ghost-btn"
-            onClick={() => onOpenSection("studio")}
-          >
-            {t("dashboard.openStudio")}
+            <UiPlayArrow className="dashboard-hero-listen-btn__ic" />
+            {heroListenPaused
+              ? t("dashboard.resumeListen")
+              : t("nav.listen")}
           </button>
         </div>
       </section>

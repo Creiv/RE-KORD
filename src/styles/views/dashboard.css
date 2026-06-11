@@ -1,6 +1,18 @@
 /* views/dashboard.css — Dashboard: metric card, scheda Mix, alert, colophon impostazioni.
    Split da views.css (Fase 6): ordine di cascata preservato via index.css. */
 
+/* Hero — pulsante unico Ascolta / Riprendi ascolto */
+.dashboard-hero-listen-btn {
+  padding: 0.65rem 1.4rem;
+  font-size: 1rem;
+}
+
+.dashboard-hero-listen-btn__ic {
+  width: 1.2rem;
+  height: 1.2rem;
+  flex-shrink: 0;
+}
+
 .metric-card {
   padding: 1rem 1.1rem;
   border-radius: var(--radius-lg);

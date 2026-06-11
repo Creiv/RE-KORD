@@ -21,7 +21,12 @@ import {
   syncMediaSessionState,
 } from "../lib/mediaSession";
 import { isAutomotiveDisplayMode } from "../lib/routing";
-import { fisherYatesShuffle } from "../lib/smartShuffle";
+import {
+  fisherYatesShuffle,
+  QUEUE_HISTORY_KEEP,
+  QUEUE_REFILL_BATCH,
+  QUEUE_REFILL_THRESHOLD,
+} from "../lib/smartShuffle";
 import {
   resetPlayerProgressTime,
   setPlayerProgressTime,
@@ -65,7 +70,7 @@ type Ctx = {
     t: EnrichedTrack,
     list?: EnrichedTrack[],
     at?: number,
-    opts?: { preserveQueueOrder?: boolean }
+    opts?: { preserveQueueOrder?: boolean; refillRemainder?: EnrichedTrack[] }
   ) => void;
   playAlbum: (artist: string, al: LibAlbum) => void;
   addToQueue: (t: EnrichedTrack | EnrichedTrack[]) => void;
@@ -248,6 +253,10 @@ export function PlayerProvider({ children }: { children: React.ReactNode }) {
   const indexRef = useRef(currentIndex);
   const shuffleRef = useRef(false);
   const preShuffleRelPathsRef = useRef<string[] | null>(null);
+  /** Resto pre-generato della coda (finestra scorrevole): travasato a lotti. */
+  const queueRemainderRef = useRef<EnrichedTrack[] | null>(null);
+  /** relPath aggiunti a mano e non ancora riprodotti: blocco subito dopo il corrente. */
+  const manualQueuedRef = useRef<Set<string>>(new Set());
   const mediaBridgeRef = useRef<MediaSessionBridge>({
     play: () => {
       return;
@@ -667,6 +676,48 @@ export function PlayerProvider({ children }: { children: React.ReactNode }) {
     enqueueQueuePatch({ tracks: queue, currentIndex });
   }, [currentIndex, enqueueQueuePatch, queue, restoreSession, userReady]);
 
+  /**
+   * Finestra scorrevole: quando davanti al corrente restano pochi brani
+   * travasa un lotto dal remainder pre-generato; pota la storia oltre
+   * QUEUE_HISTORY_KEEP (mai durante un crossfade: gli indici dei deck
+   * diventerebbero stantii; mai in repeat "all": il giro deve restare intero).
+   */
+  useEffect(() => {
+    if (!queue.length) return;
+    const remainder = queueRemainderRef.current;
+    const ahead = queue.length - 1 - currentIndex;
+    const needRefill =
+      !!remainder?.length && ahead <= QUEUE_REFILL_THRESHOLD;
+    const canTrim =
+      !crossfadeBusyRef.current &&
+      repeatRef.current !== "all" &&
+      currentIndex > QUEUE_HISTORY_KEEP;
+    if (!needRefill && !canTrim) return;
+    const drop = canTrim ? currentIndex - QUEUE_HISTORY_KEEP : 0;
+    let batch: EnrichedTrack[] = [];
+    if (needRefill && remainder) {
+      const space = MAX_QUEUE_LENGTH - (queue.length - drop);
+      batch = remainder.splice(
+        0,
+        Math.min(QUEUE_REFILL_BATCH, Math.max(0, space))
+      );
+      if (!remainder.length) queueRemainderRef.current = null;
+    }
+    if (!drop && !batch.length) return;
+    if (batch.length && shuffleRef.current && preShuffleRelPathsRef.current) {
+      preShuffleRelPathsRef.current = [
+        ...preShuffleRelPathsRef.current,
+        ...batch.map((t) => t.relPath),
+      ];
+    }
+    setQueue((p) => [...p.slice(drop), ...batch]);
+    if (drop > 0) setCurrentIndex((i) => Math.max(0, i - drop));
+  }, [queue, currentIndex]);
+
+  useEffect(() => {
+    if (current?.relPath) manualQueuedRef.current.delete(current.relPath);
+  }, [current?.relPath]);
+
   useEffect(() => {
     if (!userReady || !restoreSession) return;
     const onPageHide = () => {
@@ -1079,7 +1130,7 @@ export function PlayerProvider({ children }: { children: React.ReactNode }) {
       track: EnrichedTrack,
       list?: EnrichedTrack[],
       at?: number,
-      opts?: { preserveQueueOrder?: boolean }
+      opts?: { preserveQueueOrder?: boolean; refillRemainder?: EnrichedTrack[] }
     ) => {
       const fullQueue = list?.length ? [...list] : [track];
       const nextIndex =
@@ -1092,6 +1143,17 @@ export function PlayerProvider({ children }: { children: React.ReactNode }) {
       const newSig = nextQueue.map((t) => t.relPath).join("\0");
       const oldSig = queueRef.current.map((t) => t.relPath).join("\0");
       const queueReplaced = newSig !== oldSig;
+      if (opts?.refillRemainder !== undefined) {
+        queueRemainderRef.current = opts.refillRemainder.length
+          ? [...opts.refillRemainder]
+          : null;
+      } else if (queueReplaced) {
+        // Coda sostituita senza remainder esplicito: il vecchio resto non
+        // appartiene più a questa coda. Un salto dentro la stessa coda
+        // (queueReplaced false) invece lo conserva.
+        queueRemainderRef.current = null;
+      }
+      if (queueReplaced) manualQueuedRef.current.clear();
       const shouldShuffle =
         nextQueue.length > 1 &&
         shuffle &&
@@ -1149,7 +1211,21 @@ export function PlayerProvider({ children }: { children: React.ReactNode }) {
           ];
         }
         if (!add.length) return p;
-        return [...p, ...add];
+        // Inserimento subito dopo il corrente, dietro alle aggiunte manuali
+        // già in attesa: il brano parte "prossimo", mai in fondo né dopo i
+        // lotti rigenerati dalla finestra scorrevole. Con un crossfade in
+        // corso si parte dopo il brano già in dissolvenza, per non spostare
+        // l'indice che i deck stanno usando.
+        const base =
+          crossfadeBusyRef.current && crossfadeNextIdxRef.current != null
+            ? crossfadeNextIdxRef.current + 1
+            : indexRef.current + 1;
+        let at = Math.min(base, p.length);
+        while (at < p.length && manualQueuedRef.current.has(p[at]!.relPath)) {
+          at += 1;
+        }
+        for (const t of add) manualQueuedRef.current.add(t.relPath);
+        return [...p.slice(0, at), ...add, ...p.slice(at)];
       });
     },
     [current]
@@ -1159,6 +1235,7 @@ export function PlayerProvider({ children }: { children: React.ReactNode }) {
     const snapshot = queueRef.current;
     const currentAt = indexRef.current;
     const removedPath = snapshot[index]?.relPath;
+    if (removedPath) manualQueuedRef.current.delete(removedPath);
     const nextQueue = snapshot.filter((_, itemIndex) => itemIndex !== index);
     setQueue(nextQueue);
     if (
@@ -1176,6 +1253,7 @@ export function PlayerProvider({ children }: { children: React.ReactNode }) {
     }
     if (index === currentAt) {
       if (!nextQueue.length) {
+        queueRemainderRef.current = null;
         setCurrent(null);
         setCurrentIndex(0);
         keepPlayingRef.current = false;
@@ -1224,6 +1302,8 @@ export function PlayerProvider({ children }: { children: React.ReactNode }) {
 
   const clearQueue = useCallback(() => {
     preShuffleRelPathsRef.current = null;
+    queueRemainderRef.current = null;
+    manualQueuedRef.current.clear();
     void abortCrossfade();
     audioDeck0Ref.current?.pause();
     audioDeck1Ref.current?.pause();

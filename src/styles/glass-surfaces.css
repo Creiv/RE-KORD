@@ -19,8 +19,12 @@
   --glass-edge: color-mix(in srgb, var(--border) 78%, transparent);
   --glass-blur: 18px;
   --glass-blur-soft: 12px;
+  /* Schede del corpo pagina (sotto la banda in alto): sfocatura minima.
+     Sotto i 4px l'effetto è invisibile sulle immagini di sfondo. */
+  --glass-blur-faint: 0.5px;
   --glass-filter-main: blur(var(--glass-blur)) saturate(1.45);
   --glass-filter-soft: blur(var(--glass-blur-soft)) saturate(1.3);
+  --glass-filter-faint: blur(var(--glass-blur-faint)) saturate(1.45);
   --glass-fill-main: linear-gradient(
     145deg,
     color-mix(in srgb, var(--glass-shine) 55%, var(--glass-panel)) 0%,
@@ -63,6 +67,7 @@
   --glass-panel-muted: color-mix(in srgb, var(--glass-1) 84%, transparent);
   --glass-filter-main: none;
   --glass-filter-soft: none;
+  --glass-filter-faint: none;
 }
 
 :root[data-glass-surfaces="1"] .surface-card,
@@ -89,8 +94,12 @@
 :root[data-glass-surfaces="1"] .settings-page > .surface-card:first-child,
 :root[data-glass-surfaces="1"] .library-page__chrome > :first-child,
 :root[data-glass-surfaces="1"] .library-view > .album-hero:first-child,
-:root[data-glass-surfaces="1"] .library-view > .surface-card.surface-card--toolbar-only:first-child,
-:root[data-glass-surfaces="1"] .library-page.library-view--search-results > :first-child,
+:root[data-glass-surfaces="1"]
+  .library-view
+  > .surface-card.surface-card--toolbar-only:first-child,
+:root[data-glass-surfaces="1"]
+  .library-page.library-view--search-results
+  > :first-child,
 :root[data-glass-surfaces="1"] .view-page--listen .listen-page > .listen-stage {
   position: relative;
   isolation: isolate;
@@ -108,19 +117,15 @@
 :root[data-glass-surfaces="1"] .alert-card,
 :root[data-glass-surfaces="1"] .meta-edit-dialog {
   border-color: var(--glass-edge);
-  box-shadow:
-    var(--shadow-elev-1),
+  box-shadow: var(--shadow-elev-1),
     inset 0 -1px 0 color-mix(in srgb, black 10%, transparent);
 }
 
-:root[data-glass-surfaces="1"] .surface-card::before,
 :root[data-glass-surfaces="1"] .hero-card::before,
 :root[data-glass-surfaces="1"] .listen-stage::before,
 :root[data-glass-surfaces="1"] .album-hero::before,
 :root[data-glass-surfaces="1"] .achievements-hero::before,
 :root[data-glass-surfaces="1"] .library-search-hero::before,
-:root[data-glass-surfaces="1"] .metric-card::before,
-:root[data-glass-surfaces="1"] .alert-card::before,
 :root[data-glass-surfaces="1"] .meta-edit-dialog::before {
   content: "";
   position: absolute;
@@ -131,6 +136,22 @@
   background: var(--glass-fill-page);
   -webkit-backdrop-filter: var(--glass-filter-main);
   backdrop-filter: var(--glass-filter-main);
+  box-shadow: inset 0 1px 0 var(--glass-shine);
+}
+
+/* Schede più in basso nelle pagine: stesso vetro, sfocatura minima */
+:root[data-glass-surfaces="1"] .surface-card::before,
+:root[data-glass-surfaces="1"] .metric-card::before,
+:root[data-glass-surfaces="1"] .alert-card::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  z-index: -1;
+  pointer-events: none;
+  background: var(--glass-fill-page);
+  -webkit-backdrop-filter: var(--glass-filter-faint);
+  backdrop-filter: var(--glass-filter-faint);
   box-shadow: inset 0 1px 0 var(--glass-shine);
 }
 
@@ -155,22 +176,33 @@
 :root[data-glass-surfaces="1"] .view-page--studio > .surface-card:first-child,
 :root[data-glass-surfaces="1"] .settings-page > .surface-card:first-child,
 :root[data-glass-surfaces="1"] .library-page__chrome > :first-child,
-:root[data-glass-surfaces="1"] .library-view > .surface-card.surface-card--toolbar-only:first-child,
-:root[data-glass-surfaces="1"] .library-page.library-view--search-results > :first-child {
+:root[data-glass-surfaces="1"]
+  .library-view
+  > .surface-card.surface-card--toolbar-only:first-child,
+:root[data-glass-surfaces="1"]
+  .library-page.library-view--search-results
+  > :first-child {
   border-color: color-mix(in srgb, var(--accent) 22%, var(--glass-edge) 78%);
-  box-shadow:
-    var(--shadow-elev-1),
+  box-shadow: var(--shadow-elev-1),
     inset 1px 0 0 color-mix(in srgb, var(--accent) 12%, transparent);
 }
 
 :root[data-glass-surfaces="1"] .view-page__toolbar-band > :first-child::before,
 :root[data-glass-surfaces="1"] .view-page__intro > .hero-card::before,
 :root[data-glass-surfaces="1"] .view-page__intro > .achievements-hero::before,
-:root[data-glass-surfaces="1"] .view-page--studio > .surface-card:first-child::before,
-:root[data-glass-surfaces="1"] .settings-page > .surface-card:first-child::before,
+:root[data-glass-surfaces="1"]
+  .view-page--studio
+  > .surface-card:first-child::before,
+:root[data-glass-surfaces="1"]
+  .settings-page
+  > .surface-card:first-child::before,
 :root[data-glass-surfaces="1"] .library-page__chrome > :first-child::before,
-:root[data-glass-surfaces="1"] .library-view > .surface-card.surface-card--toolbar-only:first-child::before,
-:root[data-glass-surfaces="1"] .library-page.library-view--search-results > :first-child::before {
+:root[data-glass-surfaces="1"]
+  .library-view
+  > .surface-card.surface-card--toolbar-only:first-child::before,
+:root[data-glass-surfaces="1"]
+  .library-page.library-view--search-results
+  > :first-child::before {
   content: "";
   position: absolute;
   inset: 0;
@@ -191,8 +223,7 @@
 :root[data-glass-surfaces="1"] .library-list-tile,
 :root[data-glass-surfaces="1"] .panel-empty {
   border-color: var(--glass-edge);
-  box-shadow:
-    inset 0 1px 0 var(--glass-shine-soft),
+  box-shadow: inset 0 1px 0 var(--glass-shine-soft),
     0 1px 8px color-mix(in srgb, var(--bg) 28%, transparent);
 }
 
@@ -217,8 +248,7 @@
 
 :root[data-glass-surfaces="1"] .player-bar2 {
   border-color: var(--glass-edge);
-  box-shadow:
-    0 -4px 24px color-mix(in srgb, var(--bg) 42%, transparent),
+  box-shadow: 0 -4px 24px color-mix(in srgb, var(--bg) 42%, transparent),
     inset 0 1px 0 var(--glass-shine-soft);
 }
 
@@ -237,8 +267,7 @@
 :root[data-glass-surfaces="1"] .mobile-bottom-nav {
   background: transparent;
   border-top-color: var(--glass-edge);
-  box-shadow:
-    0 -4px 24px color-mix(in srgb, var(--bg) 42%, transparent),
+  box-shadow: 0 -4px 24px color-mix(in srgb, var(--bg) 42%, transparent),
     inset 0 1px 0 var(--glass-shine-soft);
 }
 
@@ -302,8 +331,7 @@
 :root[data-glass-surfaces="1"] .track-row.is-active,
 :root[data-glass-surfaces="1"] .playlist-row.is-active {
   border-color: color-mix(in srgb, var(--accent) 48%, var(--glass-edge) 52%);
-  box-shadow:
-    inset 3px 0 0 var(--accent),
+  box-shadow: inset 3px 0 0 var(--accent),
     0 0 0 1px color-mix(in srgb, var(--accent) 22%, transparent),
     0 12px 36px color-mix(in srgb, var(--bg) 55%, transparent);
 }
@@ -317,10 +345,10 @@
   );
 }
 
-:root[data-glass-surfaces="1"] .studio-catalog-web-pick-dialog__track.is-active {
+:root[data-glass-surfaces="1"]
+  .studio-catalog-web-pick-dialog__track.is-active {
   border-color: color-mix(in srgb, var(--accent) 48%, var(--glass-edge) 52%);
-  box-shadow:
-    inset 3px 0 0 var(--accent),
+  box-shadow: inset 3px 0 0 var(--accent),
     0 0 0 1px color-mix(in srgb, var(--accent) 22%, transparent);
 }
 
@@ -328,9 +356,7 @@
   position: relative;
   isolation: isolate;
   background: transparent;
-  box-shadow:
-    var(--shadow-elev-1),
-    inset 0 1px 0 var(--glass-shine-soft);
+  box-shadow: var(--shadow-elev-1), inset 0 1px 0 var(--glass-shine-soft);
 }
 
 :root[data-glass-surfaces="1"] .glass::before {
@@ -353,9 +379,12 @@
 :root[data-rekord-client="1"][data-glass-surfaces="1"] .track-row::before,
 :root[data-rekord-client="1"][data-glass-surfaces="1"] .playlist-row::before,
 :root[data-rekord-client="1"][data-glass-surfaces="1"] .player-bar2::before,
-:root[data-rekord-client="1"][data-glass-surfaces="1"] .mobile-bottom-nav::before,
-:root[data-rekord-client="1"][data-glass-surfaces="1"] .rhythm-dock-panel__head::before,
-:root[data-rekord-client="1"][data-glass-surfaces="1"] .rhythm-dock-panel__diff::before {
+:root[data-rekord-client="1"][data-glass-surfaces="1"]
+  .mobile-bottom-nav::before,
+:root[data-rekord-client="1"][data-glass-surfaces="1"]
+  .rhythm-dock-panel__head::before,
+:root[data-rekord-client="1"][data-glass-surfaces="1"]
+  .rhythm-dock-panel__diff::before {
   transform: translateZ(0);
 }
 
@@ -366,5 +395,6 @@
     --glass-panel-muted: color-mix(in srgb, var(--glass-1) 84%, transparent);
     --glass-filter-main: none;
     --glass-filter-soft: none;
+    --glass-filter-faint: none;
   }
 }
