@@ -35,6 +35,7 @@
     "docker:logs": "docker compose logs -f rekord"
   },
   "dependencies": {
+    "@tanstack/react-virtual": "^3.14.2",
     "archiver": "^7.0.1",
     "cors": "^2.8.6",
     "express": "^5.2.1",

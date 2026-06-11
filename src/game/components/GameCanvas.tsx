@@ -55,7 +55,8 @@ interface GameCanvasProps {
     getAnalyser: () => AnalyserNode | null;
     isPlaying: boolean;
     seedKey: string;
-    karaoke?: KaraokeLines;
+    /** Letto a draw-time: l'oggetto resta stabile tra i tick di progresso. */
+    getKaraoke?: () => KaraokeLines | undefined;
   };
   labels?: {
     score: string;
@@ -401,7 +402,7 @@ export function GameCanvas({
         chart,
         seedKey: backdrop.seedKey,
         liveTime: songTime,
-        karaoke: backdrop.karaoke,
+        karaoke: backdrop.getKaraoke?.(),
       });
     }
 

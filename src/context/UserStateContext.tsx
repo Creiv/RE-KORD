@@ -7,6 +7,7 @@ import {
   useMemo,
   useRef,
   useState,
+  useSyncExternalStore,
 } from "react";
 import {
   customThemeBgImageUrl,
@@ -27,6 +28,7 @@ import {
 import { DEFAULT_CUSTOM_THEME } from "../lib/themeCatalog";
 import { touchListeningActivity } from "../lib/achievements";
 import { enrichedTracksNeedPlayerResync } from "../lib/libraryIndex";
+import { isTrackAlbumShuffleExcluded } from "../lib/randomExclusions";
 import { probeGlassBackdrop } from "../lib/glassBackdrop";
 import {
   applyUserStatePatchFields,
@@ -486,13 +488,17 @@ function applyUserStatePatchLocal(
   return applyUserStatePatchFields(base, patch, normalizeSettings, normalizeUserState);
 }
 
+/**
+ * Patch "full" dallo stato React. La coda è esclusa di proposito: vive in
+ * `queueStateRef` e viene persistita solo via `enqueueQueuePatch` (lo
+ * state React contiene solo lo snapshot di idratazione, potenzialmente stale).
+ */
 function userStateToPatch(state: UserStateV1, omitPlaylists = false): UserStatePatch {
   return compactUserStatePatch({
     favorites: state.favorites,
     recent: state.recent,
     trackPlayCounts: state.trackPlayCounts,
     ...(omitPlaylists ? {} : { playlists: state.playlists }),
-    queue: state.queue,
     settings: state.settings,
     shuffleExcludedAlbumIds: state.shuffleExcludedAlbumIds,
     shuffleExcludedTrackRelPaths: state.shuffleExcludedTrackRelPaths,
@@ -646,6 +652,23 @@ type UserStateContextValue = {
 
 const UserStateContext = createContext<UserStateContextValue | null>(null);
 
+/**
+ * Store leggero per le righe delle liste brani: espone preferiti, conteggi
+ * ascolti ed esclusioni shuffle via useSyncExternalStore, così le righe non si
+ * sottoscrivono all'intero UserStateContext.
+ */
+type TrackRowUserStore = {
+  subscribe: (listener: () => void) => () => void;
+  isFavorite: (relPath: string) => boolean;
+  getTrackPlayCount: (relPath: string) => number;
+  isShuffleExcludedTrack: (relPath: string) => boolean;
+  isAlbumShuffleExcluded: (track: EnrichedTrack) => boolean;
+  toggleFavorite: (relPath: string) => void;
+  toggleShuffleExcludedTrack: (relPath: string) => void;
+};
+
+const TrackRowUserContext = createContext<TrackRowUserStore | null>(null);
+
 export function UserStateProvider({ children }: { children: React.ReactNode }) {
   const { beginActivity: beginLibrarySyncActivity } = useLibrarySyncActivity();
   const beginLibrarySyncActivityRef = useRef(beginLibrarySyncActivity);
@@ -661,6 +684,12 @@ export function UserStateProvider({ children }: { children: React.ReactNode }) {
   const playlistDirtyRef = useRef(false);
   const hydratedRef = useRef(false);
   const saveSeqRef = useRef(0);
+  /**
+   * Coda live (fonte di verità dopo l'idratazione). Aggiornata da
+   * enqueueQueuePatch senza setState: ogni cambio brano non deve
+   * ri-renderizzare tutti i consumer di useUserState().
+   */
+  const queueStateRef = useRef<QueueState>({ tracks: [], currentIndex: 0 });
   const pendingPatchRef = useRef<UserStatePatch>({});
   const inFlightPatchRef = useRef<UserStatePatch>({});
   const flushTimerRef = useRef<number | null>(null);
@@ -735,9 +764,12 @@ export function UserStateProvider({ children }: { children: React.ReactNode }) {
       const hasLocalUnsaved = Object.keys(localUnsaved).length > 0;
       dirtyRef.current = needsInitialPersist || hasLocalUnsaved;
 
+      const preserved = hasLocalUnsaved
+        ? applyUserStatePatchLocal(merged, localUnsaved)
+        : merged;
+      queueStateRef.current = preserved.queue;
       setState((prev) => {
         if (!hasLocalUnsaved) return merged;
-        const preserved = applyUserStatePatchLocal(merged, localUnsaved);
         return {
           ...preserved,
           revision: Math.max(
@@ -826,7 +858,12 @@ export function UserStateProvider({ children }: { children: React.ReactNode }) {
     inFlightPatchRef.current = patch;
     flushingRef.current = true;
     const seq = ++saveSeqRef.current;
-    const silent = Boolean(opts?.silent);
+    // Patch solo-coda: salvataggio di routine a ogni cambio brano — silenzioso
+    // (niente spinner/attività) e senza setState, così nessun consumer di
+    // useUserState() viene ri-renderizzato.
+    const queueOnly =
+      Object.keys(patch).length === 1 && patch.queue !== undefined;
+    const silent = Boolean(opts?.silent) || queueOnly;
     const endSaveActivity = silent
       ? () => {}
       : beginLibrarySyncActivity("sync.activity.savingUserState");
@@ -836,14 +873,16 @@ export function UserStateProvider({ children }: { children: React.ReactNode }) {
         if (seq !== saveSeqRef.current) return;
         const normalized = normalizeUserState(saved);
         const hasNewerPending = Object.keys(pendingPatchRef.current).length > 0;
-        setState((prev) =>
-          hasNewerPending
-            ? {
-                ...prev,
-                revision: normalized.revision,
-              }
-            : mergeSavedUserState(prev, normalized, patch, normalizeUserState)
-        );
+        if (!queueOnly) {
+          setState((prev) =>
+            hasNewerPending
+              ? {
+                  ...prev,
+                  revision: normalized.revision,
+                }
+              : mergeSavedUserState(prev, normalized, patch, normalizeUserState)
+          );
+        }
         setError(null);
         dirtyRef.current = hasNewerPending;
         if (patch.playlists) playlistDirtyRef.current = false;
@@ -975,6 +1014,10 @@ export function UserStateProvider({ children }: { children: React.ReactNode }) {
           pendingPatchRef.current
         );
         const hasLocalUnsaved = Object.keys(localUnsaved).length > 0;
+        const preserved = hasLocalUnsaved
+          ? applyUserStatePatchLocal(mergedRemote, localUnsaved)
+          : mergedRemote;
+        queueStateRef.current = preserved.queue;
         setState((prev) => {
           if (
             !hasLocalUnsaved &&
@@ -983,7 +1026,6 @@ export function UserStateProvider({ children }: { children: React.ReactNode }) {
             return prev;
           }
           if (!hasLocalUnsaved) return mergedRemote;
-          const preserved = applyUserStatePatchLocal(mergedRemote, localUnsaved);
           return {
             ...preserved,
             revision: Math.max(
@@ -1275,51 +1317,60 @@ export function UserStateProvider({ children }: { children: React.ReactNode }) {
     (deletedRelPaths: string[]) => {
       const deleted = new Set(deletedRelPaths.filter(Boolean));
       if (!deleted.size) return;
+      // La coda live è in queueStateRef (lo state React ha solo lo snapshot
+      // di idratazione): filtrala da lì e includila esplicitamente nel patch.
+      const liveQueue = queueStateRef.current;
+      const nextQueueTracks = liveQueue.tracks.filter(
+        (tr) => !deleted.has(tr.relPath)
+      );
+      const oldCurrent = liveQueue.tracks[liveQueue.currentIndex];
+      const nextCurrent = oldCurrent
+        ? nextQueueTracks.findIndex((tr) => tr.relPath === oldCurrent.relPath)
+        : -1;
+      const nextQueue: QueueState = {
+        tracks: nextQueueTracks,
+        currentIndex:
+          nextQueueTracks.length === 0
+            ? 0
+            : Math.max(
+                0,
+                Math.min(
+                  nextCurrent >= 0 ? nextCurrent : 0,
+                  nextQueueTracks.length - 1
+                )
+              ),
+      };
+      queueStateRef.current = nextQueue;
       commit(
-        (prev) => {
-          const nextQueueTracks = prev.queue.tracks.filter(
-            (tr) => !deleted.has(tr.relPath)
-          );
-          const oldCurrent = prev.queue.tracks[prev.queue.currentIndex];
-          const nextCurrent = oldCurrent
-            ? nextQueueTracks.findIndex((tr) => tr.relPath === oldCurrent.relPath)
-            : -1;
-          return {
-            ...prev,
-            favorites: prev.favorites.filter((rel) => !deleted.has(rel)),
-            shuffleExcludedTrackRelPaths:
-              prev.shuffleExcludedTrackRelPaths.filter((rel) => !deleted.has(rel)),
-            trackPlayCounts: Object.fromEntries(
-              Object.entries(prev.trackPlayCounts || {}).filter(
-                ([rel]) => !deleted.has(rel)
-              )
-            ) as UserStateV1["trackPlayCounts"],
-            plectrBests: Object.fromEntries(
-              Object.entries(prev.plectrBests || {}).filter(
-                ([rel]) => !deleted.has(rel)
-              )
-            ) as UserStateV1["plectrBests"],
-            recent: prev.recent.filter((tr) => !deleted.has(tr.relPath)),
-            playlists: prev.playlists.map((pl) => ({
-              ...pl,
-              tracks: pl.tracks.filter((tr) => !deleted.has(tr.relPath)),
-            })),
-            queue: {
-              tracks: nextQueueTracks,
-              currentIndex:
-                nextQueueTracks.length === 0
-                  ? 0
-                  : Math.max(
-                      0,
-                      Math.min(
-                        nextCurrent >= 0 ? nextCurrent : 0,
-                        nextQueueTracks.length - 1
-                      )
-                    ),
-            },
-          };
-        },
-        { immediate: true }
+        (prev) => ({
+          ...prev,
+          favorites: prev.favorites.filter((rel) => !deleted.has(rel)),
+          shuffleExcludedTrackRelPaths:
+            prev.shuffleExcludedTrackRelPaths.filter((rel) => !deleted.has(rel)),
+          trackPlayCounts: Object.fromEntries(
+            Object.entries(prev.trackPlayCounts || {}).filter(
+              ([rel]) => !deleted.has(rel)
+            )
+          ) as UserStateV1["trackPlayCounts"],
+          plectrBests: Object.fromEntries(
+            Object.entries(prev.plectrBests || {}).filter(
+              ([rel]) => !deleted.has(rel)
+            )
+          ) as UserStateV1["plectrBests"],
+          recent: prev.recent.filter((tr) => !deleted.has(tr.relPath)),
+          playlists: prev.playlists.map((pl) => ({
+            ...pl,
+            tracks: pl.tracks.filter((tr) => !deleted.has(tr.relPath)),
+          })),
+          queue: nextQueue,
+        }),
+        {
+          immediate: true,
+          patch: (next) => ({
+            ...userStateToPatch(next, !playlistDirtyRef.current),
+            queue: nextQueue,
+          }),
+        }
       );
     },
     [commit]
@@ -1335,16 +1386,18 @@ export function UserStateProvider({ children }: { children: React.ReactNode }) {
 
   const enqueueQueuePatch = useCallback(
     (queue: QueueState) => {
+      // Niente setState: la coda cambia a ogni avanzamento brano e non deve
+      // invalidare tutti i consumer del context. Vive in queueStateRef e
+      // viene persistita col flush debounced.
       const nextQueue = normalizeQueueState(queue);
-      commit(
-        (prev) => ({
-          ...prev,
-          queue: nextQueue,
-        }),
-        { patch: () => ({ queue: nextQueue }) }
-      );
+      queueStateRef.current = nextQueue;
+      pendingPatchRef.current = mergeUserStatePatches(pendingPatchRef.current, {
+        queue: nextQueue,
+      });
+      dirtyRef.current = true;
+      schedulePendingFlush();
     },
-    [commit, normalizeQueueState]
+    [normalizeQueueState, schedulePendingFlush]
   );
 
   const setQueueSnapshot = useCallback(
@@ -1532,6 +1585,59 @@ export function UserStateProvider({ children }: { children: React.ReactNode }) {
 
   const favorites = useMemo(() => new Set(state.favorites), [state.favorites]);
 
+  const trackRowListenersRef = useRef<Set<() => void>>(new Set());
+  const trackRowSnapRef = useRef<{
+    favorites: Set<string>;
+    playCounts: Readonly<Record<string, number>>;
+    excludedAlbums: Set<string>;
+    excludedTracks: Set<string>;
+  }>({
+    favorites: new Set(),
+    playCounts: {},
+    excludedAlbums: new Set(),
+    excludedTracks: new Set(),
+  });
+  const trackRowActionsRef = useRef({ toggleFavorite, toggleShuffleExcludedTrack });
+  useEffect(() => {
+    trackRowActionsRef.current = { toggleFavorite, toggleShuffleExcludedTrack };
+  }, [toggleFavorite, toggleShuffleExcludedTrack]);
+  useEffect(() => {
+    trackRowSnapRef.current = {
+      favorites,
+      playCounts: state.trackPlayCounts || {},
+      excludedAlbums: new Set(state.shuffleExcludedAlbumIds),
+      excludedTracks: new Set(state.shuffleExcludedTrackRelPaths),
+    };
+    for (const listener of trackRowListenersRef.current) listener();
+  }, [
+    favorites,
+    state.trackPlayCounts,
+    state.shuffleExcludedAlbumIds,
+    state.shuffleExcludedTrackRelPaths,
+  ]);
+  const trackRowStore = useMemo<TrackRowUserStore>(
+    () => ({
+      subscribe: (listener) => {
+        trackRowListenersRef.current.add(listener);
+        return () => {
+          trackRowListenersRef.current.delete(listener);
+        };
+      },
+      isFavorite: (relPath) => trackRowSnapRef.current.favorites.has(relPath),
+      getTrackPlayCount: (relPath) =>
+        trackRowSnapRef.current.playCounts[relPath] ?? 0,
+      isShuffleExcludedTrack: (relPath) =>
+        trackRowSnapRef.current.excludedTracks.has(relPath),
+      isAlbumShuffleExcluded: (track) =>
+        isTrackAlbumShuffleExcluded(track, trackRowSnapRef.current.excludedAlbums),
+      toggleFavorite: (relPath) =>
+        trackRowActionsRef.current.toggleFavorite(relPath),
+      toggleShuffleExcludedTrack: (relPath) =>
+        trackRowActionsRef.current.toggleShuffleExcludedTrack(relPath),
+    }),
+    []
+  );
+
   const value = useMemo<UserStateContextValue>(
     () => ({
       state,
@@ -1599,7 +1705,9 @@ export function UserStateProvider({ children }: { children: React.ReactNode }) {
 
   return (
     <UserStateContext.Provider value={value}>
-      {children}
+      <TrackRowUserContext.Provider value={trackRowStore}>
+        {children}
+      </TrackRowUserContext.Provider>
     </UserStateContext.Provider>
   );
 }
@@ -1608,4 +1716,37 @@ export function useUserState() {
   const ctx = useContext(UserStateContext);
   if (!ctx) throw new Error("useUserState");
   return ctx;
+}
+
+/**
+ * Sottoscrizione granulare per una riga brano: ri-renderizza solo quando
+ * cambiano preferito / conteggio ascolti / esclusioni shuffle di quel brano.
+ */
+export function useTrackRowUserState(track: EnrichedTrack) {
+  const store = useContext(TrackRowUserContext);
+  if (!store) throw new Error("useTrackRowUserState");
+  const relPath = track.relPath;
+  const fav = useSyncExternalStore(
+    store.subscribe,
+    () => store.isFavorite(relPath)
+  );
+  const playCount = useSyncExternalStore(
+    store.subscribe,
+    () => store.getTrackPlayCount(relPath)
+  );
+  const trackShuffleExcluded = useSyncExternalStore(
+    store.subscribe,
+    () => store.isShuffleExcludedTrack(relPath)
+  );
+  const albumShuffleExcluded = useSyncExternalStore(store.subscribe, () =>
+    store.isAlbumShuffleExcluded(track)
+  );
+  return {
+    fav,
+    playCount,
+    trackShuffleExcluded,
+    albumShuffleExcluded,
+    toggleFavorite: store.toggleFavorite,
+    toggleShuffleExcludedTrack: store.toggleShuffleExcludedTrack,
+  };
 }

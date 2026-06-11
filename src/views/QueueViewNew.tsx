@@ -4,6 +4,7 @@ import { useUserState } from "../context/UserStateContext";
 import { useI18n } from "../i18n/useI18n";
 import { SectionHeadLead } from "../components/SectionHeadLead";
 import { TrackListRow } from "../components/AppSharedUi";
+import { VirtualTrackList } from "../components/VirtualTrackList";
 import {
   UiKeyboardArrowDown,
   UiKeyboardArrowUp,
@@ -65,12 +66,16 @@ function QueueViewNew({
         {p.queue.length === 0 ? (
           <p className="panel-empty">{t("queue.empty")}</p>
         ) : (
-          <div className="list-stack">
-            {p.queue.map((track, index) => (
+          <VirtualTrackList
+            items={p.queue}
+            getKey={(track, index) => `${track.relPath}-${index}`}
+            followIndex={p.currentIndex}
+            renderRow={(track, index, virtualized) => (
               <TrackListRow
                 key={`${track.relPath}-${index}`}
                 track={track}
                 active={index === p.currentIndex}
+                autoFocusActive={!virtualized}
                 onPlay={() => p.playTrack(track, p.queue, index)}
                 extraActions={
                   <>
@@ -112,8 +117,8 @@ function QueueViewNew({
                   </>
                 }
               />
-            ))}
-          </div>
+            )}
+          />
         )}
       </section>
     </div>

@@ -8,6 +8,7 @@ import {
   useMemo,
   useRef,
   useState,
+  useSyncExternalStore,
 } from "react";
 import { mediaUrl } from "../lib/api";
 import { enrichTrack } from "../lib/enrichTrack";
@@ -81,6 +82,21 @@ type Ctx = {
 };
 
 const PlayerContext = createContext<Ctx | null>(null);
+
+/**
+ * Store leggero per le righe delle liste brani: espone solo brano corrente e
+ * appartenenza alla coda via useSyncExternalStore, così le righe non si
+ * sottoscrivono all'intero PlayerContext (che cambia a ogni play/pause/seek).
+ */
+type TrackRowPlayerStore = {
+  subscribe: (listener: () => void) => () => void;
+  getCurrentRelPath: () => string | null;
+  isInQueue: (relPath: string) => boolean;
+  addToQueue: (t: EnrichedTrack | EnrichedTrack[]) => void;
+  removeFromQueueByRelPath: (relPath: string) => void;
+};
+
+const TrackRowPlayerContext = createContext<TrackRowPlayerStore | null>(null);
 
 function pickNextIndex(
   len: number,
@@ -1409,6 +1425,39 @@ export function PlayerProvider({ children }: { children: React.ReactNode }) {
     return () => window.clearInterval(id);
   }, [current, isPlaying, syncMediaSessionNow]);
 
+  const trackRowListenersRef = useRef<Set<() => void>>(new Set());
+  const trackRowSnapRef = useRef<{
+    currentRelPath: string | null;
+    queueSet: Set<string>;
+  }>({ currentRelPath: null, queueSet: new Set() });
+  const trackRowActionsRef = useRef({ addToQueue, removeFromQueueByRelPath });
+  useEffect(() => {
+    trackRowActionsRef.current = { addToQueue, removeFromQueueByRelPath };
+  }, [addToQueue, removeFromQueueByRelPath]);
+  useEffect(() => {
+    trackRowSnapRef.current = {
+      currentRelPath: current?.relPath ?? null,
+      queueSet: new Set(queue.map((t) => t.relPath)),
+    };
+    for (const listener of trackRowListenersRef.current) listener();
+  }, [current, queue]);
+  const trackRowStore = useMemo<TrackRowPlayerStore>(
+    () => ({
+      subscribe: (listener) => {
+        trackRowListenersRef.current.add(listener);
+        return () => {
+          trackRowListenersRef.current.delete(listener);
+        };
+      },
+      getCurrentRelPath: () => trackRowSnapRef.current.currentRelPath,
+      isInQueue: (relPath) => trackRowSnapRef.current.queueSet.has(relPath),
+      addToQueue: (t) => trackRowActionsRef.current.addToQueue(t),
+      removeFromQueueByRelPath: (relPath) =>
+        trackRowActionsRef.current.removeFromQueueByRelPath(relPath),
+    }),
+    []
+  );
+
   const value = useMemo<Ctx>(
     () => ({
       audioRef,
@@ -1484,9 +1533,11 @@ export function PlayerProvider({ children }: { children: React.ReactNode }) {
 
   return (
     <PlayerContext.Provider value={value}>
-      {children}
-      <audio ref={audioDeck0Ref} hidden preload="auto" crossOrigin="anonymous" />
-      <audio ref={audioDeck1Ref} hidden preload="auto" crossOrigin="anonymous" />
+      <TrackRowPlayerContext.Provider value={trackRowStore}>
+        {children}
+        <audio ref={audioDeck0Ref} hidden preload="auto" crossOrigin="anonymous" />
+        <audio ref={audioDeck1Ref} hidden preload="auto" crossOrigin="anonymous" />
+      </TrackRowPlayerContext.Provider>
     </PlayerContext.Provider>
   );
 }
@@ -1495,4 +1546,27 @@ export function usePlayer() {
   const ctx = useContext(PlayerContext);
   if (!ctx) throw new Error("usePlayer");
   return ctx;
+}
+
+/**
+ * Sottoscrizione granulare per una riga brano: ri-renderizza solo quando
+ * cambia "è il brano corrente" o "è in coda" per questo relPath.
+ */
+export function useTrackRowPlayer(relPath: string) {
+  const store = useContext(TrackRowPlayerContext);
+  if (!store) throw new Error("useTrackRowPlayer");
+  const isCurrent = useSyncExternalStore(
+    store.subscribe,
+    () => store.getCurrentRelPath() === relPath
+  );
+  const inQueue = useSyncExternalStore(
+    store.subscribe,
+    () => store.isInQueue(relPath)
+  );
+  return {
+    isCurrent,
+    inQueue,
+    addToQueue: store.addToQueue,
+    removeFromQueueByRelPath: store.removeFromQueueByRelPath,
+  };
 }

@@ -4,6 +4,7 @@ import { useLibraryPlayback } from "../hooks/useLibraryPlayback";
 import { PlayCollectionButton } from "../components/PlayCollectionButton";
 import { SectionHeadLead } from "../components/SectionHeadLead";
 import { TrackListRow } from "../components/AppSharedUi";
+import { VirtualTrackList } from "../components/VirtualTrackList";
 import type { EnrichedTrack } from "../types";
 
 function TrackCollectionView({
@@ -58,15 +59,18 @@ function TrackCollectionView({
         {tracks.length === 0 ? (
           <p className="panel-empty">{t("collection.empty")}</p>
         ) : (
-          <div className="list-stack">
-            {tracks.map((track, index) => (
+          <VirtualTrackList
+            items={tracks}
+            getKey={(track, index) => `${track.relPath}-${index}`}
+            renderRow={(track, index, virtualized) => (
               <TrackListRow
                 key={`${track.relPath}-${index}`}
                 track={track}
+                autoFocusActive={!virtualized}
                 onPlay={() => onTrackPlay(track)}
               />
-            ))}
-          </div>
+            )}
+          />
         )}
       </section>
     </div>

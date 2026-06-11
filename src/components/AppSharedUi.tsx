@@ -18,15 +18,14 @@ import {
   type RefObject,
 } from "react";
 import { createPortal } from "react-dom";
-import { usePlayer } from "../context/PlayerContext";
+import { useTrackRowPlayer } from "../context/PlayerContext";
 import { useStudioNavigation } from "../context/StudioNavigationContext";
-import { useUserState } from "../context/UserStateContext";
+import { useTrackRowUserState, useUserState } from "../context/UserStateContext";
 import { useI18n } from "../i18n/useI18n";
 import {
   coverUrlForAlbumRelPath,
   coverUrlForTrackRelPath,
 } from "../lib/api";
-import { isTrackAlbumShuffleExcluded } from "../lib/randomExclusions";
 import { fmtDate } from "../lib/metaFormat";
 import { formatDurationMs } from "../lib/duration";
 import { versionedUrl } from "../lib/versionedUrl";
@@ -376,20 +375,22 @@ export const TrackListRow = memo(function TrackListRow({
   /** Disabilita lo scroll automatico della riga quando diventa quella attiva. */
   autoFocusActive?: boolean;
 }) {
-  const p = usePlayer();
-  const user = useUserState();
+  const {
+    isCurrent,
+    inQueue: inQ,
+    addToQueue,
+    removeFromQueueByRelPath,
+  } = useTrackRowPlayer(track.relPath);
+  const {
+    fav,
+    playCount,
+    trackShuffleExcluded,
+    albumShuffleExcluded,
+    toggleFavorite,
+    toggleShuffleExcludedTrack,
+  } = useTrackRowUserState(track);
   const { t } = useI18n();
   const openTrackMetaEdit = useOpenTrackMetaEdit();
-  const exAlbums = useMemo(
-    () => new Set(user.state.shuffleExcludedAlbumIds),
-    [user.state.shuffleExcludedAlbumIds]
-  );
-  const excludedTracksMemo = useMemo(
-    () => new Set(user.state.shuffleExcludedTrackRelPaths),
-    [user.state.shuffleExcludedTrackRelPaths]
-  );
-  const albumShuffleExcluded = isTrackAlbumShuffleExcluded(track, exAlbums);
-  const trackShuffleExcluded = excludedTracksMemo.has(track.relPath);
   const shuffleExcluded = albumShuffleExcluded || trackShuffleExcluded;
   const rowRef = useRef<HTMLDivElement | null>(null);
   const isWideRow = useElementMinWidth(
@@ -402,17 +403,11 @@ export const TrackListRow = memo(function TrackListRow({
   const excludeOverflowMenuLabel = shuffleExcluded
     ? t("trackRow.unblockShuffle")
     : t("trackRow.blockShuffle");
-  const inQ = p.isTrackInQueue(track.relPath);
-  const fav = user.isFavorite(track.relPath);
-  const playCount = user.getTrackPlayCount(track.relPath);
   const lyricsRaw = String(track.meta?.lyrics || "").trim();
   const hasLyrics = lyricsRaw.length > 0;
   const hasLrcLyrics = hasLyrics && parseLrcLyrics(lyricsRaw).length > 0;
   const durationStr = formatDurationMs(track.meta?.durationMs);
-  const rowActive =
-    active !== undefined
-      ? active
-      : Boolean(p.current && p.current.relPath === track.relPath);
+  const rowActive = active !== undefined ? active : isCurrent;
   const prevActiveRef = useRef(false);
   const [overflowOpen, setOverflowOpen] = useState(false);
   const overflowRef = useRef<HTMLDivElement | null>(null);
@@ -561,7 +556,7 @@ export const TrackListRow = memo(function TrackListRow({
               <button
                 type="button"
                 className="track-row__in-coda"
-                onClick={() => p.removeFromQueueByRelPath(track.relPath)}
+                onClick={() => removeFromQueueByRelPath(track.relPath)}
                 title={t("trackRow.removeQueueTitle")}
                 aria-label={t("trackRow.removeQueueAria")}
               >
@@ -576,7 +571,7 @@ export const TrackListRow = memo(function TrackListRow({
               <button
                 type="button"
                 className="track-row__ic track-row__ic--queue"
-                onClick={() => p.addToQueue(track)}
+                onClick={() => addToQueue(track)}
                 title={t("trackRow.addQueueTitle")}
                 aria-label={t("trackRow.addQueueAria")}
               >
@@ -591,7 +586,7 @@ export const TrackListRow = memo(function TrackListRow({
             <button
               type="button"
               className={`track-row__ic track-row__ic--fav ${fav ? "is-on" : ""}`}
-              onClick={() => user.toggleFavorite(track.relPath)}
+              onClick={() => toggleFavorite(track.relPath)}
               title={t("trackRow.favTitle")}
               aria-pressed={fav}
               aria-label={t("trackRow.favAria")}
@@ -655,7 +650,7 @@ export const TrackListRow = memo(function TrackListRow({
               }
               onClick={() => {
                 if (albumShuffleExcluded) return;
-                user.toggleShuffleExcludedTrack(track.relPath);
+                toggleShuffleExcludedTrack(track.relPath);
               }}
               aria-pressed={shuffleExcluded}
               aria-label={
@@ -681,7 +676,7 @@ export const TrackListRow = memo(function TrackListRow({
               <button
                 type="button"
                 className={`track-row__ic track-row__ic--fav ${fav ? "is-on" : ""}`}
-                onClick={() => user.toggleFavorite(track.relPath)}
+                onClick={() => toggleFavorite(track.relPath)}
                 title={t("trackRow.favTitle")}
                 aria-pressed={fav}
                 aria-label={t("trackRow.favAria")}
@@ -733,7 +728,7 @@ export const TrackListRow = memo(function TrackListRow({
                           aria-pressed={fav}
                           aria-label={t("trackRow.favAria")}
                           onClick={() => {
-                            user.toggleFavorite(track.relPath);
+                            toggleFavorite(track.relPath);
                             setOverflowOpen(false);
                           }}
                         >
@@ -759,7 +754,7 @@ export const TrackListRow = memo(function TrackListRow({
                           aria-label={t("trackRow.removeQueueAria")}
                           title={t("trackRow.removeQueueTitle")}
                           onClick={() => {
-                            p.removeFromQueueByRelPath(track.relPath);
+                            removeFromQueueByRelPath(track.relPath);
                             setOverflowOpen(false);
                           }}
                         >
@@ -781,7 +776,7 @@ export const TrackListRow = memo(function TrackListRow({
                           aria-label={t("trackRow.addQueueAria")}
                           title={t("trackRow.addQueueTitle")}
                           onClick={() => {
-                            p.addToQueue(track);
+                            addToQueue(track);
                             setOverflowOpen(false);
                           }}
                         >
@@ -868,7 +863,7 @@ export const TrackListRow = memo(function TrackListRow({
                         }
                         onClick={() => {
                           if (albumShuffleExcluded) return;
-                          user.toggleShuffleExcludedTrack(track.relPath);
+                          toggleShuffleExcludedTrack(track.relPath);
                           setOverflowOpen(false);
                         }}
                       >

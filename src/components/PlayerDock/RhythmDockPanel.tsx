@@ -9,9 +9,12 @@ import {
 import { usePlayer } from "../../context/PlayerContext";
 import { useRhythmMode } from "../../context/RhythmModeContext";
 import { useUserState } from "../../context/UserStateContext";
-import { usePlayerProgressTime } from "../../hooks/usePlayerProgressTime";
+import { readPlayerProgressTime } from "../../context/playerProgressStore";
 import { useI18n } from "../../i18n/useI18n";
-import { resolveKaraokeLines } from "../../lib/karaokeLyrics";
+import {
+  resolveKaraokeLines,
+  type KaraokeLines,
+} from "../../lib/karaokeLyrics";
 import { GameCanvas } from "../../game/components/GameCanvas";
 import { DIFFICULTIES } from "../../game/config/gameConfig";
 import { useRhythmChart } from "../../game/hooks/useRhythmChart";
@@ -82,7 +85,6 @@ export const RhythmDockPanel = memo(function RhythmDockPanel({
 }: RhythmDockPanelProps) {
   const { t } = useI18n();
   const p = usePlayer();
-  const progressTime = usePlayerProgressTime();
   const user = useUserState();
   const { setOpen } = useRhythmMode();
   const { phase, chartSet, chartRelPath, loadMessage, errorCode } =
@@ -270,27 +272,39 @@ export const RhythmDockPanel = memo(function RhythmDockPanel({
   const vizBackdrop = useMemo(() => {
     if (user.state.settings.plectrDisableVizBackdrop) return undefined;
     const mode = user.state.settings.vizMode;
-    const karaoke =
-      mode === "karaoke"
-        ? resolveKaraokeLines(
-            String(track.meta?.lyrics || "").trim(),
-            progressTime,
-            p.duration,
-            track.title || track.relPath,
-          )
-        : undefined;
+    let getKaraoke: (() => KaraokeLines | undefined) | undefined;
+    if (mode === "karaoke") {
+      const lyricsRaw = String(track.meta?.lyrics || "").trim();
+      const fallbackTitle = track.title || track.relPath;
+      const duration = p.duration;
+      // Risolto a draw-time (tempo letto dallo store progresso) con una
+      // piccola cache: l'oggetto vizBackdrop resta stabile tra i tick e
+      // GameCanvas non viene ri-renderizzato a ogni avanzamento.
+      let cache: { time: number; value: KaraokeLines } | null = null;
+      getKaraoke = () => {
+        const time = readPlayerProgressTime();
+        if (cache && Math.abs(time - cache.time) < 0.25) return cache.value;
+        const value = resolveKaraokeLines(
+          lyricsRaw,
+          time,
+          duration,
+          fallbackTitle,
+        );
+        cache = { time, value };
+        return value;
+      };
+    }
     return {
       mode,
       getAnalyser: p.getAnalyser,
       isPlaying: p.isPlaying,
       seedKey: track.relPath,
-      karaoke,
+      getKaraoke,
     };
   }, [
     p.duration,
     p.getAnalyser,
     p.isPlaying,
-    progressTime,
     track.meta?.lyrics,
     track.relPath,
     track.title,

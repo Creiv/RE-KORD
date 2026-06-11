@@ -35,6 +35,7 @@ import {
 } from "../../components/AppSharedUi";
 import { AlbumListTile, ArtistListTile, GenreListTile } from "../../components/library";
 import { SectionHeadLead } from "../../components/SectionHeadLead";
+import { VirtualTrackList } from "../../components/VirtualTrackList";
 import { ExcludeShuffleIcon } from "../../components/ExcludeShuffleIcon";
 import { TrackMoodGlyph } from "../../components/TrackMoodGlyph";
 import {
@@ -1479,17 +1480,20 @@ export default function LibraryView({
         ) : null}
         {selectedGenreKey ? (
           <>
-            <div className="list-stack">
-              {sortedGenreTracks.map((track) => (
+            <VirtualTrackList
+              items={sortedGenreTracks}
+              getKey={(track) => track.relPath}
+              renderRow={(track, _index, virtualized) => (
                 <TrackListRow
                   key={track.relPath}
                   track={track}
+                  autoFocusActive={!virtualized}
                   onPlay={() =>
                     playCollectionShuffle(track, sortedGenreTracks, true)
                   }
                 />
-              ))}
-            </div>
+              )}
+            />
           </>
         ) : libBrowse === "moods" ? (
           <div className="library-mood-browse">
@@ -1599,17 +1603,20 @@ export default function LibraryView({
                     />
                   </div>
                 </div>
-                <div className="list-stack">
-                  {sortedMoodTracks.map((track) => (
+                <VirtualTrackList
+                  items={sortedMoodTracks}
+                  getKey={(track) => track.relPath}
+                  renderRow={(track, _index, virtualized) => (
                     <TrackListRow
                       key={track.relPath}
                       track={track}
+                      autoFocusActive={!virtualized}
                       onPlay={() =>
                         playCollectionShuffle(track, sortedMoodTracks, true)
                       }
                     />
-                  ))}
-                </div>
+                  )}
+                />
               </>
             )}
           </div>
