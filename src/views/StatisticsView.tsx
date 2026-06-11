@@ -224,18 +224,22 @@ function StatisticsView({
     { id: "plectr" as const, label: t("statistics.modePlectr") },
     { id: "blocked" as const, label: t("statistics.modeBlocked") },
   ];
+  /* Cifre con separatore delle migliaia secondo la lingua (it: 1.234.567) */
+  const fmtN = (n: number) => n.toLocaleString(sortLocale);
   const formatMetricValue = (n: number, relPath?: string) => {
-    if (metricMode === "plays") return t("trackRow.playCount", { n });
-    if (metricMode === "favorites") return t("statistics.favoriteCount", { n });
+    if (metricMode === "plays")
+      return t("trackRow.playCount", { n: fmtN(n) });
+    if (metricMode === "favorites")
+      return t("statistics.favoriteCount", { n: fmtN(n) });
     if (metricMode === "plectr") {
       const grade = relPath
         ? user.state.plectrBests?.[relPath]?.grade
         : undefined;
       return grade
-        ? t("statistics.plectrScoreWithGrade", { n, grade })
-        : t("statistics.plectrScore", { n });
+        ? t("statistics.plectrScoreWithGrade", { n: fmtN(n), grade })
+        : t("statistics.plectrScore", { n: fmtN(n) });
     }
-    return t("statistics.blockedCount", { n });
+    return t("statistics.blockedCount", { n: fmtN(n) });
   };
 
   return (
@@ -274,7 +278,13 @@ function StatisticsView({
       </header>
 
       <div className="statistics-page__sections">
-        <div className="statistics-page__rankings">
+        <div
+          className={`statistics-page__rankings${
+            metricMode === "blocked"
+              ? " statistics-page__rankings--duo"
+              : ""
+          }`}
+        >
         {metricMode !== "blocked" ? (
         <section className="surface-card statistics-section">
           <div className="statistics-section__head">
@@ -488,19 +498,19 @@ function StatisticsView({
             >
             <div className="metric-card">
               <span>{t("statistics.overviewTotalPlays")}</span>
-              <strong>{overviewData.totalScore}</strong>
+              <strong>{fmtN(overviewData.totalScore)}</strong>
             </div>
             <div className="metric-card">
               <span>{t("statistics.overviewTracksWithPlays")}</span>
-              <strong>{overviewData.tracksWithPlays}</strong>
+              <strong>{fmtN(overviewData.tracksWithPlays)}</strong>
             </div>
             <div className="metric-card">
               <span>{t("statistics.overviewArtistsTouched")}</span>
-              <strong>{overviewData.artistsTouched}</strong>
+              <strong>{fmtN(overviewData.artistsTouched)}</strong>
             </div>
             <div className="metric-card">
               <span>{t("statistics.overviewAlbumsTouched")}</span>
-              <strong>{overviewData.albumsTouched}</strong>
+              <strong>{fmtN(overviewData.albumsTouched)}</strong>
             </div>
             </div>
             <div
@@ -509,15 +519,15 @@ function StatisticsView({
             >
               <div className="metric-card">
                 <span>{t("statistics.overviewFavoritesTotal")}</span>
-                <strong>{totalFavorites}</strong>
+                <strong>{fmtN(totalFavorites)}</strong>
               </div>
               <div className="metric-card">
                 <span>{t("statistics.overviewBlockedTotal")}</span>
-                <strong>{totalShuffleBlocks}</strong>
+                <strong>{fmtN(totalShuffleBlocks)}</strong>
               </div>
               <div className="metric-card">
                 <span>{t("statistics.overviewPlectrTracks")}</span>
-                <strong>{totalPlectrTracks}</strong>
+                <strong>{fmtN(totalPlectrTracks)}</strong>
               </div>
             </div>
           </div>

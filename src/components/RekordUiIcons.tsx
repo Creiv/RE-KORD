@@ -260,16 +260,18 @@ export function UiGraphicEq({ className }: { className?: string }) {
   );
 }
 
-/** Plettro per chitarra — punta in basso, angoli arrotondati, ~25% più largo. */
+/** Plettro per chitarra — punta in basso, con tre note che cadono in
+    diagonale intagliate (richiamo alle corsie di Plectr). */
 export function UiPlectrum({ className }: { className?: string }) {
   const cls = className
     ? `rekord-plectrum-ic ${className}`
     : "rekord-plectrum-ic";
   return (
-    <svg className={cls} viewBox="0 0 30 24" aria-hidden="true">
+    <svg className={cls} viewBox="0 0 24 24" aria-hidden="true">
       <path
         fill="currentColor"
-        d="M15 21.4Q16.1 22.2 17.5 20.3L23.9 6.2Q24.7 4.3 22.6 3.2Q18.9 1.7 15 1.7Q11.1 1.7 7.4 3.2Q5.3 4.3 6.1 6.2L12.5 20.3Q13.9 22.2 15 21.4Z"
+        fillRule="evenodd"
+        d="M12 21.8C11 21.8 10 20.7 8.6 18C6.8 14.5 5 10.6 5 7.8C5 5.1 7.9 3.2 12 3.2C16.1 3.2 19 5.1 19 7.8C19 10.6 17.2 14.5 15.4 18C14 20.7 13 21.8 12 21.8Z M7.95 7.6A0.95 0.95 0 0 1 9.85 7.6L9.85 10.4A0.95 0.95 0 0 1 7.95 10.4Z M11.05 9.4A0.95 0.95 0 0 1 12.95 9.4L12.95 12.2A0.95 0.95 0 0 1 11.05 12.2Z M14.15 11.2A0.95 0.95 0 0 1 16.05 11.2L16.05 14A0.95 0.95 0 0 1 14.15 14Z"
       />
     </svg>
   );

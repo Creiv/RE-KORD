@@ -596,6 +596,12 @@
   .statistics-page__rankings > .statistics-section {
     align-self: stretch;
   }
+
+  /* Modalità Bloccati: solo 2 schede, metà larghezza a testa anche
+     dove la griglia passerebbe a 3 colonne (901px+ e ultrawide). */
+  .statistics-page__rankings.statistics-page__rankings--duo {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
 }
 
 @container rekord-page (min-width: 901px) {
