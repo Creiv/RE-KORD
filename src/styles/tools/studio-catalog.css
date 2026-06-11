@@ -7,6 +7,43 @@
   min-width: 0;
 }
 
+.studio-listen-shell {
+  min-width: 0;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  box-shadow: none;
+}
+
+.studio-listen-shell > .tools.tool-studio-layout {
+  padding-bottom: 0;
+}
+
+.studio-pane.studio-pane--listen {
+  line-height: 1.5;
+  min-width: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  min-height: 0;
+}
+
+/* Studio → Ascolta: solo il visualizer senza box interna */
+.studio-pane--listen .view-page--listen {
+  min-width: 0;
+}
+
+:root .studio-pane--listen .listen-stage__viz {
+  border: none;
+  box-shadow: none;
+  background: transparent;
+}
+
+:root .studio-pane--listen .listen-stage__viz::before {
+  content: none;
+}
+
 .studio-page-card > .tools.tool-studio-layout {
   padding-bottom: 0;
 }

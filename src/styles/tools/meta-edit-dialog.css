@@ -8,8 +8,14 @@
   background: color-mix(in srgb, var(--bg) 50%, rgba(0, 0, 0, 0.42));
   display: grid;
   place-items: center;
-  padding: 1rem;
+  padding: max(1rem, env(safe-area-inset-top))
+    max(1rem, env(safe-area-inset-right))
+    max(1rem, env(safe-area-inset-bottom))
+    max(1rem, env(safe-area-inset-left));
   box-sizing: border-box;
+  min-height: 100dvh;
+  min-height: var(--app-vh, 100dvh);
+  min-height: -webkit-fill-available;
 }
 
 .meta-edit-backdrop.custom-theme-dialog-backdrop {

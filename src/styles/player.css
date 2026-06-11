@@ -38,7 +38,7 @@
 }
 
 @media (max-width: 1000px) {
-  .player-bar2 {
+  :root:not([data-glass-surfaces="1"]) .player-bar2 {
     background: color-mix(in srgb, var(--surface-elev-b) 98%, var(--bg));
   }
 }

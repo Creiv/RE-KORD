@@ -70,6 +70,76 @@
   box-shadow: var(--shadow-elev-1);
 }
 
+.listen-stage__art-btn {
+  display: block;
+  position: relative;
+  flex-shrink: 0;
+  padding: 0;
+  margin: 0;
+  border: 0;
+  background: none;
+  cursor: pointer;
+  border-radius: var(--radius-lg);
+  line-height: 0;
+}
+
+.listen-stage__art-btn .listen-stage__art {
+  width: var(--listen-art-size);
+  height: var(--listen-art-size);
+}
+
+.listen-stage__art-btn:focus-visible {
+  outline: 2px solid var(--accent2);
+  outline-offset: 3px;
+}
+
+.listen-stage__art-btn.is-busy {
+  opacity: 0.65;
+  pointer-events: none;
+}
+
+.listen-stage__cover-edit-badge {
+  position: absolute;
+  right: 8px;
+  bottom: 8px;
+  display: inline-grid;
+  place-items: center;
+  width: 28px;
+  height: 28px;
+  border-radius: 8px;
+  color: var(--text);
+  background: color-mix(in srgb, var(--surface) 78%, transparent);
+  border: 1px solid var(--border);
+  backdrop-filter: blur(6px);
+  opacity: 0;
+  transition: opacity 0.15s ease;
+  pointer-events: none;
+}
+
+.listen-stage__cover-edit-badge svg {
+  width: 16px;
+  height: 16px;
+}
+
+.listen-stage__art-btn:hover .listen-stage__cover-edit-badge,
+.listen-stage__art-btn:focus-visible .listen-stage__cover-edit-badge {
+  opacity: 1;
+}
+
+.listen-stage__cover-edit-err {
+  position: absolute;
+  left: 6px;
+  right: 6px;
+  bottom: 6px;
+  padding: 0.28rem 0.45rem;
+  border-radius: 8px;
+  font-size: 0.68rem;
+  font-weight: 700;
+  color: #fff;
+  background: color-mix(in srgb, var(--danger) 82%, #000 18%);
+  pointer-events: none;
+}
+
 .listen-stage__art--empty {
   display: grid;
   place-items: center;

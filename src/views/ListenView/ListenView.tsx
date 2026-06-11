@@ -29,27 +29,34 @@ import {
 import {
   UiFavorite,
   UiHistory,
+  UiImage,
   UiLyrics,
   UiMusicNote,
   UiNavList,
   UiNote,
 } from "../../components/RekordUiIcons";
-import { coverUrlForTrackRelPath } from "../../lib/api";
+import { coverUrlForTrackRelPath, uploadAlbumCover } from "../../lib/api";
 import { versionedUrl } from "../../lib/versionedUrl";
+import { albumFolderFromTrackRelPath } from "../../lib/trackPaths";
 import { isTrackAlbumShuffleExcluded } from "../../lib/randomExclusions";
 import { eligibleTracksForIntelligentRandom } from "../../lib/randomExclusions";
 import { PlayCollectionButton } from "../../components/PlayCollectionButton";
 import { formatDurationMs } from "../../lib/duration";
 import { trackInfoBadges } from "../../lib/metaFormat";
 import { parseLrcLyrics, currentLrcLineIndex } from "../../lib/lrc";
-import type { AppSection, LibraryIndex } from "../../types";
+import type { AppSection, LibraryEntityDelta, LibraryIndex } from "../../types";
 
 interface ListenViewProps {
   index: LibraryIndex;
   onOpenSection: (section: AppSection) => void;
+  onLibraryDelta?: (delta: LibraryEntityDelta, reconcile?: boolean) => void;
 }
 
-export default function ListenView({ index, onOpenSection }: ListenViewProps) {
+export default function ListenView({
+  index,
+  onOpenSection,
+  onLibraryDelta,
+}: ListenViewProps) {
   const p = usePlayer();
   const progressTime = usePlayerProgressTime();
   const user = useUserState();
@@ -123,6 +130,25 @@ export default function ListenView({ index, onOpenSection }: ListenViewProps) {
   const lrcScrollRef = useRef<HTMLDivElement>(null);
   const lrcCurrentLineRef = useRef<HTMLParagraphElement | null>(null);
   const vizScrollRef = useRef<HTMLDivElement | null>(null);
+  const coverFileInputRef = useRef<HTMLInputElement | null>(null);
+  const [coverUploadBusy, setCoverUploadBusy] = useState(false);
+  const [coverUploadErr, setCoverUploadErr] = useState<string | null>(null);
+
+  const currentAlbumPath = cur ? albumFolderFromTrackRelPath(cur.relPath) : "";
+
+  const onCoverFilePicked = (file: File | null) => {
+    if (!file || !currentAlbumPath || coverUploadBusy) return;
+    setCoverUploadBusy(true);
+    setCoverUploadErr(null);
+    uploadAlbumCover(currentAlbumPath, file)
+      .then((delta) => {
+        onLibraryDelta?.(delta, false);
+      })
+      .catch((e) => {
+        setCoverUploadErr(String(e?.message || e));
+      })
+      .finally(() => setCoverUploadBusy(false));
+  };
 
   useEffect(() => {
     const timer = window.setTimeout(() => {
@@ -188,21 +214,40 @@ export default function ListenView({ index, onOpenSection }: ListenViewProps) {
           <div className="listen-stage__meta">
             <div className="listen-stage__head">
               {p.current?.relPath ? (
-                <CoverImg
-                  priority
-                  className="listen-stage__art"
-                  src={versionedUrl(
-                    coverUrlForTrackRelPath(p.current.relPath),
-                    typeof (p.current as unknown as { updatedAt?: unknown })
-                      .updatedAt === "number"
-                      ? (p.current as unknown as { updatedAt: number })
-                          .updatedAt
-                      : null,
-                  )}
-                  alt=""
-                  fallbackClassName="listen-stage__art listen-stage__art--empty"
-                  fallback={<UiMusicNote className="listen-stage__empty-ic" />}
-                />
+                <button
+                  type="button"
+                  className={`listen-stage__art-btn${
+                    coverUploadBusy ? " is-busy" : ""
+                  }`}
+                  onClick={() => coverFileInputRef.current?.click()}
+                  disabled={coverUploadBusy || !currentAlbumPath}
+                  title={t("library.coverUploadTitle")}
+                  aria-label={t("library.coverUploadAria")}
+                >
+                  <CoverImg
+                    priority
+                    className="listen-stage__art"
+                    src={versionedUrl(
+                      coverUrlForTrackRelPath(p.current.relPath),
+                      typeof (p.current as unknown as { updatedAt?: unknown })
+                        .updatedAt === "number"
+                        ? (p.current as unknown as { updatedAt: number })
+                            .updatedAt
+                        : null,
+                    )}
+                    alt=""
+                    fallbackClassName="listen-stage__art listen-stage__art--empty"
+                    fallback={<UiMusicNote className="listen-stage__empty-ic" />}
+                  />
+                  <span className="listen-stage__cover-edit-badge" aria-hidden>
+                    <UiImage />
+                  </span>
+                  {coverUploadErr ? (
+                    <span className="listen-stage__cover-edit-err">
+                      {t("library.coverUploadErr")}
+                    </span>
+                  ) : null}
+                </button>
               ) : (
                 <div
                   className="listen-stage__art listen-stage__art--empty"
@@ -211,6 +256,17 @@ export default function ListenView({ index, onOpenSection }: ListenViewProps) {
                   <UiMusicNote className="listen-stage__empty-ic" />
                 </div>
               )}
+              <input
+                ref={coverFileInputRef}
+                type="file"
+                accept="image/jpeg,image/png"
+                hidden
+                onChange={(event) => {
+                  const file = event.target.files?.[0] ?? null;
+                  event.target.value = "";
+                  onCoverFilePicked(file);
+                }}
+              />
               <div className="listen-stage__text">
                 <div className="listen-stage__text-lead">
                   <div className="listen-stage__eyebrow-row">

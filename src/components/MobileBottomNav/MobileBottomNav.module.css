@@ -3,6 +3,7 @@
 .nav {
   display: flex;
   position: fixed;
+  isolation: isolate;
   left: 0;
   right: 0;
   bottom: 0;
@@ -134,6 +135,9 @@
   box-sizing: border-box;
   background: rgba(0, 0, 0, 0.55);
   animation: sheetBackdrop 0.2s ease;
+  min-height: 100dvh;
+  min-height: var(--app-vh, 100dvh);
+  min-height: -webkit-fill-available;
 }
 
 .sheet[hidden] {

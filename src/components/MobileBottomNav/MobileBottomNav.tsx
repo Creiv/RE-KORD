@@ -71,7 +71,7 @@ export function MobileBottomNav({ active, onSelect }: MobileBottomNavProps) {
 
   return (
     <>
-      <nav className={styles.nav} aria-label={t("mobile.navAria")}>
+      <nav className={`mobile-bottom-nav ${styles.nav}`} aria-label={t("mobile.navAria")}>
         <div className={styles.navInner}>
           {PRIMARY.map((item) => {
             const isActive = active === item.id;

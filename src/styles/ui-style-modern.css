@@ -197,7 +197,8 @@
 }
 
 /* ── 7. Player: dock flottante staccato dai bordi (solo desktop) ──────
-   Su mobile la barra resta a filo con fondo e lati, come in classico. */
+   Su mobile la barra resta a filo con fondo e lati, come in classico.
+   Con superfici vetro attive non sovrascrivere background/blur della barra. */
 @media (min-width: 901px) {
   :root[data-ui-style="modern"] {
     /* Spazio extra sotto il contenuto per il dock flottante */
@@ -210,11 +211,23 @@
     padding: 0 14px calc(env(safe-area-inset-bottom, 0px) + 14px);
   }
 
-  :root[data-ui-style="modern"] .player-bar2 {
+  :root[data-ui-style="modern"]:not([data-glass-surfaces="1"]) .player-bar2 {
     border-radius: 24px;
     border: 1px solid color-mix(in srgb, var(--accent) 18%, var(--border));
     box-shadow: var(--shadow-elev-2);
     background: color-mix(in srgb, var(--sidebar-bg) 92%, var(--accent) 8%);
+  }
+
+  :root[data-ui-style="modern"][data-glass-surfaces="1"] .player-bar2 {
+    border-radius: 24px;
+    border-color: color-mix(in srgb, var(--accent) 18%, var(--border));
+    box-shadow: var(--shadow-elev-2);
+  }
+}
+
+@media (max-width: 900px) {
+  :root[data-ui-style="modern"][data-glass-surfaces="1"] .player-bar2 {
+    border-color: color-mix(in srgb, var(--accent) 18%, var(--border));
   }
 }
 

@@ -23,6 +23,7 @@ import { useToolsActivity } from "../../context/ToolsActivityContext";
 import { useUserState } from "../../context/UserStateContext";
 import { useMatchMedia } from "../../hooks/useMatchMedia";
 import { usePlayerDockCssVars } from "../../hooks/usePlayerDockCssVars";
+import { useViewportHeight } from "../../hooks/useViewportHeight";
 import { useSyncStatusSnackbar } from "../../hooks/useSyncStatusSnackbar";
 import { MOBILE_LAYOUT_MQ } from "../../lib/breakpoints";
 import { useI18n } from "../../i18n/useI18n";
@@ -93,6 +94,7 @@ export function AppShell() {
   const p = usePlayer();
   const { setOpen: setRhythmOpen } = useRhythmMode();
   usePlayerDockCssVars(p.queue.length);
+  useViewportHeight();
   const isMobileLayout = useMatchMedia(MOBILE_LAYOUT_MQ);
   const user = useUserState();
   const syncUserStateFromServer = user.syncUserStateFromServer;

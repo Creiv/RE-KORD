@@ -945,16 +945,20 @@
   --player-art-fb: rgba(255, 160, 170, 0.12);
 }
 
+html {
+  height: var(--app-vh, 100dvh);
+  min-height: var(--app-vh, 100dvh);
+}
+
 html,
 body,
 #root {
   height: 100%;
-  min-height: 100dvh;
+  min-height: 100%;
   margin: 0;
 }
 
 #root {
-  min-height: 100dvh;
   max-height: none;
   overflow: hidden;
   display: flex;
@@ -965,7 +969,7 @@ body,
 body {
   overflow: hidden;
   box-sizing: border-box;
-  min-height: 100dvh;
+  min-height: var(--app-vh, 100dvh);
   background: linear-gradient(180deg, var(--page-lg-1) 0%, var(--page-lg-2) 100%);
 }
 

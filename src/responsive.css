@@ -17,13 +17,19 @@ body,
 }
 
 @media (max-width: 1000px) {
-  html,
+  html {
+    height: var(--app-vh, 100dvh);
+    min-height: var(--app-vh, 100dvh);
+  }
+
   body,
   #root {
-    min-height: 100dvh;
-    min-height: 100svh;
-    height: 100dvh;
-    height: 100svh;
+    min-height: 100%;
+    height: 100%;
+  }
+
+  .mobile-bottom-nav {
+    bottom: 0;
   }
 }
 
@@ -506,7 +512,7 @@ body,
 
   .meta-edit-dialog {
     width: min(100%, 100vw - 1.5rem);
-    max-height: 85dvh;
+    max-height: min(85dvh, calc(100dvh - env(safe-area-inset-top, 0px) - env(safe-area-inset-bottom, 0px) - 2rem));
   }
 
   .library-search-hero.surface-card {
@@ -801,3 +807,11 @@ body,
     height: 1.02rem;
   }
 }
+
+/* Studio → Ascolta: solo il visualizer senza box interna */
+:root .studio-pane--listen .listen-stage__viz {
+  border: none;
+  box-shadow: none;
+  background: transparent;
+}
+

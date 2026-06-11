@@ -226,6 +226,7 @@
   content: "";
   position: absolute;
   inset: 0;
+  border-radius: inherit;
   z-index: -1;
   pointer-events: none;
   background: color-mix(in srgb, var(--glass-panel-deep) 88%, transparent);
@@ -233,7 +234,26 @@
   backdrop-filter: blur(20px) saturate(1.4);
 }
 
-/* Plectr — solo barra superiore e pulsanti difficoltà */
+:root[data-glass-surfaces="1"] .mobile-bottom-nav {
+  background: transparent;
+  border-top-color: var(--glass-edge);
+  box-shadow:
+    0 -4px 24px color-mix(in srgb, var(--bg) 42%, transparent),
+    inset 0 1px 0 var(--glass-shine-soft);
+}
+
+:root[data-glass-surfaces="1"] .mobile-bottom-nav::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  z-index: -1;
+  pointer-events: none;
+  background: color-mix(in srgb, var(--glass-panel-deep) 88%, transparent);
+  -webkit-backdrop-filter: blur(20px) saturate(1.4);
+  backdrop-filter: blur(20px) saturate(1.4);
+}
+
+/* Electron: promuovi layer GPU per il vetro */
 :root[data-glass-surfaces="1"] .rhythm-dock-panel__head {
   border-bottom-color: var(--glass-edge);
   box-shadow: inset 0 1px 0 var(--glass-shine);
@@ -333,6 +353,7 @@
 :root[data-rekord-client="1"][data-glass-surfaces="1"] .track-row::before,
 :root[data-rekord-client="1"][data-glass-surfaces="1"] .playlist-row::before,
 :root[data-rekord-client="1"][data-glass-surfaces="1"] .player-bar2::before,
+:root[data-rekord-client="1"][data-glass-surfaces="1"] .mobile-bottom-nav::before,
 :root[data-rekord-client="1"][data-glass-surfaces="1"] .rhythm-dock-panel__head::before,
 :root[data-rekord-client="1"][data-glass-surfaces="1"] .rhythm-dock-panel__diff::before {
   transform: translateZ(0);

@@ -2,9 +2,9 @@
 
 .shell {
   display: flex;
-  min-height: 0;
-  height: 100dvh;
-  max-height: 100dvh;
+  height: var(--app-vh, 100%);
+  min-height: var(--app-vh, 100%);
+  max-height: var(--app-vh, 100dvh);
   overflow: hidden;
   overflow-x: clip;
   max-width: 100%;
@@ -60,10 +60,9 @@
 @media (max-width: 1000px) {
   .shell {
     flex-direction: column;
-    min-height: 100dvh;
-    min-height: 100svh;
-    height: 100dvh;
-    height: 100svh;
+    height: var(--app-vh, 100%);
+    min-height: var(--app-vh, 100%);
+    max-height: var(--app-vh, 100dvh);
   }
 
   .body {

@@ -1734,7 +1734,13 @@ export function ToolsView({
         </div>
       </section>
 
-      <section className="surface-card studio-page-card">
+      <section
+        className={
+          studioPane === "listen"
+            ? "studio-listen-shell"
+            : "surface-card studio-page-card"
+        }
+      >
         <div className="tools tool-studio-layout">
           {studioPane === "listen" && libraryIndex ? (
             <div
@@ -1746,6 +1752,7 @@ export function ToolsView({
                 <LazyListenView
                   index={libraryIndex}
                   onOpenSection={onOpenSection ?? (() => {})}
+                  onLibraryDelta={onLibraryDelta}
                 />
               </Suspense>
             </div>
