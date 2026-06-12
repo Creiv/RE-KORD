@@ -149,9 +149,12 @@ export function GameCanvas({
     at: 0,
   });
   const lastRunUpdateScoreRef = useRef(-1);
-  const lanePressReleaseTimersRef = useRef<
-    Array<ReturnType<typeof setTimeout> | null>
-  >([null, null, null, null]);
+  const lanePressReleaseTimersRef = useRef<Array<number | null>>([
+    null,
+    null,
+    null,
+    null,
+  ]);
   const lanePadRefs = useRef<Array<HTMLButtonElement | null>>([
     null,
     null,
@@ -1005,7 +1008,7 @@ function isChartRunComplete(state: RunState, songTime: number): boolean {
   return songTime >= lastEnd + HIT_WINDOWS.ok;
 }
 
-const laneFlashClearTimers: Array<ReturnType<typeof setTimeout> | null> = [
+const laneFlashClearTimers: Array<number | null> = [
   null,
   null,
   null,

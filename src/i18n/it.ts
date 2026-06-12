@@ -407,6 +407,7 @@ export const IT: Record<string, string> = {
   "playlists.eyebrow": "Playlist",
   "playlists.heading": "Collezioni personali",
   "playlists.newPh": "Nuova playlist",
+  "playlists.empty": "Nessuna playlist — creane una qui sopra.",
   "playlists.create": "Crea",
   "playlists.play": "Play",
   "playlists.addCurrent": "+ Brano corrente",

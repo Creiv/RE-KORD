@@ -275,17 +275,17 @@
 }
 
 .library-mood-filter-grid {
-  display: flex;
-  flex-wrap: wrap;
-  justify-content: flex-start;
+  display: grid;
+  /* Celle elastiche: riempiono tutta la riga (es. 4 colonne su phone)
+     invece di lasciare spazio vuoto a destra con larghezze fisse. */
+  grid-template-columns: repeat(auto-fill, minmax(min(4.6rem, 100%), 1fr));
   align-content: flex-start;
   gap: 0.45rem;
   width: 100%;
 }
 
 .library-mood-filter-btn {
-  flex: 0 0 5.85rem;
-  width: 5.85rem;
+  width: 100%;
   box-sizing: border-box;
   display: flex;
   flex-direction: column;
@@ -474,6 +474,33 @@
 
 .settings-ui-inline-control--checkbox-row > span {
   min-width: 0;
+}
+
+/* Sezione Backup: azioni a destra su desktop; su phone la testata impila
+   (titolo sopra, pulsanti sotto a tutta larghezza). */
+.settings-backup-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: flex-end;
+  gap: var(--space-3);
+  min-width: 0;
+}
+
+@media (max-width: 560px) {
+  .settings-page .settings-activity-section .section-head--page-toolbar {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .settings-backup-actions {
+    justify-content: stretch;
+  }
+
+  .settings-backup-actions > .ghost-btn {
+    flex: 1 1 auto;
+    min-height: 42px;
+  }
 }
 
 .settings-ui-inline-control .settings-checkbox {

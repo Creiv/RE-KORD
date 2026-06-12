@@ -93,6 +93,9 @@ function PlaylistsViewNew({
         <div className="view-stack">
           <section className="surface-card">
             <div className="list-stack">
+              {playlists.length === 0 ? (
+                <p className="panel-empty">{t("playlists.empty")}</p>
+              ) : null}
               {playlists.map((playlist) => (
                 <div
                   key={playlist.id}

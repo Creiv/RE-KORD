@@ -1,0 +1,1178 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta
+      name="viewport"
+      content="width=device-width, initial-scale=1.0, viewport-fit=cover"
+    />
+    <title>RE-KORD Client</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Inter:ital,opsz,wght@0,14..32,400..700;1,14..32,400..700&display=swap"
+      rel="stylesheet"
+    />
+    <style>
+      :root {
+        --bg: #0a0e14;
+        --surface: #121820;
+        --surface2: #161d28;
+        --surface3: #1c2532;
+        --border: rgba(148, 163, 184, 0.16);
+        --border-strong: rgba(148, 163, 184, 0.28);
+        --text: #eef2f7;
+        --muted: #94a3b8;
+        --muted-strong: #cbd5e1;
+        --accent: #f97316;
+        --accent2: #38bdf8;
+        --danger: #f87171;
+        --warning: #eab308;
+        --radius-sm: 4px;
+        --radius-md: 6px;
+        --radius-lg: 8px;
+        --radius-pill: 6px;
+        --shadow-elev-1: 0 1px 0 rgba(0, 0, 0, 0.35), 0 2px 10px rgba(0, 0, 0, 0.22);
+        --shadow-elev-2: 0 4px 18px rgba(0, 0, 0, 0.28);
+        --focus-ring: color-mix(in srgb, var(--accent2) 65%, white 20%);
+        --space-3: 0.625rem;
+        --space-4: 0.875rem;
+        --space-5: 1.125rem;
+        --space-6: 1.5rem;
+        --text-sm: 0.8125rem;
+        --text-xs: 0.7rem;
+        --segmented-1: rgba(255, 143, 92, 0.12);
+        --segmented-2: rgba(100, 212, 255, 0.08);
+        --chip-on: rgba(255, 143, 92, 0.1);
+        --ghost-input-bg: rgba(255, 255, 255, 0.04);
+        --text-on-accent: #07101b;
+        --dirlist-hover-bg: rgba(255, 255, 255, 0.04);
+        --font-ui: "Inter", system-ui, -apple-system, sans-serif;
+        color-scheme: dark;
+      }
+
+      * {
+        box-sizing: border-box;
+      }
+
+      body {
+        margin: 0;
+        min-height: 100vh;
+        font: 15px/1.45 var(--font-ui);
+        color: var(--text);
+        background: var(--bg);
+        -webkit-font-smoothing: antialiased;
+        text-rendering: optimizeLegibility;
+      }
+
+      .connect-page {
+        min-height: 100vh;
+        display: flex;
+        flex-direction: column;
+      }
+
+      .connect-lang {
+        position: fixed;
+        top: 0;
+        right: 0;
+        left: 0;
+        z-index: 10;
+        display: flex;
+        justify-content: flex-end;
+        padding: var(--space-4) max(1rem, env(safe-area-inset-right));
+        pointer-events: none;
+      }
+
+      .connect-lang .segmented {
+        pointer-events: auto;
+        background: color-mix(in srgb, var(--surface2) 92%, transparent);
+        border: 1px solid var(--border);
+        border-radius: var(--radius-md);
+        padding: 0.2rem;
+        box-shadow: var(--shadow-elev-1);
+      }
+
+      .connect-shell {
+        flex: 1;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        padding: 4.25rem max(1rem, env(safe-area-inset-right)) 2rem
+          max(1rem, env(safe-area-inset-left));
+      }
+
+      .surface-card {
+        width: 100%;
+        max-width: 26rem;
+        padding: var(--space-5);
+        border: 1px solid color-mix(in srgb, var(--accent) 16%, var(--border) 84%);
+        border-radius: var(--radius-md);
+        background:
+          radial-gradient(
+            ellipse 85% 140% at 0% 50%,
+            color-mix(in srgb, var(--accent) 12%, var(--surface2)) 0%,
+            transparent 52%
+          ),
+          radial-gradient(
+            ellipse 75% 130% at 100% 50%,
+            color-mix(in srgb, var(--accent2) 8%, var(--surface2)) 0%,
+            transparent 48%
+          ),
+          linear-gradient(
+            90deg,
+            color-mix(in srgb, var(--accent) 7%, var(--surface2)) 0%,
+            color-mix(in srgb, var(--accent) 2%, var(--surface2)) 32%,
+            var(--surface2) 58%
+          );
+        box-shadow:
+          var(--shadow-elev-1),
+          inset 1px 0 0 color-mix(in srgb, var(--accent) 10%, transparent);
+        transition: max-width 0.22s ease;
+      }
+
+      .surface-card.is-accounts {
+        max-width: 34rem;
+      }
+
+      .section-head {
+        display: flex;
+        align-items: flex-start;
+        justify-content: space-between;
+        gap: var(--space-4);
+        margin-bottom: var(--space-4);
+      }
+
+      .section-head h2 {
+        margin: 0.2rem 0 0;
+        font-size: 1.18rem;
+        font-weight: 700;
+        letter-spacing: -0.02em;
+        line-height: 1.2;
+      }
+
+      .brand-mark {
+        display: flex;
+        align-items: center;
+        gap: 0.75rem;
+        margin-bottom: 0.15rem;
+      }
+
+      .brand-mark img {
+        width: 2.5rem;
+        height: 2.5rem;
+        border-radius: var(--radius-md);
+        object-fit: cover;
+        box-shadow: var(--shadow-elev-1);
+        flex-shrink: 0;
+      }
+
+      .eyebrow {
+        margin: 0;
+        color: var(--accent2);
+        text-transform: uppercase;
+        letter-spacing: 0.16em;
+        font-size: 0.72rem;
+        font-weight: 800;
+      }
+
+      .subtext {
+        margin: 0.45rem 0 0;
+        color: var(--muted);
+        font-size: var(--text-sm);
+        line-height: 1.5;
+      }
+
+      .stack {
+        display: grid;
+        gap: var(--space-4);
+      }
+
+      .field-label {
+        display: block;
+        margin-bottom: 0.42rem;
+        font-size: var(--text-sm);
+        font-weight: 600;
+        color: var(--muted-strong);
+      }
+
+      .ghost-input {
+        width: 100%;
+        background: var(--ghost-input-bg);
+        border: 1px solid var(--border);
+        border-radius: var(--radius-md);
+        color: var(--text);
+        padding: 0.4rem 0.75rem;
+        font: inherit;
+        font-size: var(--text-sm);
+        min-height: 36px;
+        outline: none;
+        transition: border-color 0.16s ease, box-shadow 0.16s ease;
+      }
+
+      .ghost-input::placeholder {
+        color: color-mix(in srgb, var(--muted) 72%, transparent);
+      }
+
+      .ghost-input:focus-visible {
+        outline: 2px solid var(--focus-ring);
+        outline-offset: 2px;
+        border-color: color-mix(in srgb, var(--accent2) 45%, var(--border) 55%);
+      }
+
+      .row-split {
+        display: grid;
+        grid-template-columns: minmax(0, 1fr) 5.5rem;
+        gap: var(--space-3);
+        align-items: end;
+      }
+
+      .segmented {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 0.4rem;
+      }
+
+      .segmented button {
+        padding: 0.5rem 0.7rem;
+        border-radius: var(--radius-sm);
+        border: 1px solid var(--border);
+        background: color-mix(in srgb, var(--surface2) 55%, transparent);
+        color: var(--muted);
+        font: inherit;
+        font-size: var(--text-sm);
+        font-weight: 750;
+        cursor: pointer;
+        transition: color 0.16s ease, border-color 0.16s ease, background 0.16s ease;
+      }
+
+      .segmented button:hover:not(.is-on) {
+        color: color-mix(in srgb, var(--muted-strong) 85%, var(--text) 15%);
+        border-color: color-mix(in srgb, var(--border-strong) 72%, transparent);
+        background: color-mix(in srgb, var(--surface3) 65%, transparent);
+      }
+
+      .segmented button.is-on {
+        color: var(--text);
+        border-color: color-mix(in srgb, var(--accent) 32%, var(--border-strong) 68%);
+        background: linear-gradient(135deg, var(--segmented-1), var(--segmented-2));
+        box-shadow: var(--shadow-elev-1);
+      }
+
+      .segmented--joined,
+      .segmented--mode {
+        flex-wrap: nowrap;
+        gap: 0;
+        width: 100%;
+      }
+
+      .segmented--joined button,
+      .segmented--mode button {
+        flex: 1 1 0;
+        min-width: 0;
+      }
+
+      .segmented--joined button:first-of-type,
+      .segmented--mode button:first-of-type {
+        border-radius: var(--radius-sm) 0 0 var(--radius-sm);
+      }
+
+      .segmented--joined button:last-of-type,
+      .segmented--mode button:last-of-type {
+        margin-inline-start: -1px;
+        border-radius: 0 var(--radius-sm) var(--radius-sm) 0;
+      }
+
+      .segmented--joined button:not(:first-of-type):not(:last-of-type),
+      .segmented--mode button:not(:first-of-type):not(:last-of-type) {
+        margin-inline-start: -1px;
+        border-radius: 0;
+      }
+
+      .accounts-head {
+        margin-bottom: var(--space-4);
+      }
+
+      .accounts-head h2 {
+        margin: 0.2rem 0 0;
+        font-size: 1.12rem;
+      }
+
+      .account-grid {
+        display: flex;
+        flex-wrap: wrap;
+        justify-content: center;
+        gap: 0.7rem;
+      }
+
+      .account-pick {
+        width: 7.5rem;
+        padding: 0.85rem 0.65rem 0.75rem;
+        border: 1px solid var(--border);
+        border-radius: var(--radius-lg);
+        background: color-mix(in srgb, var(--surface2) 78%, transparent);
+        box-shadow: var(--shadow-elev-1);
+        cursor: pointer;
+        text-align: center;
+        font: inherit;
+        color: inherit;
+        transition: border-color 0.15s, background 0.15s, transform 0.08s;
+      }
+
+      .account-pick:hover {
+        border-color: var(--border-strong);
+        background: color-mix(in srgb, var(--surface3) 82%, transparent);
+      }
+
+      .account-pick:active {
+        transform: scale(0.99);
+      }
+
+      .account-pick.is-selected {
+        border-color: color-mix(in srgb, var(--accent) 42%, var(--border) 58%);
+        background: color-mix(in srgb, var(--accent) 11%, var(--surface2) 89%);
+      }
+
+      .account-pick__avatar {
+        display: grid;
+        width: 2.25rem;
+        height: 2.25rem;
+        margin: 0 auto 0.6rem;
+        place-items: center;
+        border-radius: 999px;
+        background: color-mix(in srgb, var(--accent) 18%, var(--surface3) 82%);
+        color: var(--accent);
+        font-size: 0.9rem;
+        font-weight: 850;
+      }
+
+      .account-pick.is-selected .account-pick__avatar {
+        background: color-mix(in srgb, var(--accent) 28%, var(--surface3) 72%);
+      }
+
+      .account-pick__name {
+        display: block;
+        font-size: 0.84rem;
+        font-weight: 650;
+        line-height: 1.3;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+      }
+
+      .err-banner {
+        display: flex;
+        align-items: flex-start;
+        gap: 0.55rem;
+        margin-top: var(--space-4);
+        padding: 0.72rem 0.78rem;
+        border-radius: var(--radius-md);
+        border: 1px solid color-mix(in srgb, var(--danger) 42%, var(--border) 58%);
+        background: color-mix(in srgb, var(--danger) 10%, var(--surface2) 90%);
+        color: color-mix(in srgb, var(--danger) 82%, var(--text) 18%);
+        font-size: 0.86rem;
+        line-height: 1.4;
+        white-space: pre-wrap;
+        word-break: break-word;
+      }
+
+      .err-banner svg {
+        flex: 0 0 auto;
+        width: 1rem;
+        height: 1rem;
+        margin-top: 0.1rem;
+        color: var(--danger);
+      }
+
+      .actions {
+        display: grid;
+        gap: 0.55rem;
+        margin-top: var(--space-5);
+      }
+
+      .primary-btn,
+      .ghost-btn {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        gap: 0.5rem;
+        width: 100%;
+        min-height: 38px;
+        padding: 0.5rem 0.85rem;
+        border-radius: var(--radius-pill);
+        font: inherit;
+        font-weight: 650;
+        cursor: pointer;
+        transition: filter 0.15s, opacity 0.15s, transform 0.08s;
+      }
+
+      .primary-btn {
+        border: none;
+        background: linear-gradient(
+          135deg,
+          var(--accent),
+          color-mix(in srgb, var(--accent2) 75%, white 8%)
+        );
+        color: var(--text-on-accent);
+      }
+
+      .primary-btn:hover:not(:disabled) {
+        filter: brightness(1.05);
+      }
+
+      .primary-btn:disabled {
+        opacity: 0.45;
+        cursor: not-allowed;
+        filter: saturate(0.55);
+      }
+
+      .ghost-btn {
+        background: var(--ghost-input-bg);
+        color: var(--text);
+        border: 1px solid var(--border);
+      }
+
+      .ghost-btn:hover:not(:disabled) {
+        border-color: color-mix(in srgb, var(--accent2) 45%, var(--border) 55%);
+        background: var(--dirlist-hover-bg);
+      }
+
+      .primary-btn:active:not(:disabled),
+      .ghost-btn:active:not(:disabled) {
+        transform: scale(0.99);
+      }
+
+      .primary-btn.is-loading {
+        position: relative;
+        color: transparent !important;
+      }
+
+      .primary-btn.is-loading .rekord-splash__ring {
+        position: absolute;
+        inset: 0;
+        margin: auto;
+        width: 1.15rem;
+        height: 1.15rem;
+      }
+
+      .rekord-splash__ring {
+        box-sizing: border-box;
+        border-radius: 50%;
+        border: 2px solid color-mix(in srgb, var(--border) 78%, transparent);
+        border-top-color: color-mix(in srgb, var(--accent) 92%, var(--border) 8%);
+        border-right-color: color-mix(in srgb, var(--accent) 48%, var(--border) 52%);
+        animation: rekordSplashSpin 0.88s linear infinite;
+      }
+
+      @keyframes rekordSplashSpin {
+        to {
+          transform: rotate(360deg);
+        }
+      }
+
+      .hidden {
+        display: none !important;
+      }
+
+      @media (max-width: 420px) {
+        .surface-card {
+          padding: var(--space-4);
+        }
+
+        .row-split {
+          grid-template-columns: minmax(0, 1fr) 5rem;
+        }
+
+        .account-pick {
+          width: 6.75rem;
+        }
+      }
+    </style>
+  </head>
+  <body class="connect-page">
+    <header class="connect-lang" aria-label="Language">
+      <div class="segmented segmented--joined" role="group" id="lang-seg">
+        <button type="button" class="is-on" data-locale="en" aria-pressed="true">EN</button>
+        <button type="button" data-locale="it" aria-pressed="false">IT</button>
+      </div>
+    </header>
+
+    <div class="connect-shell">
+      <section class="surface-card" id="card" role="main">
+        <div class="section-head">
+          <div>
+            <div class="brand-mark">
+              <img src="rekord-logo.png" alt="" width="40" height="40" decoding="async" />
+              <p class="eyebrow">RE-KORD</p>
+            </div>
+            <h2 id="title">Connect</h2>
+            <p class="subtext" id="subtitle">
+              Connect to your RE-KORD server on the local network or via a public URL.
+            </p>
+          </div>
+        </div>
+
+        <div id="connect-panel" class="stack">
+          <div>
+            <span class="field-label" id="lbl-mode">Connection type</span>
+            <div class="segmented segmented--mode" id="mode-seg" role="group">
+              <button type="button" class="is-on" data-mode="local" aria-pressed="true" id="opt-local">
+                Local IP
+              </button>
+              <button type="button" data-mode="public" aria-pressed="false" id="opt-public">
+                Public URL
+              </button>
+            </div>
+          </div>
+          <div class="row-split" id="local-wrap">
+            <label>
+              <span class="field-label" id="lbl-host">IP or hostname</span>
+              <input
+                id="host"
+                class="ghost-input"
+                type="text"
+                value="192.168.1.100"
+                placeholder="192.168.1.100"
+                autocomplete="off"
+                spellcheck="false"
+              />
+            </label>
+            <label>
+              <span class="field-label" id="lbl-port">Port</span>
+              <input
+                id="port"
+                class="ghost-input"
+                type="text"
+                inputmode="numeric"
+                value="3001"
+                placeholder="3001"
+                autocomplete="off"
+                spellcheck="false"
+              />
+            </label>
+          </div>
+          <label class="hidden" id="public-wrap">
+            <span class="field-label" id="lbl-public-url">Public URL</span>
+            <input
+              id="public-url"
+              class="ghost-input"
+              type="text"
+              placeholder="https://name.trycloudflare.com"
+              autocomplete="off"
+              spellcheck="false"
+            />
+          </label>
+        </div>
+
+        <div id="accounts-panel" class="hidden">
+          <div class="accounts-head">
+            <p class="eyebrow" id="accounts-eyebrow">Session</p>
+            <h2 id="accounts-title">Choose an account</h2>
+            <p class="subtext" id="accounts-hint">Select a profile, then open the library.</p>
+          </div>
+          <div class="account-grid" id="account-grid" role="listbox" aria-label="Accounts"></div>
+        </div>
+
+        <div class="err-banner hidden" id="err" role="alert" aria-live="polite">
+          <svg viewBox="0 0 24 24" fill="none" aria-hidden="true">
+            <circle cx="12" cy="12" r="10" stroke="currentColor" stroke-width="1.8"></circle>
+            <path d="M12 7.5v6" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"></path>
+            <circle cx="12" cy="16.8" r="1" fill="currentColor"></circle>
+          </svg>
+          <span id="err-text"></span>
+        </div>
+
+        <div class="actions" id="actions">
+          <button type="button" class="primary-btn" id="btn-probe" disabled>Connect</button>
+          <button type="button" class="ghost-btn hidden" id="btn-scan">Scan QR</button>
+          <button type="button" class="primary-btn hidden" id="btn-open" disabled>Open</button>
+          <button type="button" class="ghost-btn hidden" id="btn-back">Change server</button>
+        </div>
+      </section>
+    </div>
+
+    <script>
+      /* Ponte Capacitor: stesse API del preload Electron (getSaved / probe / join),
+         così lo script di connect.html resta identico al client desktop. */
+      (function () {
+        var STORAGE_KEY = "rekord-client-remote";
+
+        function normalizeBase(input) {
+          var t = String(input || "")
+            .trim()
+            .replace(/\/+$/, "");
+          if (!t) return null;
+          if (!/^https?:\/\//i.test(t)) t = "http://" + t;
+          return t;
+        }
+
+        function buildAppUrl(base, accountId) {
+          var u = new URL(base.endsWith("/") ? base : base + "/");
+          u.pathname = (u.pathname || "/").replace(/\/+$/, "") + "/";
+          u.search = "";
+          u.searchParams.set("rekordAccount", String(accountId));
+          u.searchParams.set("rekordClient", "1");
+          return u.toString();
+        }
+
+        /* HTTP nativo (CapacitorHttp) per evitare CORS dalla pagina locale;
+           fallback su fetch per i test nel browser. */
+        async function httpGetJson(url) {
+          var http =
+            window.Capacitor &&
+            window.Capacitor.Plugins &&
+            window.Capacitor.Plugins.CapacitorHttp;
+          var body, status;
+          if (http) {
+            var r = await http.request({
+              url: url,
+              method: "GET",
+              connectTimeout: 8000,
+              readTimeout: 8000,
+              responseType: "json",
+              headers: { Accept: "application/json" },
+            });
+            status = r.status;
+            body = r.data;
+            if (typeof body === "string") {
+              try {
+                body = JSON.parse(body);
+              } catch (_e) {
+                body = null;
+              }
+            }
+          } else {
+            var c = new AbortController();
+            var to = setTimeout(function () {
+              c.abort();
+            }, 8000);
+            try {
+              var resp = await fetch(url, {
+                signal: c.signal,
+                headers: { Accept: "application/json" },
+              });
+              status = resp.status;
+              body = await resp.json().catch(function () {
+                return null;
+              });
+            } finally {
+              clearTimeout(to);
+            }
+          }
+          if (!body || typeof body !== "object") {
+            throw new Error(status ? "HTTP " + status : "Risposta non valida");
+          }
+          if (body.ok === false) {
+            throw new Error(String(body.error || "Errore dal server"));
+          }
+          if (status < 200 || status >= 300) {
+            throw new Error("HTTP " + status);
+          }
+          return body.ok === true && "data" in body ? body.data : body;
+        }
+
+        window.rekordClientConnect = {
+          getSaved: function () {
+            try {
+              return Promise.resolve(
+                JSON.parse(localStorage.getItem(STORAGE_KEY) || "null")
+              );
+            } catch (_e) {
+              return Promise.resolve(null);
+            }
+          },
+          probe: async function (rawBase) {
+            var b = normalizeBase(rawBase);
+            if (!b) return { ok: false, error: "Indirizzo non valido" };
+            try {
+              await httpGetJson(b + "/api/health");
+              var snapshot = await httpGetJson(b + "/api/accounts");
+              return { ok: true, baseUrl: b, accounts: snapshot };
+            } catch (err) {
+              return {
+                ok: false,
+                error: String((err && err.message) || err),
+              };
+            }
+          },
+          join: async function (rawBase, accountId) {
+            var b = normalizeBase(rawBase);
+            if (!b || !accountId) return { ok: false, error: "Dati mancanti" };
+            try {
+              await httpGetJson(b + "/api/health");
+            } catch (err) {
+              return {
+                ok: false,
+                error: String((err && err.message) || err),
+              };
+            }
+            localStorage.setItem(
+              STORAGE_KEY,
+              JSON.stringify({ baseUrl: b, accountId: String(accountId) })
+            );
+            window.location.href = buildAppUrl(b, accountId);
+            return { ok: true };
+          },
+          buildAppUrl: buildAppUrl,
+        };
+      })();
+    </script>
+    <script>
+      const LOCALE_KEY = "rekord-connect-locale";
+
+      const I18N = {
+        en: {
+          title: "Connect",
+          subtitle: "Connect to your RE-KORD server on the local network or via a public URL.",
+          connectionType: "Connection type",
+          localIp: "Local IP",
+          publicUrl: "Public URL",
+          host: "IP or hostname",
+          port: "Port",
+          publicUrlPlaceholder: "https://name.trycloudflare.com",
+          connect: "Connect",
+          connecting: "Connecting…",
+          scanQr: "Scan QR",
+          open: "Open",
+          opening: "Opening…",
+          accountsEyebrow: "Session",
+          accountsTitle: "Choose an account",
+          accountsHint: "Select a profile, then open the library.",
+          changeServer: "Change server",
+          noBridge: "Use the RE-KORD Client app to connect.",
+          errPublicUrl: "Enter a valid public URL (https://…).",
+          errHost: "Enter an IP address or hostname.",
+          errPortMissing: "Enter a port number (e.g. 3001).",
+          errPortInvalid: "Invalid port (use 1–65535, without http://).",
+          errConnection: "Connection failed.",
+          errNoAccounts: "No accounts found on the server.",
+          errOpen: "Could not open the library.",
+        },
+        it: {
+          title: "Connetti",
+          subtitle: "Collegati al server RE-KORD in rete locale o tramite URL pubblico.",
+          connectionType: "Tipo connessione",
+          localIp: "IP locale",
+          publicUrl: "URL pubblico",
+          host: "IP o hostname",
+          port: "Porta",
+          publicUrlPlaceholder: "https://nome.trycloudflare.com",
+          connect: "Connetti",
+          connecting: "Connessione…",
+          scanQr: "Scansiona QR",
+          open: "Apri",
+          opening: "Apertura…",
+          accountsEyebrow: "Sessione",
+          accountsTitle: "Scegli un account",
+          accountsHint: "Seleziona un profilo, poi apri la libreria.",
+          changeServer: "Cambia server",
+          noBridge: "Usa l’eseguibile RE-KORD Client.",
+          errPublicUrl: "Inserisci un URL pubblico valido (https://…).",
+          errHost: "Inserisci un indirizzo IP o hostname.",
+          errPortMissing: "Inserisci un numero di porta (es. 3001).",
+          errPortInvalid: "Porta non valida (usa 1–65535, senza http://).",
+          errConnection: "Connessione non riuscita.",
+          errNoAccounts: "Nessun account sul server.",
+          errOpen: "Impossibile aprire la libreria.",
+        },
+      };
+
+      if (!window.rekordClientConnect) {
+        document.body.innerHTML =
+          '<div class="connect-shell"><section class="surface-card" style="max-width:22rem"><p class="err-banner" style="margin:0;border:none;background:transparent;padding:0">Use the <strong>RE-KORD Client</strong> app.</p></section></div>';
+        throw new Error("no bridge");
+      }
+
+      const E = (id) => document.getElementById(id);
+      const cardEl = E("card");
+      const hostIn = E("host");
+      const portIn = E("port");
+      const modeSeg = E("mode-seg");
+      const langSeg = E("lang-seg");
+      const publicWrap = E("public-wrap");
+      const publicUrlIn = E("public-url");
+      const connectPanel = E("connect-panel");
+      const accountsPanel = E("accounts-panel");
+      const accountGrid = E("account-grid");
+      const errEl = E("err");
+      const errText = E("err-text");
+      const localWrap = E("local-wrap");
+      const btnProbe = E("btn-probe");
+      const btnOpen = E("btn-open");
+      const btnBack = E("btn-back");
+      const btnScan = E("btn-scan");
+      const scannerAvailable = Boolean(
+        window.Capacitor &&
+          window.Capacitor.Plugins &&
+          window.Capacitor.Plugins.CapacitorBarcodeScanner
+      );
+
+      let locale = "en";
+      let connectionMode = "local";
+      let lastBase = "";
+      let selectedAccountId = "";
+
+      function t(key) {
+        return (I18N[locale] && I18N[locale][key]) || I18N.en[key] || key;
+      }
+
+      function setLocale(next) {
+        locale = next === "it" ? "it" : "en";
+        localStorage.setItem(LOCALE_KEY, locale);
+        document.documentElement.lang = locale;
+        E("title").textContent = t("title");
+        E("subtitle").textContent = t("subtitle");
+        E("lbl-mode").textContent = t("connectionType");
+        E("opt-local").textContent = t("localIp");
+        E("opt-public").textContent = t("publicUrl");
+        E("lbl-host").textContent = t("host");
+        E("lbl-port").textContent = t("port");
+        E("lbl-public-url").textContent = t("publicUrl");
+        publicUrlIn.placeholder = t("publicUrlPlaceholder");
+        E("accounts-eyebrow").textContent = t("accountsEyebrow");
+        E("accounts-title").textContent = t("accountsTitle");
+        E("accounts-hint").textContent = t("accountsHint");
+        btnBack.textContent = t("changeServer");
+        btnScan.textContent = t("scanQr");
+        if (!btnProbe.classList.contains("is-loading")) btnProbe.textContent = t("connect");
+        if (!btnOpen.classList.contains("is-loading")) btnOpen.textContent = t("open");
+        langSeg.querySelectorAll("button").forEach((btn) => {
+          const active = btn.dataset.locale === locale;
+          btn.classList.toggle("is-on", active);
+          btn.setAttribute("aria-pressed", active ? "true" : "false");
+        });
+      }
+
+      function setConnectionMode(mode) {
+        connectionMode = mode === "public" ? "public" : "local";
+        modeSeg.querySelectorAll("button").forEach((btn) => {
+          const active = btn.dataset.mode === connectionMode;
+          btn.classList.toggle("is-on", active);
+          btn.setAttribute("aria-pressed", active ? "true" : "false");
+        });
+        syncModeUi();
+      }
+
+      function showErr(m) {
+        if (!m) {
+          errEl.classList.add("hidden");
+          errText.textContent = "";
+        } else {
+          errEl.classList.remove("hidden");
+          errText.textContent = m;
+        }
+      }
+
+      function parseBaseUrl(str) {
+        if (!str || !String(str).trim()) return null;
+        const t0 = String(str).trim().replace(/\/+$/, "");
+        const withP = /^https?:\/\//i.test(t0) ? t0 : `http://${t0}`;
+        try {
+          const u = new URL(withP);
+          return {
+            full: `${u.protocol}//${u.host}`,
+            h: u.hostname,
+            p: u.port || "3001",
+            protocol: u.protocol,
+          };
+        } catch {
+          return null;
+        }
+      }
+
+      function guessModeFromBase(raw) {
+        const p = parseBaseUrl(raw);
+        if (!p) return "local";
+        if (p.protocol === "https:") return "public";
+        if (String(p.h || "").includes("trycloudflare.com")) return "public";
+        return "local";
+      }
+
+      function syncModeUi() {
+        const isPublic = connectionMode === "public";
+        localWrap.classList.toggle("hidden", isPublic);
+        publicWrap.classList.toggle("hidden", !isPublic);
+      }
+
+      function buildRaw() {
+        if (connectionMode === "public") {
+          const raw = publicUrlIn.value.trim();
+          if (!raw) return "";
+          const parsed = parseBaseUrl(raw);
+          return parsed ? parsed.full : "";
+        }
+        const h = hostIn.value.trim();
+        const ps = portIn.value.trim();
+        if (!h || !ps) return "";
+        if (!/^\d{1,5}$/.test(ps)) return "";
+        const n = parseInt(ps, 10);
+        if (n < 1 || n > 65535) return "";
+        return `${h}:${n}`;
+      }
+
+      function updateProbeButton() {
+        btnProbe.disabled = !buildRaw() || btnProbe.classList.contains("is-loading");
+      }
+
+      function ensureSpinner(btn) {
+        if (!btn.querySelector(".rekord-splash__ring")) {
+          const ring = document.createElement("span");
+          ring.className = "rekord-splash__ring";
+          ring.setAttribute("aria-hidden", "true");
+          btn.appendChild(ring);
+        }
+      }
+
+      function setLoading(btn, loading, idleLabelKey, loadingLabelKey) {
+        ensureSpinner(btn);
+        btn.classList.toggle("is-loading", loading);
+        btn.disabled = loading;
+        btn.textContent = loading ? t(loadingLabelKey) : t(idleLabelKey);
+        if (loading) ensureSpinner(btn);
+      }
+
+      function renderAccountCards(list, defaultId) {
+        accountGrid.innerHTML = "";
+        selectedAccountId = "";
+        for (const a of list) {
+          const card = document.createElement("button");
+          card.type = "button";
+          card.className = "account-pick";
+          card.dataset.id = a.id;
+          card.setAttribute("role", "option");
+          card.setAttribute("aria-selected", "false");
+          const letter = (String(a.name || "").trim()[0] || "?").toUpperCase();
+          card.innerHTML =
+            `<span class="account-pick__avatar" aria-hidden="true">${letter}</span>` +
+            `<span class="account-pick__name">${escapeHtml(a.name || a.id)}</span>`;
+          card.addEventListener("click", () => selectAccount(a.id));
+          accountGrid.appendChild(card);
+        }
+        const pick = defaultId && list.some((a) => a.id === defaultId) ? defaultId : list[0]?.id;
+        if (pick) selectAccount(pick);
+      }
+
+      function escapeHtml(s) {
+        return String(s)
+          .replace(/&/g, "&amp;")
+          .replace(/</g, "&lt;")
+          .replace(/>/g, "&gt;")
+          .replace(/"/g, "&quot;");
+      }
+
+      function selectAccount(id) {
+        selectedAccountId = id;
+        accountGrid.querySelectorAll(".account-pick").forEach((el) => {
+          const on = el.dataset.id === id;
+          el.classList.toggle("is-selected", on);
+          el.setAttribute("aria-selected", on ? "true" : "false");
+        });
+        btnOpen.disabled = !id || btnOpen.classList.contains("is-loading");
+      }
+
+      function showConnectForm() {
+        connectPanel.classList.remove("hidden");
+        accountsPanel.classList.add("hidden");
+        cardEl.classList.remove("is-accounts");
+        E("subtitle").classList.remove("hidden");
+        btnProbe.classList.remove("hidden");
+        btnScan.classList.toggle("hidden", !scannerAvailable);
+        btnOpen.classList.add("hidden");
+        btnBack.classList.add("hidden");
+        updateProbeButton();
+      }
+
+      function showAccountsView() {
+        connectPanel.classList.add("hidden");
+        accountsPanel.classList.remove("hidden");
+        cardEl.classList.add("is-accounts");
+        E("subtitle").classList.add("hidden");
+        btnProbe.classList.add("hidden");
+        btnScan.classList.add("hidden");
+        btnOpen.classList.remove("hidden");
+        btnBack.classList.remove("hidden");
+      }
+
+      function resetToConnect() {
+        showErr("");
+        showConnectForm();
+        setLoading(btnProbe, false, "connect", "connecting");
+        setLoading(btnOpen, false, "open", "opening");
+      }
+
+      const savedLocale = localStorage.getItem(LOCALE_KEY);
+      setLocale(savedLocale === "it" ? "it" : "en");
+      langSeg.querySelectorAll("button").forEach((btn) => {
+        btn.addEventListener("click", () => setLocale(btn.dataset.locale));
+      });
+
+      modeSeg.querySelectorAll("button").forEach((btn) => {
+        btn.addEventListener("click", () => {
+          setConnectionMode(btn.dataset.mode);
+          updateProbeButton();
+          showErr("");
+          resetToConnect();
+        });
+      });
+
+      const params = new URLSearchParams(window.location.search);
+      const fromUrl = params.get("base");
+      if (fromUrl) {
+        const p = parseBaseUrl(decodeURIComponent(fromUrl));
+        if (p) {
+          if (guessModeFromBase(p.full) === "public") {
+            setConnectionMode("public");
+            publicUrlIn.value = p.full;
+          } else {
+            setConnectionMode("local");
+            hostIn.value = p.h;
+            portIn.value = p.p;
+          }
+        }
+      } else {
+        hostIn.value = "192.168.1.100";
+        portIn.value = "3001";
+        setConnectionMode("local");
+      }
+      syncModeUi();
+
+      [hostIn, portIn, publicUrlIn].forEach((el) => {
+        el.addEventListener("input", () => {
+          updateProbeButton();
+          showErr("");
+          resetToConnect();
+        });
+      });
+
+      window.rekordClientConnect
+        .getSaved()
+        .then((s) => {
+          if (s && s.baseUrl && !fromUrl) {
+            const p = parseBaseUrl(s.baseUrl);
+            if (p) {
+              if (guessModeFromBase(p.full) === "public") {
+                setConnectionMode("public");
+                publicUrlIn.value = p.full;
+              } else {
+                setConnectionMode("local");
+                hostIn.value = p.h;
+                portIn.value = p.p;
+              }
+              syncModeUi();
+            }
+            updateProbeButton();
+          }
+        })
+        .catch(() => {});
+
+      updateProbeButton();
+
+      btnProbe.addEventListener("click", async () => {
+        showErr("");
+        const raw = buildRaw();
+        if (!raw) {
+          if (connectionMode === "public") showErr(t("errPublicUrl"));
+          else if (!hostIn.value.trim()) showErr(t("errHost"));
+          else if (!portIn.value.trim() || !/^\d+$/.test(portIn.value.trim()))
+            showErr(t("errPortMissing"));
+          else showErr(t("errPortInvalid"));
+          return;
+        }
+        setLoading(btnProbe, true, "connect", "connecting");
+        const r = await window.rekordClientConnect.probe(raw);
+        setLoading(btnProbe, false, "connect", "connecting");
+        if (!r || !r.ok) {
+          showErr((r && r.error) || t("errConnection"));
+          return;
+        }
+        lastBase = r.baseUrl;
+        const snap = r.accounts;
+        if (!snap || !Array.isArray(snap.accounts) || !snap.accounts.length) {
+          showErr(t("errNoAccounts"));
+          return;
+        }
+        renderAccountCards(snap.accounts, snap.defaultAccountId);
+        showAccountsView();
+        btnOpen.disabled = !selectedAccountId;
+      });
+
+      btnOpen.addEventListener("click", async () => {
+        if (!lastBase || !selectedAccountId) return;
+        showErr("");
+        setLoading(btnOpen, true, "open", "opening");
+        const r = await window.rekordClientConnect.join(lastBase, selectedAccountId);
+        setLoading(btnOpen, false, "open", "opening");
+        if (!r || !r.ok) {
+          showErr((r && r.error) || t("errOpen"));
+        }
+      });
+
+      btnBack.addEventListener("click", () => {
+        resetToConnect();
+      });
+
+      /* ── Estensioni APK: scan QR + auto-apertura come il client desktop ── */
+      btnScan.classList.toggle("hidden", !scannerAvailable);
+
+      btnScan.addEventListener("click", async () => {
+        if (!scannerAvailable) return;
+        try {
+          /* hint 0 = QR_CODE */
+          const res =
+            await window.Capacitor.Plugins.CapacitorBarcodeScanner.scanBarcode(
+              { hint: 0 }
+            );
+          const value = res && (res.ScanResult || res.scanResult);
+          if (!value) return;
+          const p = parseBaseUrl(String(value).trim());
+          if (!p) {
+            showErr(t("errPublicUrl"));
+            return;
+          }
+          /* Autocompila i campi e tenta subito la connessione:
+             a probe riuscito compare la scelta account. */
+          if (guessModeFromBase(p.full) === "public") {
+            setConnectionMode("public");
+            publicUrlIn.value = p.full;
+          } else {
+            setConnectionMode("local");
+            hostIn.value = p.h;
+            portIn.value = p.p;
+          }
+          syncModeUi();
+          updateProbeButton();
+          btnProbe.click();
+        } catch (_e) {
+          /* scan annullato dall'utente: nessun errore */
+        }
+      });
+
+      /* Tasto Indietro di Android dall'app → si torna qui: form pronto,
+         niente loop di auto-apertura. */
+      let returnedFromApp = false;
+      window.addEventListener("pageshow", (e) => {
+        if (e.persisted) {
+          returnedFromApp = true;
+          resetToConnect();
+        }
+      });
+
+      /* Come il client desktop: con uno stato salvato si apre direttamente
+         l'app; se il server non risponde si resta sul form con l'errore. */
+      (async () => {
+        if (fromUrl) return;
+        const s = await window.rekordClientConnect.getSaved().catch(() => null);
+        if (!s || !s.baseUrl || !s.accountId) return;
+        const r = await window.rekordClientConnect.probe(s.baseUrl);
+        if (returnedFromApp) return;
+        if (r && r.ok) {
+          window.location.href = window.rekordClientConnect.buildAppUrl(
+            r.baseUrl,
+            s.accountId
+          );
+        } else {
+          showErr((r && r.error) || t("errConnection"));
+        }
+      })();
+    </script>
+  </body>
+</html>

@@ -400,6 +400,7 @@ export const EN: Record<string, string> = {
   "playlists.eyebrow": "Playlists",
   "playlists.heading": "Personal collections",
   "playlists.newPh": "New playlist",
+  "playlists.empty": "No playlists yet — create one above.",
   "playlists.create": "Create",
   "playlists.play": "Play",
   "playlists.addCurrent": "+ Current track",

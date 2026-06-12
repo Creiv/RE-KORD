@@ -6,6 +6,7 @@ import {
   useState,
   type ChangeEvent,
 } from "react";
+import { QrCodeImg } from "../components/QrCodeImg";
 import { useAppConfirm } from "../context/AppConfirmContext";
 import { useUserState } from "../context/UserStateContext";
 import { useI18n } from "../i18n/useI18n";
@@ -124,7 +125,7 @@ function SettingsView() {
   const [remoteAccessBusy, setRemoteAccessBusy] = useState(false);
   const [remoteAccessErr, setRemoteAccessErr] = useState<string | null>(null);
   const [remoteUrlCopyOk, setRemoteUrlCopyOk] = useState<string | null>(null);
-  const remoteUrlCopyTimerRef = useRef<ReturnType<typeof setTimeout> | null>(
+  const remoteUrlCopyTimerRef = useRef<number | null>(
     null
   );
   const [accounts, setAccounts] = useState<AccountsResponse | null>(null);
@@ -1063,14 +1064,10 @@ function SettingsView() {
                   url: remoteAccess.publicUrl,
                 })}
               >
-                <img
+                <QrCodeImg
                   className="settings-network-qr__img"
-                  src={`https://api.qrserver.com/v1/create-qr-code/?size=220x220&data=${encodeURIComponent(
-                    remoteAccess.publicUrl
-                  )}`}
-                  alt=""
-                  loading="lazy"
-                  draggable={false}
+                  value={remoteAccess.publicUrl}
+                  size={220}
                 />
               </button>
               {remoteUrlCopyOk ? (
@@ -1091,10 +1088,7 @@ function SettingsView() {
               <p className="eyebrow">{t("settings.backupEyebrow")}</p>
               <h2>{t("settings.backupHeading")}</h2>
             </div>
-            <div
-              className="row gap flex-wrap"
-              style={{ alignItems: "center", justifyContent: "flex-end" }}
-            >
+            <div className="settings-backup-actions">
               <button
                 type="button"
                 className="ghost-btn ghost-btn--sm"

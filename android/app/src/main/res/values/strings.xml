@@ -1,0 +1,7 @@
+<?xml version='1.0' encoding='utf-8'?>
+<resources>
+    <string name="app_name">RE-KORD</string>
+    <string name="title_activity_main">RE-KORD</string>
+    <string name="package_name">app.rekord.client</string>
+    <string name="custom_url_scheme">app.rekord.client</string>
+</resources>

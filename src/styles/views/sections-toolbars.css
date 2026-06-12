@@ -347,6 +347,38 @@
   max-width: 18rem;
 }
 
+/* Phone: toolbar Coda impilata — titolo sopra, input a tutta larghezza,
+   pulsanti sotto (niente input strizzato accanto ai bottoni).
+   Specificità ≥3: deve battere le regole .queue-page di responsive.css. */
+@media (max-width: 560px) {
+  .queue-page .surface-card--toolbar-only .section-head--page-toolbar {
+    flex-flow: column;
+    align-items: stretch;
+  }
+
+  .queue-page .section-head__tools.page-toolbar__actions {
+    margin-left: 0;
+    width: 100%;
+  }
+
+  .queue-page .queue-hero-actions {
+    width: 100%;
+    justify-content: stretch;
+  }
+
+  .queue-page .queue-hero-actions .queue-name-input {
+    flex: 1 1 100%;
+    max-width: none;
+    min-height: 44px;
+  }
+
+  .queue-page .queue-hero-actions > .primary-btn,
+  .queue-page .queue-hero-actions > .ghost-btn {
+    flex: 1 1 auto;
+    min-height: 44px;
+  }
+}
+
 .section-head__tools {
   display: flex;
   flex-wrap: wrap;
@@ -435,6 +467,37 @@
   width: auto;
   max-width: none;
   flex-wrap: nowrap;
+}
+
+/* Phone: headrow "Panoramica" (pagina artista / genere) impilata —
+   titolo sopra, ordinamenti sotto a tutta larghezza.
+   Specificità a 3 classi: deve battere il flex-flow:row di responsive.css. */
+@media (max-width: 560px) {
+  .section-head.section-head--page-toolbar.library-genre-tracklist-headrow {
+    flex-flow: column;
+    align-items: stretch;
+  }
+
+  .library-genre-tracklist-headrow
+    .section-head__tools.library-overview-toolbar {
+    margin-left: 0;
+    width: 100%;
+    justify-content: flex-start;
+  }
+
+  .library-genre-tracklist-headrow
+    .library-overview-toolbar
+    .segmented--joined {
+    width: 100%;
+  }
+
+  .library-genre-tracklist-headrow
+    .library-overview-toolbar
+    .segmented--joined
+    > button {
+    flex: 1 1 0;
+    min-height: 42px;
+  }
 }
 
 .library-overview-toolbar .segmented--joined button,

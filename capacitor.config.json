@@ -1,0 +1,12 @@
+{
+  "appId": "app.rekord.client",
+  "appName": "RE-KORD",
+  "webDir": "client-shell",
+  "server": {
+    "cleartext": true,
+    "allowNavigation": ["*"]
+  },
+  "android": {
+    "backgroundColor": "#0a0e14"
+  }
+}

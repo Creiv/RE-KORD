@@ -32,6 +32,35 @@ function canUseMediaSession(): boolean {
   return typeof navigator !== "undefined" && "mediaSession" in navigator
 }
 
+/** Client Android (APK): il WebView non ha l'API Media Session — MainActivity
+ *  espone un ponte minimale (`RekordMediaNative.update(json)` per lo stato,
+ *  `window.__rekordMediaAction(action, seekTime)` per i comandi) collegato
+ *  alla MediaSession nativa di RekordMediaService. */
+type RekordMediaNative = { update: (json: string) => void }
+
+function rekordMediaNative(): RekordMediaNative | null {
+  try {
+    const w = window as unknown as { RekordMediaNative?: RekordMediaNative }
+    return w.RekordMediaNative &&
+      typeof w.RekordMediaNative.update === "function"
+      ? w.RekordMediaNative
+      : null
+  } catch {
+    return null
+  }
+}
+
+function coverUrlForTrack(track: EnrichedTrack): string {
+  const version = (track as EnrichedTrack & { updatedAt?: number | null })
+    .updatedAt
+  const baseCover = coverUrlForTrackRelPath(track.relPath)
+  return toAbsoluteUrl(
+    version
+      ? `${baseCover}${baseCover.includes("?") ? "&" : "?"}v=${Math.floor(version)}`
+      : baseCover,
+  )
+}
+
 let cachedMetadataKey: string | null = null
 
 function metadataCacheKey(track: EnrichedTrack): string {
@@ -51,13 +80,7 @@ export function setMediaSessionMetadata(
   const key = metadataCacheKey(track)
   if (cachedMetadataKey === key) return
   cachedMetadataKey = key
-  const version = (track as EnrichedTrack & { updatedAt?: number | null }).updatedAt
-  const baseCover = coverUrlForTrackRelPath(track.relPath)
-  const cover = toAbsoluteUrl(
-    version
-      ? `${baseCover}${baseCover.includes("?") ? "&" : "?"}v=${Math.floor(version)}`
-      : baseCover,
-  )
+  const cover = coverUrlForTrack(track)
   navigator.mediaSession.metadata = new MediaMetadata({
     title: track.title,
     artist: track.artist,
@@ -109,6 +132,37 @@ export type MediaSessionSync = {
 }
 
 export function syncMediaSessionState(sync: MediaSessionSync): void {
+  const native = rekordMediaNative()
+  if (native) {
+    try {
+      if (!sync.track) {
+        native.update(JSON.stringify({ playbackState: "none" }))
+        return
+      }
+      native.update(
+        JSON.stringify({
+          title: sync.track.title,
+          artist: sync.track.artist,
+          album: sync.track.album,
+          artworkUrl: coverUrlForTrack(sync.track),
+          playbackState: sync.playbackState,
+          duration:
+            !sync.skipPosition &&
+            sync.duration != null &&
+            Number.isFinite(sync.duration) &&
+            sync.duration > 0
+              ? sync.duration
+              : 0,
+          position:
+            !sync.skipPosition && sync.position != null ? sync.position : 0,
+          playbackRate: sync.playbackRate ?? 1,
+        }),
+      )
+    } catch {
+      /* */
+    }
+    return
+  }
   if (!canUseMediaSession()) return
   if (!sync.track) {
     setMediaSessionMetadata(null)
@@ -211,10 +265,6 @@ function trySetActionHandler(
 export function registerMediaSessionActions(
   getBridge: () => MediaSessionBridge,
 ): () => void {
-  if (!canUseMediaSession()) return () => {
-    /* */
-  }
-  const ms = navigator.mediaSession
   const run = (fn: () => void) => {
     try {
       fn()
@@ -222,6 +272,43 @@ export function registerMediaSessionActions(
       /* */
     }
   }
+
+  if (rekordMediaNative()) {
+    const target = window as unknown as {
+      __rekordMediaAction?: (action: string, seekTime: number) => void
+    }
+    target.__rekordMediaAction = (action: string, seekTime: number) => {
+      run(() => {
+        const b = getBridge()
+        switch (action) {
+          case "play":
+            b.play()
+            break
+          case "pause":
+          case "stop":
+            b.pause()
+            break
+          case "nexttrack":
+            b.next()
+            break
+          case "previoustrack":
+            b.prev()
+            break
+          case "seekto":
+            if (Number.isFinite(seekTime) && seekTime >= 0) b.seek(seekTime)
+            break
+        }
+      })
+    }
+    return () => {
+      delete target.__rekordMediaAction
+    }
+  }
+
+  if (!canUseMediaSession()) return () => {
+    /* */
+  }
+  const ms = navigator.mediaSession
   const play = () => run(() => getBridge().play())
   const pause = () => run(() => getBridge().pause())
   const mute = () => run(() => getBridge().mute())
@@ -334,9 +421,6 @@ export function registerMediaSessionActions(
       trySetActionHandler(ms, a, null)
     }
     for (const a of EXPERIMENTAL_MUTE_ALIASES) {
-      trySetActionHandler(ms, a, null)
-    }
-    for (const a of EXPERIMENTAL_UNMUTE_ALIASES) {
       trySetActionHandler(ms, a, null)
     }
   }
