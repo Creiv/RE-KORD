@@ -196,6 +196,8 @@ export type UserSettings = {
   plectrDisableVizBackdrop: boolean;
   /** Schede e sezioni semitrasparenti con riflessi (sfondo pagina invariato). */
   glassSurfaces: boolean;
+  /** Opacità delle superfici vetro in percento (0–100, default 62). */
+  glassOpacity: number;
 };
 
 /** Patch impostazioni utente: customTheme può essere parziale (merge profondo). */

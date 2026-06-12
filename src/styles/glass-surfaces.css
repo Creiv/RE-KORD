@@ -5,9 +5,26 @@
  */
 
 :root[data-glass-surfaces="1"] {
-  --glass-panel: color-mix(in srgb, var(--glass-1) 62%, transparent);
-  --glass-panel-deep: color-mix(in srgb, var(--glass-2) 52%, transparent);
-  --glass-panel-muted: color-mix(in srgb, var(--glass-1) 48%, transparent);
+  /* Opacità regolabile da Impostazioni (0–1, default = look storico 62%).
+     Varianti: deep −10 e muted −14 punti rispetto al pannello principale.
+     I fallback senza blur / reduced-transparency più sotto restano fissi
+     (90/86/84): sono reti di sicurezza per la leggibilità. */
+  --glass-user-opacity: 0.62;
+  --glass-panel: color-mix(
+    in srgb,
+    var(--glass-1) clamp(0%, calc(var(--glass-user-opacity) * 100%), 100%),
+    transparent
+  );
+  --glass-panel-deep: color-mix(
+    in srgb,
+    var(--glass-2) clamp(0%, calc(var(--glass-user-opacity) * 100% - 10%), 100%),
+    transparent
+  );
+  --glass-panel-muted: color-mix(
+    in srgb,
+    var(--glass-1) clamp(0%, calc(var(--glass-user-opacity) * 100% - 14%), 100%),
+    transparent
+  );
   --glass-shine: light-dark(
     color-mix(in srgb, white 48%, transparent),
     color-mix(in srgb, white 22%, transparent)

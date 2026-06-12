@@ -176,13 +176,15 @@ export function DashboardMixCard({
           title={t("dashboard.mixHeading")}
           icon={<UiShuffle className="section-head__ic" />}
         />
-        <button
-          type="button"
-          className="text-btn"
-          onClick={() => onOpenSection("libreria")}
-        >
-          {t("dashboard.mixOpenLibrary")}
-        </button>
+        <div className="section-head__tools">
+          <button
+            type="button"
+            className="text-btn"
+            onClick={() => onOpenSection("libreria")}
+          >
+            {t("dashboard.mixOpenLibrary")}
+          </button>
+        </div>
       </div>
       <div className="dashboard-session-body dashboard-mix-body">
         <div className="dashboard-mix-scroll">

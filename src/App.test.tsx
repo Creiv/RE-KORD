@@ -123,6 +123,7 @@ const userState: UserStateV1 = {
     artistAlbumSort: "date",
     audioCrossfadeSec: 3,
     plectrDisableVizBackdrop: false,
+    glassOpacity: 62,
     glassSurfaces: false,
     uiStyle: "classic",
   },

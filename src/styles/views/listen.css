@@ -51,6 +51,7 @@
 .listen-stage__head {
   display: flex;
   flex-direction: row;
+  flex-wrap: wrap;
   align-items: center;
   gap: 1rem 1.15rem;
   min-width: 0;

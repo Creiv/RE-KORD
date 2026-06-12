@@ -173,19 +173,32 @@
   grid-template-columns: repeat(2, minmax(0, 1fr));
 }
 
-.dashboard-page__intro .stats-grid {
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-}
-
+/* Phone: le metriche restano 2×2 (densità da prodotto), solo più compatte */
 @container rekord-page (max-width: 519px) {
   .dashboard-page__intro .stats-grid {
-    grid-template-columns: minmax(0, 1fr);
+    gap: var(--space-3);
+  }
+
+  .dashboard-page__intro .metric-card {
+    padding: 0.8rem 0.9rem;
+  }
+
+  .dashboard-page__intro .metric-card strong {
+    font-size: 1.6rem;
   }
 }
 
 @media (max-width: 519px) {
   .dashboard-page__intro .stats-grid {
-    grid-template-columns: minmax(0, 1fr);
+    gap: var(--space-3);
+  }
+
+  .dashboard-page__intro .metric-card {
+    padding: 0.8rem 0.9rem;
+  }
+
+  .dashboard-page__intro .metric-card strong {
+    font-size: 1.6rem;
   }
 }
 
@@ -915,29 +928,41 @@ html:not([data-glass-surfaces="1"]) .settings-page > .surface-card {
   }
 }
 
-.library-page__chrome .section-head__tools .hero-card__actions {
+.library-page__chrome .section-head__tools .hero-card__actions,
+.library-view > .surface-card--toolbar-only .section-head__tools .hero-card__actions {
   flex-wrap: wrap;
   justify-content: flex-end;
   gap: var(--space-2) var(--space-3);
 }
 
+/* Pagina artista (header fuori da library-page__chrome): il titolo non si
+   comprime sotto i pulsanti Riproduci/Curiosità — questi vanno a capo. */
+.library-view > .surface-card--toolbar-only .page-toolbar__lead--backrow {
+  min-width: min(100%, 14rem);
+}
+
 @media (max-width: 560px) {
-  .library-page__chrome .section-head.section-head--page-toolbar {
+  .library-page__chrome .section-head.section-head--page-toolbar,
+  .library-view > .surface-card--toolbar-only .section-head.section-head--page-toolbar {
     flex-direction: column;
     align-items: stretch;
   }
 
-  .library-page__chrome .section-head__tools {
+  .library-page__chrome .section-head__tools,
+  .library-view > .surface-card--toolbar-only .section-head__tools {
     width: 100%;
   }
 
-  .library-page__chrome .section-head__tools .hero-card__actions {
+  .library-page__chrome .section-head__tools .hero-card__actions,
+  .library-view > .surface-card--toolbar-only .section-head__tools .hero-card__actions {
     width: 100%;
     justify-content: stretch;
   }
 
   .library-page__chrome .section-head__tools .hero-card__actions > .primary-btn,
-  .library-page__chrome .section-head__tools .hero-card__actions > .ghost-btn {
+  .library-page__chrome .section-head__tools .hero-card__actions > .ghost-btn,
+  .library-view > .surface-card--toolbar-only .section-head__tools .hero-card__actions > .primary-btn,
+  .library-view > .surface-card--toolbar-only .section-head__tools .hero-card__actions > .ghost-btn {
     flex: 1 1 auto;
     min-width: 0;
   }

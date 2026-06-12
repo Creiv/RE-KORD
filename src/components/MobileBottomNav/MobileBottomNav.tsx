@@ -1,4 +1,11 @@
-import { useCallback, useEffect, useId, useState } from "react";
+import {
+  useCallback,
+  useEffect,
+  useId,
+  useLayoutEffect,
+  useRef,
+  useState,
+} from "react";
 import type { AppSection } from "../../types";
 import { useRhythmMode } from "../../context/RhythmModeContext";
 import { usePlayer } from "../../context/PlayerContext";
@@ -34,8 +41,29 @@ export function MobileBottomNav({ active, onSelect }: MobileBottomNavProps) {
   const player = usePlayer();
   const sheetId = useId();
   const [moreOpen, setMoreOpen] = useState(false);
+  const navInnerRef = useRef<HTMLDivElement | null>(null);
   const isMoreGroup =
     MORE_KEYS.some((x) => x.id === active) || rhythmOpen;
+
+  // Sincronizza --mobile-nav-h con l'altezza reale della nav (esclusa la
+  // safe-area, che le formule CSS sommano a parte) — pattern usePlayerDockCssVars.
+  useLayoutEffect(() => {
+    if (rhythmOpen) return;
+    const el = navInnerRef.current;
+    if (!el) return;
+    const root = document.documentElement;
+    const apply = () => {
+      const h = Math.ceil(el.getBoundingClientRect().height);
+      if (h > 0) root.style.setProperty("--mobile-nav-h", `${h}px`);
+    };
+    apply();
+    const ro = new ResizeObserver(apply);
+    ro.observe(el);
+    return () => {
+      ro.disconnect();
+      root.style.removeProperty("--mobile-nav-h");
+    };
+  }, [rhythmOpen]);
 
   useEffect(() => {
     if (!moreOpen) return;
@@ -72,7 +100,7 @@ export function MobileBottomNav({ active, onSelect }: MobileBottomNavProps) {
   return (
     <>
       <nav className={`mobile-bottom-nav ${styles.nav}`} aria-label={t("mobile.navAria")}>
-        <div className={styles.navInner}>
+        <div className={styles.navInner} ref={navInnerRef}>
           {PRIMARY.map((item) => {
             const isActive = active === item.id;
             return (

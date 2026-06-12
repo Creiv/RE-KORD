@@ -18,8 +18,10 @@ body,
 
 @media (max-width: 1000px) {
   html {
-    height: var(--app-vh, 100dvh);
-    min-height: var(--app-vh, 100dvh);
+    height: 100vh;
+    height: 100dvh;
+    min-height: 100vh;
+    min-height: 100dvh;
   }
 
   body,

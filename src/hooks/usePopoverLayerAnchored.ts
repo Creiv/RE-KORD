@@ -28,6 +28,9 @@ export type PopoverLayerOptions = {
   preferAbove?: boolean;
 };
 
+/** Altezza tipica di un menu: sotto questa soglia di spazio residuo si flippa sopra. */
+const ESTIMATED_PANEL_H = 280;
+
 export function popoverPlacementStyle(
   placement: PopoverLayerPlacement | null
 ): CSSProperties | undefined {
@@ -89,8 +92,15 @@ export function usePopoverLayerAnchored(
     const m = Math.max(0, options?.edgeMarginPx ?? 8);
     const minW = options?.alignMinWidthPx;
     const vw = window.innerWidth;
+    const vh = window.visualViewport?.height ?? window.innerHeight;
 
-    const preferAbove = options?.preferAbove === true;
+    // Flip verso l'alto se sotto l'ancora non c'è spazio per un menu tipico
+    // (ancore in fondo alla lista / sopra la bottom nav) e sopra ce n'è di più.
+    const spaceBelow = vh - rect.bottom - 4;
+    const flipAbove =
+      spaceBelow < ESTIMATED_PANEL_H && rect.top > spaceBelow;
+
+    const preferAbove = options?.preferAbove === true || flipAbove;
     if (preferAbove) {
       if (minW != null && minW > 0 && rect.right - m < minW) {
         const left = Math.max(m, Math.min(rect.left, vw - minW - m));

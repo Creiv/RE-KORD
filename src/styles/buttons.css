@@ -156,6 +156,14 @@
   color: color-mix(in srgb, var(--accent2) 88%, white 12%);
 }
 
+/* Touch: area di tocco decente senza cambiare l'aspetto su desktop */
+@media (pointer: coarse) {
+  .text-btn {
+    min-height: var(--tap-comfort);
+    padding-inline: 0.35rem;
+  }
+}
+
 .round {
   min-width: 50px;
 }
@@ -168,17 +176,17 @@
 .settings-remote-btn.is-remote-on {
   background: var(--success);
   border-color: var(--success);
-  color: #fff;
+  color: var(--text-on-success);
 }
 
 .settings-remote-btn.is-remote-on:hover:not(:disabled) {
   background: var(--danger-strong);
   border-color: var(--danger-strong);
-  color: #fff;
+  color: var(--text-on-danger);
 }
 
 .settings-remote-btn.is-remote-starting {
   background: var(--warning);
   border-color: var(--warning);
-  color: rgb(10 10 10 / 0.9);
+  color: var(--text-on-warning);
 }

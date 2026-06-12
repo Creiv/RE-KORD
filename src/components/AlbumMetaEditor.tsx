@@ -68,6 +68,15 @@ function AlbumMetaEditorModal({
     }, 0);
   }, [album]);
 
+  useEffect(() => {
+    if (!album) return;
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape") onClose();
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [album, onClose]);
+
   const submit = useCallback(
     async (event: FormEvent) => {
       event.preventDefault();

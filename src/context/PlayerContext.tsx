@@ -916,6 +916,11 @@ export function PlayerProvider({ children }: { children: React.ReactNode }) {
       const onExternalPause = () => {
         if (appInitiatedPauseRef.current) return;
         if (ixFor(audio) !== activeDeckRef.current) return;
+        // Pausa automatica di fine traccia (il browser la emette subito prima
+        // di 'ended'): non è una pausa esterna. Senza questo guard l'icona
+        // scattava a "play" a ogni cambio brano e restava sbagliata durante
+        // il crossfade (l'audio prosegue sull'altro deck).
+        if (audio.ended) return;
         if (!keepPlayingRef.current || !currentRef.current) return;
         if (isAutomotiveDisplayMode()) {
           audio.muted = true;

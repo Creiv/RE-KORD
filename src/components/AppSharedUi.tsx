@@ -916,7 +916,10 @@ export function AlbumCover({
   album: LibraryAlbumIndex;
   compact?: boolean;
 }) {
-  const coverPath = album.coverRelPath?.trim() || album.relPath;
+  // L'indice è autorevole (il server serve solo file cover.* dalla cartella):
+  // senza cover nota niente richiesta, iniziali subito.
+  const coverPath =
+    album.coverRelPath?.trim() || (album.hasCover ? album.relPath : "");
   if (coverPath) {
     const src = versionedUrl(coverUrlForAlbumRelPath(coverPath), album.updatedAt);
     return (

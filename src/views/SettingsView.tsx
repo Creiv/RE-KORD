@@ -15,6 +15,7 @@ import {
   createAccount as createApiAccount,
   deleteAccount as deleteApiAccount,
   downloadKordDataBackup,
+  downloadThemeExport,
   fetchAccounts,
   fetchActivityLog,
   fetchConfig,
@@ -76,6 +77,44 @@ function SettingsView() {
   const [youtubeCookiesOk, setYoutubeCookiesOk] = useState<string | null>(null);
   const youtubeCookiesInputRef = useRef<HTMLInputElement | null>(null);
   const [customThemeDialogOpen, setCustomThemeDialogOpen] = useState(false);
+  // Opacità vetro: anteprima live sul CSS, persistenza con debounce 500ms.
+  const [glassOpacityDraft, setGlassOpacityDraft] = useState(
+    user.state.settings.glassOpacity
+  );
+  const glassOpacitySaveTimer = useRef<ReturnType<typeof setTimeout> | null>(
+    null
+  );
+
+  useEffect(() => {
+    setGlassOpacityDraft(user.state.settings.glassOpacity);
+  }, [user.state.settings.glassOpacity]);
+
+  useEffect(
+    () => () => {
+      if (glassOpacitySaveTimer.current)
+        clearTimeout(glassOpacitySaveTimer.current);
+    },
+    []
+  );
+
+  const onGlassOpacityChange = useCallback(
+    (value: number) => {
+      if (!Number.isFinite(value)) return;
+      const v = Math.min(100, Math.max(0, Math.round(value)));
+      setGlassOpacityDraft(v);
+      // Anteprima immediata; il salvataggio arriva col debounce (500ms).
+      document.documentElement.style.setProperty(
+        "--glass-user-opacity",
+        String(v / 100)
+      );
+      if (glassOpacitySaveTimer.current)
+        clearTimeout(glassOpacitySaveTimer.current);
+      glassOpacitySaveTimer.current = setTimeout(() => {
+        user.updateSettings({ glassOpacity: v });
+      }, 500);
+    },
+    [user]
+  );
   const [lanAccessUrl, setLanAccessUrl] = useState<string | null>(null);
   const [remoteAccess, setRemoteAccess] = useState<RemoteAccessState | null>(
     null
@@ -103,6 +142,7 @@ function SettingsView() {
   const [backupBusy, setBackupBusy] = useState(false);
   const [backupOk, setBackupOk] = useState<string | null>(null);
   const [backupErr, setBackupErr] = useState<string | null>(null);
+  const [themeExportBusy, setThemeExportBusy] = useState(false);
   const [restoreBusy, setRestoreBusy] = useState(false);
   const [restoreOk, setRestoreOk] = useState<string | null>(null);
   const [restoreErr, setRestoreErr] = useState<string | null>(null);
@@ -217,6 +257,21 @@ function SettingsView() {
       .finally(() => setBackupBusy(false));
   };
 
+  const runThemeExport = () => {
+    setBackupErr(null);
+    setBackupOk(null);
+    setThemeExportBusy(true);
+    downloadThemeExport()
+      .then((name) => {
+        setBackupOk(t("settings.themeExportSuccess", { name }));
+        window.setTimeout(() => setBackupOk(null), 5000);
+      })
+      .catch((e: unknown) =>
+        setBackupErr(e instanceof Error ? e.message : String(e))
+      )
+      .finally(() => setThemeExportBusy(false));
+  };
+
   const onRestoreFileChange = (event: ChangeEvent<HTMLInputElement>) => {
     const f = event.target.files?.[0];
     if (event.target) event.target.value = "";
@@ -229,7 +284,14 @@ function SettingsView() {
     setRestoreOk(null);
     setRestoreBusy(true);
     uploadKordDataRestore(f)
-      .then(() => {
+      .then((data) => {
+        if (data?.themeImported) {
+          // Tema importato lato server: ricarica per ripartire dallo stato
+          // fresco (il context in memoria sovrascriverebbe i settings).
+          setRestoreOk(t("settings.themeImportSuccess"));
+          window.setTimeout(() => window.location.reload(), 1200);
+          return;
+        }
         setRestoreOk(t("settings.restoreSuccess"));
         window.setTimeout(() => setRestoreOk(null), 8000);
       })
@@ -590,17 +652,54 @@ function SettingsView() {
               </div>
             </label>
           </div>
-          <label className="settings-ui-inline-control settings-ui-inline-control--checkbox-row">
-            <input
-              type="checkbox"
-              className="settings-checkbox"
-              checked={user.state.settings.glassSurfaces}
-              onChange={(event) =>
-                user.updateSettings({ glassSurfaces: event.target.checked })
-              }
-            />
-            <span>{t("settings.glassSurfaces")}</span>
-          </label>
+          <div className="settings-glass-control">
+            <label className="settings-ui-inline-control settings-ui-inline-control--checkbox-row">
+              <input
+                type="checkbox"
+                className="settings-checkbox"
+                checked={user.state.settings.glassSurfaces}
+                onChange={(event) =>
+                  user.updateSettings({ glassSurfaces: event.target.checked })
+                }
+              />
+              <span>{t("settings.glassSurfaces")}</span>
+            </label>
+            <div className="settings-glass-opacity">
+              <span className="settings-glass-opacity__label">
+                {t("settings.glassOpacity")}
+              </span>
+              <input
+                type="range"
+                className="settings-glass-opacity__slider"
+                min={0}
+                max={100}
+                step={1}
+                disabled={!user.state.settings.glassSurfaces}
+                value={glassOpacityDraft}
+                onChange={(event) =>
+                  onGlassOpacityChange(Number(event.target.value))
+                }
+                aria-label={t("settings.glassOpacity")}
+              />
+              <input
+                type="number"
+                className="ghost-input settings-glass-opacity__num"
+                min={0}
+                max={100}
+                inputMode="numeric"
+                disabled={!user.state.settings.glassSurfaces}
+                value={glassOpacityDraft}
+                onChange={(event) => {
+                  if (event.target.value === "") return;
+                  onGlassOpacityChange(Number(event.target.value));
+                }}
+                aria-label={t("settings.glassOpacity")}
+              />
+              <span className="settings-glass-opacity__unit" aria-hidden>
+                %
+              </span>
+            </div>
+          </div>
           <label className="settings-ui-inline-control">
             <span>{t("settings.visualizer")}</span>
             <select
@@ -1005,6 +1104,16 @@ function SettingsView() {
                 {backupBusy
                   ? t("settings.backupRunning")
                   : t("settings.backupCta")}
+              </button>
+              <button
+                type="button"
+                className="ghost-btn ghost-btn--sm"
+                disabled={themeExportBusy || restoreBusy}
+                onClick={runThemeExport}
+              >
+                {themeExportBusy
+                  ? t("settings.themeExportRunning")
+                  : t("settings.themeExportCta")}
               </button>
               <input
                 ref={restoreFileInputRef}

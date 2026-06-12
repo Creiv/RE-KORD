@@ -485,6 +485,59 @@
   justify-self: start;
 }
 
+/* Stile vetro: checkbox + slider opacità con valore editabile a fianco */
+.settings-glass-control {
+  display: grid;
+  gap: 0.55rem;
+  min-width: 0;
+}
+
+.settings-glass-opacity {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  min-width: 0;
+}
+
+.settings-glass-opacity__label {
+  flex-shrink: 0;
+  font-size: 0.82rem;
+  color: var(--muted-strong);
+}
+
+.settings-glass-opacity__slider {
+  flex: 1 1 auto;
+  min-width: 0;
+  accent-color: var(--accent2);
+  cursor: pointer;
+}
+
+.settings-glass-opacity__slider:disabled {
+  cursor: default;
+  opacity: 0.45;
+}
+
+.settings-glass-opacity__num {
+  width: 4.2rem;
+  flex-shrink: 0;
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+}
+
+.settings-glass-opacity__num:disabled,
+.settings-glass-opacity:has(.settings-glass-opacity__slider:disabled)
+  .settings-glass-opacity__label,
+.settings-glass-opacity:has(.settings-glass-opacity__slider:disabled)
+  .settings-glass-opacity__unit {
+  opacity: 0.45;
+}
+
+.settings-glass-opacity__unit {
+  flex-shrink: 0;
+  font-size: 0.82rem;
+  color: var(--muted);
+}
+
 .account-list {
   display: grid;
   gap: 0.7rem;

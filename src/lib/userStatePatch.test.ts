@@ -33,6 +33,7 @@ function baseState(): UserStateV1 {
       audioCrossfadeSec: 3,
       plectrDisableVizBackdrop: false,
       glassSurfaces: false,
+      glassOpacity: 62,
       uiStyle: "classic",
     },
     shuffleExcludedAlbumIds: [],

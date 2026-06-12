@@ -1,5 +1,14 @@
 /* Plectr — gameplay (caricato on-demand via ensurePlectrStyles) */
 
+/* Palette giudizi: identità fissa del gioco, indipendente dal tema (le corsie
+   devono restare distinguibili). Canvas: rekordLanes.ts / GameCanvas.tsx. */
+.rhythm-dock-panel {
+  --plectr-perfect: #46e7ff;
+  --plectr-good: #35d26f;
+  --plectr-timing: #f2ce4a;
+  --plectr-miss: #ff6f82;
+}
+
 .rhythm-dock-panel .game-screen {
   position: relative;
   width: 100%;
@@ -487,10 +496,10 @@
 }
 
 .rhythm-dock-panel .game-screen--dock .rhythm-lane-strip__cell--miss .rhythm-lane-strip__mark {
-  background: #ff6f82;
+  background: var(--plectr-miss);
   opacity: 1;
   transform: scaleY(1.35);
-  box-shadow: 0 0 10px rgba(255, 111, 130, 0.55);
+  box-shadow: 0 0 10px color-mix(in srgb, var(--plectr-miss) 55%, transparent);
 }
 
 .rhythm-dock-panel .game-screen--dock .touch-pads {
@@ -563,8 +572,8 @@
 }
 
 .rhythm-dock-panel .game-screen--dock .lane-pad--miss {
-  border-top-color: #ff6f82;
-  box-shadow: 0 -4px 14px rgba(255, 111, 130, 0.35);
+  border-top-color: var(--plectr-miss);
+  box-shadow: 0 -4px 14px color-mix(in srgb, var(--plectr-miss) 35%, transparent);
 }
 
 .rhythm-dock-panel .game-screen--dock .lane-pip {
@@ -588,8 +597,8 @@
 }
 
 .rhythm-dock-panel .game-screen--dock .lane-pad--miss .lane-pip {
-  background: #ff6f82;
-  box-shadow: 0 0 12px rgba(255, 111, 130, 0.65);
+  background: var(--plectr-miss);
+  box-shadow: 0 0 12px color-mix(in srgb, var(--plectr-miss) 65%, transparent);
 }
 
 .rhythm-dock-panel .game-screen--dock .hud.top,
@@ -704,19 +713,19 @@
 }
 
 .rhythm-dock-panel .game-screen--dock .feedback--compact.feedback-perfect strong {
-  color: #46e7ff;
+  color: var(--plectr-perfect);
 }
 
 .rhythm-dock-panel .game-screen--dock .feedback--compact.feedback-good strong {
-  color: #35d26f;
+  color: var(--plectr-good);
 }
 
 .rhythm-dock-panel .game-screen--dock .feedback--compact.feedback-timing strong {
-  color: #f2ce4a;
+  color: var(--plectr-timing);
 }
 
 .rhythm-dock-panel .game-screen--dock .feedback--compact.feedback-miss strong {
-  color: #ff6f82;
+  color: var(--plectr-miss);
 }
 
 @media (min-width: 760px) {

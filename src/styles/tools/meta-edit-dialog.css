@@ -34,6 +34,7 @@
   width: min(28rem, 100%);
   max-height: min(90dvh, 100%);
   overflow: auto;
+  overscroll-behavior: contain;
   margin: 0;
 }
 
@@ -71,7 +72,7 @@
 .app-dialog__btn--danger {
   background: color-mix(in srgb, var(--danger, #c44) 82%, var(--bg) 18%);
   border-color: color-mix(in srgb, var(--danger, #c44) 50%, var(--border) 50%);
-  color: #fff;
+  color: var(--text-on-danger);
 }
 
 .app-dialog__btn--danger:hover {
@@ -79,9 +80,9 @@
 }
 
 .app-dialog__btn--warning {
-  background: color-mix(in srgb, #d1a32d 86%, var(--bg) 14%);
-  border-color: color-mix(in srgb, #d1a32d 55%, var(--border) 45%);
-  color: #1a1102;
+  background: color-mix(in srgb, var(--warning, #d1a32d) 86%, var(--bg) 14%);
+  border-color: color-mix(in srgb, var(--warning, #d1a32d) 55%, var(--border) 45%);
+  color: var(--text-on-warning);
 }
 
 .app-dialog__btn--warning:hover {
@@ -153,6 +154,15 @@
 
 .meta-edit-lyrics-textarea {
   width: 100%;
+}
+
+/* Schermi bassi (landscape phone, tastiera aperta): la textarea non deve
+   spingere le azioni del dialog fuori dallo schermo. */
+@media (max-height: 700px) {
+  .meta-edit-lyrics-textarea {
+    max-height: 38dvh;
+    max-height: calc(var(--app-vh, 100dvh) * 0.38);
+  }
 }
 
 .meta-edit-field {

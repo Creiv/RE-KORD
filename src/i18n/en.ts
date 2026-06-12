@@ -490,11 +490,16 @@ export const EN: Record<string, string> = {
   "settings.backupCta": "BACKUP",
   "settings.backupRunning": "Preparing…",
   "settings.backupSuccess": "Download started: {{name}}",
-  "settings.restoreCta": "UPLOAD",
-  "settings.restoreRunning": "Restoring…",
+  "settings.restoreCta": "UPLOAD BACKUP OR THEME",
+  "settings.restoreRunning": "Uploading…",
   "settings.restoreSuccess":
     "Restore complete. Reload the page to load your saved session and settings.",
-  "settings.restoreErrNotZip": "Select a .zip file produced by RE-KORD backup.",
+  "settings.restoreErrNotZip":
+    "Select a .zip file produced by RE-KORD backup or theme export.",
+  "settings.themeExportCta": "EXPORT THEME",
+  "settings.themeExportRunning": "Exporting…",
+  "settings.themeExportSuccess": "Download started: {{name}}",
+  "settings.themeImportSuccess": "Theme imported! Reloading the page…",
   "settings.activityLogEmpty": "No activity recorded yet.",
   "settings.activityLogReload": "Refresh",
   "settings.activityLogColTime": "When",
@@ -520,6 +525,7 @@ export const EN: Record<string, string> = {
   "settings.uiStyleModern": "Modern",
   "settings.glassSurfaces":
     "Glass style (semi-transparent cards with reflections)",
+  "settings.glassOpacity": "Glass opacity",
   "settings.visualizer": "Visualizer",
   "settings.trackTransitions": "Transitions between tracks",
   "settings.trackTransitionsHint":

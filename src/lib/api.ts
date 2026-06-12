@@ -680,16 +680,58 @@ export async function downloadKordDataBackup(): Promise<string> {
   return name
 }
 
-export async function uploadKordDataRestore(
-  file: File,
-): Promise<{ restored: boolean; accountCount: number }> {
+export async function uploadKordDataRestore(file: File): Promise<{
+  restored?: boolean
+  accountCount?: number
+  themeImported?: boolean
+  theme?: string | null
+}> {
   const fd = new FormData()
   fd.append("file", file)
   const response = await apiFetch("/api/backup/kord-restore", {
     method: "POST",
     body: fd,
   })
-  return unwrap<{ restored: boolean; accountCount: number }>(response)
+  return unwrap<{
+    restored?: boolean
+    accountCount?: number
+    themeImported?: boolean
+    theme?: string | null
+  }>(response)
+}
+
+/** Scarica lo zip del tema corrente (solo dati del tema, condivisibile). */
+export async function downloadThemeExport(): Promise<string> {
+  const response = await apiFetch("/api/backup/theme-export", {
+    method: "GET",
+    cache: "no-store",
+  })
+  if (!response.ok) {
+    const text = await response.text()
+    let msg = "Theme export failed"
+    try {
+      const j = JSON.parse(text) as { error?: string }
+      if (j?.error) msg = j.error
+    } catch {
+      if (text) msg = text
+    }
+    throw new Error(msg)
+  }
+  const cd = response.headers.get("Content-Disposition") || ""
+  const m = /filename\*?=(?:UTF-8''|"?)([^";\n]+)/i.exec(cd)
+  const name =
+    (m?.[1] || "")
+      .replace(/^["']|["']$/g, "")
+      .trim() || "rekord-theme.zip"
+  const blob = await response.blob()
+  const url = URL.createObjectURL(blob)
+  const a = document.createElement("a")
+  a.href = url
+  a.download = decodeURIComponent(name)
+  a.rel = "noopener"
+  a.click()
+  window.setTimeout(() => URL.revokeObjectURL(url), 60_000)
+  return name
 }
 
 export type PresetYtdlp = {

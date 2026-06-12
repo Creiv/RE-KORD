@@ -81,6 +81,13 @@
 }
 
 /* Dashboard — scheda Mix (generi / mood) */
+/* Header card: sotto questa larghezza il titolo non si comprime e l'azione
+   "Apri libreria" va a capo invece di collidere col titolo (cfr.
+   .section-head__album-tracklist-row in sections-toolbars.css). */
+.dashboard-mix-card .section-head--page-toolbar .section-head__lead {
+  min-width: min(100%, 14rem);
+}
+
 .dashboard-mix-body {
   display: flex;
   flex-direction: column;

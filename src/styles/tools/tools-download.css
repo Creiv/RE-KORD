@@ -630,6 +630,12 @@
   color: var(--accent2);
 }
 
+/* Tastiera: anello di focus pieno, il solo cambio bordo è troppo sottile */
+.tools-dl-mode__help:focus-visible {
+  outline: 2px solid var(--focus-ring);
+  outline-offset: 2px;
+}
+
 .tools-dl-mode__tip {
   display: none;
   position: absolute;

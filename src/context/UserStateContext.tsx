@@ -88,7 +88,14 @@ function defaultSettings(): UserSettings {
     audioCrossfadeSec: 3,
     plectrDisableVizBackdrop: false,
     glassSurfaces: false,
+    glassOpacity: 62,
   };
+}
+
+function normalizeGlassOpacity(raw: unknown): number {
+  const n = Number(raw);
+  if (!Number.isFinite(n)) return 62;
+  return Math.min(100, Math.max(0, Math.round(n)));
 }
 
 function normalizeAudioCrossfadeSec(raw: Partial<UserSettings> | UserSettingsPatch): AudioCrossfadeSec {
@@ -198,6 +205,7 @@ function normalizeSettings(raw: Partial<UserSettings> | UserSettingsPatch): User
     audioCrossfadeSec: normalizeAudioCrossfadeSec(raw),
     plectrDisableVizBackdrop: raw.plectrDisableVizBackdrop === true,
     glassSurfaces: raw.glassSurfaces === true,
+    glassOpacity: normalizeGlassOpacity(raw.glassOpacity),
     uiStyle: raw.uiStyle === "modern" ? "modern" : "classic",
   };
 }
@@ -300,18 +308,28 @@ function isLightSection(sectionHex: string): boolean {
   return relativeLuminance(sectionHex) > 0.45;
 }
 
+/** Sotto questa opacità vetro le card lasciano vedere lo sfondo: il
+ *  bianco/nero del testo segue la luminosità dello sfondo, non delle sezioni. */
+const GLASS_INK_FROM_BG_BELOW = 50;
+
 function textOnAccent(accentHex: string): string {
   return relativeLuminance(accentHex) > 0.55
     ? mixHex(accentHex, "#0a0a0a", 0.9)
     : mixHex(accentHex, "#ffffff", 0.94);
 }
 
-function applyCustomThemeVars(root: HTMLElement, theme: CustomThemeSettings) {
+function applyCustomThemeVars(
+  root: HTMLElement,
+  theme: CustomThemeSettings,
+  opts?: { inkFromBg?: boolean }
+) {
   const bg = theme.bg;
   const section = theme.section;
   const accent = theme.accent;
   const accent2 = theme.accent2;
-  const light = isLightSection(section);
+  // Palette chiara/scura: di norma decide il colore Sezioni (è lì che poggia
+  // il testo); con vetro molto trasparente decide lo sfondo che traspare.
+  const light = isLightSection(opts?.inkFromBg ? bg : section);
   root.style.colorScheme = light ? "light" : "dark";
 
   if (light) {
@@ -939,11 +957,23 @@ export function UserStateProvider({ children }: { children: React.ReactNode }) {
     const root = document.documentElement;
     root.dataset.theme = state.settings.theme;
     if (state.settings.theme === "custom") {
-      applyCustomThemeVars(root, state.settings.customTheme ?? DEFAULT_CUSTOM_THEME);
+      const inkFromBg =
+        state.settings.glassSurfaces &&
+        state.settings.glassOpacity < GLASS_INK_FROM_BG_BELOW;
+      applyCustomThemeVars(
+        root,
+        state.settings.customTheme ?? DEFAULT_CUSTOM_THEME,
+        { inkFromBg }
+      );
     } else {
       clearCustomThemeVars(root);
     }
-  }, [state.settings.customTheme, state.settings.theme]);
+  }, [
+    state.settings.customTheme,
+    state.settings.theme,
+    state.settings.glassSurfaces,
+    state.settings.glassOpacity,
+  ]);
 
   useEffect(() => {
     const root = document.documentElement;
@@ -975,11 +1005,16 @@ export function UserStateProvider({ children }: { children: React.ReactNode }) {
   useEffect(() => {
     if (state.settings.glassSurfaces) {
       document.documentElement.dataset.glassSurfaces = "1";
+      document.documentElement.style.setProperty(
+        "--glass-user-opacity",
+        String(normalizeGlassOpacity(state.settings.glassOpacity) / 100)
+      );
     } else {
       delete document.documentElement.dataset.glassSurfaces;
       delete document.documentElement.dataset.glassBackdrop;
+      document.documentElement.style.removeProperty("--glass-user-opacity");
     }
-  }, [state.settings.glassSurfaces]);
+  }, [state.settings.glassSurfaces, state.settings.glassOpacity]);
 
   useEffect(() => {
     if (state.settings.uiStyle === "modern") {

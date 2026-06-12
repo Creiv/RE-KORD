@@ -20,6 +20,10 @@
   --danger: #f87171;
   --success: #2e7d32;
   --danger-strong: #c62828;
+  /* Testo sopra superfici di stato (override per-tema se serve) */
+  --text-on-success: #fff;
+  --text-on-danger: #fff;
+  --text-on-warning: #1a1102;
   --bar-h: 96px;
   --content-pad-bottom: calc(
     env(safe-area-inset-bottom, 0px) + 0.75rem + var(--bar-h) + 0.5rem
@@ -57,6 +61,7 @@
   --z-modal: 120;
   --z-overlay-raised: 125;
   --z-popover: 250;
+  --z-toast: 260;
   --font-ui: "Inter", system-ui, -apple-system, sans-serif;
   --font-mono: "JetBrains Mono", ui-monospace, monospace;
   --page-glow-1: rgba(255, 143, 92, 0.16);
@@ -945,12 +950,15 @@
   --player-art-fb: rgba(255, 160, 170, 0.12);
 }
 
+/* Altezza app: 100dvh nativo (il browser la tiene corretta al variare della
+   chrome UI); --app-vh resta solo per superfici keyboard-aware (dialog). */
 html {
-  height: var(--app-vh, 100dvh);
-  min-height: var(--app-vh, 100dvh);
+  height: 100vh;
+  height: 100dvh;
+  min-height: 100vh;
+  min-height: 100dvh;
 }
 
-html,
 body,
 #root {
   height: 100%;
@@ -968,8 +976,8 @@ body,
 
 body {
   overflow: hidden;
+  overscroll-behavior: none;
   box-sizing: border-box;
-  min-height: var(--app-vh, 100dvh);
   background: linear-gradient(180deg, var(--page-lg-1) 0%, var(--page-lg-2) 100%);
 }
 

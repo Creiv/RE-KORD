@@ -498,12 +498,16 @@ export const IT: Record<string, string> = {
   "settings.backupCta": "BACKUP",
   "settings.backupRunning": "Preparazione in corso…",
   "settings.backupSuccess": "Download avviato: {{name}}",
-  "settings.restoreCta": "UPLOAD",
-  "settings.restoreRunning": "Ripristino in corso…",
+  "settings.restoreCta": "UPLOAD BACKUP O TEMA",
+  "settings.restoreRunning": "Caricamento in corso…",
   "settings.restoreSuccess":
     "Ripristino completato. Ricarica la pagina per applicare lo stato e le impostazioni.",
   "settings.restoreErrNotZip":
-    "Seleziona un file .zip prodotto dal backup RE-KORD.",
+    "Seleziona un file .zip prodotto dal backup o dall'export tema RE-KORD.",
+  "settings.themeExportCta": "ESPORTA TEMA",
+  "settings.themeExportRunning": "Esportazione…",
+  "settings.themeExportSuccess": "Download avviato: {{name}}",
+  "settings.themeImportSuccess": "Tema importato! Ricarico la pagina…",
   "settings.activityLogEmpty": "Nessuna attività registrata finora.",
   "settings.activityLogReload": "Aggiorna",
   "settings.activityLogColTime": "Quando",
@@ -529,6 +533,7 @@ export const IT: Record<string, string> = {
   "settings.uiStyleModern": "Moderno",
   "settings.glassSurfaces":
     "Stile vetro (schede semitrasparenti con riflessi)",
+  "settings.glassOpacity": "Opacità vetro",
   "settings.visualizer": "Visualizer",
   "settings.trackTransitions": "Transizioni tra i brani",
   "settings.trackTransitionsHint":

@@ -90,6 +90,13 @@ button.settings-network-qr:focus-visible {
   }
 }
 
+.activity-log-scroll {
+  max-width: 100%;
+  overflow-x: auto;
+  overscroll-behavior-x: contain;
+  -webkit-overflow-scrolling: touch;
+}
+
 .activity-log-table {
   width: 100%;
   border-collapse: collapse;

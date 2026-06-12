@@ -317,8 +317,15 @@ function sanitizeSettings(settings) {
     audioCrossfadeSec: normalizeAudioCrossfadeSec(src),
     plectrDisableVizBackdrop: src.plectrDisableVizBackdrop === true,
     glassSurfaces: src.glassSurfaces === true,
+    glassOpacity: normalizeGlassOpacity(src.glassOpacity),
     uiStyle: src.uiStyle === "modern" ? "modern" : "classic",
   }
+}
+
+function normalizeGlassOpacity(raw) {
+  const n = Number(raw)
+  if (!Number.isFinite(n)) return 62
+  return Math.min(100, Math.max(0, Math.round(n)))
 }
 
 function sanitizeShuffleIdList(raw) {
