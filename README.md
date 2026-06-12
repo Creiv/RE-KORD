@@ -2,181 +2,153 @@
   <img src="public/REKORDlogo.png" alt="RE-KORD" width="128" />
 </p>
 
-<h1 align="center">RE-KORD 3.5</h1>
-
 <p align="center">
-  <strong>Your local music hub.</strong> One interface to listen, organize, enrich your library, and play with the music — on your disk, on your network, under your control.
+  <a href="https://re-kord.com"><strong>re-kord.com</strong></a>
+  &nbsp;·&nbsp;
+  <a href="https://www.reddit.com/r/RE_KORD/"><strong>r/RE_KORD</strong></a>
 </p>
 
-<p align="center"><em>Exact semver in <code>package.json</code> · UI in English and Italian</em></p>
+<h1 align="center">RE-KORD 4.0</h1>
 
-> **Stable release line:** **3.5** builds on the rebuilt 3.4 branch (no server-side `sharp` for covers, DiscoWall in Studio → Listen) and adds **Docker** deployment (`Dockerfile`, `docker-compose.yml`) plus **Plectr visualizer backdrops** (live audio visualizer behind the lanes; disable in Settings). Earlier **3.3** tags on GitHub used a different stack and are not recommended for new installs.
+<p align="center">
+  <strong>Your music. Your server. Your rules.</strong><br />
+  A self-hosted music hub that turns a folder of audio files into a complete
+  listening, curation, and play experience — on your disk, on your network,
+  under your control.
+</p>
 
----
-
-## Links
-
-- **[re-kord.com](https://re-kord.com)** — official site: overview, downloads (Server, Client, Docker), and install guides.
-- **[r/RE_KORD](https://www.reddit.com/r/RE_KORD/)** — community on Reddit for support, tips, and release updates.
-
----
-
-## Why RE-KORD
-
-RE-KORD is not a cloud service: it is **home for your audio**. It indexes the folder you choose, keeps queue, playlists, favorites, and stats per profile, and gives you studio-grade tools built in. Open the player in **Studio → Listen**, pick a **visualizer** (including **DiscoWall**), or launch **Plectr** on the track that is playing.
-
-Built for **legal libraries** (rights-free music, your own productions, podcasts, material you are allowed to use). You decide what to import; RE-KORD helps you manage it.
+<p align="center"><em>UI in English and Italian · exact semver in <code>package.json</code></em></p>
 
 ---
 
-## Everything RE-KORD does
+## What is RE-KORD
 
-### Command center
+RE-KORD is **not a cloud service** — it's a home for your audio. Point it at a
+folder and it becomes your personal music server: a fast library with rich
+metadata, a serious player with visualizers and synced lyrics, studio tools to
+grow and maintain your collection, and even a rhythm game generated from your
+own tracks. Everything stays on your machine; every device on your network can
+join in.
 
-| Area | What you get |
-| --- | --- |
-| **Dashboard** | Artists / albums / tracks overview, highlighted favorites, recently updated albums, **instant mix** by genre and mood, resume listening session, library quality alerts (covers, metadata, loose-track folders). |
-| **Library** | Browse by **artists, genres, and moods**; quick search (`Ctrl+K`); sort modes; album and track sheets; edit titles, tags, **LRC** or plain lyrics; **smart shuffle** exclusions (single track, whole album, genre). |
-| **Studio** | One workspace with tabs: **Listen** (now playing, queue, lyrics, visualizer), catalog discovery, download, metadata, artwork. |
-| **Plectr** | Rhythm game on generated charts, synced with the player. |
-| **Queue · Playlists · Favorites · Recent** | Full session management: reorder, repeat, save sets, jump back in time. |
-| **Statistics** | Top tracks, artists, albums, and genres; filters for plays, favorites, and shuffle blocks. |
-| **Achievements** | XP progression, levels, daily streak, dozens of badges (plays, favorites, playlists, library, Plectr…). |
-| **Settings** | Library root, local accounts, theme and visualizer, LAN / Cloudflare, backup, activity log, YouTube cookies for downloads. |
+One install gives you the **server + web app**. Around it: a **desktop app**
+(Server or thin Client), a **Docker image**, an installable **PWA**, and — new
+in 4.0 — a native **Android client**.
 
-### Listening and player
+## Highlights
 
-- **Persistent player** with queue, shuffle, repeat (off / all / one), volume, session restore on launch.
-- **Listen** (Studio tab): now playing, up-next queue, shuffle across the library, recent history, **lyrics** panel (synced LRC or plain text), and the active **visualizer** on the player.
-- **Crossfade** (off, 3 s, 5 s) between tracks and softer UI transitions when artwork changes.
-- **Visualizer** modes (Settings → Theme and visualizer): **bars**, **mirror**, **wave**, **smooth wave**, **H·M·B waves**, **signals**, **DiscoWall**, **karaoke** — all driven by live audio analysis on the playing track. **DiscoWall** is a grid “light wall” (audio energy plus Plectr chart data when a chart exists); it is not a separate app section.
-- **Google Cast** (Remote Playback) where the browser supports it.
-- **Mobile dock**: compact controls, swipe between tracks, quick access to Plectr and sections.
+🎧 **Listen like you mean it**
+Persistent player with queue, smart shuffle, repeat and crossfade; synced
+**LRC lyrics**; 8 audio-reactive **visualizers** (bars, waves, DiscoWall,
+karaoke…); OS media integration (lock screen, headphone and car controls,
+Android Auto-friendly).
 
-### Studio — your post-production room
+🗂️ **A library that stays healthy**
+Browse by artist, genre, or **mood**; instant search; quality alerts for
+missing covers and metadata; per-track and per-album metadata editors;
+multi-source artwork and trivia lookup; bulk scans and title cleanup.
 
-- **Listen** — player, queue, lyrics, and visualizer (same modes as in Settings).
-- **Discover** — **local** catalog (per-account artist/album selection) and **web** suggestions (preview and download into the library).
-- **Download** — `yt-dlp` bundled in Server packs; single, playlist/album, artist discography; classic and **explore** UI; folders under *Music*; progress and cancel; native AAC/Opus (m4a/webm) without ffmpeg in RE-KORD; optional YouTube cookies.
-- **Metadata** — album and track enrichment (MusicBrainz / iTunes and RE-KORD pipeline), bulk scan, heuristic **title cleanup**, prune orphan track metadata.
-- **Covers** — artwork search and apply to album folders (full-size files served by the API; resized in the browser).
+🛠️ **Studio built in**
+Discover and download new music (bundled `yt-dlp`), enrich metadata from
+MusicBrainz/iTunes and friends, manage covers, curate a per-profile catalog —
+all from the same UI, with the library re-indexed automatically.
 
-### Plectr
+🎮 **Plectr**
+A rhythm game charted on the fly from *your* tracks: three difficulties,
+holds and swipes, per-track records, and live sync with whatever is playing.
 
-- **Plectr** (main nav) — rhythm game on charts generated from audio: **easy / normal / hard**, tap / hold, score, combo, accuracy, **per-track records** (per account), **live sync** with the player (follow the track already playing). Open from the nav or with **P** while a queue is active.
-- **Plectr backdrop** — the active **visualizer** (bars, DiscoWall, karaoke, …) renders behind the lanes in the game canvas; turn it off in **Settings → Theme and visualizer** if you prefer a clean lane view.
+📊 **Know your habits**
+Play counts, top artists/albums/genres, favorites, listening streaks — plus an
+achievements system with XP, levels, and 60+ badges.
 
-### Personalization and profiles
+🎨 **Make it yours**
+18 theme presets plus a fully custom theme (colors or background image),
+classic/modern UI styles, **glass surfaces with adjustable opacity**, and
+**shareable themes**: export your look as a file, import it on any other
+server or profile.
 
-- **Themes** — preset palettes (light/dark, Prism Engine, custom colors).
-- **Languages** — **English** or **Italian** UI.
-- **Local accounts** — multiple profiles on one machine, each with state (favorites, playlists, stats, Plectr records, shuffle exclusions) under `.kord/` in the library.
-- **Backup and restore** — ZIP of settings and state; browsable server activity log.
+🌐 **Anywhere you are**
+LAN access out of the box, one-click **Cloudflare tunnel** with QR code for
+remote listening, multiple local profiles, full **backup/restore**, and a
+self-updating client model: update the server once, every client follows.
 
-### Network and distribution
+## New in 4.0
 
-- **Node server + React UI** — API and interface from one install; filesystem index of the *music root*.
-- **LAN** — listens on all interfaces by default: other devices open `http://<IP>:<port>` (firewall permitting).
-- **External access** — **Cloudflare** tunnel from Settings (quick trycloudflare URL or stable named tunnel).
-- **Electron** — full desktop app; **RE-KORD Server** (server + yt-dlp per target OS); **RE-KORD Client** (UI only, points at an existing server).
-- **Docker** — single-container server + built UI (`Dockerfile`, `docker-compose.yml`); persistent volumes for `/music` and `/config`.
+- 📱 **Android client (APK)** — connects to your server like the desktop
+  client, with **QR pairing** straight from Settings → Network: scan, pick a
+  profile, play. Native playback widget and media controls, portrait-locked,
+  hardware back navigation.
+- 🎨 **Theme sharing** — one-click theme export (colors, style, glass,
+  background image) into a portable file anyone can import.
+- 🪟 **Adjustable glass** — a transparency slider for glass surfaces, with
+  text contrast that adapts automatically.
+- 📐 **Mobile, polished** — every page reviewed and tightened for phones:
+  full-height layout on every device, stacked toolbars, denser dashboards,
+  instant cover placeholders.
+- 🖥️ **Cross-platform packaging fixes** — proper app icon on Windows builds
+  made from Linux, one-command Android packaging.
 
----
+## Get RE-KORD
 
-## Disclaimer
+| Flavor | What it is | How |
+| --- | --- | --- |
+| **Server** (desktop) | Full app: server + UI + bundled yt-dlp/cloudflared | Downloads on [re-kord.com](https://re-kord.com) |
+| **Client** (desktop) | Thin UI that connects to an existing server | Downloads on [re-kord.com](https://re-kord.com) |
+| **Android client** | Native APK, QR pairing, media widget | `npm run pack:android:client` → `release/` |
+| **Docker** | Single container: server + built UI | See below |
+| **PWA** | Install the web app from any browser on your network | Open the server URL → install |
 
-RE-KORD and its creators **are not responsible** for what users download, import, or manage. Each user is **solely responsible** for copyright and local law compliance. Use only content you have rights or permission to use.
+### Docker quick start
 
----
+```bash
+cp .env.docker.example .env       # set REKORD_MUSIC_HOST to your music folder
+npm run docker:build && npm run docker:up
+# → http://localhost:3001
+```
 
-## Technical (brief)
+Bind mounts: `REKORD_MUSIC_HOST → /music` (library) and
+`REKORD_CONFIG_HOST → /config` (accounts, settings, cookies). Useful knobs:
+`REKORD_PORT`, `REKORD_LISTEN_HOST=127.0.0.1` (loopback only), `MUSIC_ROOT`
+(lock the library path).
 
-### Requirements
-
-- Recent **Node.js** (development and from-source use).
-- A folder of audio files.
-- **yt-dlp** optional in dev (`PATH` or `YTDLP_PATH`); included in **`pack:*:server`** builds per target OS.
-
-### Quick start
+### From source
 
 ```bash
 npm install
 npm run dev          # browser: Vite :5173 + API :3001
-npm run dev:app      # Electron + server in userData
+npm run dev:app      # Electron desktop + server
+
+npm test && npm run lint && npm run build
 ```
 
-Library root: `MUSIC_ROOT` or Settings. Server config dir: `REKORD_USER_CONFIG_DIR` (legacy: `WPP_USER_CONFIG_DIR`).
+Library root: `MUSIC_ROOT` env or in-app Settings. Per-profile state lives in
+`MUSIC_ROOT/.kord/` and survives reinstalls.
 
-### Docker
+### Packaging 4.0
 
 ```bash
-cp .env.docker.example .env
-# Edit REKORD_MUSIC_HOST to your music folder on the host
-
-npm run docker:build
-npm run docker:up
-# → http://localhost:3001 (or REKORD_PORT)
+npm run pack:linux:server -- 4.0.0   # → release/RE-KORD-Server-4.0.0-linux-x86_64.AppImage
+npm run pack:win:server  -- 4.0.0    # Windows server (NSIS on Windows hosts, .7z from Linux)
+npm run pack:linux:client -- 4.0.0   # thin desktop client
+npm run pack:win:client  -- 4.0.0
+npm run pack:android:client -- 4.0.0 # → release/RE-KORD-Client-4.0.0-android.apk
 ```
 
-By default, `docker-compose.yml` **bind-mounts host folders** (no manual `docker cp`):
+Server packs bundle **yt-dlp** and **cloudflared** for the target OS. Windows
+builds made from Linux get the correct app icon automatically. On Linux
+without `libfuse2`, run AppImages via `./scripts/run-linux-appimage.sh`.
 
-| Host (`.env`) | Container | Purpose |
-| --- | --- | --- |
-| `REKORD_MUSIC_HOST` (default `./docker-data/music`) | `/music` | Music library |
-| `REKORD_CONFIG_HOST` (default `./docker-data/config`) | `/config` | Server config, accounts, cookies |
+## Tech, in one line
 
-On first start, the entrypoint creates `/config/music-root.config.json` pointing at `/music`. Settings in the UI work from `http://localhost:3001` (Docker admin access). Optional `MUSIC_ROOT` in compose locks the library path via environment.
+React 19 + Vite on the front, Express on the back, Electron for desktop,
+Capacitor for Android, Docker for servers — a single codebase, no external
+database, no telemetry.
 
-| Variable | Effect |
-| --- | --- |
-| `REKORD_MUSIC_HOST` / `REKORD_CONFIG_HOST` | Host paths for bind mounts |
-| `REKORD_LISTEN_HOST=127.0.0.1` | Loopback only (no LAN) |
-| `REKORD_PORT` / `KORD_PORT` / `PORT` | HTTP port |
-| `REKORD_YTDLP_COOKIES` | Netscape cookies file path inside `/config` |
-| `MUSIC_ROOT` (optional in compose) | Lock library folder (disables in-app path change) |
-| `REKORD_LISTEN_ON_LAN=1` | Expose Vite dev server on LAN |
+## Disclaimer
 
-### Build and release 3.5
-
-```bash
-npm run build
-npm test && npm run lint
-
-# Recommended: versioned Server / Client packs (uses electron-builder.rekord.cjs)
-npm run pack:linux:server -- 3.5.0   # → release/RE-KORD-Server-3.5.0-linux-x64.AppImage
-npm run pack:win:server -- 3.5.0    # → RE-KORD Server .exe (build on Windows for NSIS)
-npm run pack:linux:client -- 3.5.0  # → RE-KORD-Client-… (UI only, remote server)
-npm run pack:win:client -- 3.5.0
-
-npm run pack              # generic electron-builder on current OS → release/
-```
-
-On Linux without `libfuse2`, start the AppImage with:
-
-```bash
-./scripts/run-linux-appimage.sh
-# or: APPIMAGE_EXTRACT_AND_RUN=1 ./release/RE-KORD-Server-3.5.0-linux-x64.AppImage
-```
-
-Server packs bundle **yt-dlp** and **cloudflared** for the target OS, run `vite build`, and ship `dist/`, `server/`, and `public/REKORDlogo.png`. Existing libraries keep data under **`.kord/`** (unchanged on disk).
-
-Windows: prefer building **on Windows** for installers. Linux Electron: `ELECTRON_DISABLE_SANDBOX=1` if needed. On Linux, cross-building Windows may yield a `.7z` unless `REKORD_WIN_INSTALLER=1` on a Windows host.
-
-### Repo (at a glance)
-
-| Path | Role |
-| --- | --- |
-| `src/` | React, player, routing, i18n, Plectr game |
-| `server/` | Express, library index, downloads, state in `MUSIC_ROOT/.kord/` |
-| `electron/` | Main process, RE-KORD Client connect flow |
-| `Dockerfile` · `docker-compose.yml` | Container image and compose stack (server + UI) |
-
-**Scripts:** `dev` · `dev:app` · `build` · `test` · `lint` · `pack` / `pack:linux|win|mac` · `pack:*:server|client` · `docker:build` · `docker:up` · `docker:down` · `docker:logs`
-
-**Main API:** `/api/library` · `/api/library-index` · `/api/dashboard` · `/api/user-state` · `/api/download` · `/api/artwork/*` · `/api/album-info/*` · `/api/track-info/*` · `/api/fs/*`
-
-**Publishers:** default LAN bind — restrict with `REKORD_LISTEN_HOST` when remote access is not wanted; `pack:*:server` for Studio with bundled yt-dlp; build on the target OS when possible.
+RE-KORD and its creators **are not responsible** for what users download,
+import, or manage. Each user is **solely responsible** for copyright and local
+law compliance. Use only content you have the rights or permission to use.
 
 ---
 
-<p align="center"><em>RE-KORD 3.5 by Creiv — local music, serious tools, play on the beat.</em></p>
+<p align="center"><em>RE-KORD 4.0 by Creiv — local music, serious tools, play on the beat.</em></p>

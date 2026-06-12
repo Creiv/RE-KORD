@@ -36,6 +36,29 @@ interface PlayerDockProps {
   onLibraryDelta?: (delta: LibraryEntityDelta, reconcile?: boolean) => void;
 }
 
+/** Timeline isolata: si abbona da sola al progresso (~4-5Hz da timeupdate)
+ *  così a ri-renderizzare è questo alberino, non l'intero dock — col pannello
+ *  Plectr aperto un re-render del dock costa un frame perso a cadenza fissa. */
+function DockTimeline({
+  duration,
+  seekRatio,
+}: {
+  duration: number;
+  seekRatio: (r: number) => void;
+}) {
+  const progressTime = usePlayerProgressTime();
+  const percent = duration > 0 ? (progressTime / duration) * 100 : 0;
+  return (
+    <div className="player-bar2__timeline">
+      <PlayerProgressTrack percent={percent} seekRatio={seekRatio} />
+      <div className="player-bar2__times">
+        <span>{formatDuration(progressTime)}</span>
+        <span>{formatDuration(duration)}</span>
+      </div>
+    </div>
+  );
+}
+
 export const PlayerDock = memo(function PlayerDock({
   onGoToAscolta,
   onOpenLibraryArtist,
@@ -43,7 +66,6 @@ export const PlayerDock = memo(function PlayerDock({
   onLibraryDelta,
 }: PlayerDockProps) {
   const p = usePlayer();
-  const progressTime = usePlayerProgressTime();
   const { open: rhythmOpen, stylesReady, setOpen: setRhythmOpen } = useRhythmMode();
   const user = useUserState();
   const { t } = useI18n();
@@ -62,7 +84,6 @@ export const PlayerDock = memo(function PlayerDock({
     () => new Set(user.state.shuffleExcludedTrackRelPaths),
     [user.state.shuffleExcludedTrackRelPaths],
   );
-  const percent = p.duration > 0 ? (progressTime / p.duration) * 100 : 0;
   const cur = p.current;
   const albumShuffleExcluded = Boolean(
     cur && isTrackAlbumShuffleExcluded(cur, exAlbums),
@@ -371,13 +392,7 @@ export const PlayerDock = memo(function PlayerDock({
             )}
           </div>
           <div className="player-bar2__row player-bar2__row--seek">
-            <div className="player-bar2__timeline">
-              <PlayerProgressTrack percent={percent} seekRatio={p.seekRatio} />
-              <div className="player-bar2__times">
-                <span>{formatDuration(progressTime)}</span>
-                <span>{formatDuration(p.duration)}</span>
-              </div>
-            </div>
+            <DockTimeline duration={p.duration} seekRatio={p.seekRatio} />
           </div>
         </footer>
       </div>

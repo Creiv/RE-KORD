@@ -35,6 +35,86 @@ interface PlayerSyncBridge {
   pause: () => void;
 }
 
+/** Corsie e pad: memoizzati — il feedback HUD cambia a ogni nota giudicata e
+ *  senza memo ogni setHud riconciliava 8 nodi + 16 closure, rubando frame al
+ *  canvas (micro-scatti su CPU lente). I callback sono stabili (useCallback). */
+const LaneStripAndPads = React.memo(function LaneStripAndPads({
+  laneStripRefs,
+  lanePadRefs,
+  judgeLane,
+  releaseLanePress,
+}: {
+  laneStripRefs: React.RefObject<Array<HTMLDivElement | null>>;
+  lanePadRefs: React.RefObject<Array<HTMLButtonElement | null>>;
+  judgeLane: (laneIndex: number, pressed: boolean) => void;
+  releaseLanePress: (laneIndex: number) => void;
+}) {
+  return (
+    <>
+      <div className="rhythm-lane-strip" aria-hidden>
+        {LANES.map((lane, index) => (
+          <div
+            key={`${lane.name}-strip`}
+            ref={(el) => {
+              laneStripRefs.current[index] = el;
+            }}
+            className="rhythm-lane-strip__cell"
+            style={
+              {
+                "--lane-color": lane.color,
+                "--lane-shadow": lane.shadow,
+              } as React.CSSProperties
+            }
+          >
+            <span className="rhythm-lane-strip__mark" />
+          </div>
+        ))}
+      </div>
+      <div className="touch-pads" aria-label="Lane controls">
+        {LANES.map((lane, index) => (
+          <button
+            key={lane.name}
+            ref={(el) => {
+              lanePadRefs.current[index] = el;
+            }}
+            className="lane-pad"
+            style={{ "--lane-color": lane.color, "--lane-shadow": lane.shadow } as React.CSSProperties}
+            type="button"
+            tabIndex={-1}
+            onPointerDown={(event) => {
+              event.preventDefault();
+              event.currentTarget.setPointerCapture(event.pointerId);
+              judgeLane(index, true);
+            }}
+            onPointerUp={(event) => {
+              event.preventDefault();
+              releaseLanePress(index);
+              if (event.currentTarget.hasPointerCapture(event.pointerId)) {
+                event.currentTarget.releasePointerCapture(event.pointerId);
+              }
+            }}
+            onPointerCancel={(event) => {
+              event.preventDefault();
+              releaseLanePress(index);
+              if (event.currentTarget.hasPointerCapture(event.pointerId)) {
+                event.currentTarget.releasePointerCapture(event.pointerId);
+              }
+            }}
+            onPointerLeave={(event) => {
+              if (event.currentTarget.hasPointerCapture(event.pointerId)) return;
+              if (event.buttons !== 0) return;
+              releaseLanePress(index);
+            }}
+            aria-label={`${lane.name} lane`}
+          >
+            <span className="lane-pip" aria-hidden="true" />
+          </button>
+        ))}
+      </div>
+    </>
+  );
+});
+
 interface GameCanvasProps {
   chart: Chart;
   runId: number;
@@ -138,6 +218,21 @@ export function GameCanvas({
   const gameRef = useRef<HTMLElement | null>(null);
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
   const audioRef = useRef<HTMLAudioElement | null>(null);
+  /** Clock-bridge anche per i percorsi non live-sync: audio.currentTime
+   *  avanza a quanti di ~10-40ms — letto grezzo a ogni frame le note
+   *  scendono a micro-scatti. resolveSmoothSongTime lo smussa. */
+  const fallbackClockBridgeRef = useRef({
+    getCurrentTime: () => {
+      const bridge = playerSyncRef.current;
+      if (bridge) return bridge.getCurrentTime();
+      return audioRef.current?.currentTime ?? 0;
+    },
+    getAudio: () => {
+      const bridge = playerSyncRef.current;
+      if (bridge) return bridge.getAudio();
+      return audioRef.current;
+    },
+  });
   const rafRef = useRef(0);
   const drawRef = useRef<() => void>(() => {});
   const stateRef = useRef<RunState | null>(null);
@@ -388,9 +483,11 @@ export function GameCanvas({
             }
           });
       } else if (state.started) {
-        songTime = usePlayer
-          ? bridge!.getCurrentTime()
-          : audio!.currentTime;
+        songTime = resolveSmoothSongTime(
+          state,
+          now,
+          fallbackClockBridgeRef.current,
+        );
       }
     }
     state.songTime = songTime;
@@ -905,66 +1002,12 @@ export function GameCanvas({
           </button>
         </div>
       ) : null}
-      <div className="rhythm-lane-strip" aria-hidden>
-        {LANES.map((lane, index) => (
-          <div
-            key={`${lane.name}-strip`}
-            ref={(el) => {
-              laneStripRefs.current[index] = el;
-            }}
-            className="rhythm-lane-strip__cell"
-            style={
-              {
-                "--lane-color": lane.color,
-                "--lane-shadow": lane.shadow,
-              } as React.CSSProperties
-            }
-          >
-            <span className="rhythm-lane-strip__mark" />
-          </div>
-        ))}
-      </div>
-      <div className="touch-pads" aria-label="Lane controls">
-        {LANES.map((lane, index) => (
-          <button
-            key={lane.name}
-            ref={(el) => {
-              lanePadRefs.current[index] = el;
-            }}
-            className="lane-pad"
-            style={{ "--lane-color": lane.color, "--lane-shadow": lane.shadow } as React.CSSProperties}
-            type="button"
-            tabIndex={-1}
-            onPointerDown={(event) => {
-              event.preventDefault();
-              event.currentTarget.setPointerCapture(event.pointerId);
-              judgeLane(index, true);
-            }}
-            onPointerUp={(event) => {
-              event.preventDefault();
-              releaseLanePress(index);
-              if (event.currentTarget.hasPointerCapture(event.pointerId)) {
-                event.currentTarget.releasePointerCapture(event.pointerId);
-              }
-            }}
-            onPointerCancel={(event) => {
-              event.preventDefault();
-              releaseLanePress(index);
-              if (event.currentTarget.hasPointerCapture(event.pointerId)) {
-                event.currentTarget.releasePointerCapture(event.pointerId);
-              }
-            }}
-            onPointerLeave={(event) => {
-              if (event.currentTarget.hasPointerCapture(event.pointerId)) return;
-              if (event.buttons !== 0) return;
-              releaseLanePress(index);
-            }}
-            aria-label={`${lane.name} lane`}
-          >
-            <span className="lane-pip" aria-hidden="true" />
-          </button>
-        ))}
-      </div>
+      <LaneStripAndPads
+        laneStripRefs={laneStripRefs}
+        lanePadRefs={lanePadRefs}
+        judgeLane={judgeLane}
+        releaseLanePress={releaseLanePress}
+      />
     </main>
   );
 }

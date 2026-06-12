@@ -29,6 +29,16 @@ const MOTIFS = {
   ],
 };
 
+/** Sorgente audio per l'analisi: AudioBuffer la soddisfa strutturalmente,
+ *  e un payload ricostruito in un Worker (canali trasferiti) pure. */
+export interface AnalyzableAudio {
+  length: number;
+  numberOfChannels: number;
+  sampleRate: number;
+  duration: number;
+  getChannelData(channel: number): Float32Array;
+}
+
 interface FrameStats {
   rms: number;
   zcr: number;
@@ -100,7 +110,7 @@ function trackFingerprint(relPath: string, duration: number): string {
   return `rekord:${relPath}:${Math.round(duration * 1000)}`;
 }
 
-function makeMono(buffer: AudioBuffer): Float32Array {
+function makeMono(buffer: AnalyzableAudio): Float32Array {
   const length = buffer.length;
   const channelCount = buffer.numberOfChannels;
   const mono = new Float32Array(length);
@@ -172,7 +182,7 @@ function buildNovelty({ flux, rms, zcr }: { flux: Float32Array; rms: Float32Arra
   return novelty;
 }
 
-function pickOnsetCandidates({ buffer, novelty, rms, rmsGate, sampleRate, zcr }: { buffer: AudioBuffer; novelty: Float32Array; rms: Float32Array; rmsGate: number; sampleRate: number; zcr: Float32Array }): OnsetCandidate[] {
+function pickOnsetCandidates({ buffer, novelty, rms, rmsGate, sampleRate, zcr }: { buffer: AnalyzableAudio; novelty: Float32Array; rms: Float32Array; rmsGate: number; sampleRate: number; zcr: Float32Array }): OnsetCandidate[] {
   const values = Array.from(novelty);
   const gate = Math.max(percentile(values, 0.72), mean(values) + stddev(values, mean(values)) * 0.28);
   const strong = Math.max(0.0001, percentile(Array.from(rms), 0.92));
@@ -461,7 +471,7 @@ function fillBeatGridEvents({
   strengthGate,
 }: {
   beatGrid: BeatGrid;
-  buffer: AudioBuffer;
+  buffer: AnalyzableAudio;
   difficulty: Difficulty;
   frameCount: number;
   rms: Float32Array;
@@ -504,7 +514,7 @@ function buildChartForDifficulty({
 }: {
   baseSongId: string;
   beatGrid: BeatGrid;
-  buffer: AudioBuffer;
+  buffer: AnalyzableAudio;
   candidates: OnsetCandidate[];
   difficulty: Difficulty;
   rms: Float32Array;
@@ -612,7 +622,7 @@ function buildChartForDifficulty({
 }
 
 async function buildChartSetFromBuffer(
-  buffer: AudioBuffer,
+  buffer: AnalyzableAudio,
   meta: { baseSongId: string; title: string }
 ): Promise<ChartSet> {
   const samples = makeMono(buffer);
@@ -662,7 +672,7 @@ async function buildChartSetFromBuffer(
 }
 
 export async function analyzeLibraryBuffer(
-  buffer: AudioBuffer,
+  buffer: AnalyzableAudio,
   relPath: string,
   title: string
 ): Promise<ChartSet> {

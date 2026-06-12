@@ -20,6 +20,9 @@ const forceWinNsis = process.env.REKORD_WIN_INSTALLER === "1";
 const useWinNsis = isWinHost || forceWinNsis;
 const win = {
   ...b.win,
+  // Da Linux l'editing exe di electron-builder richiederebbe wine: lo si
+  // salta e l'icona viene incorporata dopo da scripts/fix-win-exe-icon.mjs
+  // (resedit, puro JS) tramite pack-release.mjs.
   signAndEditExecutable: isWinHost,
   target: useWinNsis ? b.win.target : [{ target: "7z", arch: ["x64"] }],
 };

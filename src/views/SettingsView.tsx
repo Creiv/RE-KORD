@@ -155,7 +155,7 @@ function SettingsView() {
       return false;
     }
   });
-  const rekordAppVersion = String(import.meta.env.VITE_REKORD_VERSION ?? "3.5.0");
+  const rekordAppVersion = String(import.meta.env.VITE_REKORD_VERSION ?? "4.0.0");
 
   useEffect(() => {
     Promise.all([fetchConfig(), fetchAccounts()])

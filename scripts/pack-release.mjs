@@ -54,3 +54,32 @@ execSync(`npx electron-builder ${platFlag} --config ${configPath}`, {
   cwd: root,
   env: { ...process.env, REKORD_PACK_FLAVOR: flavor, REKORD_APP_VERSION: version },
 })
+
+// Build Windows da host non-Windows: electron-builder salta l'editing
+// dell'exe (servirebbe wine) → icona incorporata a posteriori con resedit
+// e archivio 7z ricreato con l'eseguibile corretto.
+if (platform === "win" && process.platform !== "win32") {
+  const productName = flavor === "client" ? "RE-KORD Client" : "RE-KORD Server"
+  const unpackedDir = path.join(root, "release", "win-unpacked")
+  const exePath = path.join(unpackedDir, `${productName}.exe`)
+  if (fs.existsSync(exePath)) {
+    execSync(
+      `node "${path.join(root, "scripts", "fix-win-exe-icon.mjs")}" "${exePath}" "${path.join(root, "public", "icon.ico")}"`,
+      { stdio: "inherit", cwd: root },
+    )
+    const artifact = path.join(
+      root,
+      "release",
+      `RE-KORD-${flavor === "client" ? "Client" : "Server"}-${version}-win-x64.7z`,
+    )
+    const { path7za } = await import("7zip-bin")
+    fs.rmSync(artifact, { force: true })
+    execSync(`"${path7za}" a "${artifact}" .`, {
+      stdio: "inherit",
+      cwd: unpackedDir,
+    })
+    console.log(`\nArchivio rigenerato con icona corretta: ${artifact}`)
+  } else {
+    console.warn(`Exe non trovato per fix icona: ${exePath}`)
+  }
+}

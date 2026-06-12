@@ -525,7 +525,7 @@ export const IT: Record<string, string> = {
   "settings.colophonLine4":
     "Lo strumento è pensato per librerie con contenuti leciti/no copyright (o comunque con diritti d'uso disponibili). Ogni utente è l'unico responsabile delle proprie azioni.",
   "settings.colophonLine5":
-    "Novità 3.5: distribuzione Docker (server + interfaccia) e sfondo visualizer nel canvas Plectr (disattivabile in Impostazioni → Tema e visualizer).",
+    "Novità 4.0: client Android con scan QR, condivisione dei temi via export/import, opacità vetro regolabile, widget di riproduzione nativo su Android e interfaccia mobile rivista.",
   "settings.uiEyebrow": "Preferenze interfaccia",
   "settings.uiHeading": "Tema e visualizer",
   "settings.theme": "Tema",
