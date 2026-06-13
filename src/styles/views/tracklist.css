@@ -686,7 +686,8 @@
   gap: 0.28rem;
   cursor: grab;
   user-select: none;
-  touch-action: pan-x;
+  /* pan-y incluso: un tocco che parte qui deve poter scrollare la pagina */
+  touch-action: pan-x pan-y;
 }
 
 .lib-badge-cluster--card-foot::-webkit-scrollbar {

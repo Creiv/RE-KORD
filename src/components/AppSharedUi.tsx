@@ -1475,7 +1475,9 @@ export function DraggableBadgeCluster({ children }: { children: ReactNode }) {
       onPointerDown={(event) => {
         const el = ref.current;
         if (!el || el.scrollWidth <= el.clientWidth) return;
-        if (event.pointerType === "mouse" && event.button !== 0) return;
+        // Drag manuale solo col mouse: su touch lo scroll (orizzontale e
+        // verticale, verso la pagina) resta nativo del browser.
+        if (event.pointerType !== "mouse" || event.button !== 0) return;
         dragRef.current = {
           active: true,
           pointerId: event.pointerId,
