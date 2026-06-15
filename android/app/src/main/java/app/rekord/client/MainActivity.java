@@ -14,15 +14,21 @@ import android.os.Looper;
 import android.webkit.JavascriptInterface;
 import android.webkit.WebView;
 import com.getcapacitor.BridgeActivity;
+import com.google.android.gms.cast.framework.CastContext;
 import org.json.JSONObject;
 
 public class MainActivity extends BridgeActivity {
 
     private final Handler mainHandler = new Handler(Looper.getMainLooper());
     private RekordMediaService mediaService;
+    private RekordCastManager castManager;
     private String pendingStateJson;
     private String pendingMediaAction;
     private double pendingMediaSeekSec = -1;
+    private int pendingMediaRetries = 0;
+    private static final long MEDIA_ACTION_RETRY_MS = 400L;
+    private static final int MEDIA_ACTION_MAX_RETRIES = 30;
+    private final Runnable deliverPendingMediaActionRunnable = this::deliverPendingMediaAction;
 
     private final ServiceConnection mediaConnection = new ServiceConnection() {
         @Override
@@ -47,6 +53,14 @@ public class MainActivity extends BridgeActivity {
     @Override
     public void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
+        try {
+            CastContext.getSharedInstance(this);
+            castManager = new RekordCastManager(this, (action, seekTimeSec) ->
+                mainHandler.post(() -> dispatchMediaAction(action, seekTimeSec))
+            );
+        } catch (Exception e) {
+            android.util.Log.w("RekordClient", "Cast SDK non disponibile: " + e.getMessage());
+        }
         WebView webView = this.bridge.getWebView();
         // Ponte media minimale, disponibile su OGNI pagina (anche l'app
         // caricata dal server): niente runtime Capacitor nelle pagine remote.
@@ -102,7 +116,10 @@ public class MainActivity extends BridgeActivity {
     private void deliverPendingMediaAction() {
         if (pendingMediaAction == null) return;
         WebView webView = this.bridge != null ? this.bridge.getWebView() : null;
-        if (webView == null) return;
+        if (webView == null) {
+            schedulePendingMediaRetry();
+            return;
+        }
         wakeWebViewForMedia();
         final String action = pendingMediaAction;
         final double seekTimeSec = pendingMediaSeekSec;
@@ -119,9 +136,24 @@ public class MainActivity extends BridgeActivity {
                     pendingMediaAction.equals(action)) {
                     pendingMediaAction = null;
                     pendingMediaSeekSec = -1;
+                    pendingMediaRetries = 0;
+                    mainHandler.removeCallbacks(deliverPendingMediaActionRunnable);
+                } else {
+                    schedulePendingMediaRetry();
                 }
             })
         );
+    }
+
+    private void schedulePendingMediaRetry() {
+        if (pendingMediaAction == null) return;
+        if (pendingMediaRetries >= MEDIA_ACTION_MAX_RETRIES) {
+            pendingMediaRetries = 0;
+            return;
+        }
+        pendingMediaRetries++;
+        mainHandler.removeCallbacks(deliverPendingMediaActionRunnable);
+        mainHandler.postDelayed(deliverPendingMediaActionRunnable, MEDIA_ACTION_RETRY_MS);
     }
 
     private void applyMediaState(String json) {
@@ -132,6 +164,7 @@ public class MainActivity extends BridgeActivity {
         try {
             JSONObject o = new JSONObject(json);
             mediaService.updateStateFromJson(json);
+            if (castManager != null) castManager.syncFromJson(json);
         } catch (Exception e) {
             android.util.Log.w("RekordClient", "stato media non valido: " + e.getMessage());
         }

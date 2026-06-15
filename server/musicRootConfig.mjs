@@ -7,6 +7,7 @@ import {
   buildLanAccessUrls,
   guessLanIPv4,
 } from "./lanNetwork.mjs";
+import { isTranscodeAvailable } from "./ffmpegBin.mjs";
 import {
   atomicWriteFileUtf8,
   rekordAccountDir,
@@ -378,6 +379,7 @@ export function getConfigSnapshot(includeMusicRoot) {
     youtubeCookiesLabel: state.youtubeCookiesPath
       ? path.basename(state.youtubeCookiesPath)
       : null,
+    transcodeAvailable: isTranscodeAvailable(),
   };
   if (includeMusicRoot) {
     snap.musicRoot = getMusicRoot();

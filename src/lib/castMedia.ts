@@ -45,10 +45,44 @@ export function castMimeTypeForRelPath(relPath: string): string {
   return CAST_MIME_BY_EXT[ext] ?? "audio/mpeg"
 }
 
+/** Formati spesso non decodificati da Google Home / Cast. */
+export const CAST_TRANSCODE_EXTS = new Set(["flac", "ogg", "opus", "wav"])
+
+export type CastStreamOptions = {
+  /** Usa /media/transcode per formati non compatibili con Cast. */
+  forCast?: boolean
+  /** Se false, non usa transcode anche in forCast (es. ffmpeg assente). */
+  transcodeAvailable?: boolean
+}
+
+function encodeMediaRelPath(relPath: string): string {
+  return relPath
+    .split("/")
+    .map((segment) => encodeURIComponent(segment))
+    .join("/")
+}
+
+export function transcodeMediaPath(relPath: string, format = "mp3"): string {
+  const base = encodeMediaRelPath(relPath)
+  const params = new URLSearchParams({ format })
+  return `/media/transcode/${base}?${params}`
+}
+
+export function needsCastTranscodeRelPath(relPath: string): boolean {
+  const ext = relPath.split(".").pop()?.toLowerCase() ?? ""
+  return CAST_TRANSCODE_EXTS.has(ext)
+}
+
 export function castStreamUrl(
   relPath: string,
   baseOrigin: string,
+  opts: CastStreamOptions = {},
 ): string {
+  const forCast = opts.forCast === true
+  const transcodeOk = opts.transcodeAvailable !== false
+  if (forCast && transcodeOk && needsCastTranscodeRelPath(relPath)) {
+    return new URL(transcodeMediaPath(relPath), baseOrigin).href
+  }
   return new URL(mediaUrl(relPath), baseOrigin).href
 }
 
@@ -72,12 +106,16 @@ export function buildCastTrackPayload(
   track: EnrichedTrack,
   baseOrigin: string,
   positionSec = 0,
+  opts: CastStreamOptions = {},
 ): CastTrackPayload {
+  const streamUrl = castStreamUrl(track.relPath, baseOrigin, opts)
   return {
     track,
-    streamUrl: castStreamUrl(track.relPath, baseOrigin),
+    streamUrl,
     coverUrl: castCoverUrl(track.relPath, baseOrigin),
-    mimeType: castMimeTypeForRelPath(track.relPath),
+    mimeType: castMimeTypeForRelPath(
+      streamUrl.includes("/media/transcode/") ? "x.mp3" : track.relPath,
+    ),
     positionSec: Math.max(0, positionSec),
   }
 }

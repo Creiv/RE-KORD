@@ -26,6 +26,7 @@ export function buildMediaSessionQueueEntries(
   queue: readonly EnrichedTrack[],
   currentIndex: number,
   baseOrigin: string,
+  castOpts: { forCast?: boolean; transcodeAvailable?: boolean } = {},
 ): { entries: MediaSessionQueueEntry[]; activeIndex: number } {
   if (!queue.length || !baseOrigin) {
     return { entries: [], activeIndex: 0 }
@@ -42,7 +43,10 @@ export function buildMediaSessionQueueEntries(
       title: track.title,
       artist: track.artist,
       album: track.album,
-      mediaUri: castStreamUrl(track.relPath, baseOrigin),
+      mediaUri: castStreamUrl(track.relPath, baseOrigin, {
+        forCast: castOpts.forCast ?? true,
+        transcodeAvailable: castOpts.transcodeAvailable,
+      }),
       artworkUrl: castCoverUrl(track.relPath, baseOrigin),
     })),
     activeIndex: clampedIndex - start,
@@ -203,6 +207,7 @@ export function syncMediaSessionState(sync: MediaSessionSync): void {
           mediaUri: sync.mediaUri ?? "",
           mediaId: sync.mediaId ?? sync.track.relPath,
           playbackState: sync.playbackState,
+          skipPosition: sync.skipPosition ?? false,
           duration:
             !sync.skipPosition &&
             sync.duration != null &&
@@ -368,6 +373,12 @@ export function registerMediaSessionActions(
             if (Number.isFinite(seekTime) && seekTime >= 0) {
               b.playQueueIndex(Math.floor(seekTime))
             }
+            break
+          case "mute":
+            b.mute()
+            break
+          case "unmute":
+            b.unmute()
             break
           case "seekto":
             if (Number.isFinite(seekTime) && seekTime >= 0) b.seek(seekTime)

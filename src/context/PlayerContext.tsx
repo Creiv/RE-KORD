@@ -10,7 +10,7 @@ import {
   useState,
   useSyncExternalStore,
 } from "react";
-import { mediaUrl } from "../lib/api";
+import { mediaUrl, fetchConfig } from "../lib/api";
 import { enrichTrack } from "../lib/enrichTrack";
 import { enrichedTracksNeedPlayerResync } from "../lib/libraryIndex";
 import { isTrackAlbumShuffleExcluded } from "../lib/randomExclusions";
@@ -240,6 +240,7 @@ export function PlayerProvider({ children }: { children: React.ReactNode }) {
     /* bound in effect */
   });
   const trackLoadingRef = useRef(false);
+  const transcodeAvailableRef = useRef(true);
   const restoredRef = useRef(false);
   const repeatRef = useRef<RepeatMode>("all");
   const lastTrackBoundaryAdvanceAtRef = useRef(0);
@@ -307,8 +308,20 @@ export function PlayerProvider({ children }: { children: React.ReactNode }) {
   const currentRef = useRef<EnrichedTrack | null>(null);
   const lastMediaPosAtRef = useRef(0);
   const lastMediaRelPathRef = useRef<string | null>(null);
+  const lastMediaSessionSyncAtRef = useRef(0);
   const halfListenCountedRef = useRef(false);
   const halfListenTrackRef = useRef<string | null>(null);
+
+  useEffect(() => {
+    void fetchConfig()
+      .then((cfg) => {
+        transcodeAvailableRef.current = cfg.transcodeAvailable !== false;
+        syncMediaSessionNowRef.current();
+      })
+      .catch(() => {
+        /* server config opzionale */
+      });
+  }, []);
 
   useEffect(() => {
     queueRef.current = queue;
@@ -901,6 +914,12 @@ export function PlayerProvider({ children }: { children: React.ReactNode }) {
         if (audioCrossfadeSecRef.current > 0 && repeatRef.current !== "one") {
           void startCrossfade();
         }
+
+        const now = Date.now();
+        if (now - lastMediaSessionSyncAtRef.current >= 900) {
+          lastMediaSessionSyncAtRef.current = now;
+          syncMediaSessionNowRef.current();
+        }
       };
       const onMeta = () => {
         if (ixFor(audio) !== activeDeckRef.current) return;
@@ -1006,6 +1025,23 @@ export function PlayerProvider({ children }: { children: React.ReactNode }) {
     };
   }, [advanceAfterTrackCompleted, finalizeCrossfade]);
 
+  /** Prefetch head HTTP dei prossimi 2 brani in coda (max 256KB ciascuno). */
+  useEffect(() => {
+    if (!current || queue.length === 0) return;
+    const HEAD_BYTES = 262_144;
+    for (let i = 1; i <= 2; i++) {
+      const tr = queue[currentIndex + i];
+      if (!tr) continue;
+      const url = mediaUrl(tr.relPath);
+      void fetch(url, {
+        headers: { Range: `bytes=0-${HEAD_BYTES - 1}` },
+        cache: "force-cache",
+      }).catch(() => {
+        /* best-effort */
+      });
+    }
+  }, [current?.relPath, currentIndex, queue]);
+
   useEffect(() => {
     const id = window.setInterval(() => {
       if (document.visibilityState !== "hidden") return;
@@ -1035,10 +1071,15 @@ export function PlayerProvider({ children }: { children: React.ReactNode }) {
     const baseOrigin = resolveMediaSessionBaseOrigin();
     const q = queueRef.current;
     const qIndex = indexRef.current;
+    const castOpts = {
+      forCast: true as const,
+      transcodeAvailable: transcodeAvailableRef.current,
+    };
     const { entries: queueEntries, activeIndex } = buildMediaSessionQueueEntries(
       q,
       qIndex,
       baseOrigin,
+      castOpts,
     );
     syncMediaSessionState({
       track,
@@ -1048,7 +1089,9 @@ export function PlayerProvider({ children }: { children: React.ReactNode }) {
       position: dur > 0 ? pos : undefined,
       playbackRate: audio?.playbackRate || 1,
       skipPosition: loading,
-      mediaUri: baseOrigin ? castStreamUrl(track.relPath, baseOrigin) : undefined,
+      mediaUri: baseOrigin
+        ? castStreamUrl(track.relPath, baseOrigin, castOpts)
+        : undefined,
       mediaId: track.relPath,
       queue: queueEntries,
       queueIndex: activeIndex,

@@ -58,6 +58,14 @@ describe("castMedia", () => {
     expect(castMimeTypeForRelPath("x.m4a")).toBe("audio/mp4")
   })
 
+  it("castStreamUrl usa transcode per FLAC in forCast", () => {
+    const url = castStreamUrl("a/album/track.flac", "http://192.168.0.10:3001", {
+      forCast: true,
+    })
+    expect(url).toContain("/media/transcode/a/album/track.flac")
+    expect(url).toContain("format=mp3")
+  })
+
   it("buildCastTrackPayload include stream e copertina", () => {
     const payload = buildCastTrackPayload(track, "http://192.168.0.10:3001", 12)
     expect(payload.streamUrl).toContain("/media/Artist/Album/song.mp3")

@@ -16,6 +16,7 @@ import android.os.Build;
 import android.os.Handler;
 import android.os.IBinder;
 import android.os.Looper;
+import android.os.PowerManager;
 import android.support.v4.media.MediaDescriptionCompat;
 import android.support.v4.media.MediaMetadataCompat;
 import android.support.v4.media.session.MediaSessionCompat;
@@ -70,8 +71,8 @@ public class RekordMediaService extends Service {
     private boolean hasNext = false;
     private int queueIndex = 0;
     private List<MediaSessionCompat.QueueItem> playQueue = new ArrayList<>();
-    private String lastAppliedMediaId = "";
     private boolean foreground = false;
+    private PowerManager.WakeLock wakeLock;
 
     public class LocalBinder extends Binder {
         RekordMediaService getService() {
@@ -145,6 +146,7 @@ public class RekordMediaService extends Service {
 
     @Override
     public void onDestroy() {
+        updateWakeLock(false);
         if (session != null) {
             session.setActive(false);
             session.release();
@@ -174,8 +176,13 @@ public class RekordMediaService extends Service {
             this.artist = o.optString("artist", "");
             this.album = o.optString("album", "");
             this.playbackState = o.optString("playbackState", "none");
-            this.durationMs = (long) Math.max(0, o.optDouble("duration", 0) * 1000.0);
-            this.positionMs = (long) Math.max(0, o.optDouble("position", 0) * 1000.0);
+            if (!o.optBoolean("skipPosition", false)) {
+                long nextDurationMs = (long) Math.max(0, o.optDouble("duration", 0) * 1000.0);
+                if (nextDurationMs > 0) {
+                    this.durationMs = nextDurationMs;
+                }
+                this.positionMs = (long) Math.max(0, o.optDouble("position", 0) * 1000.0);
+            }
             this.speed = (float) (o.optDouble("playbackRate", 1) > 0 ? o.optDouble("playbackRate", 1) : 1);
             this.mediaId = o.optString("mediaId", "");
             this.mediaUri = o.optString("mediaUri", "");
@@ -260,17 +267,31 @@ public class RekordMediaService extends Service {
         });
     }
 
+    private void updateWakeLock(boolean playing) {
+        if (playing) {
+            if (wakeLock == null) {
+                PowerManager pm = (PowerManager) getSystemService(POWER_SERVICE);
+                if (pm == null) return;
+                wakeLock = pm.newWakeLock(PowerManager.PARTIAL_WAKE_LOCK, "RekordMedia:Playback");
+                wakeLock.setReferenceCounted(false);
+            }
+            if (!wakeLock.isHeld()) {
+                wakeLock.acquire(6 * 60 * 60 * 1000L);
+            }
+        } else if (wakeLock != null && wakeLock.isHeld()) {
+            wakeLock.release();
+        }
+    }
+
     private void apply() {
         if (session == null) return;
         if ("none".equals(playbackState)) {
+            updateWakeLock(false);
             session.setActive(false);
             session.setQueue(new ArrayList<>());
-            lastAppliedMediaId = "";
             stopForegroundCompat();
             return;
         }
-
-        boolean trackChanged = !mediaId.isEmpty() && !mediaId.equals(lastAppliedMediaId);
 
         MediaMetadataCompat.Builder meta = new MediaMetadataCompat.Builder()
             .putString(MediaMetadataCompat.METADATA_KEY_TITLE, title)
@@ -295,15 +316,9 @@ public class RekordMediaService extends Service {
         session.setMetadata(meta.build());
         session.setQueue(playQueue.isEmpty() ? null : playQueue);
 
-        int state;
-        if (trackChanged) {
-            state = PlaybackStateCompat.STATE_BUFFERING;
-        } else if ("playing".equals(playbackState)) {
-            state = PlaybackStateCompat.STATE_PLAYING;
-        } else {
-            state = PlaybackStateCompat.STATE_PAUSED;
-        }
-
+        int state = "playing".equals(playbackState)
+            ? PlaybackStateCompat.STATE_PLAYING
+            : PlaybackStateCompat.STATE_PAUSED;
         long actions =
             PlaybackStateCompat.ACTION_PLAY |
             PlaybackStateCompat.ACTION_PAUSE |
@@ -320,64 +335,43 @@ public class RekordMediaService extends Service {
             actions |= PlaybackStateCompat.ACTION_SKIP_TO_QUEUE_ITEM;
         }
 
+        // setState a 3 arg: Android usa elapsedRealtime() internamente.
+        // Il 4° arg con System.currentTimeMillis() rompe l'estrapolazione in PLAYING
+        // (barra a 0 in riproduzione, corretta in pausa).
         session.setPlaybackState(
             new PlaybackStateCompat.Builder()
-                .setState(state, positionMs, speed, System.currentTimeMillis())
+                .setState(state, positionMs, speed)
                 .setActions(actions)
                 .setActiveQueueItemId(queueIndex < playQueue.size() ? playQueue.get(queueIndex).getQueueId() : -1)
                 .build()
         );
         session.setActive(true);
 
-        if (trackChanged && "playing".equals(playbackState)) {
-            lastAppliedMediaId = mediaId;
-            mainHandler.postDelayed(this::applyPlayingAfterTrackChange, 120);
-        } else {
-            lastAppliedMediaId = mediaId;
-        }
-
         Notification notification = buildNotification();
-        if (!foreground) {
-            if (Build.VERSION.SDK_INT >= 29) {
-                startForeground(
-                    NOTIFICATION_ID,
-                    notification,
-                    ServiceInfo.FOREGROUND_SERVICE_TYPE_MEDIA_PLAYBACK
-                );
+        if ("playing".equals(playbackState)) {
+            if (!foreground) {
+                if (Build.VERSION.SDK_INT >= 29) {
+                    startForeground(
+                        NOTIFICATION_ID,
+                        notification,
+                        ServiceInfo.FOREGROUND_SERVICE_TYPE_MEDIA_PLAYBACK
+                    );
+                } else {
+                    startForeground(NOTIFICATION_ID, notification);
+                }
+                foreground = true;
             } else {
-                startForeground(NOTIFICATION_ID, notification);
+                notifySafely(notification);
             }
-            foreground = true;
+            updateWakeLock(true);
         } else {
+            if (foreground) {
+                stopForeground(STOP_FOREGROUND_DETACH);
+                foreground = false;
+            }
             notifySafely(notification);
+            updateWakeLock(false);
         }
-    }
-
-    private void applyPlayingAfterTrackChange() {
-        if (session == null || "none".equals(playbackState)) return;
-        long actions =
-            PlaybackStateCompat.ACTION_PLAY |
-            PlaybackStateCompat.ACTION_PAUSE |
-            PlaybackStateCompat.ACTION_PLAY_PAUSE |
-            PlaybackStateCompat.ACTION_SEEK_TO |
-            PlaybackStateCompat.ACTION_STOP;
-        if (hasPrevious) actions |= PlaybackStateCompat.ACTION_SKIP_TO_PREVIOUS;
-        if (hasNext) actions |= PlaybackStateCompat.ACTION_SKIP_TO_NEXT;
-        if (!playQueue.isEmpty()) actions |= PlaybackStateCompat.ACTION_SKIP_TO_QUEUE_ITEM;
-
-        int state = "playing".equals(playbackState)
-            ? PlaybackStateCompat.STATE_PLAYING
-            : PlaybackStateCompat.STATE_PAUSED;
-        session.setPlaybackState(
-            new PlaybackStateCompat.Builder()
-                .setState(state, positionMs, speed, System.currentTimeMillis())
-                .setActions(actions)
-                .setActiveQueueItemId(
-                    queueIndex < playQueue.size() ? playQueue.get(queueIndex).getQueueId() : -1
-                )
-                .build()
-        );
-        notifySafely(buildNotification());
     }
 
     private void notifySafely(Notification notification) {
@@ -440,8 +434,7 @@ public class RekordMediaService extends Service {
             .setLargeIcon(artwork)
             .setContentIntent(contentIntent)
             .setOnlyAlertOnce(true)
-            .setVisibility(NotificationCompat.VISIBILITY_PUBLIC)
-            .setOngoing("playing".equals(playbackState));
+            .setVisibility(NotificationCompat.VISIBILITY_PUBLIC);
 
         if (prevIntent != null) {
             b.addAction(

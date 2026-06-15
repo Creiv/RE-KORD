@@ -33,6 +33,8 @@ import { registerUserStateRoutes } from "./routes/userStateRoutes.mjs";
 import { registerDownloadRoutes } from "./routes/downloadRoutes.mjs";
 import { registerFsRoutes } from "./routes/fsRoutes.mjs";
 import { registerMetadataRoutes } from "./routes/metadataRoutes.mjs";
+import { registerTranscodeRoutes } from "./transcode.mjs";
+import { applyMediaFileHeaders } from "./mediaStream.mjs";
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
 const app = express();
@@ -98,19 +100,16 @@ app.use("/media", (req, res, next) => {
   next();
 });
 
+registerTranscodeRoutes(app);
+
 app.use("/media", (req, res, next) => {
   if (!isLibraryRootConfigured()) return res.status(503).end();
   const root = getMusicRoot();
   if (!root) return res.status(503).end();
   express.static(root, {
     index: false,
-    setHeaders: (res, filePath) => {
-      if (filePath.endsWith(".flac"))
-        res.setHeader("Content-Type", "audio/flac");
-      else if (filePath.endsWith(".m4a"))
-        res.setHeader("Content-Type", "audio/mp4");
-      else if (filePath.endsWith(".webm"))
-        res.setHeader("Content-Type", "audio/webm");
+    setHeaders: (res, filePath, stat) => {
+      applyMediaFileHeaders(res, filePath, stat);
     },
   })(req, res, next);
 });

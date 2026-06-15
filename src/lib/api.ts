@@ -506,6 +506,8 @@ export type AppConfig = {
   lanAccessUrl: string | null
   defaultAccountId?: string
   remoteAccess?: RemoteAccessState
+  /** ffmpeg disponibile per /media/transcode (cast FLAC→MP3). */
+  transcodeAvailable?: boolean
 }
 
 export type RemoteAccessState = {
