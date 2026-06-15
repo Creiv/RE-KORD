@@ -1,5 +1,53 @@
+import { castCoverUrl, castStreamUrl } from "./castMedia"
 import { coverUrlForTrackRelPath } from "./api"
 import type { EnrichedTrack } from "../types"
+
+/** Finestra coda esposta al sistema (Cast / Assistant / Android Auto). */
+export const MEDIA_SESSION_QUEUE_WINDOW = 25
+
+export type MediaSessionQueueEntry = {
+  id: string
+  /** Indice globale nella coda del player (per onSkipToQueueItem). */
+  queueId: number
+  title: string
+  artist: string
+  album: string
+  mediaUri: string
+  artworkUrl: string
+}
+
+export function resolveMediaSessionBaseOrigin(): string {
+  if (typeof window === "undefined") return ""
+  return window.location.origin
+}
+
+/** Coda scorrevole centrata sul brano corrente per skip e voice control. */
+export function buildMediaSessionQueueEntries(
+  queue: readonly EnrichedTrack[],
+  currentIndex: number,
+  baseOrigin: string,
+): { entries: MediaSessionQueueEntry[]; activeIndex: number } {
+  if (!queue.length || !baseOrigin) {
+    return { entries: [], activeIndex: 0 }
+  }
+  const clampedIndex = Math.max(0, Math.min(currentIndex, queue.length - 1))
+  const lookBehind = 5
+  const start = Math.max(0, clampedIndex - lookBehind)
+  const end = Math.min(queue.length, start + MEDIA_SESSION_QUEUE_WINDOW)
+  const slice = queue.slice(start, end)
+  return {
+    entries: slice.map((track, offset) => ({
+      id: track.relPath,
+      queueId: start + offset,
+      title: track.title,
+      artist: track.artist,
+      album: track.album,
+      mediaUri: castStreamUrl(track.relPath, baseOrigin),
+      artworkUrl: castCoverUrl(track.relPath, baseOrigin),
+    })),
+    activeIndex: clampedIndex - start,
+  }
+}
 
 /** Risoluzioni tipiche richieste da widget OS, Android Auto e desktop. */
 export const MEDIA_SESSION_ARTWORK_SIZES = [
@@ -129,6 +177,13 @@ export type MediaSessionSync = {
   playbackRate?: number
   /** Salta setPositionState (es. cambio brano in corso su Android). */
   skipPosition?: boolean
+  /** URI assoluto del file audio (Google Cast / output picker). */
+  mediaUri?: string
+  mediaId?: string
+  queue?: MediaSessionQueueEntry[]
+  queueIndex?: number
+  hasPrevious?: boolean
+  hasNext?: boolean
 }
 
 export function syncMediaSessionState(sync: MediaSessionSync): void {
@@ -145,6 +200,8 @@ export function syncMediaSessionState(sync: MediaSessionSync): void {
           artist: sync.track.artist,
           album: sync.track.album,
           artworkUrl: coverUrlForTrack(sync.track),
+          mediaUri: sync.mediaUri ?? "",
+          mediaId: sync.mediaId ?? sync.track.relPath,
           playbackState: sync.playbackState,
           duration:
             !sync.skipPosition &&
@@ -156,6 +213,18 @@ export function syncMediaSessionState(sync: MediaSessionSync): void {
           position:
             !sync.skipPosition && sync.position != null ? sync.position : 0,
           playbackRate: sync.playbackRate ?? 1,
+          queueIndex: sync.queueIndex ?? 0,
+          hasPrevious: sync.hasPrevious ?? false,
+          hasNext: sync.hasNext ?? false,
+          queue: (sync.queue ?? []).map((item) => ({
+            id: item.id,
+            queueId: item.queueId,
+            title: item.title,
+            artist: item.artist,
+            album: item.album,
+            mediaUri: item.mediaUri,
+            artworkUrl: item.artworkUrl,
+          })),
         }),
       )
     } catch {
@@ -204,6 +273,7 @@ export type MediaSessionBridge = {
   unmute: () => void
   next: () => void
   prev: () => void
+  playQueueIndex: (index: number) => void
   seek: (timeSec: number) => void
   seekBy: (deltaSec: number) => void
   toggleShuffle: () => void
@@ -293,6 +363,11 @@ export function registerMediaSessionActions(
             break
           case "previoustrack":
             b.prev()
+            break
+          case "playqueueindex":
+            if (Number.isFinite(seekTime) && seekTime >= 0) {
+              b.playQueueIndex(Math.floor(seekTime))
+            }
             break
           case "seekto":
             if (Number.isFinite(seekTime) && seekTime >= 0) b.seek(seekTime)

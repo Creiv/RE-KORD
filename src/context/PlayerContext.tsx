@@ -19,7 +19,10 @@ import {
   registerMediaSessionActions,
   resolveMediaSessionPauseAction,
   syncMediaSessionState,
+  buildMediaSessionQueueEntries,
+  resolveMediaSessionBaseOrigin,
 } from "../lib/mediaSession";
+import { castStreamUrl } from "../lib/castMedia";
 import { isAutomotiveDisplayMode } from "../lib/routing";
 import {
   fisherYatesShuffle,
@@ -274,6 +277,10 @@ export function PlayerProvider({ children }: { children: React.ReactNode }) {
       return;
     },
     prev: () => {
+      return;
+    },
+    playQueueIndex: (index: number) => {
+      void index;
       return;
     },
     seek: (time: number) => {
@@ -1025,6 +1032,14 @@ export function PlayerProvider({ children }: { children: React.ReactNode }) {
     const pos = audio ? readPlayerProgressTime() : 0;
     const keepPlaying = keepPlayingRef.current;
     const loading = trackLoadingRef.current;
+    const baseOrigin = resolveMediaSessionBaseOrigin();
+    const q = queueRef.current;
+    const qIndex = indexRef.current;
+    const { entries: queueEntries, activeIndex } = buildMediaSessionQueueEntries(
+      q,
+      qIndex,
+      baseOrigin,
+    );
     syncMediaSessionState({
       track,
       playbackState:
@@ -1033,6 +1048,12 @@ export function PlayerProvider({ children }: { children: React.ReactNode }) {
       position: dur > 0 ? pos : undefined,
       playbackRate: audio?.playbackRate || 1,
       skipPosition: loading,
+      mediaUri: baseOrigin ? castStreamUrl(track.relPath, baseOrigin) : undefined,
+      mediaId: track.relPath,
+      queue: queueEntries,
+      queueIndex: activeIndex,
+      hasPrevious: qIndex > 0,
+      hasNext: qIndex < q.length - 1,
     });
   }, [duration]);
 
@@ -1404,6 +1425,16 @@ export function PlayerProvider({ children }: { children: React.ReactNode }) {
     setCurrent(shuffled[idx] || null);
   }, []);
 
+  const playQueueIndex = useCallback((index: number) => {
+    const q = queueRef.current;
+    if (index < 0 || index >= q.length) return;
+    void abortCrossfade();
+    setCurrentIndex(index);
+    setCurrent(q[index] || null);
+    keepPlayingRef.current = true;
+    syncMediaSessionNowRef.current();
+  }, [abortCrossfade]);
+
   const prev = useCallback(() => {
     if (!queue.length) return;
     const crossfade = abortCrossfade();
@@ -1439,6 +1470,7 @@ export function PlayerProvider({ children }: { children: React.ReactNode }) {
       },
       next,
       prev,
+      playQueueIndex,
       seek: (t) => {
         seek(t);
       },
@@ -1475,6 +1507,7 @@ export function PlayerProvider({ children }: { children: React.ReactNode }) {
     playForMediaSession,
     pauseForMediaSession,
     next,
+    playQueueIndex,
     prev,
     seek,
     setShuffle,

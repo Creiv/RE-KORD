@@ -1,6 +1,7 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import {
   buildMediaSessionArtwork,
+  buildMediaSessionQueueEntries,
   MEDIA_SESSION_ARTWORK_SIZES,
   resolveMediaSessionPauseAction,
   setMediaSessionMetadata,
@@ -70,5 +71,25 @@ describe("mediaSession", () => {
         isMuted: true,
       }),
     ).toBe("pause");
+  });
+
+  it("buildMediaSessionQueueEntries espone URI assoluti e indici globali", () => {
+    const tracks = [0, 1, 2, 3, 4].map((n) => ({
+      id: `t${n}`,
+      relPath: `a/${n}.mp3`,
+      title: `Track ${n}`,
+      artist: "Artist",
+      album: "Album",
+    })) as import("../types").EnrichedTrack[];
+    const { entries, activeIndex } = buildMediaSessionQueueEntries(
+      tracks,
+      3,
+      "http://192.168.0.5:3001",
+    );
+    expect(activeIndex).toBe(3);
+    expect(entries[3]?.queueId).toBe(3);
+    expect(entries[3]?.mediaUri).toBe(
+      "http://192.168.0.5:3001/media/a/3.mp3",
+    );
   });
 });

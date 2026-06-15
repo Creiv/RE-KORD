@@ -21,6 +21,8 @@ public class MainActivity extends BridgeActivity {
     private final Handler mainHandler = new Handler(Looper.getMainLooper());
     private RekordMediaService mediaService;
     private String pendingStateJson;
+    private String pendingMediaAction;
+    private double pendingMediaSeekSec = -1;
 
     private final ServiceConnection mediaConnection = new ServiceConnection() {
         @Override
@@ -58,6 +60,22 @@ public class MainActivity extends BridgeActivity {
     }
 
     @Override
+    public void onResume() {
+        super.onResume();
+        mainHandler.post(this::deliverPendingMediaAction);
+    }
+
+    @Override
+    public void onPause() {
+        super.onPause();
+        // Capacitor mette in pausa il WebView: con sessione media attiva
+        // riattiviamo i timer così play/pause dalla lock screen funzionano.
+        if (mediaService != null && mediaService.isSessionActive()) {
+            wakeWebViewForMedia();
+        }
+    }
+
+    @Override
     public void onDestroy() {
         try {
             unbindService(mediaConnection);
@@ -69,15 +87,41 @@ public class MainActivity extends BridgeActivity {
 
     /** Tasti widget/cuffie/auto → webapp (window.__rekordMediaAction). */
     private void dispatchMediaAction(String action, double seekTimeSec) {
+        pendingMediaAction = action;
+        pendingMediaSeekSec = seekTimeSec;
+        deliverPendingMediaAction();
+    }
+
+    private void wakeWebViewForMedia() {
         WebView webView = this.bridge != null ? this.bridge.getWebView() : null;
         if (webView == null) return;
+        webView.onResume();
+        webView.resumeTimers();
+    }
+
+    private void deliverPendingMediaAction() {
+        if (pendingMediaAction == null) return;
+        WebView webView = this.bridge != null ? this.bridge.getWebView() : null;
+        if (webView == null) return;
+        wakeWebViewForMedia();
+        final String action = pendingMediaAction;
+        final double seekTimeSec = pendingMediaSeekSec;
         String js =
-            "window.__rekordMediaAction && window.__rekordMediaAction(" +
+            "(function(){if(typeof window.__rekordMediaAction==='function'){window.__rekordMediaAction(" +
             JSONObject.quote(action) +
             "," +
             seekTimeSec +
-            ");";
-        webView.evaluateJavascript(js, null);
+            ");return true;}return false;})()";
+        webView.post(() ->
+            webView.evaluateJavascript(js, value -> {
+                if ("true".equals(value) &&
+                    pendingMediaAction != null &&
+                    pendingMediaAction.equals(action)) {
+                    pendingMediaAction = null;
+                    pendingMediaSeekSec = -1;
+                }
+            })
+        );
     }
 
     private void applyMediaState(String json) {
@@ -87,16 +131,7 @@ public class MainActivity extends BridgeActivity {
         }
         try {
             JSONObject o = new JSONObject(json);
-            mediaService.updateState(
-                o.optString("title", ""),
-                o.optString("artist", ""),
-                o.optString("album", ""),
-                o.isNull("artworkUrl") ? null : o.optString("artworkUrl", null),
-                o.optString("playbackState", "none"),
-                o.optDouble("duration", 0),
-                o.optDouble("position", 0),
-                o.optDouble("playbackRate", 1)
-            );
+            mediaService.updateStateFromJson(json);
         } catch (Exception e) {
             android.util.Log.w("RekordClient", "stato media non valido: " + e.getMessage());
         }
