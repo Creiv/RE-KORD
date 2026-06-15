@@ -3,7 +3,7 @@
   "description": "RE-KORD — local hub for listening to, organizing, and maintaining a personal music library",
   "author": "RE-KORD",
   "private": true,
-  "version": "4.0.0",
+  "version": "4.1.0",
   "type": "module",
   "main": "electron/main.mjs",
   "scripts": {
@@ -41,12 +41,17 @@
     "@capacitor/barcode-scanner": "^3.0.2",
     "@capacitor/core": "^8.4.0",
     "@tanstack/react-virtual": "^3.14.2",
+    "@types/better-sqlite3": "^7.6.13",
     "archiver": "^7.0.1",
+    "better-sqlite3": "^12.10.1",
+    "chokidar": "^5.0.0",
     "express": "^5.2.1",
     "multer": "^2.1.1",
+    "music-metadata": "^11.13.0",
     "qrcode": "^1.5.4",
     "react": "^19.2.5",
     "react-dom": "^19.2.5",
+    "sharp": "^0.35.1",
     "unzipper": "^0.12.3"
   },
   "devDependencies": {

@@ -291,6 +291,10 @@ export function coverUrlForAlbumRelPath(relPath: string) {
   return apiUrl("/api/cover", { path: relPath })
 }
 
+export function artworkUrl(artworkId: string, size: "128" | "256" | "full" = "128") {
+  return apiUrl(`/api/library/artwork/${encodeURIComponent(artworkId)}`, { size })
+}
+
 export async function fetchLibraryIndex(): Promise<LibraryIndex> {
   await ensureSelectedAccountId()
   const response = await apiFetch("/api/library-index", { cache: "no-store" })
@@ -1492,18 +1496,39 @@ export async function savePlectrBestScore(
   }>(response);
 }
 
-export async function pruneOrphanTrackMetaForAlbum(
+export async function pruneAlbumLibraryMetadataForAlbum(
   albumPath: string,
-): Promise<{ albumPath: string; removed: string[]; written: boolean }> {
+): Promise<{
+  albumPath: string;
+  removed: string[];
+  written: boolean;
+  expectedTracksCleared: boolean;
+  trackOrderingFieldsCleared: number;
+  albumFieldsMerged: number;
+  tracksMerged: number;
+  jsonFilesRemoved: number;
+  jsonFilesTrimmed: number;
+}> {
   const response = await apiFetch("/api/track-info/prune-orphans", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ albumPath }),
   })
-  return unwrap<{ albumPath: string; removed: string[]; written: boolean }>(
-    response,
-  )
+  return unwrap<{
+    albumPath: string;
+    removed: string[];
+    written: boolean;
+    expectedTracksCleared: boolean;
+    trackOrderingFieldsCleared: number;
+    albumFieldsMerged: number;
+    tracksMerged: number;
+    jsonFilesRemoved: number;
+    jsonFilesTrimmed: number;
+  }>(response)
 }
+
+/** @deprecated Usa {@link pruneAlbumLibraryMetadataForAlbum}. */
+export const pruneOrphanTrackMetaForAlbum = pruneAlbumLibraryMetadataForAlbum
 
 export type SanitizeTrackTitlesOneAlbum = {
   changes: { fileName: string; from: string; to: string }[]

@@ -3,7 +3,7 @@ import { existsSync, statSync } from "fs"
 import { stat as statAsync } from "fs/promises"
 import path from "path"
 import { loadAlbumJsonMetaFromDir, loadTrackJsonMetaMapFromDir } from "./albumInfo.mjs"
-import { reorderTracksByAlbumExpectedRelease } from "./albumExpectedOrder.mjs"
+import { orderAlbumTrackList } from "./albumExpectedOrder.mjs"
 import { getAudioFileDurationMs } from "./audioDuration.mjs"
 import { parseTrackGenres } from "./genres.mjs"
 
@@ -174,28 +174,7 @@ async function readAlbumTracks(artistName, albumFolderName, albumDir, albumMeta)
       }),
     )
   }
-  const compareAlbumTracksDefault = (a, b) => {
-    const ta = a.meta?.trackNumber ?? null
-    const tb = b.meta?.trackNumber ?? null
-    if (ta != null && tb != null && ta !== tb) return ta - tb
-    if (ta != null && tb == null) return -1
-    if (ta == null && tb != null) return 1
-    return cmpByDateThenName(a, b)
-  }
-  tracks.sort(compareAlbumTracksDefault)
-
-  const reordered = reorderTracksByAlbumExpectedRelease(
-    tracks,
-    albumMeta?.expectedTracks,
-    artistName,
-    compareAlbumTracksDefault,
-  )
-  if (reordered) {
-    tracks.length = 0
-    tracks.push(...reordered)
-  }
-
-  return tracks
+  return orderAlbumTrackList(tracks)
 }
 
 async function readLooseTracks(artistName, artistDir) {

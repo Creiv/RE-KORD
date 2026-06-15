@@ -19,6 +19,8 @@ import {
 import { getActivityLogFilePath } from "./activityLog.mjs"
 import { getUserStateFilePathForAccount, getUserStateFilePathInConfigDir } from "./userState.mjs"
 import { ALBUM_COVER_BASENAMES } from "./musicLibrary.mjs"
+import { closeLibraryDb } from "./db/index.mjs"
+import { runLibraryScan } from "./scanner/index.mjs"
 
 const METADATA_BASENAMES = new Set([
   "kord-albuminfo.json",
@@ -438,6 +440,9 @@ export async function restoreKordFromZipPath(zipPath) {
       }
     }
 
+    /** @type {Array<{ musicRoot: string, folderRel: string, kind: 'album'|'tracks', json: object }>} */
+    const metadataImports = []
+
     async function stagedLibraryMetadata() {
       const all = await stagedEntriesKv(stagingRoot)
       for (const [relUnix] of all) {
@@ -455,11 +460,41 @@ export async function restoreKordFromZipPath(zipPath) {
         if (!underMusicRoot(full, musicRoot)) continue
         const buf = await readStagedMaybe(stagingRoot, relUnix)
         if (!buf) continue
+
+        if (METADATA_BASENAMES.has(base)) {
+          try {
+            const folderRel = rel.split("/").slice(0, -1).join("/")
+            const json = JSON.parse(buf.toString("utf8"))
+            metadataImports.push({
+              musicRoot,
+              folderRel,
+              kind: /albuminfo/i.test(base) ? "album" : "tracks",
+              json,
+            })
+          } catch {
+            /* skip invalid metadata */
+          }
+          continue
+        }
+
         await fs.mkdir(path.dirname(full), { recursive: true })
         await fs.writeFile(full, buf)
       }
     }
     await stagedLibraryMetadata()
+    closeLibraryDb(lr)
+    await runLibraryScan(lr, { full: true })
+    const {
+      importLegacyAlbumMetaToDb,
+      importLegacyTrackMetaMapToDb,
+    } = await import("./db/queries/metadata.mjs")
+    for (const item of metadataImports) {
+      if (item.kind === "album") {
+        importLegacyAlbumMetaToDb(item.musicRoot, item.folderRel, item.json)
+      } else {
+        importLegacyTrackMetaMapToDb(item.musicRoot, item.folderRel, item.json)
+      }
+    }
 
     return { restored: true, accountCount: snap.accounts.length }
   } finally {

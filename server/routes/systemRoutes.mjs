@@ -8,6 +8,8 @@ import { getMusicRoot, isLibraryRootConfigured } from "../musicRootConfig.mjs";
 import { isServerAdminRequest } from "../requestAccess.mjs";
 import { readUserState } from "../userState.mjs";
 import { existsSync } from "fs";
+import { isLibraryDbBootstrapped, getLibraryDb, getLibraryEpoch } from "../db/index.mjs";
+import { rekordDbPath } from "../db/paths.mjs";
 
 export function registerSystemRoutes(app) {
   app.get("/api/health", async (req, res) => {
@@ -39,7 +41,27 @@ export function registerSystemRoutes(app) {
         libraryRootConfigured: true,
         userStateVersion: state.version,
         accountId,
+        libraryDb: {
+          enabled: true,
+          bootstrapped: isLibraryDbBootstrapped(root),
+          path: rekordDbPath(root),
+          exists: existsSync(rekordDbPath(root)),
+          epoch: getLibraryEpoch(root),
+        },
       };
+      if (payload.libraryDb.bootstrapped) {
+        try {
+          const db = getLibraryDb(root);
+          payload.libraryDb.stats = {
+            artists: db.prepare("SELECT COUNT(*) AS c FROM artists").get().c,
+            albums: db.prepare("SELECT COUNT(*) AS c FROM albums").get().c,
+            tracks: db.prepare("SELECT COUNT(*) AS c FROM tracks").get().c,
+            artwork: db.prepare("SELECT COUNT(*) AS c FROM artwork").get().c,
+          };
+        } catch {
+          /* ok */
+        }
+      }
       if (envToken && queryToken === envToken) payload.startupToken = envToken;
       if (isServerAdminRequest(req)) payload.musicRoot = root;
       return sendOk(res, payload);

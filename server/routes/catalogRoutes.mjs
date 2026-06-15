@@ -10,7 +10,7 @@ import {
   normalizeCatalogWebUrl,
 } from "../catalogWebPreview.mjs";
 import { sendError, sendOk } from "../httpUtils.mjs";
-import { getLibraryIndexCacheEpochSnapshot } from "../libraryIndexCache.mjs";
+import { getLibraryIndexCacheEpochSnapshot } from "../libraryIndexService.mjs";
 import { getLibraryIndex } from "../libraryIndexService.mjs";
 import { buildCatalogFromIndex } from "../librarySelection.mjs";
 import { getMusicRoot } from "../musicRootConfig.mjs";

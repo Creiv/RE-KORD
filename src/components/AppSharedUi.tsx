@@ -23,6 +23,7 @@ import { useStudioNavigation } from "../context/StudioNavigationContext";
 import { useTrackRowUserState, useUserState } from "../context/UserStateContext";
 import { useI18n } from "../i18n/useI18n";
 import {
+  artworkUrl,
   coverUrlForAlbumRelPath,
   coverUrlForTrackRelPath,
 } from "../lib/api";
@@ -916,8 +917,21 @@ export function AlbumCover({
   album: LibraryAlbumIndex;
   compact?: boolean;
 }) {
-  // L'indice è autorevole (il server serve solo file cover.* dalla cartella):
-  // senza cover nota niente richiesta, iniziali subito.
+  const coverArtId = album.coverArtId?.trim() || "";
+  if (coverArtId) {
+    const src = versionedUrl(artworkUrl(coverArtId, "128"), album.updatedAt);
+    return (
+      <CoverImg
+        className={`album-cover ${compact ? "is-compact" : ""}`}
+        src={src}
+        alt=""
+        fallbackClassName={`album-cover is-fallback ${
+          compact ? "is-compact" : ""
+        }`}
+        fallback={initials(album.artist)}
+      />
+    );
+  }
   const coverPath =
     album.coverRelPath?.trim() || (album.hasCover ? album.relPath : "");
   if (coverPath) {

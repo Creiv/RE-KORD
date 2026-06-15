@@ -1,116 +1,37 @@
-import { prepareTrackTitleForMeta } from "./albumInfo.mjs"
-
-function diceCoefficient(a, b) {
-  if (!a.length || !b.length) return 0
-  if (a === b) return 1
-  if (a.length < 2 || b.length < 2) return a === b ? 1 : 0
-  const bigrams = new Map()
-  for (let i = 0; i < a.length - 1; i++) {
-    const bg = a.slice(i, i + 2)
-    bigrams.set(bg, (bigrams.get(bg) || 0) + 1)
-  }
-  let intersections = 0
-  for (let i = 0; i < b.length - 1; i++) {
-    const bg = b.slice(i, i + 2)
-    const c = bigrams.get(bg) || 0
-    if (c > 0) {
-      intersections += 1
-      bigrams.set(bg, c - 1)
-    }
-  }
-  return (2 * intersections) / (a.length + b.length - 2)
+/** Nome file locale del brano (ordine di download / cartella). */
+function trackFileName(track) {
+  const fromMeta = track?.meta?.fileName
+  if (fromMeta) return String(fromMeta)
+  const rel = String(track?.relPath || "")
+  const slash = rel.lastIndexOf("/")
+  return slash >= 0 ? rel.slice(slash + 1) : rel
 }
 
-function normMatch(artist, raw) {
-  const s = prepareTrackTitleForMeta(artist, String(raw || "")).toLowerCase().replace(/\s+/g, " ").trim()
-  return s
-}
-
-function similarity(normExpected, normLocal) {
-  if (!normExpected || !normLocal) return 0
-  if (normExpected === normLocal) return 1
-  const minL = Math.min(normExpected.length, normLocal.length)
-  if (minL >= 4) {
-    if (normExpected.includes(normLocal) || normLocal.includes(normExpected)) return 0.92
-  }
-  return diceCoefficient(normExpected, normLocal)
-}
-
-/** Sotto soglia non si associa una traccia a una riga della release (evita accoppiamenti casuali). */
-const MATCH_MIN = 0.42
-
-function sortExpectedRowsStable(rows) {
-  return [...rows].sort((a, b) => {
-    const da = Number.isFinite(Number(a.disc)) ? Number(a.disc) : 1
-    const db = Number.isFinite(Number(b.disc)) ? Number(b.disc) : 1
-    if (da !== db) return da - db
-    const pa = Number.isFinite(Number(a.position)) ? Number(a.position) : 0
-    const pb = Number.isFinite(Number(b.position)) ? Number(b.position) : 0
-    if (pa !== pb) return pa - pb
-    return String(a.title || "").localeCompare(String(b.title || ""), undefined, {
-      sensitivity: "base",
-      numeric: true,
-    })
+/**
+ * Ordine di visualizzazione: solo nome file su disco (ordine tipico del download).
+ * Non usa trackNumber, releaseDate né expectedTracks da metadati scaricati.
+ */
+export function compareAlbumTracksByFileName(a, b) {
+  const cmp = trackFileName(a).localeCompare(trackFileName(b), undefined, {
+    numeric: true,
+    sensitivity: "base",
+  })
+  if (cmp !== 0) return cmp
+  const aa = Number(a?.addedAt ?? a?.meta?.mtime ?? 0)
+  const bb = Number(b?.addedAt ?? b?.meta?.mtime ?? 0)
+  if (aa !== bb) return aa - bb
+  return String(a?.relPath || "").localeCompare(String(b?.relPath || ""), undefined, {
+    numeric: true,
+    sensitivity: "base",
   })
 }
 
 /**
- * Riordina i brani secondo `expectedTracks` (release) quando presente in kord-albuminfo.
- * Restituisce `null` se non applicabile; altrimenti un nuovo array (brani accoppiati per titolo simile,
- * poi il resto ordinato con `compareRest`).
- *
- * @param {Array<{ title: string, meta?: object }>} tracks
- * @param {Array<{ disc?: number, position?: number | null, title: string }>} expectedTracks
- * @param {string} artistName
- * @param {(a: object, b: object) => number} compareRest
+ * Ordina i brani di un album per nome file (ordine download).
+ * @param {Array<{ title: string, relPath?: string, meta?: object, addedAt?: number | null }>} tracks
  */
-export function reorderTracksByAlbumExpectedRelease(
-  tracks,
-  expectedTracks,
-  artistName,
-  compareRest,
-) {
-  if (
-    !Array.isArray(expectedTracks) ||
-    expectedTracks.length < 2 ||
-    !Array.isArray(tracks) ||
-    tracks.length < 2
-  ) {
-    return null
-  }
-
-  const sortedExp = sortExpectedRowsStable(expectedTracks).filter((row) =>
-    String(row.title || "").trim(),
-  )
-  if (sortedExp.length < 2) return null
-
-  const used = new Set()
-  const ordered = []
-
-  for (const exp of sortedExp) {
-    const nt = normMatch(artistName, exp.title)
-    if (!nt) continue
-    let bestIdx = -1
-    let bestSc = -1
-    for (let i = 0; i < tracks.length; i += 1) {
-      if (used.has(i)) continue
-      const nl = normMatch(artistName, tracks[i].title)
-      const sc = similarity(nt, nl)
-      if (sc > bestSc) {
-        bestSc = sc
-        bestIdx = i
-      }
-    }
-    if (bestIdx >= 0 && bestSc >= MATCH_MIN) {
-      used.add(bestIdx)
-      ordered.push(tracks[bestIdx])
-    }
-  }
-
-  const rest = []
-  for (let i = 0; i < tracks.length; i += 1) {
-    if (!used.has(i)) rest.push(tracks[i])
-  }
-  rest.sort(compareRest)
-  return [...ordered, ...rest]
+export function orderAlbumTrackList(tracks) {
+  if (!Array.isArray(tracks) || tracks.length < 1) return []
+  if (tracks.length < 2) return [...tracks]
+  return [...tracks].sort(compareAlbumTracksByFileName)
 }

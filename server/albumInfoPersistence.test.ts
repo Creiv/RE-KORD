@@ -48,6 +48,44 @@ describe("albumInfo persistence", () => {
     expect(json.fetchedAt).toBe("2026-05-02T00:00:00.000Z")
   })
 
+  it("does not persist ordering fields from album metadata fetch", async () => {
+    const albumDir = await fs.mkdtemp(path.join(os.tmpdir(), "rekord-album-fetch-"))
+
+    await saveAlbumFetchedMeta(albumDir, {
+      title: "Fetched",
+      country: "IT",
+      expectedTracks: [{ disc: 1, position: 1, title: "Intro" }],
+      expectedTrackCount: 1,
+      fetchedAt: "2026-05-02T00:00:00.000Z",
+    })
+
+    const raw = await fs.readFile(path.join(albumDir, "kord-albuminfo.json"), "utf8")
+    const json = JSON.parse(raw)
+    expect(json.title).toBe("Fetched")
+    expect(json.country).toBe("IT")
+    expect(json.expectedTracks).toBeUndefined()
+    expect(json.expectedTrackCount).toBeUndefined()
+  })
+
+  it("does not persist track ordering fields from track metadata fetch", async () => {
+    const albumDir = await fs.mkdtemp(path.join(os.tmpdir(), "rekord-track-fetch-"))
+    const fileName = "01 Song.flac"
+
+    await saveTrackFetchedMeta(albumDir, fileName, {
+      source: "musicbrainz",
+      trackNumber: 4,
+      discNumber: 2,
+      genre: "Rock",
+    })
+
+    const raw = await fs.readFile(path.join(albumDir, "kord-trackinfo.json"), "utf8")
+    const json = JSON.parse(raw)
+    expect(json[fileName].source).toBe("musicbrainz")
+    expect(json[fileName].genre).toBe("Rock")
+    expect(json[fileName].trackNumber).toBeUndefined()
+    expect(json[fileName].discNumber).toBeUndefined()
+  })
+
   it("normalizza i generi salvati sui metadati album", async () => {
     const albumDir = await fs.mkdtemp(path.join(os.tmpdir(), "rekord-album-genre-"))
 

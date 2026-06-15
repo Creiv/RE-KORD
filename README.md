@@ -8,7 +8,7 @@
   <a href="https://www.reddit.com/r/RE_KORD/"><strong>r/RE_KORD</strong></a>
 </p>
 
-<h1 align="center">RE-KORD 4.0</h1>
+<h1 align="center">RE-KORD 4.1</h1>
 
 <p align="center">
   <strong>Your music. Your server. Your rules.</strong><br />
@@ -31,8 +31,8 @@ own tracks. Everything stays on your machine; every device on your network can
 join in.
 
 One install gives you the **server + web app**. Around it: a **desktop app**
-(Server or thin Client), a **Docker image**, an installable **PWA**, and — new
-in 4.0 — a native **Android client**.
+(Server or thin Client), a **Docker image**, an installable **PWA**, and — since
+4.0 — a native **Android client**.
 
 ## Highlights
 
@@ -45,7 +45,9 @@ Android Auto-friendly).
 🗂️ **A library that stays healthy**
 Browse by artist, genre, or **mood**; instant search; quality alerts for
 missing covers and metadata; per-track and per-album metadata editors;
-multi-source artwork and trivia lookup; bulk scans and title cleanup.
+multi-source artwork and trivia lookup; bulk scans and title cleanup. The
+library index and album/track metadata live in a local **SQLite** database
+(`rekord.db`) with cached artwork thumbnails and filesystem watching.
 
 🛠️ **Studio built in**
 Discover and download new music (bundled `yt-dlp`), enrich metadata from
@@ -71,7 +73,24 @@ LAN access out of the box, one-click **Cloudflare tunnel** with QR code for
 remote listening, multiple local profiles, full **backup/restore**, and a
 self-updating client model: update the server once, every client follows.
 
-## New in 4.0
+## New in 4.1
+
+- 🗄️ **SQLite library core** — `MUSIC_ROOT/.kord/rekord.db` is the source of
+  truth for the library index, album/track metadata, and artwork thumbnails.
+  One-shot bootstrap from the legacy JSON cache or a full filesystem scan on
+  first run.
+- 🖼️ **Artwork cache** — cover thumbnails served from `/api/library/artwork/:id`
+  with sharp-generated sizes; no more hammering the filesystem for every tile.
+- 🧹 **Library metadata cleanup** — Studio → Tools migrates useful fields from
+  legacy JSON sidecars into the DB, removes per-track sidecars, and compacts
+  album files (trivia/`infoItems` stay on disk).
+- 📂 **Track order by filename** — album track lists follow download/filename
+  order; tag-based track numbers are no longer used for sorting.
+- 🔁 **Watcher + epochs** — filesystem changes trigger rescans; clients poll
+  `/api/library/changes` for index updates. Paginated library APIs are ready
+  for large collections.
+
+## Since 4.0
 
 - 📱 **Android client (APK)** — connects to your server like the desktop
   client, with **QR pairing** straight from Settings → Network: scan, pick a
@@ -120,17 +139,19 @@ npm run dev:app      # Electron desktop + server
 npm test && npm run lint && npm run build
 ```
 
-Library root: `MUSIC_ROOT` env or in-app Settings. Per-profile state lives in
-`MUSIC_ROOT/.kord/` and survives reinstalls.
+Library root: `MUSIC_ROOT` env or in-app Settings. Per-profile state and the
+library database live in `MUSIC_ROOT/.kord/` (`rekord.db` plus account data) and
+survive reinstalls. After upgrading from 4.0, run **Library metadata cleanup**
+once in Studio → Tools to migrate legacy JSON sidecars.
 
-### Packaging 4.0
+### Packaging 4.1
 
 ```bash
-npm run pack:linux:server -- 4.0.0   # → release/RE-KORD-Server-4.0.0-linux-x86_64.AppImage
-npm run pack:win:server  -- 4.0.0    # Windows server (NSIS on Windows hosts, .7z from Linux)
-npm run pack:linux:client -- 4.0.0   # thin desktop client
-npm run pack:win:client  -- 4.0.0
-npm run pack:android:client -- 4.0.0 # → release/RE-KORD-Client-4.0.0-android.apk
+npm run pack:linux:server -- 4.1.0   # → release/RE-KORD-Server-4.1.0-linux-x86_64.AppImage
+npm run pack:win:server  -- 4.1.0    # Windows server (NSIS on Windows hosts, .7z from Linux)
+npm run pack:linux:client -- 4.1.0   # thin desktop client
+npm run pack:win:client  -- 4.1.0
+npm run pack:android:client -- 4.1.0 # → release/RE-KORD-Client-4.1.0-android.apk
 ```
 
 Server packs bundle **yt-dlp** and **cloudflared** for the target OS. Windows
@@ -139,9 +160,9 @@ without `libfuse2`, run AppImages via `./scripts/run-linux-appimage.sh`.
 
 ## Tech, in one line
 
-React 19 + Vite on the front, Express on the back, Electron for desktop,
-Capacitor for Android, Docker for servers — a single codebase, no external
-database, no telemetry.
+React 19 + Vite on the front, Express + **SQLite** (`better-sqlite3`) on the
+back, Electron for desktop, Capacitor for Android, Docker for servers — a single
+codebase, local-first storage, no telemetry.
 
 ## Disclaimer
 
@@ -151,4 +172,4 @@ law compliance. Use only content you have the rights or permission to use.
 
 ---
 
-<p align="center"><em>RE-KORD 4.0 by Creiv — local music, serious tools, play on the beat.</em></p>
+<p align="center"><em>RE-KORD 4.1 by Creiv — local music, serious tools, play on the beat.</em></p>

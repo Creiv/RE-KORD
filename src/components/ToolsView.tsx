@@ -38,7 +38,7 @@ import {
   sanitizeTrackTitles,
   searchArtwork,
   searchMusicDirs,
-  pruneOrphanTrackMetaForAlbum,
+  pruneAlbumLibraryMetadataForAlbum,
 } from "../lib/api";
 import type {
   ArtworkHit,
@@ -1065,6 +1065,11 @@ export function ToolsView({
     setMetaLog((s) => s + t("tools.trackMetaPruneStart", { n: list.length }));
     let albumsTouched = 0;
     let keysRemoved = 0;
+    let orderingFieldsCleared = 0;
+    let releaseTracklistsCleared = 0;
+    let jsonFieldsMerged = 0;
+    let jsonTracksMerged = 0;
+    let jsonFilesRemoved = 0;
     for (let i = 0; i < list.length; i += 1) {
       if (stopTrackPrune.current) {
         setMetaLog((s) => s + t("tools.trackMetaPruneStop"));
@@ -1076,18 +1081,56 @@ export function ToolsView({
       const albumPath = list[i]!;
       setTrackPruneProg({ current: i + 1, total: list.length });
       try {
-        const r = await pruneOrphanTrackMetaForAlbum(albumPath);
-        if (r.removed.length) {
+        const r = await pruneAlbumLibraryMetadataForAlbum(albumPath);
+        const touched =
+          r.removed.length > 0 ||
+          r.expectedTracksCleared ||
+          r.trackOrderingFieldsCleared > 0 ||
+          r.albumFieldsMerged > 0 ||
+          r.tracksMerged > 0 ||
+          r.jsonFilesRemoved > 0 ||
+          r.jsonFilesTrimmed > 0;
+        if (touched) {
           albumsTouched += 1;
           keysRemoved += r.removed.length;
-          const files =
-            r.removed.length > 6
-              ? `${r.removed.slice(0, 6).join(", ")}…`
-              : r.removed.join(", ");
-          setMetaLog(
-            (s) =>
-              s + t("tools.trackMetaPruneAlbum", { path: albumPath, files })
-          );
+          orderingFieldsCleared += r.trackOrderingFieldsCleared;
+          jsonFieldsMerged += r.albumFieldsMerged;
+          jsonTracksMerged += r.tracksMerged;
+          jsonFilesRemoved += r.jsonFilesRemoved;
+          if (r.expectedTracksCleared) releaseTracklistsCleared += 1;
+          if (r.removed.length) {
+            const files =
+              r.removed.length > 6
+                ? `${r.removed.slice(0, 6).join(", ")}…`
+                : r.removed.join(", ");
+            setMetaLog(
+              (s) =>
+                s + t("tools.trackMetaPruneAlbum", { path: albumPath, files })
+            );
+          }
+          if (r.expectedTracksCleared || r.trackOrderingFieldsCleared > 0) {
+            setMetaLog(
+              (s) =>
+                s +
+                t("tools.trackMetaPruneAlbumOrdering", {
+                  path: albumPath,
+                  tracks: r.trackOrderingFieldsCleared,
+                  release: r.expectedTracksCleared ? "yes" : "no",
+                })
+            );
+          }
+          if (r.albumFieldsMerged > 0 || r.tracksMerged > 0 || r.jsonFilesRemoved > 0) {
+            setMetaLog(
+              (s) =>
+                s +
+                t("tools.trackMetaPruneAlbumJson", {
+                  path: albumPath,
+                  fields: r.albumFieldsMerged,
+                  tracks: r.tracksMerged,
+                  files: r.jsonFilesRemoved,
+                })
+            );
+          }
         }
       } catch (e) {
         setMetaLog(
@@ -1106,7 +1149,16 @@ export function ToolsView({
     setTrackPruneBusy(false);
     setMetaLog(
       (s) =>
-        s + t("tools.trackMetaPruneDone", { a: albumsTouched, k: keysRemoved })
+        s +
+        t("tools.trackMetaPruneDone", {
+          a: albumsTouched,
+          k: keysRemoved,
+          o: orderingFieldsCleared,
+          e: releaseTracklistsCleared,
+          f: jsonFieldsMerged,
+          t: jsonTracksMerged,
+          j: jsonFilesRemoved,
+        })
     );
     void onReconcileLibrary({ mode: "now" });
   };

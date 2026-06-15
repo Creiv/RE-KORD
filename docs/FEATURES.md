@@ -1,11 +1,15 @@
 # RE-KORD — Mappa completa delle funzionalità
 
-> Versione app: 4.0.0 — documento generato dall'analisi del codice (giugno 2026).
+> Versione app: 4.1.0 — documento generato dall'analisi del codice (giugno 2026).
 > Organizzato per pagina/sezione e categoria.
 
 ## Novità — giugno 2026
 
-- **Opacità vetro regolabile**: slider 0–100% con campo numerico nelle Impostazioni, anteprima live e salvataggio automatico (debounce 500ms); sotto il 50% di opacità il tema custom sceglie il bianco/nero del testo dalla luminosità dello sfondo che traspare
+- **Indice libreria in SQLite** (`rekord.db` in `.kord/`): bootstrap da cache legacy o scan filesystem; metadati album/brano e thumbnail copertine nel DB; watcher filesystem ed epoche
+- **API libreria paginate** (`/api/library/artists-page`, `/api/library/artists/:id/albums-list`, `/api/library/album-tracks`), `/api/library/changes`, copertine via `/api/library/artwork/:id`
+- **Pulizia metadati libreria** (Tools): migra campi utili da JSON legacy, rimuove sidecar brano, compatta album; ordine tracce solo per nome file
+- **Backup/restore** include `rekord.db` con import metadati legacy
+- **Opacità vetro regolabile**: slider 0–100% con campo numerico nelle Impostazioni, anteprima live e salvataggio automatico (debounce 500ms)
 - **Condivisione tema**: pulsante "Esporta tema" (zip condivisibile col solo tema, senza dati utente, sfondo immagine incluso) e upload unificato "backup o tema" che riconosce l'archivio e applica il tema su qualsiasi PC/server/account
 - **Cover mancanti istantanee**: se una copertina non esiste compaiono subito le iniziali, senza attesa; i tentativi anti-rete-flaky proseguono in background
 - **Mobile**: l'app occupa sempre tutta l'altezza dello schermo (100dvh nativo), metriche dashboard in griglia 2×2, fix header pagina artista e card "Playlist al volo", tap target più generosi
@@ -365,7 +369,8 @@
 ## 15. Server / Backend (Express)
 
 ### Libreria & scansione
-- Scansione ricorsiva del filesystem, indice con cache a epoche
+- Scansione ricorsiva del filesystem; indice persistito in SQLite (`rekord.db` in `.kord/`) con epoche e watcher filesystem
+- API paginate (`/api/library/artists-page`, `/api/library/artists/:id/albums-list`, `/api/library/album-tracks`), FTS, `/api/library/changes`, copertine via `/api/library/artwork/:id`
 - Ricerca full-text, dettaglio artisti/album, risoluzione batch tracce
 - Refresh in background, dedup richieste concorrenti (singleflight)
 - Selezione libreria per account (include/exclude artisti, album, tracce)
@@ -393,12 +398,12 @@
 
 ### Metadati
 - Aggregazione iTunes / Last.fm / MusicBrainz / LrcLib / Wikipedia / TheAudioDB
-- Persistenza locale per album (kord-albuminfo.json, kord-trackinfo.json)
+- Persistenza metadati album/brano in SQLite (`rekord.db`); sidecar JSON legacy solo migrazione/trivia
 - Ricerca e applicazione artwork (download da URL o upload max 15MB)
 - Sanitizzazione titoli, normalizzazione generi, mood per traccia
 
 ### Backup & manutenzione
-- Zip completo con manifest, restore atomico con invalidazione cache
+- Zip completo con manifest, restore atomico con `rekord.db` e import metadati legacy
 - Export/import tema: `GET /api/backup/theme-export` (zip `rekord-theme/`), import auto-riconosciuto dall'endpoint di restore (solo settings tema, nessun dato utente)
 - Migrazione schema v2 → v3 (idempotente)
 - Activity log JSONL append-only

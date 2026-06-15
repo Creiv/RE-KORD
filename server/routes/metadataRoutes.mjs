@@ -11,7 +11,7 @@ import {
   loadAlbumJsonMetaFromDir,
   loadTrackJsonMetaMapFromDir,
   prepareTrackTitleForMeta,
-  pruneOrphanTrackMetaInAlbumDir,
+  pruneAlbumLibraryMetadataInAlbumDir,
   sanitizeTrackTitlesFullLibrary,
   sanitizeTrackTitlesInAlbumDir,
   saveAlbumFetchedMeta,
@@ -31,11 +31,9 @@ import {
 import { getAudioFileDurationMs } from "../audioDuration.mjs";
 import { normalizeStoredGenreString, parseTrackGenres } from "../genres.mjs";
 import { accountIdFromReq, actLog, sendError, sendOk } from "../httpUtils.mjs";
-import {
-  patchAlbumInLibraryIndexCache,
-  patchTrackInLibraryIndexCache,
-  patchTracksInLibraryIndexCache,
-} from "../libraryIndexCache.mjs";
+import { isLibraryDbBootstrapped } from "../db/index.mjs";
+import { patchAlbumCoverInDb } from "../db/queries/metadata.mjs";
+import { registerDownloadedCoverArtwork } from "../artwork/index.mjs";
 import {
   albumDeltaFromMeta,
   invalidateLibraryIndex,
@@ -50,7 +48,6 @@ import {
   underRoot,
 } from "../pathSafety.mjs";
 import { rekordApiUserAgent } from "../rekordVersion.mjs";
-import { existingAlbumTrackInfoPath } from "../trackInfoPaths.mjs";
 import { normalizeTrackMoodsList } from "../trackMoods.mjs";
 import { writeUserTrackMoodsWithCAS } from "../userState.mjs";
 import { existsSync, statSync } from "fs";
@@ -136,16 +133,25 @@ export function registerMetadataRoutes(app) {
         path.sep,
         "/",
       );
-      const cachePatched = await patchAlbumInLibraryIndexCache(root, albumPath, {
-        coverRelPath,
-      });
-      scheduleLibraryIndexMetaRefresh(root, cachePatched);
+      let coverArtId = null;
+      if (isLibraryDbBootstrapped(root)) {
+        const art = await registerDownloadedCoverArtwork(
+          root,
+          albumPath,
+          Buffer.from(data),
+          ext,
+        );
+        coverArtId = art?.artId || null;
+        patchAlbumCoverInDb(root, albumPath, coverRelPath, coverArtId);
+      }
+      scheduleLibraryIndexMetaRefresh(root, isLibraryDbBootstrapped(root));
       return sendOk(res, {
         saved: path.basename(dest),
         albumPath,
         abs: dest,
         coverRelPath,
         coverVersion: Date.now(),
+        coverArtId,
       });
     } catch (error) {
       return sendError(res, 500, String(error?.message || error));
@@ -193,18 +199,25 @@ export function registerMetadataRoutes(app) {
           path.sep,
           "/",
         );
-        const cachePatched = await patchAlbumInLibraryIndexCache(
-          root,
-          albumPath,
-          { coverRelPath },
-        );
-        scheduleLibraryIndexMetaRefresh(root, cachePatched);
+        let coverArtId = null;
+        if (isLibraryDbBootstrapped(root)) {
+          const art = await registerDownloadedCoverArtwork(
+            root,
+            albumPath,
+            req.file.buffer,
+            ext,
+          );
+          coverArtId = art?.artId || null;
+          patchAlbumCoverInDb(root, albumPath, coverRelPath, coverArtId);
+        }
+        scheduleLibraryIndexMetaRefresh(root, isLibraryDbBootstrapped(root));
         return sendOk(res, {
           saved: path.basename(dest),
           albumPath,
           abs: dest,
           coverRelPath,
           coverVersion: Date.now(),
+          coverArtId,
         });
       } catch (error) {
         return sendError(res, 500, String(error?.message || error));
@@ -236,12 +249,7 @@ export function registerMetadataRoutes(app) {
         detail: "MusicBrainz / release metadata",
       });
       const albumDelta = albumDeltaFromMeta(albumPath, savedMeta, albumTitle);
-      const cachePatched = await patchAlbumInLibraryIndexCache(
-        root,
-        albumPath,
-        albumDelta,
-      );
-      scheduleLibraryIndexMetaRefresh(root, cachePatched);
+      scheduleLibraryIndexMetaRefresh(root, isLibraryDbBootstrapped(root));
       return res.json({ ok: true, albumPath, meta: savedMeta, album: albumDelta });
     } catch (error) {
       return sendError(res, 500, String(error?.message || error));
@@ -332,21 +340,13 @@ export function registerMetadataRoutes(app) {
           typeof meta?.expectedTrackCount === "number"
             ? meta.expectedTrackCount
             : null,
-        expectedTracks: Array.isArray(meta?.expectedTracks)
-          ? meta.expectedTracks
-          : null,
         hasAlbumMeta: true,
       };
       const trackPatches = touchedTracks.map((row) => ({
         relPath: row.relPath,
         meta: row.meta,
       }));
-      const cachePatched =
-        (await patchAlbumInLibraryIndexCache(root, albumPath, album)) ||
-        (trackPatches.length
-          ? await patchTracksInLibraryIndexCache(root, trackPatches)
-          : false);
-      scheduleLibraryIndexMetaRefresh(root, cachePatched);
+      scheduleLibraryIndexMetaRefresh(root, isLibraryDbBootstrapped(root));
       return sendOk(res, {
         albumPath,
         meta,
@@ -384,16 +384,8 @@ export function registerMetadataRoutes(app) {
         String(fileName)
           .replace(/\.(mp3|flac|m4a|ogg|opus|wav|aac|webm)$/i, "")
           .trim() || fileName;
-      const fpRead = existingAlbumTrackInfoPath(albumDir);
-      let json = {};
-      if (fpRead) {
-        try {
-          json = JSON.parse(await fs.readFile(fpRead, "utf8")) || {};
-        } catch {
-          json = {};
-        }
-      }
-      const existingTr = json[fileName];
+      const trackMetaMap = await loadTrackJsonMetaMapFromDir(albumDir);
+      const existingTr = trackMetaMap[fileName];
       const artistFromTrackInfo =
         existingTr &&
         typeof existingTr === "object" &&
@@ -434,12 +426,7 @@ export function registerMetadataRoutes(app) {
         ...(resolvedTitle ? { title: resolvedTitle } : {}),
         meta: metaOut,
       };
-      const cachePatched = await patchTrackInLibraryIndexCache(
-        root,
-        relPath,
-        trackDelta,
-      );
-      scheduleLibraryIndexMetaRefresh(root, cachePatched);
+      scheduleLibraryIndexMetaRefresh(root, isLibraryDbBootstrapped(root));
       return res.json({ ok: true, relPath, meta: metaOut, track: trackDelta });
     } catch (error) {
       return sendError(res, 500, String(error?.message || error));
@@ -472,16 +459,8 @@ export function registerMetadataRoutes(app) {
         String(fileName)
           .replace(/\.(mp3|flac|m4a|ogg|opus|wav|aac|webm)$/i, "")
           .trim() || fileName;
-      const fpRead = existingAlbumTrackInfoPath(albumDir);
-      let json = {};
-      if (fpRead) {
-        try {
-          json = JSON.parse(await fs.readFile(fpRead, "utf8")) || {};
-        } catch {
-          json = {};
-        }
-      }
-      const existingTr = json[fileName];
+      const trackMetaMap = await loadTrackJsonMetaMapFromDir(albumDir);
+      const existingTr = trackMetaMap[fileName];
       const artistFromTrackInfo =
         existingTr &&
         typeof existingTr === "object" &&
@@ -596,12 +575,7 @@ export function registerMetadataRoutes(app) {
         ...(title ? { title } : {}),
         meta: metaOut,
       };
-      const cachePatched = await patchTrackInLibraryIndexCache(
-        root,
-        relPath,
-        trackDelta,
-      );
-      scheduleLibraryIndexMetaRefresh(root, cachePatched);
+      scheduleLibraryIndexMetaRefresh(root, isLibraryDbBootstrapped(root));
       return res.json({
         ok: true,
         relPath,
@@ -625,19 +599,40 @@ export function registerMetadataRoutes(app) {
       }
       if (!statSync(full).isDirectory())
         return sendError(res, 400, "Not a directory");
-      const r = await pruneOrphanTrackMetaInAlbumDir(full);
-      if (r.removed.length) {
+      const r = await pruneAlbumLibraryMetadataInAlbumDir(full);
+      if (r.written) {
         void actLog(req, {
           kind: "library",
-          action: "track_metadata_prune_orphans",
+          action: "library_metadata_prune",
           folder: albumPath,
-          detail: `${r.removed.length} key(s): ${r.removed
-          .slice(0, 12)
-          .join(", ")}${r.removed.length > 12 ? "…" : ""}`,
+          detail: [
+            r.orphanTrackKeysRemoved.length
+              ? `${r.orphanTrackKeysRemoved.length} orphan key(s)`
+              : null,
+            r.expectedTracksCleared ? "release tracklist cleared" : null,
+            r.trackOrderingFieldsCleared
+              ? `${r.trackOrderingFieldsCleared} track ordering field(s)`
+              : null,
+            r.albumFieldsMerged ? `${r.albumFieldsMerged} album field(s) from JSON` : null,
+            r.tracksMerged ? `${r.tracksMerged} track(s) from JSON` : null,
+            r.jsonFilesRemoved ? `${r.jsonFilesRemoved} JSON file(s) removed` : null,
+          ]
+            .filter(Boolean)
+            .join("; "),
         });
         await invalidateLibraryIndex(root);
       }
-      return sendOk(res, { albumPath, removed: r.removed, written: r.written });
+      return sendOk(res, {
+        albumPath,
+        removed: r.orphanTrackKeysRemoved,
+        written: r.written,
+        expectedTracksCleared: r.expectedTracksCleared,
+        trackOrderingFieldsCleared: r.trackOrderingFieldsCleared,
+        albumFieldsMerged: r.albumFieldsMerged,
+        tracksMerged: r.tracksMerged,
+        jsonFilesRemoved: r.jsonFilesRemoved,
+        jsonFilesTrimmed: r.jsonFilesTrimmed,
+      });
     } catch (error) {
       return sendError(res, 500, String(error?.message || error));
     }
@@ -692,7 +687,7 @@ export function registerMetadataRoutes(app) {
   });
 
   /* Info e curiosità per artista/album (kord-artistinfo.json / chiave `info`
-     in kord-albuminfo.json). `artist` è la cartella artista; `album` la
+     in kord-albuminfo.json o nel DB). `artist` è la cartella artista; `album` la
      cartella album (opzionale: senza, si opera sull'artista). */
   const resolveEntityDirs = (root, artistRaw, albumRaw) => {
     const artistSeg = safeRelSeg(String(artistRaw || "").trim());

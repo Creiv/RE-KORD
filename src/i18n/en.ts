@@ -49,7 +49,7 @@ export const EN: Record<string, string> = {
   "sync.activity.applyingCover": "Saving album cover…",
   "sync.activity.updatingGenres": "Updating album genres…",
   "sync.activity.sanitizingTitles": "Normalizing track titles…",
-  "sync.activity.pruningTrackMeta": "Cleaning orphan track metadata…",
+  "sync.activity.pruningTrackMeta": "Cleaning library metadata…",
   "sync.activity.updatingLibrary": "Updating library view…",
   "topbar.toolsBusyTitle": "Tools: download or metadata running in background",
   "topbar.kpi": "{{art}} art. · {{alb}} alb. · {{state}}",
@@ -229,8 +229,8 @@ export const EN: Record<string, string> = {
   "library.looseTracksChip":
     "{{n}} track(s) missing date or genre in metadata",
   "library.looseTracksOkChip": "No tracks missing date/genre in metadata",
-  "library.albumInfoPresent": "Album metadata present in folder",
-  "library.albumInfoMissing": "Missing album metadata file (kord-albuminfo.json)",
+  "library.albumInfoPresent": "Album metadata in database",
+  "library.albumInfoMissing": "Album metadata not yet in the database",
   "library.tracksPartialMeta":
     "{{n}} track(s) missing date or genre in metadata",
   "library.tracksAllHaveMeta":
@@ -517,7 +517,7 @@ export const EN: Record<string, string> = {
   "settings.colophonLine4":
     "This tool is designed for legal/no-copyright music libraries (or any content used with proper rights). Each user is solely responsible for their own actions.",
   "settings.colophonLine5":
-    "4.0 highlights: Android client with QR pairing, theme sharing via export/import, adjustable glass opacity, native Android playback widget, and a refreshed mobile UI.",
+    "4.1 highlights: SQLite library index (rekord.db), cached artwork thumbnails, library metadata cleanup from legacy JSON, and track order by filename.",
   "settings.uiEyebrow": "Interface preferences",
   "settings.uiHeading": "Theme and visualizer",
   "settings.theme": "Theme",
@@ -1107,16 +1107,16 @@ export const EN: Record<string, string> = {
   "tools.scanAlbumsAuto": "Automatic album scan",
   "tools.scanning": "Scanning…",
   "tools.scanAlbumsTitle":
-    "Skip albums with kord-albuminfo.json; delay between requests (MusicBrainz rate limit)",
+    "Skip albums that already have metadata in the database; delay between requests (MusicBrainz rate limit)",
   "tools.tracks": "Tracks",
   "tools.currentTrackMeta": "Playing track metadata",
   "tools.scanAllTracks": "Scan all tracks",
   "tools.scanChoiceAlbumTitle": "Automatic album scan",
   "tools.scanChoiceAlbumHint":
-    "Fetch metadata only for folders still missing kord-albuminfo.json, or rescan every album (refreshes existing metadata).",
+    "Fetch metadata only for albums missing metadata in the database, or rescan every album (refreshes existing metadata).",
   "tools.scanChoiceTrackTitle": "Scan all tracks",
   "tools.scanChoiceTrackHint":
-    "Fetch metadata only for tracks missing genre or release date in kord-trackinfo.json, or rescan every audio file.",
+    "Fetch metadata only for tracks missing genre or release date in the database, or rescan every audio file.",
   "tools.scanChoiceMissingOnly": "Missing only",
   "tools.scanChoiceRescanAll": "Rescan all",
   "tools.scanChoiceCancel": "Cancel",
@@ -1133,17 +1133,21 @@ export const EN: Record<string, string> = {
   "tools.applyLibrary": "Apply to entire library",
   "tools.progressAlbumMeta": "Album metadata (MB / TheAudioDB / iTunes)",
   "tools.progressTrackMeta": "Track metadata",
-  "tools.progressTrackMetaPrune": "Stale entries in track metadata",
-  "tools.trackMetaPruneOrphans": "Remove stale track metadata",
+  "tools.progressTrackMetaPrune": "Library metadata cleanup",
+  "tools.trackMetaPruneOrphans": "Library metadata cleanup",
   "tools.trackMetaPruneTitle":
-    "For each album folder, drop stale track-metadata keys that do not match an audio file still on disk",
+    "For each album: migrate useful metadata from JSON into SQLite, remove obsolete sidecars, stale keys, release tracklists, and track/disc numbers. Audio files are not modified. Album trivia (infoItems) stay in JSON.",
   "tools.trackMetaPruneConfirm":
-    "Scan every album and remove stale track-metadata entries for files that are no longer in the folder? Audio files are not deleted.",
+    "Scan every album and clean up library metadata?\n\n• copy useful fields from kord-*.json into the database (missing fields only)\n• remove track sidecars and album metadata already in the DB\n• stale track entries with no matching audio file\n• release tracklists and track/disc numbers\n\nAudio files are not deleted.",
   "tools.trackMetaPruneStart":
-    "Stale track metadata cleanup: {{n}} album folders.\n",
-  "tools.trackMetaPruneAlbum": "  {{path}}: removed {{files}}\n",
+    "Library metadata cleanup: {{n}} album folders.\n",
+  "tools.trackMetaPruneAlbum": "  {{path}}: removed stale keys {{files}}\n",
+  "tools.trackMetaPruneAlbumOrdering":
+    "  {{path}}: cleared ordering fields on {{tracks}} track(s) · release tracklist: {{release}}\n",
+  "tools.trackMetaPruneAlbumJson":
+    "  {{path}}: migrated {{fields}} album field(s) and {{tracks}} track(s) from JSON · JSON files removed: {{files}}\n",
   "tools.trackMetaPruneDone":
-    "Cleanup finished. Albums updated: {{a}} · entries removed: {{k}}.\n",
+    "Cleanup finished. Albums updated: {{a}} · stale keys: {{k}} · track ordering fields: {{o}} · release tracklists: {{e}} · album fields from JSON: {{f}} · tracks from JSON: {{t}} · JSON files removed: {{j}}.\n",
   "tools.trackMetaPruneStop": "Cleanup stopped by user.\n",
   "tools.trackMetaPruneItemErr": "[{{i}}/{{total}}] {{path}}: {{err}}\n",
   "tools.stopTrackPrune": "Stop cleanup",

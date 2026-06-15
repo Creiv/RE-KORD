@@ -13,7 +13,6 @@ import {
   saveCustomThemeBg,
 } from "../customThemeBg.mjs";
 import { accountIdFromReq, sendError, sendOk } from "../httpUtils.mjs";
-import { invalidateLibraryIndex } from "../libraryIndexService.mjs";
 import { getAccountsSnapshot, getMusicRoot, isMusicRootFromEnv } from "../musicRootConfig.mjs";
 import { mergeAndWriteUserStatePatch, readUserState } from "../userState.mjs";
 
@@ -215,7 +214,6 @@ export function registerBackupRoutes(app) {
         );
       }
       const data = await restoreRekordFromZipBuffer(req.file.buffer);
-      await invalidateLibraryIndex(getMusicRoot());
       return sendOk(res, data);
     } catch (error) {
       if (error?.code === "ENV_LOCKED") {

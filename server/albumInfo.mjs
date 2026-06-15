@@ -5,6 +5,18 @@ import path from "path"
 import { normalizeStoredGenreString } from "./genres.mjs"
 import { atomicWriteFileUtf8 } from "./rekordDataStore.mjs"
 import { rekordApiUserAgentWithUrl } from "./rekordVersion.mjs"
+import { getMusicRoot } from "./musicRootConfig.mjs"
+import { isLibraryDbBootstrapped } from "./db/index.mjs"
+import {
+  getAlbumRowByFolderRel,
+  saveAlbumMetaToDb,
+  saveTrackMetaToDb,
+  clearAlbumOrderingMetaInDb,
+  clearTrackOrderingMetaInAlbumDb,
+  mergeLegacyAlbumJsonIntoDb,
+  mergeLegacyTrackMapIntoDb,
+} from "./db/queries/metadata.mjs"
+import { getLibraryDb } from "./db/index.mjs"
 
 const LIB_EXCLUDE = new Set([
   "kord",
@@ -172,7 +184,56 @@ function pickTrackMetaPath(albumDir) {
   return k
 }
 
+/** @param {string} musicRoot @param {string} albumDir */
+function albumFolderRelInLibrary(musicRoot, albumDir) {
+  const root = path.resolve(String(musicRoot || ""))
+  if (!root) return null
+  const abs = path.resolve(albumDir)
+  if (abs === root || !abs.startsWith(root + path.sep)) return null
+  return path.relative(root, abs).replace(/\\/g, "/")
+}
+
+function canUseLibraryDbForAlbumDir(albumDir) {
+  const root = getMusicRoot()
+  if (!root || !isLibraryDbBootstrapped(root)) return null
+  return albumFolderRelInLibrary(root, albumDir)
+}
+
 export async function loadAlbumJsonMetaFromDir(albumDir) {
+  const folderRel = canUseLibraryDbForAlbumDir(albumDir)
+  if (folderRel) {
+    const root = getMusicRoot()
+    const row = getAlbumRowByFolderRel(root, folderRel)
+    if (!row) return null
+    const db = getLibraryDb(root)
+    const expectedRows = db
+      .prepare(
+        "SELECT disc, position, title FROM album_expected_tracks WHERE album_id = ? ORDER BY disc, position, title",
+      )
+      .all(row.id)
+    let expectedTracks = null
+    let expectedTrackCount = null
+    if (expectedRows.length) {
+      expectedTracks = expectedRows.map((r) => ({
+        disc: r.disc,
+        position: r.position,
+        title: r.title,
+      }))
+      expectedTrackCount = expectedTracks.length
+    } else if (row.expected_track_count != null) {
+      expectedTrackCount = row.expected_track_count
+    }
+    return {
+      title: row.title || row.name || null,
+      releaseDate: row.release_date || null,
+      genre: normalizeStoredGenreString(row.genre) || null,
+      label: row.label || null,
+      country: row.country || null,
+      musicbrainzReleaseId: row.musicbrainz_release_id || null,
+      expectedTrackCount,
+      expectedTracks,
+    }
+  }
   const p = pickAlbumMetaPath(albumDir)
   if (!existsSync(p)) return null
   try {
@@ -227,6 +288,31 @@ export async function loadAlbumJsonMetaFromDir(albumDir) {
  * @param {string} albumDir percorso assoluto
  */
 export async function loadTrackJsonMetaMapFromDir(albumDir) {
+  const folderRel = canUseLibraryDbForAlbumDir(albumDir)
+  if (folderRel) {
+    const root = getMusicRoot()
+    const album = getAlbumRowByFolderRel(root, folderRel)
+    if (!album) return {}
+    const rows = getLibraryDb(root)
+      .prepare("SELECT * FROM tracks WHERE album_id = ?")
+      .all(album.id)
+    const out = {}
+    for (const row of rows) {
+      const fileName = row.file_name || path.basename(row.rel_path)
+      out[fileName] = {
+        title: row.title || null,
+        releaseDate: row.release_date || null,
+        genre: row.genre || null,
+        lyrics: row.lyrics || null,
+        durationMs: row.duration_ms ?? null,
+        trackNumber: row.track_number ?? null,
+        discNumber: row.disc_number ?? null,
+        source: row.source || null,
+        url: row.url || null,
+      }
+    }
+    return out
+  }
   const p = pickTrackMetaPath(albumDir)
   if (!existsSync(p)) return {}
   try {
@@ -261,6 +347,10 @@ export async function loadTrackJsonMetaMapFromDir(albumDir) {
 }
 
 export async function saveAlbumManualMeta(albumDir, patch) {
+  const folderRel = canUseLibraryDbForAlbumDir(albumDir)
+  if (folderRel) {
+    return saveAlbumMetaToDb(getMusicRoot(), folderRel, patch)
+  }
   const readPath = pickAlbumMetaPath(albumDir)
   const writePath = path.join(albumDir, FILE_ALBUM)
   return withMetaMutation(writePath, async () => {
@@ -302,24 +392,55 @@ export async function saveAlbumManualMeta(albumDir, patch) {
   })
 }
 
+const ALBUM_ORDERING_FETCH_KEYS = ["expectedTracks", "expectedTrackCount"]
+const TRACK_ORDERING_FETCH_KEYS = ["trackNumber", "discNumber"]
+/** Chiavi JSON album da non cancellare (trivia / entityInfo, ancora solo su file). */
+const ALBUM_JSON_ENTITY_KEYS = new Set(["infoItems", "info"])
+
+function stripAlbumOrderingFromFetchPayload(payload) {
+  if (!payload || typeof payload !== "object") return payload
+  const next = { ...payload }
+  for (const k of ALBUM_ORDERING_FETCH_KEYS) delete next[k]
+  return next
+}
+
+function stripTrackOrderingFromFetchPayload(patch) {
+  if (!patch || typeof patch !== "object") return patch
+  const next = { ...patch }
+  for (const k of TRACK_ORDERING_FETCH_KEYS) delete next[k]
+  return next
+}
+
 export async function saveAlbumFetchedMeta(albumDir, payload) {
+  const safe = stripAlbumOrderingFromFetchPayload(payload)
+  const folderRel = canUseLibraryDbForAlbumDir(albumDir)
+  if (folderRel) {
+    return saveAlbumMetaToDb(getMusicRoot(), folderRel, safe)
+  }
   const readPath = pickAlbumMetaPath(albumDir)
   const writePath = path.join(albumDir, FILE_ALBUM)
   return withMetaMutation(writePath, async () => {
     const json = await readJsonObjectFile(readPath)
-    const next = { ...json, ...payload }
+    const next = { ...json, ...safe }
+    for (const k of ALBUM_ORDERING_FETCH_KEYS) delete next[k]
     await writeJsonObjectAtomic(writePath, next)
     return next
   })
 }
 
 /**
- * Merge manuale in kord-trackinfo.json per un file audio (legge da kord o legacy wpp, scrive sempre kord).
+ * Merge manuale metadati traccia (SQLite se bootstrapped, altrimenti kord-trackinfo.json).
  * @param {string} albumDir assoluto
  * @param {string} fileName es. "01 - Song.flac"
  * @param {Record<string, unknown>} patch solo chiavi ammesse
  */
 export async function saveTrackManualMeta(albumDir, fileName, patch) {
+  const folderRel = canUseLibraryDbForAlbumDir(albumDir)
+  if (folderRel) {
+    const relPath = `${folderRel}/${fileName}`.replace(/\\/g, "/")
+    const meta = saveTrackMetaToDb(getMusicRoot(), relPath, patch)
+    return { ...meta, editedAt: new Date().toISOString() }
+  }
   const readPath = pickTrackMetaPath(albumDir)
   const writePath = path.join(albumDir, FILE_TRACK)
   return withMetaMutation(writePath, async () => {
@@ -376,6 +497,26 @@ export async function saveTrackManualMeta(albumDir, fileName, patch) {
 }
 
 export async function saveTrackFetchedMeta(albumDir, fileName, patch) {
+  const safe = stripTrackOrderingFromFetchPayload(patch)
+  const folderRel = canUseLibraryDbForAlbumDir(albumDir)
+  if (folderRel) {
+    const root = getMusicRoot()
+    const relPath = `${folderRel}/${fileName}`.replace(/\\/g, "/")
+    const { durationMs, ...rest } = safe || {}
+    saveTrackMetaToDb(root, relPath, rest)
+    const row = getLibraryDb(root).prepare("SELECT * FROM tracks WHERE rel_path = ?").get(relPath)
+    return {
+      title: row?.title || null,
+      releaseDate: row?.release_date || null,
+      genre: row?.genre || null,
+      lyrics: row?.lyrics || null,
+      trackNumber: row?.track_number ?? null,
+      discNumber: row?.disc_number ?? null,
+      source: row?.source || null,
+      url: row?.url || null,
+      fetchedAt: rest.fetchedAt || new Date().toISOString(),
+    }
+  }
   const fpKord = path.join(albumDir, FILE_TRACK)
   const readPath = pickTrackMetaPath(albumDir)
   const writePath = fpKord
@@ -385,8 +526,9 @@ export async function saveTrackFetchedMeta(albumDir, fileName, patch) {
       json[fileName] && typeof json[fileName] === "object"
         ? { ...json[fileName] }
         : {}
-    const row = { ...prev, ...patch }
+    const row = { ...prev, ...safe }
     delete row.durationMs
+    for (const k of TRACK_ORDERING_FETCH_KEYS) delete row[k]
     json[fileName] = row
     await writeJsonObjectAtomic(writePath, json)
     return row
@@ -548,12 +690,7 @@ export function sanitizeLocalTrackTitleDisplay(raw, opts) {
  * @param {string} albumDir percorso assoluto album
  * @param {boolean} dryRun
  */
-/**
- * Rimuove da kord-trackinfo (o legacy) le chiavi che non corrispondono a file audio presenti in cartella.
- * @param {string} albumDir percorso assoluto album
- * @returns {Promise<{ removed: string[]; written: boolean }>}
- */
-export async function pruneOrphanTrackMetaInAlbumDir(albumDir) {
+async function pruneOrphanTrackMetaJsonInAlbumDir(albumDir) {
   const readPath = pickTrackMetaPath(albumDir)
   if (!existsSync(readPath)) return { removed: [], written: false }
   const writePath = path.join(albumDir, FILE_TRACK)
@@ -578,38 +715,197 @@ export async function pruneOrphanTrackMetaInAlbumDir(albumDir) {
   })
 }
 
+async function clearAlbumOrderingMetaJsonInAlbumDir(albumDir) {
+  const readPath = pickAlbumMetaPath(albumDir)
+  if (!existsSync(readPath)) return false
+  const writePath = path.join(albumDir, FILE_ALBUM)
+  return withMetaMutation(writePath, async () => {
+    const json = await readJsonObjectFile(readPath)
+    let touched = false
+    const next = { ...json }
+    for (const k of ALBUM_ORDERING_FETCH_KEYS) {
+      if (Object.prototype.hasOwnProperty.call(next, k)) {
+        delete next[k]
+        touched = true
+      }
+    }
+    if (!touched) return false
+    await writeJsonObjectAtomic(writePath, next)
+    return true
+  })
+}
+
+async function clearTrackOrderingMetaJsonInAlbumDir(albumDir) {
+  const readPath = pickTrackMetaPath(albumDir)
+  if (!existsSync(readPath)) return 0
+  const writePath = path.join(albumDir, FILE_TRACK)
+  return withMetaMutation(writePath, async () => {
+    const json = await readJsonObjectFile(readPath)
+    let cleared = 0
+    const next = { ...json }
+    for (const fileName of Object.keys(next)) {
+      const row = next[fileName]
+      if (!row || typeof row !== "object") continue
+      let rowTouched = false
+      const copy = { ...row }
+      for (const k of TRACK_ORDERING_FETCH_KEYS) {
+        if (Object.prototype.hasOwnProperty.call(copy, k) && copy[k] != null) {
+          delete copy[k]
+          rowTouched = true
+        }
+      }
+      if (rowTouched) {
+        next[fileName] = copy
+        cleared += 1
+      }
+    }
+    if (cleared === 0) return 0
+    await writeJsonObjectAtomic(writePath, next)
+    return cleared
+  })
+}
+
+async function migrateJsonSidecarsIntoDb(albumDir, folderRel, root) {
+  let albumFieldsMerged = 0
+  let tracksMerged = 0
+
+  const albumRead = pickAlbumMetaPath(albumDir)
+  if (existsSync(albumRead)) {
+    const json = await readJsonObjectFile(albumRead)
+    const r = mergeLegacyAlbumJsonIntoDb(root, folderRel, json)
+    if (r.merged) albumFieldsMerged = r.fieldCount
+  }
+
+  const trackRead = pickTrackMetaPath(albumDir)
+  if (existsSync(trackRead)) {
+    const json = await readJsonObjectFile(trackRead)
+    const r = mergeLegacyTrackMapIntoDb(root, folderRel, json)
+    tracksMerged = r.merged
+  }
+
+  return { albumFieldsMerged, tracksMerged }
+}
+
+/** Dopo migrazione in DB: tieni solo trivia album; elimina sidecar brano. */
+async function compactJsonSidecarsAfterDbMigration(albumDir) {
+  let jsonFilesRemoved = 0
+  let jsonFilesTrimmed = 0
+
+  for (const fileName of [FILE_ALBUM, FILE_ALBUM_WPP]) {
+    const fp = path.join(albumDir, fileName)
+    if (!existsSync(fp)) continue
+    const json = await readJsonObjectFile(fp)
+    const compact = {}
+    for (const [k, v] of Object.entries(json)) {
+      if (ALBUM_JSON_ENTITY_KEYS.has(k)) compact[k] = v
+    }
+    if (Object.keys(compact).length === 0) {
+      await fs.unlink(fp).catch(() => {})
+      jsonFilesRemoved += 1
+    } else if (Object.keys(compact).length !== Object.keys(json).length) {
+      await withMetaMutation(fp, async () => {
+        await writeJsonObjectAtomic(fp, compact)
+      })
+      jsonFilesTrimmed += 1
+    }
+  }
+
+  for (const fileName of [FILE_TRACK, FILE_TRACK_WPP]) {
+    const fp = path.join(albumDir, fileName)
+    if (!existsSync(fp)) continue
+    await fs.unlink(fp).catch(() => {})
+    jsonFilesRemoved += 1
+  }
+
+  return { jsonFilesRemoved, jsonFilesTrimmed }
+}
+
+/**
+ * Pulizia metadati libreria per un album: migra JSON→DB, orfani, ordinamento, compatta sidecar.
+ * @param {string} albumDir percorso assoluto album
+ */
+export async function pruneAlbumLibraryMetadataInAlbumDir(albumDir) {
+  const folderRel = canUseLibraryDbForAlbumDir(albumDir)
+  let albumFieldsMerged = 0
+  let tracksMerged = 0
+  let jsonFilesRemoved = 0
+  let jsonFilesTrimmed = 0
+
+  if (folderRel) {
+    const root = getMusicRoot()
+    const mig = await migrateJsonSidecarsIntoDb(albumDir, folderRel, root)
+    albumFieldsMerged = mig.albumFieldsMerged
+    tracksMerged = mig.tracksMerged
+    const compact = await compactJsonSidecarsAfterDbMigration(albumDir)
+    jsonFilesRemoved = compact.jsonFilesRemoved
+    jsonFilesTrimmed = compact.jsonFilesTrimmed
+  }
+
+  const orphan = await pruneOrphanTrackMetaJsonInAlbumDir(albumDir)
+  const expectedTracksCleared = await clearAlbumOrderingMetaJsonInAlbumDir(albumDir)
+  const trackOrderingFieldsCleared = await clearTrackOrderingMetaJsonInAlbumDir(albumDir)
+
+  const folderRelForDb = folderRel
+  let dbExpectedCleared = false
+  let dbTrackOrderingCleared = 0
+  if (folderRelForDb) {
+    const root = getMusicRoot()
+    dbExpectedCleared = clearAlbumOrderingMetaInDb(root, folderRelForDb)
+    dbTrackOrderingCleared = clearTrackOrderingMetaInAlbumDb(root, folderRelForDb)
+  }
+
+  const written =
+    orphan.written ||
+    expectedTracksCleared ||
+    trackOrderingFieldsCleared > 0 ||
+    dbExpectedCleared ||
+    dbTrackOrderingCleared > 0 ||
+    albumFieldsMerged > 0 ||
+    tracksMerged > 0 ||
+    jsonFilesRemoved > 0 ||
+    jsonFilesTrimmed > 0
+
+  return {
+    orphanTrackKeysRemoved: orphan.removed,
+    expectedTracksCleared: expectedTracksCleared || dbExpectedCleared,
+    trackOrderingFieldsCleared: trackOrderingFieldsCleared + dbTrackOrderingCleared,
+    albumFieldsMerged,
+    tracksMerged,
+    jsonFilesRemoved,
+    jsonFilesTrimmed,
+    written,
+  }
+}
+
 export async function sanitizeTrackTitlesInAlbumDir(albumDir, dryRun) {
   const changes = []
   const entries = await fs.readdir(albumDir, { withFileTypes: true })
-  const readPath = pickTrackMetaPath(albumDir)
-  const writePath = path.join(albumDir, FILE_TRACK)
-  return withMetaMutation(writePath, async () => {
-    const mut = await readJsonObjectFile(readPath)
-    const segs = path.normalize(albumDir).split(path.sep).filter(Boolean)
-    const artistFolder = segs.length >= 2 ? segs[segs.length - 2] : ""
-    for (const e of entries) {
-      if (!e.isFile() || !AUDIO_RE.test(e.name)) continue
-      const base = e.name.replace(AUDIO_RE, "").trim() || e.name
-      const existing =
-        mut[e.name] && typeof mut[e.name] === "object" ? { ...mut[e.name] } : {}
-      const trackArtist = String(existing.artist || "").trim()
-      const to = sanitizeLocalTrackTitleDisplay(base, {
-        artistFolder,
-        ...(trackArtist ? { trackArtist } : {}),
-      })
-      if (to === base) continue
-      changes.push({ fileName: e.name, from: base, to })
-      if (!dryRun) {
-        mut[e.name] = { ...existing, title: to }
-      }
+  const folderRel = canUseLibraryDbForAlbumDir(albumDir)
+  const trackMetaMap = folderRel ? null : await readJsonObjectFile(pickTrackMetaPath(albumDir))
+  const segs = path.normalize(albumDir).split(path.sep).filter(Boolean)
+  const artistFolder = segs.length >= 2 ? segs[segs.length - 2] : ""
+
+  for (const e of entries) {
+    if (!e.isFile() || !AUDIO_RE.test(e.name)) continue
+    const base = e.name.replace(AUDIO_RE, "").trim() || e.name
+    const existing =
+      folderRel
+        ? (await loadTrackJsonMetaMapFromDir(albumDir))?.[e.name]
+        : trackMetaMap?.[e.name]
+    const row = existing && typeof existing === "object" ? existing : {}
+    const trackArtist = String(row.artist || "").trim()
+    const to = sanitizeLocalTrackTitleDisplay(base, {
+      artistFolder,
+      ...(trackArtist ? { trackArtist } : {}),
+    })
+    if (to === base) continue
+    changes.push({ fileName: e.name, from: base, to })
+    if (!dryRun) {
+      await saveTrackManualMeta(albumDir, e.name, { title: to })
     }
-    let written = false
-    if (!dryRun && changes.length) {
-      await writeJsonObjectAtomic(writePath, mut)
-      written = true
-    }
-    return { changes, written }
-  })
+  }
+
+  return { changes, written: !dryRun && changes.length > 0 }
 }
 
 /**

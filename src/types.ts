@@ -1,12 +1,12 @@
 export type TrackMeta = {
   fileName: string;
-  /** From kord-trackinfo (or legacy wpp-*): title shown instead of file name */
+  /** Titolo mostrato al posto del nome file (da SQLite o sidecar legacy). */
   title?: string | null;
   size: number | null;
   mtime: number | null;
   releaseDate: string | null;
   genre: string | null;
-  /** kord-trackinfo: fino a 3 chiavi mood canoniche (es. energy_boost). */
+  /** Fino a 3 mood canonici (es. energy_boost); in user state, non nel DB traccia. */
   moods?: string[] | null;
   /** Legacy: singolo mood; lettura solo migrazione. */
   mood?: string | null;
@@ -58,7 +58,7 @@ export type LibAlbum = {
   trackCount: number;
   tracks: LibTrack[];
   meta?: AlbumMeta;
-  /** From index: kord-albuminfo.json (or legacy) present in folder */
+  /** Metadati album presenti nel database (o sidecar legacy). */
   hasAlbumMeta?: boolean;
 };
 export type LibArtist = {
@@ -79,7 +79,7 @@ export type EnrichedTrack = LibTrack & {
   updatedAt?: number | null;
 };
 
-/** Voce di info/curiosità salvata per artista (kord-artistinfo.json) o album (chiave `infoItems` in kord-albuminfo.json). */
+/** Voce info/curiosità: artista in kord-artistinfo.json; album in infoItems (file o sidecar legacy). */
 export type EntityInfoItem = {
   id: string;
   /** Lingua della voce: il dialog mostra solo quelle della lingua dell'app. */
@@ -238,10 +238,12 @@ export type LibraryArtistIndex = {
   trackCount: number;
   releaseDate: string | null;
   coverRelPath: string | null;
+  /** Artwork cache id (SQLite) for instant cover URLs */
+  coverArtId?: string | null;
   albums: string[];
-  /** Album folders without kord-albuminfo (or legacy), excluding loose “Tracks” */
+  /** Album senza metadati album nel database, escluso “Tracce” loose */
   albumsWithoutFileMetaCount: number;
-  /** Tracks missing date or genre in kord-trackinfo (or absent) */
+  /** Brani senza genere o data nel database */
   tracksWithoutFileMetaCount: number;
 };
 
@@ -254,6 +256,8 @@ export type LibraryAlbumIndex = {
   relPath: string;
   trackCount: number;
   coverRelPath: string | null;
+  /** Artwork cache id (SQLite) for instant cover URLs */
+  coverArtId?: string | null;
   releaseDate: string | null;
   genre?: string | null;
   label: string | null;
@@ -344,6 +348,8 @@ export type CatalogAlbumEntry = {
   trackCount: number;
   loose: boolean;
   coverRelPath: string | null;
+  /** Artwork cache id (SQLite) for instant cover URLs */
+  coverArtId?: string | null;
 };
 
 export type CatalogArtistEntry = {

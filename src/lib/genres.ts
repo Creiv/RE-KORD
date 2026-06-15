@@ -1,5 +1,5 @@
 /**
- * kord-trackinfo: campo `genre` come stringa serializzata con `"; "`.
+ * Campo `genre` serializzato con `"; "` (indice libreria / metadati traccia).
  * Accetta anche stili legacy: "a/b", "a, b".
  */
 export function parseTrackGenres(raw: string | null | undefined): string[] {

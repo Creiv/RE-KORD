@@ -12,6 +12,18 @@ import {
   searchLibraryIndex,
 } from "../libraryIndexService.mjs";
 import {
+  listArtistsPaginated,
+  listAlbumsForArtist,
+  getAlbumTracksFromDb,
+  getArtworkRecord,
+} from "../db/queries/library.mjs";
+import { getLibraryEpoch } from "../db/index.mjs";
+import { runLibraryScan } from "../scanner/index.mjs";
+import { resolveArtworkFilePath } from "../artwork/index.mjs";
+import { existsSync } from "fs";
+import path from "path";
+import { safeRelSeg } from "../pathSafety.mjs";
+import {
   readLibrarySelection,
   removeAlbumsFromSelectionSets,
   sanitizeLibrarySelection,
@@ -229,6 +241,98 @@ export function registerLibraryRoutes(app) {
         return sendError(res, 404, String(error.message || error));
       }
       return sendError(res, 500, String(error?.message || error));
+    }
+  });
+
+  app.get("/api/library/artists-page", async (req, res) => {
+    try {
+      const root = getMusicRoot();
+      await getLibraryIndex(root);
+      const offset = Math.max(0, Number(req.query.offset) || 0);
+      const limit = Math.min(500, Math.max(1, Number(req.query.limit) || 50));
+      const sort = String(req.query.sort || "name");
+      const artists = listArtistsPaginated(root, { offset, limit, sort });
+      res.set("Cache-Control", "no-store, must-revalidate");
+      return sendOk(res, { artists, offset, limit, indexEpoch: getLibraryEpoch(root) });
+    } catch (error) {
+      console.error(error);
+      return sendError(res, 500, String(error?.message || error));
+    }
+  });
+
+  app.get("/api/library/artists/:id/albums-list", async (req, res) => {
+    try {
+      const root = getMusicRoot();
+      await getLibraryIndex(root);
+      const id = decodeURIComponent(String(req.params.id || ""));
+      const albums = listAlbumsForArtist(root, id);
+      if (!albums.length) return sendError(res, 404, "Artist not found");
+      res.set("Cache-Control", "no-store, must-revalidate");
+      return sendOk(res, { artistId: id, albums });
+    } catch (error) {
+      console.error(error);
+      return sendError(res, 500, String(error?.message || error));
+    }
+  });
+
+  app.get("/api/library/album-tracks", async (req, res) => {
+    try {
+      const root = getMusicRoot();
+      await getLibraryIndex(root);
+      const relPath = safeRelSeg(String(req.query.relPath || ""));
+      if (!relPath) return sendError(res, 400, "relPath is required");
+      const detail = getAlbumTracksFromDb(root, relPath);
+      if (!detail) return sendError(res, 404, "Album not found");
+      res.set("Cache-Control", "no-store, must-revalidate");
+      return sendOk(res, detail);
+    } catch (error) {
+      console.error(error);
+      return sendError(res, 500, String(error?.message || error));
+    }
+  });
+
+  app.get("/api/library/changes", async (req, res) => {
+    try {
+      const root = getMusicRoot();
+      const since = Number(req.query.sinceEpoch) || 0;
+      const epoch = getLibraryEpoch(root);
+      res.set("Cache-Control", "no-store, must-revalidate");
+      return sendOk(res, { changed: epoch !== since, indexEpoch: epoch });
+    } catch (error) {
+      return sendError(res, 500, String(error?.message || error));
+    }
+  });
+
+  app.post("/api/library/scan", async (req, res) => {
+    try {
+      const root = getMusicRoot();
+      const full = req.body?.full === true || String(req.query.full || "") === "1";
+      await runLibraryScan(root, { full });
+      return sendOk(res, { ok: true, indexEpoch: getLibraryEpoch(root) });
+    } catch (error) {
+      console.error(error);
+      return sendError(res, 500, String(error?.message || error));
+    }
+  });
+
+  app.get("/api/library/artwork/:id", (req, res) => {
+    try {
+      const root = getMusicRoot();
+      const id = String(req.params.id || "").trim();
+      if (!id) return res.status(400).end();
+      const sizeRaw = String(req.query.size || "128");
+      const size = sizeRaw === "full" || sizeRaw === "256" ? sizeRaw : "128";
+      const filePath = resolveArtworkFilePath(root, id, size);
+      if (!filePath || !existsSync(filePath)) return res.status(404).end();
+      const row = getArtworkRecord(root, id);
+      res.setHeader("Cache-Control", "public, max-age=31536000, immutable");
+      if (row?.mime) res.setHeader("Content-Type", row.mime);
+      // sendFile rifiuta path sotto cartelle “dot” (.kord) senza dotfiles: allow
+      return res.sendFile(path.resolve(filePath), { dotfiles: "allow" }, (err) => {
+        if (err && !res.headersSent) res.status(404).end();
+      });
+    } catch {
+      return res.status(500).end();
     }
   });
 

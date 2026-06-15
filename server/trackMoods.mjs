@@ -1,4 +1,4 @@
-/** Valori permessi per `moods` in kord-trackinfo.json (stesso ordinamento dell’UI). */
+/** Valori permessi per mood traccia (stesso ordinamento dell'UI; salvati in user state). */
 const TRACK_MOOD_IDS = [
   "energy_boost",
   "party_dance",
