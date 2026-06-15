@@ -280,10 +280,28 @@ body,
   }
 
   .player-bar2--mobile .player-bar2__identity .player-bar2__byline {
+    display: flex;
+    flex-wrap: nowrap;
+    align-items: center;
+    gap: 0;
+    min-width: 0;
     font-size: 0.72rem;
+    overflow: hidden;
+  }
+
+  .player-bar2--mobile .player-bar2__identity .player-bar2__byline-sep {
+    flex-shrink: 0;
+    padding: 0 0.2rem;
+  }
+
+  .player-bar2--mobile .player-bar2__identity .player-bar2__crumb {
+    flex: 0 1 auto;
+    min-width: 0;
+    max-width: 100%;
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
+    word-break: normal;
   }
 
   .player-bar2--mobile .player-bar2__ic {

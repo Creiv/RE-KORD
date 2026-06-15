@@ -9,11 +9,17 @@ const CLOCK_HARD_SYNC_THRESHOLD_SECONDS = 0.45;
 const CLOCK_SMOOTH_TAU_SECONDS = 0.14;
 /** Sotto questa soglia l’extrapolazione performance.now basta (niente micro-correzioni). */
 const CLOCK_MIN_CORRECTION_SECONDS = 0.0025;
+/** Delta minimo su audio.currentTime per considerarlo un nuovo campione dal browser. */
+const AUDIO_SAMPLE_EPSILON_SECONDS = 0.0005;
 
 export type SongClockState = {
   clockAnchorSong: number;
   clockAnchorPerf: number;
   smoothFramePerf: number;
+  /** Ultimo audio.currentTime campionato dal browser. */
+  audioSampleSong: number;
+  audioSamplePerf: number;
+  audioPlaybackRate: number;
 };
 
 export function createSongClockState(): SongClockState {
@@ -21,6 +27,9 @@ export function createSongClockState(): SongClockState {
     clockAnchorSong: 0,
     clockAnchorPerf: 0,
     smoothFramePerf: 0,
+    audioSampleSong: 0,
+    audioSamplePerf: 0,
+    audioPlaybackRate: 1,
   };
 }
 
@@ -34,12 +43,44 @@ export function resetSongClock(
   clock.smoothFramePerf = perfNow;
 }
 
-function readAudioReferenceTime(bridge: PlayerSyncBridgeLike): number {
+/**
+ * Su mobile audio.currentTime spesso resta fermo tra un timeupdate e l'altro
+ * (anche diversi secondi). Confrontarlo ogni frame con l'extrapolazione da
+ * performance.now fa arretrare le note fino al salto del campione successivo.
+ */
+function readInterpolatedAudioTime(
+  clock: SongClockState,
+  bridge: PlayerSyncBridgeLike,
+  perfNow: number,
+  playing: boolean,
+  playbackRate: number,
+): number {
   const audio = bridge.getAudio();
-  if (audio && Number.isFinite(audio.currentTime)) {
-    return audio.currentTime;
+  const raw = audio && Number.isFinite(audio.currentTime)
+    ? audio.currentTime
+    : bridge.getCurrentTime();
+
+  if (!playing) {
+    clock.audioSampleSong = raw;
+    clock.audioSamplePerf = perfNow;
+    clock.audioPlaybackRate = playbackRate;
+    return raw;
   }
-  return bridge.getCurrentTime();
+
+  if (
+    clock.audioSamplePerf <= 0 ||
+    Math.abs(raw - clock.audioSampleSong) > AUDIO_SAMPLE_EPSILON_SECONDS
+  ) {
+    clock.audioSampleSong = raw;
+    clock.audioSamplePerf = perfNow;
+    clock.audioPlaybackRate = playbackRate;
+    return raw;
+  }
+
+  return (
+    clock.audioSampleSong +
+    ((perfNow - clock.audioSamplePerf) / 1000) * clock.audioPlaybackRate
+  );
 }
 
 /** Orologio fluido per il rendering delle note in sync col player globale. */
@@ -49,12 +90,18 @@ export function resolveSmoothSongTime(
   bridge: PlayerSyncBridgeLike,
 ): number {
   const audio = bridge.getAudio();
-  const audioT = readAudioReferenceTime(bridge);
   const playing = Boolean(audio && !audio.paused && !audio.ended);
   const playbackRate =
     audio?.playbackRate && Number.isFinite(audio.playbackRate)
       ? audio.playbackRate
       : 1;
+  const audioT = readInterpolatedAudioTime(
+    clock,
+    bridge,
+    perfNow,
+    playing,
+    playbackRate,
+  );
 
   if (!playing) {
     resetSongClock(clock, audioT, perfNow);

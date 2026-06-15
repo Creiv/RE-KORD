@@ -287,13 +287,20 @@ export function GameCanvas({
   const [waitingForStart, setWaitingForStart] = useState(true);
   const canvasLite = embedded || syncLive;
 
+  const readCanvasDpr = useCallback(() => {
+    const base = window.devicePixelRatio || 1;
+    const cap =
+      canvasLite && window.matchMedia("(pointer: coarse)").matches ? 1.35 : 1.75;
+    return Math.min(base, cap);
+  }, [canvasLite]);
+
   useLayoutEffect(() => {
     const canvas = canvasRef.current;
     if (!canvas) return;
 
     const applySize = () => {
       const rect = canvas.getBoundingClientRect();
-      const dpr = Math.min(window.devicePixelRatio || 1, 1.75);
+      const dpr = readCanvasDpr();
       const width = Math.max(1, rect.width);
       const height = Math.max(1, rect.height);
       const bufferW = Math.max(1, Math.floor(width * dpr));
@@ -309,7 +316,7 @@ export function GameCanvas({
     const ro = new ResizeObserver(applySize);
     ro.observe(canvas);
     return () => ro.disconnect();
-  }, []);
+  }, [readCanvasDpr]);
 
   const [hud, setHud] = useState({
     score: 0,
@@ -422,7 +429,7 @@ export function GameCanvas({
     if (layout.width < 1 || layout.height < 1) {
       const rect = canvas.getBoundingClientRect();
       if (rect.width < 1 || rect.height < 1) return;
-      const dpr = Math.min(window.devicePixelRatio || 1, 1.75);
+      const dpr = readCanvasDpr();
       layout = {
         width: rect.width,
         height: rect.height,
@@ -590,6 +597,7 @@ export function GameCanvas({
     embedded,
     finish,
     maybeReportRunProgress,
+    readCanvasDpr,
     startAudioAt,
     syncLive,
     usePlayer,
@@ -1173,36 +1181,56 @@ function drawStage(ctx: CanvasRenderingContext2D, { cssWidth, cssHeight, hitY, l
     if (!vizUnderlay) {
       ctx.fillStyle = "#080a12";
       ctx.fillRect(0, 0, cssWidth, cssHeight);
-    }
-    for (let lane = 0; lane < LANES.length; lane += 1) {
-      const x = lane * laneWidth;
-      const pressed = state.pressedLanes[lane];
-      const flash = state.laneFlash[lane];
-      const flashKind =
-        flash && flash.until > now ? flash.kind : null;
-      if (pressed) {
+      for (let lane = 0; lane < LANES.length; lane += 1) {
+        const x = lane * laneWidth;
+        const pressed = state.pressedLanes[lane];
+        const flash = state.laneFlash[lane];
+        const flashKind =
+          flash && flash.until > now ? flash.kind : null;
+        if (pressed) {
+          ctx.fillStyle = LANES[lane].color;
+          ctx.globalAlpha = 0.2;
+          ctx.fillRect(x, 0, laneWidth, cssHeight);
+          ctx.globalAlpha = 1;
+        } else {
+          ctx.fillStyle =
+            lane % 2 === 0 ? "rgba(255,255,255,0.02)" : "rgba(255,255,255,0.035)";
+          ctx.fillRect(x, 0, laneWidth, cssHeight);
+        }
         ctx.fillStyle = LANES[lane].color;
-        ctx.globalAlpha = vizUnderlay ? 0.14 : 0.2;
-        ctx.fillRect(x, 0, laneWidth, cssHeight);
-        ctx.globalAlpha = 1;
-      } else {
-        ctx.fillStyle =
-          lane % 2 === 0 ? "rgba(255,255,255,0.02)" : "rgba(255,255,255,0.035)";
-        if (vizUnderlay) ctx.globalAlpha = 0.88;
-        ctx.fillRect(x, 0, laneWidth, cssHeight);
+        ctx.globalAlpha = pressed
+          ? 0.55
+          : flashKind === "hit"
+            ? 0.38
+            : flashKind === "miss"
+              ? 0.32
+              : 0.14;
+        ctx.fillRect(x + 1, 0, 2, cssHeight);
+        ctx.fillRect(x + laneWidth - 3, 0, 2, cssHeight);
         ctx.globalAlpha = 1;
       }
-      ctx.fillStyle = LANES[lane].color;
-      ctx.globalAlpha = pressed
-        ? vizUnderlay ? 0.2 : 0.55
-        : flashKind === "hit"
-          ? vizUnderlay ? 0.16 : 0.38
-          : flashKind === "miss"
-            ? vizUnderlay ? 0.14 : 0.32
-            : vizUnderlay ? 0.05 : 0.14;
-      ctx.fillRect(x + 1, 0, 2, cssHeight);
-      ctx.fillRect(x + laneWidth - 3, 0, 2, cssHeight);
-      ctx.globalAlpha = 1;
+    } else {
+      for (let lane = 0; lane < LANES.length; lane += 1) {
+        const pressed = state.pressedLanes[lane];
+        const flash = state.laneFlash[lane];
+        const flashKind =
+          flash && flash.until > now ? flash.kind : null;
+        if (!pressed && !flashKind) continue;
+        const x = lane * laneWidth;
+        ctx.fillStyle = LANES[lane].color;
+        ctx.globalAlpha = pressed
+          ? 0.2
+          : flashKind === "hit"
+            ? 0.16
+            : 0.14;
+        ctx.fillRect(x, 0, laneWidth, cssHeight);
+        ctx.globalAlpha = 1;
+        ctx.fillStyle = LANES[lane].color;
+        ctx.globalAlpha = pressed ? 0.2 : 0.16;
+        ctx.fillRect(x + 1, 0, 2, cssHeight);
+        ctx.fillRect(x + laneWidth - 3, 0, 2, cssHeight);
+        ctx.globalAlpha = 1;
+      }
     }
     drawReceptors(ctx, {
       cssWidth,

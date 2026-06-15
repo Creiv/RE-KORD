@@ -26,9 +26,32 @@ function parseCssColor(raw: string): { r: number; g: number; b: number } | null 
   return null;
 }
 
+type ThemeColors = {
+  id: string;
+  accent: { r: number; g: number; b: number };
+  text: { r: number; g: number; b: number };
+};
+
+let themeColorsCache: ThemeColors | null = null;
+
+function readThemeColors(): ThemeColors {
+  const id = document.documentElement.dataset.theme ?? "";
+  if (themeColorsCache?.id === id) return themeColorsCache;
+  const root = getComputedStyle(document.documentElement);
+  themeColorsCache = {
+    id,
+    accent:
+      parseCssColor(root.getPropertyValue("--accent")) ??
+      { r: 255, g: 143, b: 92 },
+    text:
+      parseCssColor(root.getPropertyValue("--text")) ??
+      { r: 240, g: 244, b: 248 },
+  };
+  return themeColorsCache;
+}
+
 function mixTextColor(accent: { r: number; g: number; b: number }, textWeight: number) {
-  const text = parseCssColor(getComputedStyle(document.documentElement).getPropertyValue("--text"));
-  const base = text ?? { r: 240, g: 244, b: 248 };
+  const base = readThemeColors().text;
   const t = textWeight;
   return {
     r: Math.round(base.r * (1 - t) + accent.r * t),
@@ -76,9 +99,7 @@ export function drawKaraokeLyricsOnCanvas(
   lines: KaraokeLines,
   opts?: KaraokeCanvasDrawOpts,
 ): void {
-  const accent =
-    parseCssColor(getComputedStyle(document.documentElement).getPropertyValue("--accent")) ??
-    { r: 255, g: 143, b: 92 };
+  const accent = readThemeColors().accent;
   const currentColor = mixTextColor(accent, 0.74);
   const sideColor = mixTextColor(accent, 0.26);
 

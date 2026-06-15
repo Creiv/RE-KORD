@@ -5,11 +5,21 @@ const SWIPE_MAX_VERTICAL_PX = 40;
 const SWIPE_ACTIVATE_PX = 12;
 const TAP_MAX_MOVE_PX = 10;
 
+/** Solo play/pausa e menu overflow: il resto della riga (anche artista/album) è swipeabile. */
+export const PLAYER_BAR_SWIPE_IGNORE_SELECTOR =
+  ".player-bar2__transport--mobile, .progress2, input";
+
+export function isPlayerBarSwipeIgnoredTarget(target: EventTarget | null): boolean {
+  if (!(target instanceof HTMLElement)) return true;
+  return Boolean(target.closest(PLAYER_BAR_SWIPE_IGNORE_SELECTOR));
+}
+
 type SwipeHandlers = {
   onPointerDown: (event: React.PointerEvent) => void;
   onPointerMove: (event: React.PointerEvent) => void;
   onPointerUp: (event: React.PointerEvent) => void;
   onPointerCancel: (event: React.PointerEvent) => void;
+  onClickCapture: (event: React.MouseEvent) => void;
 };
 
 export function usePlayerBarSwipe(
@@ -24,31 +34,25 @@ export function usePlayerBarSwipe(
     id: number;
     capturing: boolean;
   } | null>(null);
-  const firedRef = useRef(false);
+  const swipeFiredRef = useRef(false);
+  const suppressClickRef = useRef(false);
 
-  const reset = useCallback(() => {
+  const clearStart = useCallback(() => {
     startRef.current = null;
-    firedRef.current = false;
   }, []);
 
   const onPointerDown = useCallback(
     (event: React.PointerEvent) => {
       if (!enabled) return;
-      const target = event.target as HTMLElement;
-      if (
-        target.closest(
-          "button, input, .progress2, .player-bar2__crumb, .player-bar2__mobile-menu-wrap",
-        )
-      ) {
-        return;
-      }
+      if (isPlayerBarSwipeIgnoredTarget(event.target)) return;
       startRef.current = {
         x: event.clientX,
         y: event.clientY,
         id: event.pointerId,
         capturing: false,
       };
-      firedRef.current = false;
+      swipeFiredRef.current = false;
+      suppressClickRef.current = false;
     },
     [enabled],
   );
@@ -56,11 +60,11 @@ export function usePlayerBarSwipe(
   const onPointerMove = useCallback(
     (event: React.PointerEvent) => {
       const start = startRef.current;
-      if (!start || start.id !== event.pointerId || firedRef.current) return;
+      if (!start || start.id !== event.pointerId || swipeFiredRef.current) return;
       const dx = event.clientX - start.x;
       const dy = event.clientY - start.y;
       if (Math.abs(dy) > SWIPE_MAX_VERTICAL_PX) {
-        reset();
+        clearStart();
         return;
       }
       if (
@@ -73,12 +77,13 @@ export function usePlayerBarSwipe(
       }
       if (!start.capturing) return;
       if (Math.abs(dx) < SWIPE_THRESHOLD_PX) return;
-      firedRef.current = true;
+      swipeFiredRef.current = true;
+      suppressClickRef.current = true;
       if (dx > 0) onPrev();
       else onNext();
-      reset();
+      clearStart();
     },
-    [onNext, onPrev, reset],
+    [clearStart, onNext, onPrev],
   );
 
   const releaseCapture = useCallback(
@@ -97,20 +102,23 @@ export function usePlayerBarSwipe(
     (event: React.PointerEvent) => {
       const start = startRef.current;
       if (!start || start.id !== event.pointerId) return;
-      if (!firedRef.current && onTap) {
+      if (!swipeFiredRef.current && onTap) {
         const dx = event.clientX - start.x;
         const dy = event.clientY - start.y;
+        const target = event.target as HTMLElement;
         if (
           Math.abs(dx) <= TAP_MAX_MOVE_PX &&
-          Math.abs(dy) <= TAP_MAX_MOVE_PX
+          Math.abs(dy) <= TAP_MAX_MOVE_PX &&
+          !target.closest(".player-bar2__crumb")
         ) {
           onTap();
         }
       }
       releaseCapture(event, start);
-      reset();
+      swipeFiredRef.current = false;
+      clearStart();
     },
-    [onTap, releaseCapture, reset],
+    [clearStart, onTap, releaseCapture],
   );
 
   const onPointerCancel = useCallback(
@@ -118,10 +126,25 @@ export function usePlayerBarSwipe(
       const start = startRef.current;
       if (!start || start.id !== event.pointerId) return;
       releaseCapture(event, start);
-      reset();
+      swipeFiredRef.current = false;
+      suppressClickRef.current = false;
+      clearStart();
     },
-    [releaseCapture, reset],
+    [clearStart, releaseCapture],
   );
 
-  return { onPointerDown, onPointerMove, onPointerUp, onPointerCancel };
+  const onClickCapture = useCallback((event: React.MouseEvent) => {
+    if (!suppressClickRef.current) return;
+    suppressClickRef.current = false;
+    event.preventDefault();
+    event.stopPropagation();
+  }, []);
+
+  return {
+    onPointerDown,
+    onPointerMove,
+    onPointerUp,
+    onPointerCancel,
+    onClickCapture,
+  };
 }
