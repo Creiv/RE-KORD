@@ -13,4 +13,5 @@ if [ -z "$IMG" ] || [ ! -f "$IMG" ]; then
 fi
 chmod +x "$IMG"
 export APPIMAGE_EXTRACT_AND_RUN=1
+export ELECTRON_DISABLE_SANDBOX=1
 exec "$IMG" "$@"

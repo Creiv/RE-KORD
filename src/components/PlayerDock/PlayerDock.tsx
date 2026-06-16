@@ -142,10 +142,7 @@ export const PlayerDock = memo(function PlayerDock({
               <div className="player-bar2__track">
                 <div className="player-bar2__art-hit">
                   {cur ? (
-                    <PlayerBarTrackArt
-                      relPath={cur.relPath}
-                      version={(cur as LibraryTrackIndex).updatedAt}
-                    />
+                    <PlayerBarTrackArt track={cur as LibraryTrackIndex} />
                   ) : (
                     <div className="player-bar2__art fallback">
                       <UiMusicNote className="player-bar2__art-fallback-ic" />

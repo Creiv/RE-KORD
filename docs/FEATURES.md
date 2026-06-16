@@ -15,10 +15,13 @@
 - **Mobile**: l'app occupa sempre tutta l'altezza dello schermo (100dvh nativo), metriche dashboard in griglia 2×2, fix header pagina artista e card "Playlist al volo", tap target più generosi
 - **Player**: icona play/pausa stabile al cambio brano, anche con crossfade attivo
 - **Rifiniture**: dialog con Escape ovunque, popover che evitano la tastiera/bottom nav, scala z-index unificata (toast), token colore per stati danger/warning leggibili su ogni tema
+- **Pro Workspace UI**: nuovo layout unificato (`ui-pro-layout` + `flat-modern`) — icon rail 56px, canvas contenuto, superfici piatte; rimosso il toggle Classico/Moderno delle impostazioni
 - **Client Android (APK)**: app nativa Capacitor che si connette a un server RE-KORD come il client desktop — indirizzo manuale o **scan del QR di Impostazioni → Rete**, che autocompila e porta dritti alla scelta account; riconnessione automatica all'avvio
 - **QR generato in locale**: il QR di Impostazioni → Rete non passa più da un servizio esterno
 - **Playback avanzato (2026)**: Cast Google Home (APK + Chrome), ExoPlayer nativo opzionale, sleep timer con fade 30s (WebAudio + ExoPlayer), prefetch copertine coda, streaming `/media` con Range robusto per FLAC grandi via tunnel Cloudflare
 - **Cast TLS**: per Chromecast da tunnel remoto serve HTTPS pubblico raggiungibile dallo speaker (vedi Impostazioni → Rete)
+- **Plectr low-end**: backdrop canvas più leggero, smooth song clock e rendering karaoke ottimizzato su dispositivi meno potenti
+- **Scroll touch**: fix scroll su tracklist da dispositivi touch
 
 ## Indice
 
@@ -51,10 +54,8 @@
 - Titolo pagina attiva (mobile) e logo RE-KORD (desktop)
 
 ### Sidebar (desktop)
-- Collassabile (stato ricordato in localStorage)
-- Navigazione primaria: Dashboard, Libreria, Studio (Ascolto), Gioco (Plectr)
-- Navigazione secondaria: Coda, Playlists, Preferiti, Recenti, Statistiche, Achievements, Impostazioni
-- Badge account + indicatore stato sincronizzazione
+- **Icon rail** fissa da 56px (`rekord-icon-rail`): logo, navigazione primaria (Dashboard, Libreria, Studio, Gioco) e secondaria (Coda, Playlists, Preferiti, Recenti, Statistiche, Achievements, Impostazioni)
+- Etichette visibili al passaggio del mouse; area contenuto su canvas con larghezza massima
 
 ### Bottom Nav (mobile)
 - 3 voci primarie (Dashboard, Libreria, Studio)
@@ -110,6 +111,7 @@
 ### Riga traccia (componente comune)
 - Copertina, titolo, artista·album, chip qualità/durata, stato testi, play count
 - Pulsanti: play, preferito (toggle), edit metadati, escludi da shuffle
+- Scroll touch corretto su tracklist lunghe (dispositivi touch)
 
 ---
 
@@ -123,6 +125,7 @@
 - Pannello Recenti/Testi a tab:
   - Recenti: ultime 6 tracce ascoltate (click → radio)
   - Testi: scroll sincronizzato se LRC, testo preformattato se plain; auto-switch al tab testi se presenti
+- **Timer spegnimento**: preset 15 / 30 / 60 min o durata personalizzata (1 min – 12 h); fade-out audio di 30s (WebAudio o ExoPlayer nativo); annullabile in qualsiasi momento
 
 ---
 
@@ -205,6 +208,9 @@
 - Play/pausa, next/prev (prev riavvia la traccia se >3s)
 - Seek con drag della barra e tastiera (frecce, step ±2%)
 - Crossfade tra tracce (off / 3s / 5s) con doppio deck audio e prefetch del brano successivo
+- **Cast Google Home**: pulsante Cast nel dock (Chrome Cast SDK su web, Cast Framework su APK); transcodifica server-side via ffmpeg per formati non supportati dallo speaker (FLAC, OGG, OPUS, WAV)
+- **Timer spegnimento** (accesso rapido dal dock)
+- **Prefetch copertine** delle prossime tracce in coda
 
 ### Coda & shuffle
 - Coda fino a 500 tracce con finestra scorrevole in memoria e rifornimento automatico a lotti
@@ -270,6 +276,11 @@
 - Sincronizzata col player live (RhythmDockPanel nel dock), con clock smoothing per sincronia precisa
 - Sfondo DiscoWall integrato e karaoke opzionale
 
+### Performance dispositivi low-end
+- Backdrop canvas DiscoWall alleggerito (FPS adattivo, meno allocazioni)
+- Smooth song clock per sincronia stabile col player live
+- Rendering karaoke ridotto durante il gioco
+
 ---
 
 ## 13. Studio / Tools (manutenzione libreria)
@@ -312,6 +323,7 @@
 ### Manutenzione
 - Sanitizzazione titoli (dry-run o apply, per album o intera libreria)
 - Pruning metadati orfani (confronto meta ↔ file fisici)
+- **Pulizia metadati libreria**: migrazione campi utili da JSON legacy (`kord-trackinfo.json`, `kord-albuminfo.json`) in SQLite, rimozione sidecar brano, compattazione file album (trivia/`infoItems` restano su disco); ordine tracce per nome file
 - Riconciliazione incrementale dell'indice (debounced / immediata / manuale) con delta per traccia/album
 
 ---
@@ -332,10 +344,11 @@
   - Light: Slate, Amethyst, Citrus, Carmine
   - Custom
 - **Tema custom**: 4 colori (sfondo, sezioni, accent1, accent2); sfondo a colore o immagine (upload JPEG/PNG/WebP/GIF max 8MB; fit: cover / contain / fill / repeat / center); bianco/nero del testo scelto dalla luminosità del colore Sezioni (dallo sfondo quando il vetro è molto trasparente)
-- **Stile UI**: Classic (geometrie squadrate) / Modern (raggi morbidi, bottoni a pillola)
+- **Layout Pro Workspace**: shell unificata (icon rail, superfici piatte, canvas organizzato) — non più selezionabile tra stili Classico/Moderno
 - **Superfici vetro**: trasparenze con blur (auto-disattivate se il browser/OS non le supporta) e **opacità regolabile** 0–100% (slider + campo numerico, anteprima live, salvataggio con debounce 500ms; controlli disabilitati a vetro spento)
 - **Visualizzatore**: scelta delle 8 modalità + opzione "disattiva sfondo visualizzatore in Plectr"
 - **Crossfade audio**: off / 3s / 5s
+- **Riproduzione nativa ExoPlayer** (solo APK Android): motore Media3 al posto del WebView; disattiva il crossfade; fallback automatico all'audio web in caso di errore
 
 ### Scorciatoie tastiera
 - `/` o `Ctrl+K`: ricerca libreria
@@ -356,8 +369,8 @@
 - URL pubblico con pulsante copia e **QR code** (scansionabile dal client Android per connettersi al volo; generato in locale con la libreria `qrcode`, nessun servizio esterno)
 
 ### Backup, ripristino e condivisione tema
-- Backup: zip completo dei dati utente (preferenze, playlist, coda, metadati, stato — incluse tutte le impostazioni tema: preset/custom, stile UI, vetro e opacità)
-- **Esporta tema**: zip condivisibile (`rekord-theme-*.zip`) col solo tema corrente — colori, stile UI, vetro+opacità e sfondo immagine — senza alcuna informazione sull'utente
+- Backup: zip completo dei dati utente (preferenze, playlist, coda, metadati, stato — incluse tutte le impostazioni tema: preset/custom, vetro e opacità)
+- **Esporta tema**: zip condivisibile (`rekord-theme-*.zip`) col solo tema corrente — colori, vetro+opacità e sfondo immagine — senza alcuna informazione sull'utente
 - **Upload backup o tema**: un solo pulsante che riconosce automaticamente l'archivio — un backup ripristina tutto, un export tema applica solo il tema all'account corrente (funziona tra PC, server e utenti diversi); a import riuscito la pagina si ricarica da sola
 
 ### Log attività
@@ -379,6 +392,8 @@
 
 ### Streaming
 - File audio via `/media/*` (FLAC, M4A, MP3, WebM) con MIME corretti
+- **Range HTTP** per file lossless grandi (FLAC, WAV, AIFF): seek robusto, ottimizzato per tunnel Cloudflare (`REKORD_MEDIA_INITIAL_RANGE_BYTES`, `REKORD_MEDIA_RANGE_HINT_THRESHOLD_BYTES`)
+- **Transcodifica Cast** (`/media/transcode/*`): FLAC/OGG/OPUS/WAV → MP3/AAC via ffmpeg con cache in `.kord/transcode-cache`
 - Copertine album, stat file per caching client
 
 ### Multiutente & stato
@@ -438,6 +453,9 @@
 - Shell di connessione identica al client desktop (stessa pagina di `connect.html`): IP locale/URL pubblico, lingua EN/IT, scelta account — in più **scan QR** (plugin nativo `@capacitor/barcode-scanner`) che autocompila e connette
 - Riconnessione automatica all'avvio al server salvato; **tasto Indietro = navigazione di pagina** (history del routing SPA via `@capacitor/app`), alla radice torna alla shell
 - **Widget di ascolto nativo**: MediaSession Android via plugin `@jofr/capacitor-media-session` (notifica media, lock screen, tasti cuffie/auto, seek) — `src/lib/mediaSession.ts` usa il bridge nativo nel client e l'API web in Chrome/PWA
+- **Riproduzione in background**: `RekordMediaService` (foreground service `mediaPlayback`) mantiene l'audio attivo con l'app in background
+- **ExoPlayer nativo** opzionale (Media3): toggle in Impostazioni; bridge JS `RekordNativePlayback` in `MainActivity`
+- **Cast Google Home**: Cast Framework (`RekordCastManager`, `RekordCastOptionsProvider`) integrato nel player
 - **Blocco rotazione portrait** a livello manifest (parità con la PWA installata)
 - L'app viene caricata **direttamente dal server** (`?rekordAccount=…&rekordClient=1`): si aggiorna a ogni rebuild del server senza ricompilare l'APK
 - Build/pacchetto: `npm run pack:android:client -- <versione>` → `release/RE-KORD-Client-<versione>-android.apk` (JDK 21 auto-provisioned, minSdk 26)

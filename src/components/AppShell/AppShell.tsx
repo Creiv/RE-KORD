@@ -39,6 +39,7 @@ import {
   mergeLibraryIndexFromServer,
   libraryIndexRehydrateSig,
 } from "../../lib/libraryIndex";
+import { syncLibraryAlbumArtworkFromIndex } from "../../lib/libraryArtworkStore";
 import type { LibraryReconcileOptions } from "../../lib/libraryReconcile";
 import { parseTrackGenres } from "../../lib/genres";
 import { isStandaloneDisplayMode, useAppRoute } from "../../lib/routing";
@@ -52,6 +53,7 @@ import { TopBar } from "./TopBar/TopBar";
 import {
   AlbumMetaEditProvider,
 } from "../AlbumMetaEditor";
+import { LibraryArtworkProvider } from "../../context/LibraryArtworkContext";
 import {
   TrackMetaEditProvider,
 } from "../TrackMetaEditor";
@@ -158,7 +160,11 @@ export function AppShell() {
       const task = Promise.all([fetchLibraryIndex(), fetchDashboard()])
         .then(async ([libraryData, dashboardData]) => {
           if (seq !== refreshSeqRef.current) return;
-          setIndex((prev) => mergeLibraryIndexFromServer(prev, libraryData));
+          setIndex((prev) => {
+            const next = mergeLibraryIndexFromServer(prev, libraryData);
+            syncLibraryAlbumArtworkFromIndex(next);
+            return next;
+          });
           setDashboard(dashboardData);
           setError(null);
           if (mode === "manual" && syncUser) await syncUserStateFromServer();
@@ -261,7 +267,11 @@ export function AppShell() {
       const endActivity = beginLibrarySyncActivity(
         "sync.activity.updatingLibrary"
       );
-      setIndex((prev) => applyLibraryDeltaToIndex(prev, delta));
+      setIndex((prev) => {
+        const next = applyLibraryDeltaToIndex(prev, delta);
+        if (next) syncLibraryAlbumArtworkFromIndex(next);
+        return next;
+      });
       endActivity();
       if (reconcile) scheduleDebouncedLibraryReconcile();
     },
@@ -274,7 +284,11 @@ export function AppShell() {
       const endActivity = beginLibrarySyncActivity(
         "sync.activity.updatingLibrary"
       );
-      setIndex((prev) => applyLibraryDeltasToIndex(prev, deltas));
+      setIndex((prev) => {
+        const next = applyLibraryDeltasToIndex(prev, deltas);
+        if (next) syncLibraryAlbumArtworkFromIndex(next);
+        return next;
+      });
       endActivity();
       if (reconcile) scheduleDebouncedLibraryReconcile();
     },
@@ -835,6 +849,7 @@ export function AppShell() {
 
   return (
     <StudioNavigationProvider openStudioListen={openStudioListen}>
+    <LibraryArtworkProvider index={index}>
     <TrackMetaEditProvider
       genreOptions={libraryGenreOptions}
       onSaved={refreshAfterTrackMetaSaved}
@@ -908,6 +923,7 @@ export function AppShell() {
         </div>
       </AlbumMetaEditProvider>
     </TrackMetaEditProvider>
+    </LibraryArtworkProvider>
     </StudioNavigationProvider>
   );
 }

@@ -19,13 +19,13 @@ import {
 } from "react";
 import { createPortal } from "react-dom";
 import { useTrackRowPlayer } from "../context/PlayerContext";
+import { useTrackCoverDisplay } from "../context/LibraryArtworkContext";
 import { useStudioNavigation } from "../context/StudioNavigationContext";
 import { useTrackRowUserState, useUserState } from "../context/UserStateContext";
 import { useI18n } from "../i18n/useI18n";
 import {
   artworkUrl,
   coverUrlForAlbumRelPath,
-  coverUrlForTrackRelPath,
 } from "../lib/api";
 import { fmtDate } from "../lib/metaFormat";
 import { formatDurationMs } from "../lib/duration";
@@ -114,16 +114,15 @@ export function TrackFileMetaChip({ meta }: { meta?: TrackMeta | null }) {
 }
 
 function TrackRowArt({
-  relPath,
-  version,
+  track,
 }: {
-  relPath: string;
-  version?: number | null;
+  track: Pick<EnrichedTrack, "relPath" | "albumId" | "updatedAt">;
 }) {
+  const { src, version } = useTrackCoverDisplay(track);
   return (
     <CoverImg
       className="track-row__art"
-      src={versionedUrl(coverUrlForTrackRelPath(relPath), version)}
+      src={versionedUrl(src, version)}
       alt=""
       fallbackClassName="track-row__art track-row__art--fallback"
       fallback={<UiMusicNote className="track-row__art-fallback-ic" />}
@@ -132,13 +131,11 @@ function TrackRowArt({
 }
 
 function TrackRowArtPlay({
-  relPath,
-  version,
+  track,
   onPlay,
   isNowPlaying = false,
 }: {
-  relPath: string;
-  version?: number | null;
+  track: Pick<EnrichedTrack, "relPath" | "albumId" | "updatedAt">;
   onPlay: () => void;
   isNowPlaying?: boolean;
 }) {
@@ -148,7 +145,7 @@ function TrackRowArtPlay({
 
   return (
     <div className="track-row__art-wrap">
-      <TrackRowArt relPath={relPath} version={version} />
+      <TrackRowArt track={track} />
       {showStudio ? (
         <button
           type="button"
@@ -180,42 +177,24 @@ function TrackRowArtPlay({
   );
 }
 
-function PlayerBarTrackArtInner({
-  relPath,
-  version,
+export function PlayerBarTrackArt({
+  track,
 }: {
-  relPath: string;
-  version?: number | null;
+  track: Pick<EnrichedTrack, "relPath" | "albumId" | "updatedAt">;
 }) {
-  const base = coverUrlForTrackRelPath(relPath);
-  const src = versionedUrl(base, version);
+  const { src, version } = useTrackCoverDisplay(track, "256");
+  const cacheKey =
+    version && Number.isFinite(version) ? Math.floor(version) : null;
+  const remountKey = `${track.relPath}:${src}:${cacheKey ?? ""}`;
   return (
     <CoverImg
+      key={remountKey}
       priority
       className="player-bar2__art"
-      src={src}
+      src={versionedUrl(src, version)}
       alt=""
       fallbackClassName="player-bar2__art fallback"
       fallback={<UiMusicNote className="player-bar2__art-fallback-ic" />}
-    />
-  );
-}
-
-export function PlayerBarTrackArt({
-  relPath,
-  version,
-}: {
-  relPath: string;
-  version?: number | null;
-}) {
-  const cacheKey =
-    version && Number.isFinite(version) ? Math.floor(version) : null;
-  const remountKey = `${relPath}:${cacheKey ?? ""}`;
-  return (
-    <PlayerBarTrackArtInner
-      key={remountKey}
-      relPath={relPath}
-      version={version}
     />
   );
 }
@@ -473,8 +452,7 @@ export const TrackListRow = memo(function TrackListRow({
       className={`track-row${rowActive ? " is-active" : ""}`}
     >
       <TrackRowArtPlay
-        relPath={track.relPath}
-        version={track.updatedAt}
+        track={track}
         onPlay={onPlay}
         isNowPlaying={rowActive}
       />

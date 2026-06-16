@@ -140,13 +140,29 @@ export function mergeLibraryIndexFromServer(
   const prevAlbums = new Map(prev.albums.map((album) => [album.relPath, album]));
   const albums = next.albums.map((album) => {
     const prior = prevAlbums.get(album.relPath);
-    if (!prior?.coverRelPath || album.coverRelPath) return album;
-    return {
-      ...album,
-      coverRelPath: prior.coverRelPath,
-      hasCover: true,
-      updatedAt: Math.max(prior.updatedAt ?? 0, album.updatedAt ?? 0) || prior.updatedAt,
-    };
+    if (!prior) return album;
+    let merged = album;
+    if (prior.coverRelPath && !album.coverRelPath) {
+      merged = {
+        ...merged,
+        coverRelPath: prior.coverRelPath,
+        hasCover: true,
+        updatedAt:
+          Math.max(prior.updatedAt ?? 0, album.updatedAt ?? 0) ||
+          prior.updatedAt,
+      };
+    }
+    if (prior.coverArtId && !album.coverArtId) {
+      merged = {
+        ...merged,
+        coverArtId: prior.coverArtId,
+        hasCover: true,
+        updatedAt:
+          Math.max(prior.updatedAt ?? 0, merged.updatedAt ?? 0) ||
+          prior.updatedAt,
+      };
+    }
+    return merged;
   });
   const albumById = new Map(albums.map((album) => [album.id, album]));
   const artists = next.artists.map((artist) => {
@@ -228,29 +244,45 @@ export function applyLibraryDeltaToIndex(
       tracks: next.tracks.filter((track) => !deleted.has(track.relPath)),
     });
   }
-  if (delta.albumPath && delta.coverRelPath) {
-    const coverRelPath = delta.coverRelPath;
-    const now = Date.now();
+  if (
+    delta.albumPath &&
+    (delta.coverRelPath !== undefined || delta.coverArtId !== undefined)
+  ) {
+    const coverRelPath = delta.coverRelPath ?? null;
+    const coverArtId =
+      delta.coverArtId !== undefined ? delta.coverArtId : undefined;
+    const version = delta.coverVersion ?? Date.now();
     const albumPrefix = `${delta.albumPath}/`;
     next = {
       ...next,
       albums: next.albums.map((album) =>
         album.relPath === delta.albumPath
-          ? { ...album, coverRelPath, hasCover: true, updatedAt: now }
-          : album
+          ? {
+              ...album,
+              ...(coverRelPath !== null ? { coverRelPath, hasCover: true } : {}),
+              ...(coverArtId !== undefined ? { coverArtId } : {}),
+              updatedAt: version,
+            }
+          : album,
       ),
       tracks: next.tracks.map((track) =>
         track.relPath.startsWith(albumPrefix)
-          ? { ...track, updatedAt: now }
-          : track
+          ? { ...track, updatedAt: version }
+          : track,
       ),
       artists: next.artists.map((artist) => {
         const ownsAlbum = next.albums.some(
           (album) =>
-            album.relPath === delta.albumPath && album.artistId === artist.id
+            album.relPath === delta.albumPath && album.artistId === artist.id,
         );
         return ownsAlbum
-          ? { ...artist, coverRelPath: coverRelPath || artist.coverRelPath }
+          ? {
+              ...artist,
+              coverRelPath: coverRelPath || artist.coverRelPath,
+              ...(coverArtId !== undefined && coverArtId
+                ? { coverArtId }
+                : {}),
+            }
           : artist;
       }),
     };
@@ -269,6 +301,10 @@ export function applyLibraryDeltaToIndex(
                 patch.coverRelPath !== undefined
                   ? patch.coverRelPath
                   : album.coverRelPath,
+              coverArtId:
+                patch.coverArtId !== undefined
+                  ? patch.coverArtId
+                  : album.coverArtId,
               hasCover:
                 patch.hasCover !== undefined
                   ? patch.hasCover

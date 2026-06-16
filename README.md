@@ -39,8 +39,9 @@ One install gives you the **server + web app**. Around it: a **desktop app**
 🎧 **Listen like you mean it**
 Persistent player with queue, smart shuffle, repeat and crossfade; synced
 **LRC lyrics**; 8 audio-reactive **visualizers** (bars, waves, DiscoWall,
-karaoke…); OS media integration (lock screen, headphone and car controls,
-Android Auto-friendly).
+karaoke…); **sleep timer** with 30s fade-out; **Cast to Google Home**
+(Chrome + Android APK); OS media integration (lock screen, headphone and car
+controls, Android Auto-friendly).
 
 🗂️ **A library that stays healthy**
 Browse by artist, genre, or **mood**; instant search; quality alerts for
@@ -64,9 +65,9 @@ achievements system with XP, levels, and 60+ badges.
 
 🎨 **Make it yours**
 18 theme presets plus a fully custom theme (colors or background image),
-classic/modern UI styles, **glass surfaces with adjustable opacity**, and
-**shareable themes**: export your look as a file, import it on any other
-server or profile.
+a unified **Pro Workspace** layout (icon rail, flat surfaces, organized
+canvas), **glass surfaces with adjustable opacity**, and **shareable themes**:
+export your look as a file, import it on any other server or profile.
 
 🌐 **Anywhere you are**
 LAN access out of the box, one-click **Cloudflare tunnel** with QR code for
@@ -89,6 +90,21 @@ self-updating client model: update the server once, every client follows.
 - 🔁 **Watcher + epochs** — filesystem changes trigger rescans; clients poll
   `/api/library/changes` for index updates. Paginated library APIs are ready
   for large collections.
+- 🔊 **Cast to Google Home** — stream to Chromecast/speakers from Chrome on
+  LAN or the Android APK. Lossless formats the speaker can't decode (FLAC,
+  OGG, WAV…) are transcoded on the fly via bundled **ffmpeg**.
+- ⏱️ **Sleep timer** — fade out over 30 seconds then stop; presets or a
+  custom duration (1 min – 12 h) from the Listen view.
+- 📲 **ExoPlayer on Android** — optional native playback in the APK
+  (Settings); disables crossfade, falls back to WebView audio on error.
+  Foreground **MediaService** keeps playback alive in the background.
+- 🎮 **Plectr on low-end devices** — lighter canvas backdrop, smoother song
+  clock sync, less stutter while charts generate in a Web Worker.
+- 📡 **Large FLAC over tunnel** — robust HTTP **Range** streaming for big
+  lossless files through the Cloudflare tunnel (seek-friendly).
+- 🖥️ **Pro Workspace UI** — redesigned shell: 56px icon rail, flat card
+  surfaces, content canvas with max-width — the old Classic/Modern style
+  toggle is gone; one consistent layout for everyone.
 
 ## Since 4.0
 
@@ -96,8 +112,8 @@ self-updating client model: update the server once, every client follows.
   client, with **QR pairing** straight from Settings → Network: scan, pick a
   profile, play. Native playback widget and media controls, portrait-locked,
   hardware back navigation.
-- 🎨 **Theme sharing** — one-click theme export (colors, style, glass,
-  background image) into a portable file anyone can import.
+- 🎨 **Theme sharing** — one-click theme export (colors, glass, background
+  image) into a portable file anyone can import.
 - 🪟 **Adjustable glass** — a transparency slider for glass surfaces, with
   text contrast that adapts automatically.
 - 📐 **Mobile, polished** — every page reviewed and tightened for phones:

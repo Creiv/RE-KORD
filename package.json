@@ -7,12 +7,13 @@
   "type": "module",
   "main": "electron/main.mjs",
   "scripts": {
-    "dev": "concurrently -n srv,vite -c blue,magenta \"node server/index.mjs\" \"vite\"",
-    "dev:server": "node server/index.mjs",
+    "dev": "node scripts/ensure-native-dev.mjs && concurrently -n srv,vite -c blue,magenta \"node server/index.mjs\" \"vite\"",
+    "dev:server": "node scripts/ensure-native-dev.mjs && node server/index.mjs",
     "dev:vite": "vite",
     "dev:app": "concurrently -k -n vite,el -c green,magenta \"vite\" \"wait-on -t 120000 http://127.0.0.1:5173 && electron .\"",
     "build": "tsc -b && vite build",
     "start": "node server/index.mjs",
+    "rebuild:native:dev": "node scripts/rebuild-native-dev.mjs",
     "pack": "node scripts/pack-release.mjs server win",
     "pack:linux": "node scripts/pack-release.mjs server linux",
     "pack:android:client": "node scripts/pack-android.mjs",
@@ -132,6 +133,7 @@
       "perMachine": false
     },
     "asar": true,
+    "npmRebuild": true,
     "asarUnpack": [
       "node_modules",
       "server",

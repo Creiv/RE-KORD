@@ -36,7 +36,8 @@ import {
   UiNavList,
   UiNote,
 } from "../../components/RekordUiIcons";
-import { coverUrlForTrackRelPath, uploadAlbumCover } from "../../lib/api";
+import { uploadAlbumCover } from "../../lib/api";
+import { useTrackCoverDisplay } from "../../context/LibraryArtworkContext";
 import { versionedUrl } from "../../lib/versionedUrl";
 import { albumFolderFromTrackRelPath } from "../../lib/trackPaths";
 import { isTrackAlbumShuffleExcluded } from "../../lib/randomExclusions";
@@ -45,12 +46,31 @@ import { PlayCollectionButton } from "../../components/PlayCollectionButton";
 import { formatDurationMs } from "../../lib/duration";
 import { trackInfoBadges } from "../../lib/metaFormat";
 import { parseLrcLyrics, currentLrcLineIndex } from "../../lib/lrc";
-import type { AppSection, LibraryEntityDelta, LibraryIndex } from "../../types";
+import type {
+  AppSection,
+  EnrichedTrack,
+  LibraryEntityDelta,
+  LibraryIndex,
+} from "../../types";
 
 interface ListenViewProps {
   index: LibraryIndex;
   onOpenSection: (section: AppSection) => void;
   onLibraryDelta?: (delta: LibraryEntityDelta, reconcile?: boolean) => void;
+}
+
+function ListenStageArt({ track }: { track: EnrichedTrack }) {
+  const { src, version } = useTrackCoverDisplay(track, "full");
+  return (
+    <CoverImg
+      priority
+      className="listen-stage__art"
+      src={versionedUrl(src, version)}
+      alt=""
+      fallbackClassName="listen-stage__art listen-stage__art--empty"
+      fallback={<UiMusicNote className="listen-stage__empty-ic" />}
+    />
+  );
 }
 
 export default function ListenView({
@@ -225,21 +245,7 @@ export default function ListenView({
                   title={t("library.coverUploadTitle")}
                   aria-label={t("library.coverUploadAria")}
                 >
-                  <CoverImg
-                    priority
-                    className="listen-stage__art"
-                    src={versionedUrl(
-                      coverUrlForTrackRelPath(p.current.relPath),
-                      typeof (p.current as unknown as { updatedAt?: unknown })
-                        .updatedAt === "number"
-                        ? (p.current as unknown as { updatedAt: number })
-                            .updatedAt
-                        : null,
-                    )}
-                    alt=""
-                    fallbackClassName="listen-stage__art listen-stage__art--empty"
-                    fallback={<UiMusicNote className="listen-stage__empty-ic" />}
-                  />
+                  <ListenStageArt track={p.current} />
                   <span className="listen-stage__cover-edit-badge" aria-hidden>
                     <UiImage />
                   </span>

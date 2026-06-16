@@ -1,12 +1,31 @@
 import fs from "fs/promises"
 import path from "path"
 import { existsSync } from "fs"
-import sharp from "sharp"
 import { getLibraryDb } from "../db/index.mjs"
 import { rekordArtworkDir } from "../db/paths.mjs"
 import { newArtworkId } from "../db/queries/library.mjs"
 import { getMusicRoot } from "../musicRootConfig.mjs"
 import { coverCandidates } from "../musicLibrary.mjs"
+
+let sharpModule = null
+/** @type {Promise<import("sharp").default | null> | null} */
+let sharpLoadPromise = null
+
+async function loadSharp() {
+  if (sharpModule) return sharpModule
+  if (!sharpLoadPromise) {
+    sharpLoadPromise = import("sharp")
+      .then((mod) => {
+        sharpModule = mod.default
+        return sharpModule
+      })
+      .catch((err) => {
+        console.error("[rekord] sharp non disponibile:", err?.message || err)
+        return null
+      })
+  }
+  return sharpLoadPromise
+}
 
 /**
  * Registra copertina da file cartella e genera thumbnail in .kord/artwork/.
@@ -45,6 +64,9 @@ export async function registerFolderCoverArtwork(libraryRoot, albumId, coverRelP
   const fullDest = path.join(artDir, `${artId}.${ext}`)
   const thumb128 = path.join(artDir, `${artId}-128.${ext}`)
   const thumb256 = path.join(artDir, `${artId}-256.${ext}`)
+
+  const sharp = await loadSharp()
+  if (!sharp) return null
 
   try {
     await fs.copyFile(sourcePath, fullDest)
@@ -121,6 +143,9 @@ export async function registerDownloadedCoverArtwork(
   const fullDest = path.join(artDir, `${artId}.${safeExt}`)
   const thumb128 = path.join(artDir, `${artId}-128.${safeExt}`)
   const thumb256 = path.join(artDir, `${artId}-256.${safeExt}`)
+
+  const sharp = await loadSharp()
+  if (!sharp) return null
 
   await fs.writeFile(fullDest, imageBuffer)
   await sharp(fullDest).resize(128, 128, { fit: "cover" }).toFile(thumb128)

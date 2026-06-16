@@ -166,6 +166,32 @@ let lastServerStartupToken = null
 
 const APP_NAME = "RE-KORD"
 
+/** Switch Chromium che rompono ELECTRON_RUN_AS_NODE nel child server (--no-sandbox ecc.). */
+const CHROME_SWITCHES_STRIPPED_FOR_NODE_CHILD = [
+  "no-sandbox",
+  "disable-gpu-sandbox",
+  "ignore-gpu-blocklist",
+  "enable-gpu-rasterization",
+]
+
+function stripChromeSwitchesForNodeSpawn() {
+  const stripped = []
+  for (const sw of CHROME_SWITCHES_STRIPPED_FOR_NODE_CHILD) {
+    if (!app.commandLine.hasSwitch(sw)) continue
+    const val = app.commandLine.getSwitchValue(sw)
+    stripped.push({ sw, val })
+    app.commandLine.removeSwitch(sw)
+  }
+  return stripped
+}
+
+function restoreChromeSwitches(stripped) {
+  for (const { sw, val } of stripped) {
+    if (val) app.commandLine.appendSwitch(sw, val)
+    else app.commandLine.appendSwitch(sw)
+  }
+}
+
 function getAppIconPath() {
   const root = path.join(__dirname, "..")
   const icoDist = path.join(root, "dist", "icon.ico")
@@ -302,17 +328,27 @@ async function tryStartOnPort(userData, port, useStdio, cwd, script) {
     REKORD_STARTUP_TOKEN: startupToken,
     ELECTRON_RUN_AS_NODE: "1",
   }
-  if (process.platform === "linux" && app.isPackaged) {
+  if (app.isPackaged && (process.platform === "linux" || process.platform === "win32")) {
     env.ELECTRON_DISABLE_SANDBOX = "1"
   }
   appendLaunchLog(`spawn server on ${port} cwd=${cwd}`)
-  const child = spawn(process.execPath, [script], {
-    env,
-    cwd,
-    stdio: serverStdioForPackaged(userData, useStdio),
-  })
+  const strippedSwitches = stripChromeSwitchesForNodeSpawn()
+  let child
+  try {
+    child = spawn(process.execPath, [script], {
+      env,
+      cwd,
+      stdio: serverStdioForPackaged(userData, useStdio),
+    })
+  } finally {
+    restoreChromeSwitches(strippedSwitches)
+  }
   child.on("error", (err) => {
     console.error("[rekord] server", err)
+    appendLaunchLog(`server spawn error: ${err}`)
+  })
+  child.on("spawn", () => {
+    appendLaunchLog(`server pid ${child.pid}`)
   })
   const exitP = new Promise((resolve) => {
     child.once("exit", (c) => resolve(c))
@@ -347,6 +383,19 @@ async function tryStartOnPort(userData, port, useStdio, cwd, script) {
     }
   })
   return true
+}
+
+function readServerLogTail(userData, maxLines = 12) {
+  try {
+    const logPath = path.join(userData, "rekord-server.log")
+    if (!fs.existsSync(logPath)) return ""
+    const raw = fs.readFileSync(logPath, "utf8")
+    const lines = raw.trim().split(/\r?\n/).filter(Boolean)
+    if (!lines.length) return ""
+    return lines.slice(-maxLines).join("\n")
+  } catch {
+    return ""
+  }
 }
 
 async function startServer() {
@@ -386,8 +435,10 @@ async function startServer() {
       return
     }
   }
+  const logTail = readServerLogTail(userData)
   throw new Error(
-    "Could not start the server on a free port. Close other apps using this range or set REKORD_PORT in the environment.",
+    "Could not start the server on a free port. Close other apps using this range or set REKORD_PORT in the environment." +
+      (logTail ? `\n\nUltimo output server:\n${logTail}` : ""),
   )
 }
 

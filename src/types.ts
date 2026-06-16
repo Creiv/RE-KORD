@@ -311,6 +311,7 @@ export type LibraryEntityDelta = {
   relPath?: string;
   coverRelPath?: string | null;
   coverVersion?: number;
+  coverArtId?: string | null;
   album?: Partial<LibraryAlbumIndex> & { relPath?: string };
   track?: Partial<LibraryTrackIndex> & { relPath: string };
   tracks?: (Partial<LibraryTrackIndex> & { relPath: string })[];

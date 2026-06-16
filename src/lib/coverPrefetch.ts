@@ -1,4 +1,5 @@
-import { coverUrlForTrackRelPath } from "./api"
+import { albumArtworkForTrack } from "./libraryArtworkStore"
+import { trackCoverDisplay } from "./coverDisplay"
 import type { EnrichedTrack } from "../types"
 
 const prefetched = new Set<string>()
@@ -13,11 +14,10 @@ export function prefetchQueueCovers(
   for (let i = 1; i <= count; i++) {
     const tr = queue[currentIndex + i]
     if (!tr) continue
-    const base = coverUrlForTrackRelPath(tr.relPath)
-    const version = tr.updatedAt
+    const { src, version } = trackCoverDisplay(tr, albumArtworkForTrack(tr))
     const url = version
-      ? `${base}${base.includes("?") ? "&" : "?"}v=${Math.floor(version)}`
-      : base
+      ? `${src}${src.includes("?") ? "&" : "?"}v=${Math.floor(version)}`
+      : src
     if (prefetched.has(url)) continue
     prefetched.add(url)
     const img = new Image()

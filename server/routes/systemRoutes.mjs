@@ -41,26 +41,36 @@ export function registerSystemRoutes(app) {
         libraryRootConfigured: true,
         userStateVersion: state.version,
         accountId,
-        libraryDb: {
+        libraryDb: { enabled: true },
+      };
+      try {
+        const libraryDb = {
           enabled: true,
           bootstrapped: isLibraryDbBootstrapped(root),
           path: rekordDbPath(root),
           exists: existsSync(rekordDbPath(root)),
           epoch: getLibraryEpoch(root),
-        },
-      };
-      if (payload.libraryDb.bootstrapped) {
-        try {
-          const db = getLibraryDb(root);
-          payload.libraryDb.stats = {
-            artists: db.prepare("SELECT COUNT(*) AS c FROM artists").get().c,
-            albums: db.prepare("SELECT COUNT(*) AS c FROM albums").get().c,
-            tracks: db.prepare("SELECT COUNT(*) AS c FROM tracks").get().c,
-            artwork: db.prepare("SELECT COUNT(*) AS c FROM artwork").get().c,
-          };
-        } catch {
-          /* ok */
+        };
+        if (libraryDb.bootstrapped) {
+          try {
+            const db = getLibraryDb(root);
+            libraryDb.stats = {
+              artists: db.prepare("SELECT COUNT(*) AS c FROM artists").get().c,
+              albums: db.prepare("SELECT COUNT(*) AS c FROM albums").get().c,
+              tracks: db.prepare("SELECT COUNT(*) AS c FROM tracks").get().c,
+              artwork: db.prepare("SELECT COUNT(*) AS c FROM artwork").get().c,
+            };
+          } catch {
+            /* ok */
+          }
         }
+        payload.libraryDb = libraryDb;
+      } catch (dbErr) {
+        payload.libraryDb = {
+          enabled: true,
+          bootstrapped: false,
+          error: String(dbErr?.message || dbErr),
+        };
       }
       if (envToken && queryToken === envToken) payload.startupToken = envToken;
       if (isServerAdminRequest(req)) payload.musicRoot = root;

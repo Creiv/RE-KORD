@@ -1,5 +1,6 @@
 import { castCoverUrl, castStreamUrl } from "./castMedia"
-import { coverUrlForTrackRelPath } from "./api"
+import { albumArtworkForTrack } from "./libraryArtworkStore"
+import { trackCoverDisplay } from "./coverDisplay"
 import type { EnrichedTrack } from "../types"
 
 /** Finestra coda esposta al sistema (Cast / Assistant / Android Auto). */
@@ -103,22 +104,28 @@ function rekordMediaNative(): RekordMediaNative | null {
 }
 
 function coverUrlForTrack(track: EnrichedTrack): string {
-  const version = (track as EnrichedTrack & { updatedAt?: number | null })
-    .updatedAt
-  const baseCover = coverUrlForTrackRelPath(track.relPath)
+  const { src, version } = trackCoverDisplay(
+    track,
+    albumArtworkForTrack(track),
+    "256",
+  )
   return toAbsoluteUrl(
     version
-      ? `${baseCover}${baseCover.includes("?") ? "&" : "?"}v=${Math.floor(version)}`
-      : baseCover,
+      ? `${src}${src.includes("?") ? "&" : "?"}v=${Math.floor(version)}`
+      : src,
   )
 }
 
-let cachedMetadataKey: string | null = null
-
 function metadataCacheKey(track: EnrichedTrack): string {
-  const version = (track as EnrichedTrack & { updatedAt?: number | null }).updatedAt
-  return `${track.relPath}:${Math.floor(version ?? 0)}`
+  const { src, version } = trackCoverDisplay(
+    track,
+    albumArtworkForTrack(track),
+    "256",
+  )
+  return `${track.relPath}:${src}:${Math.floor(version ?? 0)}`
 }
+
+let cachedMetadataKey: string | null = null
 
 export function setMediaSessionMetadata(
   track: EnrichedTrack | null,

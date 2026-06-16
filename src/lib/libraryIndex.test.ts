@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import {
+  applyLibraryDeltaToIndex,
   applyLibraryDeltasToIndex,
   enrichedTracksNeedPlayerResync,
   libraryIndexRehydrateSig,
@@ -174,5 +175,18 @@ describe("libraryIndex", () => {
     ];
     const next = applyLibraryDeltasToIndex(base, deltas);
     expect(next?.albums[0]?.hasAlbumMeta).toBe(true);
+  });
+
+  it("applyLibraryDeltaToIndex aggiorna coverArtId e versione brani su cover delta", () => {
+    const base = miniIndex();
+    const next = applyLibraryDeltaToIndex(base, {
+      albumPath: "Artist/Album",
+      coverRelPath: "Artist/Album/cover.jpg",
+      coverArtId: "art-42",
+      coverVersion: 55_000,
+    });
+    expect(next?.albums[0]?.coverArtId).toBe("art-42");
+    expect(next?.albums[0]?.updatedAt).toBe(55_000);
+    expect(next?.tracks[0]?.updatedAt).toBe(55_000);
   });
 });
