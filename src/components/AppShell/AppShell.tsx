@@ -144,28 +144,6 @@ export function AppShell() {
     useState<BeforeInstallPromptEvent | null>(null);
   const [installDismissed, setInstallDismissed] = useState(false);
   const [standalone, setStandalone] = useState(() => isStandaloneDisplayMode());
-  const [sidebarCollapsed, setSidebarCollapsed] = useState<boolean>(() => {
-    try {
-      const v =
-        localStorage.getItem("rekord.sidebar.collapsed") ??
-        localStorage.getItem("kord.sidebar.collapsed");
-      return v === null ? true : v === "1";
-    } catch {
-      return true;
-    }
-  });
-
-  const toggleSidebar = useCallback(() => {
-    setSidebarCollapsed((prev) => {
-      const next = !prev;
-      try {
-        localStorage.setItem("rekord.sidebar.collapsed", next ? "1" : "0");
-      } catch {
-        /* ignore storage failures */
-      }
-      return next;
-    });
-  }, []);
 
   const refreshLibrary = useCallback(
     (mode: "manual" | "background" = "manual", syncUser = false) => {
@@ -672,10 +650,15 @@ export function AppShell() {
 
   useEffect(() => {
     const handler = (event: KeyboardEvent) => {
+      /* Scorciatoie globali solo su desktop: su mobile interferiscono con
+         scroll, tastiera virtuale e touch. */
+      if (window.matchMedia(MOBILE_LAYOUT_MQ).matches) return;
+
       const target = event.target as HTMLElement;
       const inField =
         target.tagName === "INPUT" ||
         target.tagName === "TEXTAREA" ||
+        target.tagName === "SELECT" ||
         target.isContentEditable;
 
       if (event.ctrlKey && event.key.toLowerCase() === "k" && !event.altKey) {
@@ -705,7 +688,7 @@ export function AppShell() {
     };
     window.addEventListener("keydown", handler);
     return () => window.removeEventListener("keydown", handler);
-  }, [navigate, openLibrarySearch, openStudioListen, p, setRhythmOpen]);
+  }, [openLibrarySearch, openStudioListen, p, setRhythmOpen]);
 
   const onLibraryHome = useCallback(() => {
     closeLibrarySearch();
@@ -844,7 +827,7 @@ export function AppShell() {
     }
   })();
 
-  const sideW = isMobileLayout ? "0px" : sidebarCollapsed ? "56px" : "220px";
+  const sideW = isMobileLayout ? "0px" : "56px";
 
   useLayoutEffect(() => {
     document.documentElement.style.setProperty("--side-w", sideW);
@@ -867,15 +850,9 @@ export function AppShell() {
             {!isMobileLayout ? (
               <SideBar
                 activeSection={route.section}
-                syncBusy={syncBusy}
-                syncTapAnim={syncTapAnim}
-                librarySearchBarOpen={librarySearchBarOpen}
-                collapsed={sidebarCollapsed}
                 onNavigate={navToSection}
-                onSync={onSyncButtonClick}
                 onLibraryHome={onLibraryHome}
-                onToggleSearch={toggleLibrarySearchBar}
-                onToggleCollapse={toggleSidebar}
+                onOpenSettings={() => navigate({ section: "settings" })}
               />
             ) : null}
 
@@ -891,7 +868,6 @@ export function AppShell() {
                 onSync={onSyncButtonClick}
                 onToggleSearch={toggleLibrarySearchBar}
                 onInstall={() => void installApp()}
-                onOpenSettings={() => navigate({ section: "settings" })}
               />
 
               {error && index ? (

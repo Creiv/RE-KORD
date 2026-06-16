@@ -77,7 +77,6 @@ function defaultSettings(): UserSettings {
   return {
     theme: "midnight",
     customTheme: DEFAULT_CUSTOM_THEME,
-    uiStyle: "classic",
     vizMode: "hmb",
     restoreSession: true,
     defaultTab: "dashboard",
@@ -208,7 +207,6 @@ function normalizeSettings(raw: Partial<UserSettings> | UserSettingsPatch): User
     glassSurfaces: raw.glassSurfaces === true,
     glassOpacity: normalizeGlassOpacity(raw.glassOpacity),
     nativePlayback: raw.nativePlayback === true,
-    uiStyle: raw.uiStyle === "modern" ? "modern" : "classic",
   };
 }
 
@@ -1017,14 +1015,6 @@ export function UserStateProvider({ children }: { children: React.ReactNode }) {
       document.documentElement.style.removeProperty("--glass-user-opacity");
     }
   }, [state.settings.glassSurfaces, state.settings.glassOpacity]);
-
-  useEffect(() => {
-    if (state.settings.uiStyle === "modern") {
-      document.documentElement.dataset.uiStyle = "modern";
-    } else {
-      delete document.documentElement.dataset.uiStyle;
-    }
-  }, [state.settings.uiStyle]);
 
   useEffect(() => {
     if (!state.settings.glassSurfaces) return;

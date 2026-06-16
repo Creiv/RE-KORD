@@ -187,6 +187,7 @@
   flex-wrap: wrap;
   align-items: baseline;
   gap: 0.25rem 1.15rem;
+  justify-content: space-evenly;
 }
 
 .section-nav-tab {
@@ -419,10 +420,7 @@
 /* Panoramica libreria: elenco su più colonne (griglia responsive) */
 .library-overview-cols {
   display: grid;
-  grid-template-columns: repeat(
-    auto-fill,
-    minmax(min(19rem, 100%), 1fr)
-  );
+  grid-template-columns: repeat(auto-fill, minmax(min(19rem, 100%), 1fr));
   gap: var(--space-4) var(--space-5);
   width: 100%;
 }
@@ -432,10 +430,7 @@
 }
 
 .library-overview-cols--dashboard {
-  grid-template-columns: repeat(
-    auto-fill,
-    minmax(min(17.5rem, 100%), 1fr)
-  );
+  grid-template-columns: repeat(auto-fill, minmax(min(17.5rem, 100%), 1fr));
 }
 
 .section-head__tools.library-overview-toolbar {
@@ -469,29 +464,33 @@
   flex-wrap: nowrap;
 }
 
-/* Phone: headrow "Panoramica" (pagina artista / genere) impilata —
-   titolo sopra, ordinamenti sotto a tutta larghezza.
-   Specificità a 3 classi: deve battere il flex-flow:row di responsive.css. */
-@media (max-width: 560px) {
-  .section-head.section-head--page-toolbar.library-genre-tracklist-headrow {
-    flex-flow: column;
+/* Mobile: headrow "Panoramica" (pagina artista / genere) impilata —
+   titolo sopra, ordinamenti sotto a tutta larghezza. */
+@media (max-width: 1000px) {
+  .library-page
+    .section-head.section-head--page-toolbar.library-genre-tracklist-headrow {
+    flex-flow: column nowrap;
     align-items: stretch;
   }
 
-  .library-genre-tracklist-headrow
+  .library-page
+    .library-genre-tracklist-headrow
     .section-head__tools.library-overview-toolbar {
     margin-left: 0;
     width: 100%;
+    flex-basis: 100%;
     justify-content: flex-start;
   }
 
-  .library-genre-tracklist-headrow
+  .library-page
+    .library-genre-tracklist-headrow
     .library-overview-toolbar
     .segmented--joined {
     width: 100%;
   }
 
-  .library-genre-tracklist-headrow
+  .library-page
+    .library-genre-tracklist-headrow
     .library-overview-toolbar
     .segmented--joined
     > button {

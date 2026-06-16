@@ -56,8 +56,8 @@
 }
 
 .topbar2__search-btn {
-  min-width: 2.35rem;
-  min-height: 2.35rem;
+  min-width: 2.5rem;
+  min-height: 2.5rem;
   padding: 0.32rem 0.45rem;
   display: inline-flex;
   align-items: center;
@@ -125,18 +125,19 @@
   white-space: nowrap;
 }
 
-/* Snackbar stato sync — basso sinistra (portal su body, --side-w da AppShell) */
+/* Snackbar stato sync — alto centro (portal su body) */
 .sync-status-snackbar {
   position: fixed;
   z-index: var(--z-toast);
-  left: max(1rem, calc(var(--side-w, 0px) + 1rem));
-  bottom: calc(
-    var(--bar-h, 0px) + 1rem + env(safe-area-inset-bottom, 0px)
+  top: calc(
+    env(safe-area-inset-top, 0px) + 0.25rem
   );
+  left: 50%;
+  bottom: auto;
   display: flex;
   align-items: center;
   gap: 0.65rem;
-  max-width: min(24rem, calc(100vw - var(--side-w, 0px) - 2.5rem));
+  max-width: min(24rem, calc(100vw - 2rem));
   padding: 0.72rem 1rem;
   border-radius: var(--radius-lg, 12px);
   border: 1px solid color-mix(in srgb, var(--accent2) 35%, var(--border));
@@ -149,6 +150,7 @@
     0 8px 28px rgba(0, 0, 0, 0.22),
     0 0 0 1px color-mix(in srgb, var(--accent2) 12%, transparent);
   pointer-events: none;
+  transform: translateX(-50%);
   animation: syncStatusSnackbarIn 0.28s cubic-bezier(0.22, 1, 0.36, 1) both;
 }
 
@@ -175,40 +177,19 @@
 @keyframes syncStatusSnackbarIn {
   from {
     opacity: 0;
-    transform: translateY(12px);
+    transform: translateX(-50%) translateY(-10px);
   }
 
   to {
     opacity: 1;
-    transform: translateY(0);
-  }
-}
-
-@media (max-width: 1000px) {
-  .sync-status-snackbar {
-    top: calc(env(safe-area-inset-top, 0px) + 0.75rem);
-    bottom: auto;
-    left: max(1rem, env(safe-area-inset-left, 0px));
-    max-width: min(22rem, calc(100vw - 2rem));
-    animation: syncStatusSnackbarInMobile 0.28s cubic-bezier(0.22, 1, 0.36, 1) both;
-  }
-}
-
-@keyframes syncStatusSnackbarInMobile {
-  from {
-    opacity: 0;
-    transform: translateY(-10px);
-  }
-
-  to {
-    opacity: 1;
-    transform: translateY(0);
+    transform: translateX(-50%) translateY(0);
   }
 }
 
 @media (prefers-reduced-motion: reduce) {
   .sync-status-snackbar {
     animation: none;
+    transform: translateX(-50%);
   }
 }
 
@@ -217,7 +198,8 @@
   align-items: center;
   justify-content: center;
   gap: 0;
-  min-width: 2.35rem;
+  min-width: 2.5rem;
+  min-height: 2.5rem;
   padding: 0.32rem 0.45rem;
   transition: background 0.18s ease, border-color 0.18s ease, color 0.18s ease,
     box-shadow 0.18s ease, transform 0.12s ease;

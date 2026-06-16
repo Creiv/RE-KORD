@@ -28,7 +28,7 @@
   --content-pad-bottom: calc(
     env(safe-area-inset-bottom, 0px) + 0.75rem + var(--bar-h) + 0.5rem
   );
-  --side-w: 220px;
+  --side-w: 56px;
   --radius-xs: 2px;
   --radius-sm: 4px;
   --radius-md: 6px;

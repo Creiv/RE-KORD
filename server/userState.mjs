@@ -319,7 +319,6 @@ function sanitizeSettings(settings) {
     glassSurfaces: src.glassSurfaces === true,
     glassOpacity: normalizeGlassOpacity(src.glassOpacity),
     nativePlayback: src.nativePlayback === true,
-    uiStyle: src.uiStyle === "modern" ? "modern" : "classic",
   }
 }
 

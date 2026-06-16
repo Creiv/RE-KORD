@@ -265,18 +265,13 @@
     min-width: 0;
   }
 
-  .topbar2__search-btn {
-    min-width: 2.2rem;
-    min-height: 2.2rem;
-  }
-
   .topbar2__install-btn {
     flex: 1 1 auto;
     justify-content: center;
     min-width: 0;
   }
 
-  .ghost-btn--toolbar {
+  .ghost-btn--toolbar:not(.topbar2__sync-btn):not(.topbar2__search-btn) {
     min-height: 30px;
     padding: 0.28rem 0.65rem;
     font-size: 0.78rem;
@@ -350,7 +345,7 @@
     grid-template-columns: minmax(0, 1fr);
   }
 
-  .ghost-btn--toolbar {
+  .ghost-btn--toolbar:not(.topbar2__sync-btn):not(.topbar2__search-btn) {
     min-height: 28px;
     padding: 0.22rem 0.55rem;
     font-size: 0.74rem;
@@ -363,15 +358,6 @@
 
   .topbar2__install-label {
     display: none;
-  }
-
-  .listen-stage {
-    --listen-art-size: min(148px, 42vw);
-  }
-
-  .listen-stage__head {
-    flex-direction: row;
-    align-items: center;
   }
 }
 

@@ -35,7 +35,6 @@ function baseState(): UserStateV1 {
       glassSurfaces: false,
       glassOpacity: 62,
     nativePlayback: false,
-      uiStyle: "classic",
     },
     shuffleExcludedAlbumIds: [],
     shuffleExcludedTrackRelPaths: [],

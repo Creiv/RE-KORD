@@ -36,6 +36,19 @@
   overflow: auto;
   overscroll-behavior: contain;
   margin: 0;
+  background: var(--surface2);
+  border-color: var(--border);
+  box-shadow: var(--shadow-elev-2);
+}
+
+.meta-edit-dialog::before {
+  content: none;
+  display: none;
+}
+
+.meta-edit-dialog.surface-card::before {
+  content: none;
+  display: none;
 }
 
 .app-dialog-backdrop {
@@ -381,6 +394,12 @@
 }
 
 /* Dialog "Curiosità" (info artista/album, sola lettura) */
+.entity-info-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+}
+
 .entity-info-btn__ic {
   width: 1rem;
   height: 1rem;

@@ -1,21 +1,19 @@
-/* Mobile top bar — shown only below desktop breakpoint */
+/* Context header — stesso aspetto su mobile e desktop */
 
 .topbar {
   display: flex;
-  justify-content: space-between;
-  gap: 0.75rem;
-  align-items: center;
-  padding: max(0.55rem, env(safe-area-inset-top))
-    max(0.875rem, env(safe-area-inset-right)) 0.55rem
-    max(0.875rem, env(safe-area-inset-left));
-  border-bottom: 1px solid var(--border);
-  background: var(--topbar-bg);
+  flex-direction: column;
+  gap: 0;
   position: sticky;
   top: 0;
+  isolation: isolate;
+  border-bottom: 1px solid var(--border);
+  background: color-mix(in srgb, var(--topbar-bg) 88%, transparent);
   z-index: var(--z-sticky);
   flex-shrink: 0;
-  min-height: 48px;
   box-sizing: border-box;
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
 }
 
 .row {
@@ -23,46 +21,63 @@
   flex-direction: row;
   align-items: center;
   justify-content: space-between;
-  gap: 0.5rem;
+  gap: var(--space-4);
   width: 100%;
   min-width: 0;
+  min-height: var(--pro-header-h, 56px);
+  padding: max(0.5rem, env(safe-area-inset-top))
+    max(1rem, env(safe-area-inset-right)) 0.5rem
+    max(1rem, env(safe-area-inset-left));
+  box-sizing: border-box;
 }
 
 .start {
   display: flex;
-  align-items: center;
-  gap: 0.5rem;
+  flex-direction: column;
+  align-items: flex-start;
+  justify-content: center;
+  gap: 0.12rem;
   min-width: 0;
   flex: 1 1 auto;
 }
 
-/* Wordmark — visible on desktop, hidden on mobile in favour of .pageTitle */
 .brand {
+  display: none;
+}
+
+.titleBlock {
   display: flex;
-  align-items: center;
-  flex-shrink: 0;
+  flex-direction: column;
   min-width: 0;
 }
 
-/* Section title shown on mobile */
+.breadcrumb {
+  margin: 0;
+  font-size: 0.68rem;
+  font-weight: 650;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: color-mix(in srgb, var(--accent2) 65%, var(--muted) 35%);
+  line-height: 1.2;
+}
+
 .pageTitle {
   font-family: var(--font-ui);
-  font-size: 1.05rem;
-  font-weight: 750;
-  letter-spacing: -0.01em;
+  font-size: 1.22rem;
+  font-weight: 800;
+  letter-spacing: -0.025em;
   color: var(--text);
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
-  /* Hidden on desktop (brand/logo takes its place) */
-  display: none;
+  line-height: 1.2;
 }
 
 .end {
   display: flex;
   flex-shrink: 0;
   align-items: center;
-  gap: 0.25rem;
+  gap: 0.35rem;
   margin-left: auto;
 }
 
@@ -78,20 +93,24 @@
   border-width: 0;
 }
 
-/* ── Desktop: hide topbar (sidebar shows instead) — allineato a BP_MOBILE_MAX ── */
 @media (min-width: 1001px) {
-  .topbar {
-    display: none;
+  .row {
+    max-width: var(--pro-content-max, 1360px);
+    margin-inline: auto;
+    padding-inline: max(1.25rem, env(safe-area-inset-right))
+      max(1.25rem, env(safe-area-inset-left));
   }
 }
 
-/* ── Mobile: titolo sezione + logo compatto ── */
 @media (max-width: 1000px) {
   .brand {
-    display: flex;
+    display: block;
   }
 
-  .pageTitle {
-    display: block;
+  .start {
+    flex-direction: row;
+    align-items: center;
+    justify-content: flex-start;
+    gap: 0.6rem;
   }
 }

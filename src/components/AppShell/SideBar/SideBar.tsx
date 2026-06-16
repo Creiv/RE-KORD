@@ -2,37 +2,24 @@ import { memo, useCallback } from "react";
 import { useRhythmMode } from "../../../context/RhythmModeContext";
 import { usePlayer } from "../../../context/PlayerContext";
 import { useI18n } from "../../../i18n/useI18n";
-import { RekordNavIcon, UiSearch } from "../../RekordUiIcons";
+import { RekordNavIcon } from "../../RekordUiIcons";
 import { RekordBrandLogo } from "../../RekordBrandLogo";
-import { AccountBadge } from "../../AccountBadge/AccountBadge";
 import { NAV_DEF } from "../../../lib/routing";
 import type { AppSection } from "../../../types";
 import styles from "./SideBar.module.css";
 
 interface SideBarProps {
   activeSection: AppSection;
-  syncBusy: boolean;
-  syncTapAnim: boolean;
-  librarySearchBarOpen: boolean;
-  collapsed: boolean;
   onNavigate: (section: AppSection) => void;
-  onSync: () => void;
   onLibraryHome: () => void;
-  onToggleSearch: () => void;
-  onToggleCollapse: () => void;
+  onOpenSettings: () => void;
 }
 
 export const SideBar = memo(function SideBar({
   activeSection,
-  syncBusy,
-  syncTapAnim,
-  librarySearchBarOpen,
-  collapsed,
   onNavigate,
-  onSync,
   onLibraryHome,
-  onToggleSearch,
-  onToggleCollapse,
+  onOpenSettings,
 }: SideBarProps) {
   const { t } = useI18n();
   const { open: rhythmOpen, toggle: toggleRhythm } = useRhythmMode();
@@ -58,52 +45,13 @@ export const SideBar = memo(function SideBar({
   const secondaryItems = NAV_DEF.filter((item) => item.group === "secondary");
 
   return (
-    <aside
-      className={`${styles.sidebar}${collapsed ? ` ${styles.collapsed}` : ""}`}
-      aria-label={t("topbar.navAria")}
-      data-collapsed={collapsed ? "true" : "false"}
-    >
-      {/* Header: logo + toggle */}
+    <aside className={`${styles.sidebar} rekord-icon-rail`} aria-label={t("topbar.navAria")}>
       <div className={styles.header}>
-        <div
-          className={
-            collapsed ? styles.brandSlotCollapsed : styles.brandSlotExpanded
-          }
-        >
-          <RekordBrandLogo
-            className={
-              collapsed ? `${styles.brandImg} ${styles.brandImgCollapsed}` : `${styles.brandImg} ${styles.brandImgHeader}`
-            }
-            decorative
-          />
-          {!collapsed ? (
-            <span className={styles.brandText}>RE-KORD</span>
-          ) : null}
+        <div className={styles.brandSlot}>
+          <RekordBrandLogo className={styles.brandImg} decorative />
         </div>
-        <button
-          type="button"
-          className={styles.toggleBtn}
-          onClick={onToggleCollapse}
-          title={collapsed ? t("sidebar.expand") : t("sidebar.collapse")}
-          aria-label={collapsed ? t("sidebar.expand") : t("sidebar.collapse")}
-          aria-expanded={!collapsed}
-        >
-          <svg
-            viewBox="0 0 24 24"
-            fill="none"
-            stroke="currentColor"
-            strokeWidth="2.2"
-            strokeLinecap="round"
-            strokeLinejoin="round"
-            className={`${styles.toggleIc}${collapsed ? ` ${styles.toggleIcFlipped}` : ""}`}
-            aria-hidden
-          >
-            <polyline points="15 18 9 12 15 6" />
-          </svg>
-        </button>
       </div>
 
-      {/* Navigation */}
       <nav className={styles.nav}>
         <div className={styles.navSection}>
           {coreItems.map((item) => (
@@ -119,13 +67,11 @@ export const SideBar = memo(function SideBar({
               }`}
               aria-label={t(item.labelKey)}
               aria-current={activeSection === item.id ? "page" : undefined}
-              title={collapsed ? t(item.labelKey) : undefined}
+              title={t(item.labelKey)}
               onClick={() => handleNavClick(item.id)}
             >
               <RekordNavIcon section={item.id} className={styles.navIc} />
-              {!collapsed && (
-                <span className={styles.navLabel}>{t(item.labelKey)}</span>
-              )}
+              <span className={styles.navLabel}>{t(item.labelKey)}</span>
             </button>
           ))}
         </div>
@@ -142,73 +88,26 @@ export const SideBar = memo(function SideBar({
               }`}
               aria-label={t(item.labelKey)}
               aria-current={activeSection === item.id ? "page" : undefined}
-              title={collapsed ? t(item.labelKey) : undefined}
+              title={t(item.labelKey)}
               onClick={() => handleNavClick(item.id)}
             >
               <RekordNavIcon section={item.id} className={styles.navIc} />
-              {!collapsed && (
-                <span className={styles.navLabel}>{t(item.labelKey)}</span>
-              )}
+              <span className={styles.navLabel}>{t(item.labelKey)}</span>
             </button>
           ))}
         </div>
       </nav>
 
-      {/* Footer */}
       <div className={styles.footer}>
-        <div className={styles.footerActions}>
-          <button
-            type="button"
-            className={[
-              "ghost-btn ghost-btn--toolbar topbar2__sync-btn",
-              syncBusy ? "is-loading" : "",
-              syncTapAnim ? "is-tap" : "",
-            ]
-              .filter(Boolean)
-              .join(" ")}
-            onClick={onSync}
-            disabled={syncBusy}
-            aria-label={t("topbar.sync")}
-            aria-busy={syncBusy}
-          >
-            <span className="topbar2__sync-ic" aria-hidden>
-              <svg viewBox="0 0 24 24" fill="currentColor" aria-hidden>
-                <path d="M12 4V1L8 5l4 4V6c3.31 0 6 2.69 6 6 0 1.01-.25 1.97-.7 2.8l1.46 1.46C19.54 15.03 20 13.57 20 12c0-4.42-3.58-8-8-8zm0 14c-3.31 0-6-2.69-6-6 0-1.01.25-1.97.7-2.8L5.24 7.74C4.46 8.97 4 10.43 4 12c0 4.42 3.58 8 8 8v3l4-4-4-4v3z" />
-              </svg>
-            </span>
-          </button>
-          <button
-            type="button"
-            className={[
-              "ghost-btn ghost-btn--toolbar topbar2__search-btn",
-              librarySearchBarOpen ? "is-on" : "",
-            ]
-              .filter(Boolean)
-              .join(" ")}
-            onMouseDown={(event) => event.preventDefault()}
-            onClick={onToggleSearch}
-            title={
-              librarySearchBarOpen
-                ? t("topbar.closeSearch")
-                : t("topbar.openSearch")
-            }
-            aria-label={
-              librarySearchBarOpen
-                ? t("topbar.closeSearch")
-                : t("topbar.openSearch")
-            }
-            aria-controls={
-              activeSection === "libreria" ? "library-search-input" : undefined
-            }
-          >
-            <span className="topbar2__search-btn-ic" aria-hidden>
-              <UiSearch />
-            </span>
-          </button>
-          {!collapsed && (
-            <AccountBadge onOpenSettings={() => onNavigate("settings")} />
-          )}
-        </div>
+        <button
+          type="button"
+          className={styles.footerBtn}
+          onClick={onOpenSettings}
+          title={t("nav.settings")}
+          aria-label={t("nav.settings")}
+        >
+          <RekordNavIcon section="settings" className={styles.footerBtnIc} />
+        </button>
       </div>
     </aside>
   );

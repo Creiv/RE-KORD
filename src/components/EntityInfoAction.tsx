@@ -100,9 +100,10 @@ export function EntityInfoAction({
         className="ghost-btn entity-info-btn"
         onClick={() => setOpen(true)}
         title={t("entityInfo.buttonTitle")}
+        aria-label={t("entityInfo.buttonTitle")}
       >
-        <UiAutoAwesome className="entity-info-btn__ic" />
-        {t("entityInfo.button")}
+        <UiAutoAwesome className="entity-info-btn__ic" aria-hidden />
+        <span className="entity-info-btn__label">{t("entityInfo.button")}</span>
       </button>
       {open
         ? createPortal(

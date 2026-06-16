@@ -9,12 +9,7 @@ import {
 import { usePlayer } from "../../context/PlayerContext";
 import { useRhythmMode } from "../../context/RhythmModeContext";
 import { useUserState } from "../../context/UserStateContext";
-import { readPlayerProgressTime } from "../../context/playerProgressStore";
 import { useI18n } from "../../i18n/useI18n";
-import {
-  resolveKaraokeLines,
-  type KaraokeLines,
-} from "../../lib/karaokeLyrics";
 import { GameCanvas } from "../../game/components/GameCanvas";
 import { DIFFICULTIES } from "../../game/config/gameConfig";
 import { useRhythmChart } from "../../game/hooks/useRhythmChart";
@@ -272,42 +267,17 @@ export const RhythmDockPanel = memo(function RhythmDockPanel({
   const vizBackdrop = useMemo(() => {
     if (user.state.settings.plectrDisableVizBackdrop) return undefined;
     const mode = user.state.settings.vizMode;
-    let getKaraoke: (() => KaraokeLines | undefined) | undefined;
-    if (mode === "karaoke") {
-      const lyricsRaw = String(track.meta?.lyrics || "").trim();
-      const fallbackTitle = track.title || track.relPath;
-      const duration = p.duration;
-      // Risolto a draw-time (tempo letto dallo store progresso) con una
-      // piccola cache: l'oggetto vizBackdrop resta stabile tra i tick e
-      // GameCanvas non viene ri-renderizzato a ogni avanzamento.
-      let cache: { time: number; value: KaraokeLines } | null = null;
-      getKaraoke = () => {
-        const time = readPlayerProgressTime();
-        if (cache && Math.abs(time - cache.time) < 0.25) return cache.value;
-        const value = resolveKaraokeLines(
-          lyricsRaw,
-          time,
-          duration,
-          fallbackTitle,
-        );
-        cache = { time, value };
-        return value;
-      };
-    }
+    if (mode === "karaoke") return undefined;
     return {
       mode,
       getAnalyser: p.getAnalyser,
       isPlaying: p.isPlaying,
       seedKey: track.relPath,
-      getKaraoke,
     };
   }, [
-    p.duration,
     p.getAnalyser,
     p.isPlaying,
-    track.meta?.lyrics,
     track.relPath,
-    track.title,
     user.state.settings.plectrDisableVizBackdrop,
     user.state.settings.vizMode,
   ]);

@@ -1,0 +1,356 @@
+/**
+ * RE-KORD Pro Workspace — layout professionale, pulito e organizzato.
+ * Compatibile con temi, vetro, classico/moderno e sfondo personalizzato.
+ * Caricato per ultimo in app.css.
+ */
+
+/* ── 1. Token layout pro ─────────────────────────────────────────── */
+:root {
+  --pro-rail-w: 56px;
+  --pro-content-max: 1360px;
+  --pro-header-h: 56px;
+  --pro-canvas-bg: color-mix(in srgb, var(--surface) 35%, transparent);
+  --pro-divider: color-mix(in srgb, var(--border) 85%, transparent);
+  --pro-card-bg: var(--surface2);
+  --pro-card-border: color-mix(in srgb, var(--border) 90%, transparent);
+}
+
+@media (min-width: 1001px) {
+  :root {
+    --side-w: var(--pro-rail-w);
+  }
+}
+
+/* ── 2. Shell: area contenuto come canvas ──────────────────────────── */
+@media (min-width: 1001px) {
+  .shell__main {
+    background: var(--pro-canvas-bg);
+    border-left: 1px solid var(--pro-divider);
+  }
+
+  .content-shell {
+    padding: var(--space-5) max(1.25rem, env(safe-area-inset-right))
+      var(--content-pad-bottom) max(1.25rem, env(safe-area-inset-left));
+    scroll-padding-top: calc(var(--pro-header-h, 56px) + var(--space-2));
+  }
+
+  .content-shell__inner {
+    max-width: var(--pro-content-max);
+    margin-inline: auto;
+  }
+}
+
+/* ── 3. Pagine: ritmo verticale e header fuori dalle card ─────────── */
+.view-page {
+  gap: var(--space-5);
+}
+
+.view-page__intro,
+.view-page__toolbar-band {
+  gap: var(--space-3);
+}
+
+.view-page__main,
+.view-page__body {
+  gap: var(--space-4);
+}
+
+/* Toolbar pagina: titolo a sinistra, azioni allineate a destra */
+.page-toolbar {
+  gap: var(--space-3);
+}
+
+.page-toolbar__actions {
+  gap: var(--space-2);
+}
+
+/* ── 4. Card: superfici pulite, meno rumore visivo ────────────────── */
+.surface-card,
+.hero-card,
+.listen-stage,
+.album-hero,
+.metric-card,
+.alert-card {
+  background: var(--pro-card-bg);
+  border-color: var(--pro-card-border);
+}
+
+.surface-card,
+.hero-card,
+.listen-stage,
+.album-hero {
+  padding: var(--space-4) var(--space-5);
+}
+
+/* Hero compatto: allineamento (resta griglia da library-tiles.css) */
+.hero-card--compact {
+  align-items: center;
+  gap: var(--space-3) var(--space-5);
+  padding: var(--space-4) var(--space-5);
+}
+
+.hero-card__title {
+  font-size: clamp(1.35rem, 2.5vw, 1.75rem);
+  font-weight: 750;
+  letter-spacing: -0.03em;
+  line-height: 1.15;
+  margin: 0;
+}
+
+/* Intestazioni sezione: gerarchia chiara (non nelle toolbar pagina) */
+.surface-card > .section-head:not(.section-head--page-toolbar),
+.view-page__main > .section-head:not(.section-head--page-toolbar) {
+  margin-bottom: var(--space-4);
+  padding-bottom: var(--space-3);
+  border-bottom: 1px solid var(--pro-divider);
+}
+
+.section-head--page-toolbar {
+  margin-bottom: var(--space-3);
+}
+
+.section-head h2 {
+  font-size: 1.05rem;
+  font-weight: 700;
+  letter-spacing: -0.02em;
+}
+
+.section-head--page-toolbar h2 {
+  font-size: 1.28rem;
+  font-weight: 800;
+}
+
+.eyebrow {
+  font-size: 0.68rem;
+  font-weight: 700;
+  letter-spacing: 0.1em;
+  color: color-mix(in srgb, var(--accent2) 70%, var(--muted) 30%);
+}
+
+/* ── 5. Dashboard: metriche in fascia, griglia ordinata ───────────── */
+.dashboard-page__intro {
+  display: grid;
+  gap: var(--space-4);
+  grid-template-columns: minmax(0, 1fr);
+}
+
+.dashboard-page__intro .stats-grid {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: var(--space-3);
+}
+
+.dashboard-page__intro .metric-card {
+  padding: var(--space-4);
+  text-align: left;
+  border-radius: var(--radius-md);
+  background: color-mix(in srgb, var(--surface3) 55%, var(--surface2) 45%);
+}
+
+.dashboard-page__intro .metric-card span {
+  font-size: 0.65rem;
+  letter-spacing: 0.12em;
+}
+
+.dashboard-page__intro .metric-card strong {
+  font-size: 1.65rem;
+}
+
+.dashboard-page__main {
+  gap: var(--space-4);
+}
+
+@container rekord-page (min-width: 720px) {
+  .dashboard-page__main {
+    align-items: start;
+  }
+}
+
+@container rekord-page (max-width: 899px) {
+  .dashboard-page__intro .stats-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+@container rekord-page (max-width: 719px) {
+  .dashboard-page__intro .stats-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+@media (max-width: 719px) {
+  .dashboard-page__intro .stats-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+/* ── 6. Libreria: chrome più leggero ─────────────────────────────── */
+.library-page__chrome {
+  gap: var(--space-3);
+}
+
+.library-list-tile {
+  min-height: 4.75rem;
+  padding: var(--space-3) var(--space-4);
+}
+
+/* ── 9. (track-row: stili in views/tracklist.css, niente override globali) ── */
+
+/* ── 10. Player dock: barra inset professionale (desktop) ─────────── */
+@media (min-width: 1001px) {
+  :root {
+    --content-pad-bottom: calc(
+      env(safe-area-inset-bottom, 0px) + 0.75rem + var(--bar-h) + 1.25rem
+    );
+  }
+
+  /* Padding laterale: i click passano nel vuoto; figli interattivi riattivati sotto */
+  .player-dock2 {
+    left: var(--side-w, var(--pro-rail-w));
+    right: 0;
+    padding: 0 1.25rem calc(0.75rem + env(safe-area-inset-bottom, 0px));
+    pointer-events: none;
+  }
+
+  .player-dock2 .player-bar2,
+  .player-dock2 .rhythm-dock-panel,
+  .player-dock2 .rhythm-dock-panel--idle {
+    pointer-events: auto;
+  }
+
+  .player-dock2 .player-bar2 {
+    max-width: var(--pro-content-max);
+    margin-inline: auto;
+    border-radius: var(--radius-lg);
+    border: 1px solid var(--pro-card-border);
+    box-shadow: var(--shadow-elev-2);
+    background: color-mix(in srgb, var(--sidebar-bg) 94%, var(--bg) 6%);
+  }
+
+  /*
+   * Plectr aperto: pannello 420px (rhythm-dock.css), barra full-bleed sotto
+   * come pre-redesign — stessa larghezza inset della barra chiusa, niente
+   * salti di layout né compressione dei controlli desktop.
+   */
+  .player-dock2[data-rhythm-open="1"] {
+    padding: 0 1.25rem calc(0.75rem + env(safe-area-inset-bottom, 0px));
+    pointer-events: auto;
+  }
+
+  .player-dock2[data-rhythm-open="1"] .player-bar2 {
+    max-width: var(--pro-content-max);
+    margin-inline: auto;
+    border-radius: var(--radius-lg);
+    border: 1px solid var(--pro-card-border);
+    box-shadow: var(--shadow-elev-2);
+  }
+}
+
+/* ── 11. Ascolta: stage più arioso ────────────────────────────────── */
+.listen-page {
+  gap: var(--space-4);
+}
+
+.listen-page__stage.listen-stage {
+  gap: var(--space-4);
+}
+
+/* ── 12. Statistiche: sezioni allineate ───────────────────────────── */
+.statistics-page__sections,
+.statistics-page__rankings,
+.statistics-page__footer {
+  gap: var(--space-4);
+}
+
+/* ── 13. Achievements: hero più compatto ──────────────────────────── */
+.achievements-hero__rank {
+  font-size: clamp(1.75rem, 4vw, 2.5rem);
+}
+
+.achievements-badge-grid {
+  gap: var(--space-3);
+}
+
+/* ── 14. Vetro: rail e header seguono il sistema glass esistente ───── */
+:root[data-glass-surfaces="1"] .shell__main {
+  background: transparent;
+  border-left-color: color-mix(in srgb, var(--border) 55%, transparent);
+}
+
+@media (min-width: 1001px) {
+  :root[data-glass-surfaces="1"] .player-dock2 .player-bar2 {
+    background: var(--glass-fill-page);
+  }
+}
+
+/* ── 16. Banda accent solo su hero principali, non su ogni toolbar ─── */
+:root:not([data-glass-surfaces="1"])
+  .view-page__toolbar-band
+  > .surface-card--toolbar-only,
+:root:not([data-glass-surfaces="1"])
+  .library-view
+  > .surface-card.surface-card--toolbar-only:first-child {
+  background: var(--pro-card-bg);
+  border-color: var(--pro-card-border);
+  box-shadow: var(--shadow-elev-1);
+}
+
+/* ── 17. Studio: pannelli più ordinati ────────────────────────────── */
+.view-page--studio {
+  gap: var(--space-4);
+}
+
+.view-page--studio > .surface-card:first-child {
+  margin-bottom: 0;
+}
+
+/* Liste coda / preferiti: righe tracklist native, card con padding uniforme */
+.collection-page__list.surface-card,
+.queue-page__list.surface-card {
+  padding: var(--space-4);
+}
+
+.collection-page__list .list-stack,
+.queue-page__list .list-stack {
+  gap: var(--space-3);
+}
+
+/* ── 18. Mobile: layout e touch, niente override desktop ──────────── */
+@media (max-width: 1000px) {
+  .content-shell {
+    padding-top: var(--space-2);
+    scroll-padding-top: calc(var(--pro-header-h, 56px) + var(--space-2));
+  }
+
+  .shell__main {
+    background: transparent;
+    border-left: none;
+  }
+
+  .content-shell__inner {
+    max-width: none;
+    margin-inline: 0;
+  }
+
+  .hero-card--compact {
+    grid-template-columns: minmax(0, 1fr);
+    align-items: stretch;
+  }
+
+  .hero-card--compact .hero-card__actions {
+    justify-self: stretch;
+  }
+
+  .hero-card--compact .hero-card__actions > .primary-btn {
+    width: 100%;
+    justify-content: center;
+  }
+
+  .dashboard-page__intro .stats-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .shortcut-list {
+    grid-template-columns: 1fr;
+  }
+}

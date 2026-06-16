@@ -93,7 +93,6 @@
 :root[data-glass-surfaces="1"] .album-hero,
 :root[data-glass-surfaces="1"] .metric-card,
 :root[data-glass-surfaces="1"] .alert-card,
-:root[data-glass-surfaces="1"] .meta-edit-dialog,
 :root[data-glass-surfaces="1"] .account-row,
 :root[data-glass-surfaces="1"] .studio-panel,
 :root[data-glass-surfaces="1"] .track-row,
@@ -131,19 +130,35 @@
 :root[data-glass-surfaces="1"] .achievements-hero,
 :root[data-glass-surfaces="1"] .library-search-hero,
 :root[data-glass-surfaces="1"] .metric-card,
-:root[data-glass-surfaces="1"] .alert-card,
-:root[data-glass-surfaces="1"] .meta-edit-dialog {
+:root[data-glass-surfaces="1"] .alert-card {
   border-color: var(--glass-edge);
   box-shadow: var(--shadow-elev-1),
     inset 0 -1px 0 color-mix(in srgb, black 10%, transparent);
+}
+
+/* Dialog: pannello opaco, mai vetro (il backdrop resta quello standard). */
+:root[data-glass-surfaces="1"] .meta-edit-dialog {
+  background: var(--surface2);
+  border-color: var(--border);
+  box-shadow: var(--shadow-elev-2);
+  -webkit-backdrop-filter: none;
+  backdrop-filter: none;
+}
+
+:root[data-glass-surfaces="1"] .meta-edit-dialog::before {
+  content: none;
+}
+
+:root[data-glass-surfaces="1"] .meta-edit-dialog.surface-card::before,
+:root[data-glass-surfaces="1"] .meta-edit-backdrop .surface-card::before {
+  content: none;
 }
 
 :root[data-glass-surfaces="1"] .hero-card::before,
 :root[data-glass-surfaces="1"] .listen-stage::before,
 :root[data-glass-surfaces="1"] .album-hero::before,
 :root[data-glass-surfaces="1"] .achievements-hero::before,
-:root[data-glass-surfaces="1"] .library-search-hero::before,
-:root[data-glass-surfaces="1"] .meta-edit-dialog::before {
+:root[data-glass-surfaces="1"] .library-search-hero::before {
   content: "";
   position: absolute;
   inset: 0;
@@ -297,6 +312,38 @@
   background: color-mix(in srgb, var(--glass-panel-deep) 88%, transparent);
   -webkit-backdrop-filter: blur(20px) saturate(1.4);
   backdrop-filter: blur(20px) saturate(1.4);
+}
+
+:root[data-glass-surfaces="1"] .rekord-icon-rail {
+  background: transparent;
+  border-right-color: var(--glass-edge);
+}
+
+:root[data-glass-surfaces="1"] .rekord-icon-rail::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  z-index: -1;
+  pointer-events: none;
+  background: color-mix(in srgb, var(--glass-panel-deep) 90%, transparent);
+  -webkit-backdrop-filter: blur(20px) saturate(1.45);
+  backdrop-filter: blur(20px) saturate(1.45);
+}
+
+:root[data-glass-surfaces="1"] .rekord-context-header {
+  background: transparent;
+  border-bottom-color: var(--glass-edge);
+}
+
+:root[data-glass-surfaces="1"] .rekord-context-header::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  z-index: -1;
+  pointer-events: none;
+  background: color-mix(in srgb, var(--glass-panel) 86%, transparent);
+  -webkit-backdrop-filter: blur(16px) saturate(1.4);
+  backdrop-filter: blur(16px) saturate(1.4);
 }
 
 /* Electron: promuovi layer GPU per il vetro */

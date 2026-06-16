@@ -39,7 +39,6 @@ const userStatePayload = {
     plectrDisableVizBackdrop: false,
     glassSurfaces: false,
     nativePlayback: false,
-    uiStyle: "classic",
   },
   shuffleExcludedAlbumIds: ["Artist::Album"],
   shuffleExcludedTrackRelPaths: [],

@@ -391,11 +391,15 @@ body,
     min-height: max(42px, var(--tap-min));
   }
 
-  .ghost-btn--toolbar,
-  .topbar2__sync-btn,
-  .topbar2__search-btn,
+  .ghost-btn--toolbar:not(.topbar2__sync-btn):not(.topbar2__search-btn),
   .topbar2__install-btn {
     min-height: var(--tap-min);
+  }
+
+  .topbar2__sync-btn,
+  .topbar2__search-btn {
+    min-width: 2.5rem;
+    min-height: 2.5rem;
   }
 
   .text-btn {
@@ -512,6 +516,48 @@ body,
     justify-content: stretch;
   }
 
+  /* Libreria: filtri ordinamento su riga separata sotto il titolo */
+  .library-page
+    .section-head.section-head--page-toolbar.library-genre-tracklist-headrow {
+    flex-flow: column nowrap;
+    align-items: stretch;
+    gap: 0.5rem;
+  }
+
+  .library-page .library-genre-tracklist-headrow > :first-child {
+    flex: 0 0 auto;
+    width: 100%;
+    max-width: 100%;
+  }
+
+  .library-page
+    .library-genre-tracklist-headrow
+    .section-head__tools.library-overview-toolbar {
+    flex: 0 0 auto;
+    flex-basis: 100%;
+    width: 100%;
+    max-width: 100%;
+    margin-left: 0;
+    justify-content: flex-start;
+    align-self: stretch;
+  }
+
+  .library-page
+    .library-genre-tracklist-headrow
+    .library-overview-toolbar
+    .segmented--joined {
+    width: 100%;
+  }
+
+  .library-page
+    .library-genre-tracklist-headrow
+    .library-overview-toolbar
+    .segmented--joined
+    > button {
+    flex: 1 1 0;
+    min-height: 42px;
+  }
+
   .library-filter-group .segmented--joined {
     width: 100%;
   }
@@ -574,22 +620,29 @@ body,
     border-radius: var(--radius-lg);
   }
 
-  /* Ascolta: seconda riga metadati a tutta larghezza (solo ≤900px) */
-  .listen-stage__head {
+  /* Ascolta hero: copertina sx, titolo dx, metadati sotto a tutta larghezza */
+  .listen-page .listen-stage__head {
     display: grid;
-    grid-template-columns: auto 1fr;
-    grid-template-rows: auto auto;
+    grid-template-columns: clamp(120px, 34vw, 172px) minmax(0, 1fr);
+    grid-template-areas:
+      "art lead"
+      "meta meta";
     align-items: start;
-    column-gap: 1rem;
-    row-gap: 0.55rem;
+    column-gap: 0.85rem;
+    row-gap: 0.6rem;
     width: 100%;
     min-width: 0;
   }
 
+  .listen-page .listen-stage {
+    --listen-art-size: clamp(120px, 34vw, 172px);
+  }
+
+  .listen-stage__art-btn,
   .listen-stage__art,
   .listen-stage__art--empty {
-    grid-column: 1;
-    grid-row: 1;
+    grid-area: art;
+    align-self: start;
   }
 
   .listen-stage__text {
@@ -597,16 +650,26 @@ body,
   }
 
   .listen-stage__text-lead {
-    grid-column: 2;
-    grid-row: 1;
+    grid-area: lead;
     min-width: 0;
+    align-self: center;
+    gap: 0.35rem;
+  }
+
+  .listen-stage__eyebrow-row {
+    gap: 0.25rem 0.4rem;
+  }
+
+  .listen-stage__title {
+    font-size: clamp(1.25rem, 5.2vw, 1.65rem);
+    line-height: 1.15;
   }
 
   .listen-stage__meta-full {
-    grid-column: 1 / -1;
-    grid-row: 2;
+    grid-area: meta;
     width: 100%;
     max-width: 100%;
+    gap: 0.4rem;
   }
 
   .listen-stage__meta-full .listen-stage__sub--with-stats,
@@ -615,33 +678,29 @@ body,
     width: 100%;
   }
 
-  /* Album mobile: copertina a sinistra, indietro + dettaglio + icone + pulsanti a destra in colonna; titolo e metadati sotto */
-  .album-hero__body {
-    display: flex;
-    flex-direction: column;
-    gap: 0.65rem;
+  /* Album hero: copertina sx, azioni dx; titolo e meta a tutta larghezza sotto */
+  .library-view .album-hero__body {
+    display: grid;
+    grid-template-columns: clamp(120px, 32vw, 168px) minmax(0, 1fr);
+    grid-template-areas:
+      "cover tools"
+      "title title"
+      "meta meta";
+    gap: 0.55rem 0.85rem;
     width: 100%;
+    align-items: start;
   }
 
   .album-hero__top-band {
-    display: flex;
-    flex-direction: row;
-    align-items: flex-start;
-    gap: 0.85rem;
-    width: 100%;
-    min-width: 0;
+    display: contents;
   }
 
-  .album-hero__top-band .album-cover {
-    flex: 0 0 auto;
-    width: clamp(104px, 28vw, 148px);
-    max-width: 42%;
-  }
-
+  .album-hero__top-band .album-cover,
   .album-hero__top-band .album-hero__cover-btn {
-    flex: 0 0 auto;
-    width: clamp(104px, 28vw, 148px);
-    max-width: 42%;
+    grid-area: cover;
+    width: 100%;
+    max-width: none;
+    align-self: start;
   }
 
   .album-hero__top-band .album-hero__cover-btn .album-cover {
@@ -650,7 +709,7 @@ body,
   }
 
   .album-hero__top-right {
-    flex: 1 1 0;
+    grid-area: tools;
     min-width: 0;
   }
 
@@ -658,15 +717,26 @@ body,
     flex-direction: column;
     flex-wrap: nowrap;
     align-items: stretch;
-    gap: 0.45rem;
+    gap: 0.4rem;
     width: 100%;
+    margin-bottom: 0;
   }
 
   .album-hero__toprow .page-toolbar__lead--backrow {
-    flex-direction: column;
+    flex-direction: row;
     align-items: flex-start;
     gap: 0.4rem;
     width: 100%;
+  }
+
+  .album-hero__toprow .page-toolbar__textcol .eyebrow {
+    margin: 0;
+    font-size: 0.62rem;
+  }
+
+  .album-hero__toprow .lib-badge-cluster--toolbar-left {
+    flex-wrap: wrap;
+    gap: 0.2rem;
   }
 
   .album-hero__toprow .section-head__tools {
@@ -679,26 +749,175 @@ body,
   }
 
   .album-hero__toprow .hero-card__actions {
+    display: flex;
+    flex-direction: row;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 0.4rem;
+    width: 100%;
+  }
+
+  .album-hero__toprow .hero-card__actions > .primary-btn {
+    flex: 1 1 100%;
+    width: 100%;
+    min-width: 0;
+  }
+
+  .album-hero__toprow .hero-card__actions > .entity-info-btn,
+  .album-hero__toprow .hero-card__actions > .ghost-btn--icon-only,
+  .album-hero__toprow .hero-card__actions > .library-toolbar-exclude-btn {
+    flex: 0 0 auto;
+  }
+
+  .album-hero__toprow .entity-info-btn {
+    width: 2.625rem;
+    height: 2.625rem;
+    min-width: 2.625rem;
+    min-height: 2.625rem;
+    padding: 0;
+    justify-content: center;
+    gap: 0;
+  }
+
+  .album-hero__toprow .entity-info-btn .entity-info-btn__label {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    padding: 0;
+    margin: -1px;
+    overflow: hidden;
+    clip: rect(0, 0, 0, 0);
+    white-space: nowrap;
+    border-width: 0;
+  }
+
+  .library-view .album-hero__titleblock {
+    grid-area: title;
+    grid-column: 1 / -1;
+    min-width: 0;
+    width: 100%;
+    align-self: start;
+    text-align: left;
     justify-content: flex-start;
   }
 
-  .album-hero__titleblock {
-    grid-column: unset;
-    grid-row: unset;
+  .library-view .album-hero__titleblock .album-hero__h1 {
+    font-size: clamp(1.2rem, 5vw, 1.55rem);
+    line-height: 1.15;
+    margin: 0;
+    text-align: left;
     width: 100%;
-    max-width: 100%;
   }
 
-  .album-hero__meta-full {
-    grid-column: unset;
-    grid-row: unset;
+  .library-view .album-hero__meta-full {
+    grid-area: meta;
+    grid-column: 1 / -1;
     width: 100%;
     max-width: 100%;
+    gap: 0.4rem;
+    text-align: left;
+    align-items: flex-start;
   }
 
   .album-hero__meta-full .album-hero__title-meta,
   .album-hero__meta-full .album-track-genres-inline {
     max-width: 100%;
+  }
+
+  /* Libreria mobile: toolbar a tutta larghezza, play 100% o 50% con Curiosità */
+  .library-page__chrome .section-head.section-head--page-toolbar,
+  .library-view > .surface-card--toolbar-only .section-head.section-head--page-toolbar {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .library-page__chrome .section-head--page-toolbar .section-head__tools,
+  .library-view
+    > .surface-card--toolbar-only
+    .section-head--page-toolbar
+    .section-head__tools {
+    width: 100%;
+    max-width: 100%;
+    flex: 1 1 100%;
+    margin-left: 0;
+    align-self: stretch;
+    justify-content: stretch;
+  }
+
+  .library-page__chrome .section-head__tools .hero-card__actions,
+  .library-view > .surface-card--toolbar-only .section-head__tools .hero-card__actions {
+    display: flex;
+    flex-direction: row;
+    flex-wrap: wrap;
+    align-items: stretch;
+    width: 100%;
+    gap: 0.45rem;
+  }
+
+  .library-page__chrome .section-head__tools .hero-card__actions > .primary-btn,
+  .library-view > .surface-card--toolbar-only .section-head__tools .hero-card__actions > .primary-btn {
+    flex: 1 1 100%;
+    width: 100%;
+    min-width: 0;
+    box-sizing: border-box;
+    justify-content: center;
+    padding: 0.65rem 1.4rem;
+    font-size: 1rem;
+    min-height: max(42px, var(--tap-comfort));
+  }
+
+  .library-page__chrome
+    .section-head__tools
+    .hero-card__actions:has(.entity-info-btn)
+    > .primary-btn,
+  .library-view
+    > .surface-card--toolbar-only
+    .section-head__tools
+    .hero-card__actions:has(.entity-info-btn)
+    > .primary-btn,
+  .library-page__chrome .section-head__tools .hero-card__actions > .entity-info-btn,
+  .library-view
+    > .surface-card--toolbar-only
+    .section-head__tools
+    .hero-card__actions
+    > .entity-info-btn {
+    flex: 1 1 calc(50% - 0.225rem);
+    width: auto;
+    min-width: 0;
+  }
+
+  .library-page__chrome
+    .section-head__tools
+    .hero-card__actions:has(.library-toolbar-exclude-btn):not(:has(.entity-info-btn))
+    > .primary-btn,
+  .library-view
+    > .surface-card--toolbar-only
+    .section-head__tools
+    .hero-card__actions:has(.library-toolbar-exclude-btn):not(:has(.entity-info-btn))
+    > .primary-btn {
+    flex: 1 1 auto;
+    width: auto;
+  }
+
+  .library-page__chrome
+    .section-head__tools
+    .hero-card__actions
+    > .library-toolbar-exclude-btn,
+  .library-view
+    > .surface-card--toolbar-only
+    .section-head__tools
+    .hero-card__actions
+    > .library-toolbar-exclude-btn {
+    flex: 0 0 auto;
+  }
+
+  .library-page__chrome .section-head__tools .hero-card__actions > .entity-info-btn,
+  .library-view
+    > .surface-card--toolbar-only
+    .section-head__tools
+    .hero-card__actions
+    > .entity-info-btn {
+    justify-content: center;
   }
 }
 
@@ -708,7 +927,7 @@ body,
     --bar-h: 11.5rem;
   }
 
-  .ghost-btn--toolbar {
+  .ghost-btn--toolbar:not(.topbar2__sync-btn):not(.topbar2__search-btn) {
     min-height: var(--tap-min);
   }
 
@@ -741,8 +960,7 @@ body,
   }
 
   .listen-stage {
-    --listen-art-size: min(132px, 38vw);
-    gap: 0.6rem;
+    gap: 0.75rem;
   }
 
   .listen-stage__viz {

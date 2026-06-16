@@ -425,10 +425,10 @@
   gap: 0.55rem;
 }
 
-/* Tema e Stile affiancati; "Personalizza…" sotto entrambe (desktop) o sotto Tema (mobile) */
+/* Tema + Personalizza affiancati (desktop); su mobile il bottone va sotto. */
 .settings-theme-style-row {
   display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
+  grid-template-columns: minmax(0, 1fr) auto;
   gap: var(--space-4);
   align-items: end;
 }
@@ -438,15 +438,10 @@
   grid-row: 1;
 }
 
-.settings-theme-style-row__style {
+.settings-theme-style-row__customize {
   grid-column: 2;
   grid-row: 1;
-}
-
-.settings-theme-style-row__customize {
-  grid-column: 1 / -1;
-  grid-row: 2;
-  width: 100%;
+  width: auto;
   min-height: 42px;
   justify-self: stretch;
   box-sizing: border-box;
@@ -458,10 +453,13 @@
   }
 
   .settings-theme-style-row__theme,
-  .settings-theme-style-row__style,
   .settings-theme-style-row__customize {
     grid-column: auto;
     grid-row: auto;
+  }
+
+  .settings-theme-style-row__customize {
+    width: 100%;
   }
 }
 

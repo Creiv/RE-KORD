@@ -1,8 +1,6 @@
 import type { Chart } from "../game/types";
 import type { VizMode } from "../types";
 import { DiscoWallCanvasEngine } from "./discowallCanvasEngine";
-import { drawKaraokeLyricsOnCanvas } from "./karaokeCanvasDraw";
-import type { KaraokeLines } from "./karaokeLyrics";
 import { VizCanvasEngine } from "./vizCanvasEngine";
 
 export type PlectrVizBackdropInput = {
@@ -12,7 +10,6 @@ export type PlectrVizBackdropInput = {
   chart: Chart;
   seedKey: string;
   liveTime: number;
-  karaoke?: KaraokeLines;
 };
 
 /* Lo sfondo animato è dietro un velo scuro: renderizzarlo a piena risoluzione
@@ -40,8 +37,6 @@ export class PlectrVizBackdrop {
   private offW = 0;
   private offH = 0;
   private lastRenderAt = 0;
-  private karaokeDimGradient: CanvasGradient | null = null;
-  private karaokeDimHeight = 0;
   private dimGradient: CanvasGradient | null = null;
   private dimGradientMode: VizMode | null = null;
   private dimGradientHeight = 0;
@@ -131,20 +126,20 @@ export class PlectrVizBackdrop {
     octx.fillStyle = "#04080e";
     octx.fillRect(0, 0, width, height);
 
-    octx.save();
-    octx.globalAlpha = 0.45;
-    this.viz.drawFrame(octx, {
-      width,
-      height,
-      mode: mode === "karaoke" ? "karaoke" : mode,
-      analyser,
-      isPlaying,
-      expanded: false,
-    });
-    octx.restore();
-    // In karaoke il velo va sopra anche al testo, che però resta nitido sul
-    // canvas principale: lì niente dim pre-applicato.
-    if (mode !== "karaoke") this.dimBackdrop(octx, width, height, mode);
+    if (mode !== "karaoke") {
+      octx.save();
+      octx.globalAlpha = 0.45;
+      this.viz.drawFrame(octx, {
+        width,
+        height,
+        mode,
+        analyser,
+        isPlaying,
+        expanded: false,
+      });
+      octx.restore();
+      this.dimBackdrop(octx, width, height, mode);
+    }
   }
 
   draw(
@@ -154,7 +149,7 @@ export class PlectrVizBackdrop {
     _dpr: number,
     input: PlectrVizBackdropInput,
   ): void {
-    const { mode, karaoke } = input;
+    const { mode } = input;
     if (mode !== this.lastMode) {
       this.viz.resetForMode(mode === "discowall" || mode === "karaoke" ? "bars" : mode);
       this.lastMode = mode;
@@ -176,25 +171,6 @@ export class PlectrVizBackdrop {
     }
     if (this.off && this.offW > 0 && this.offH > 0) {
       ctx.drawImage(this.off, 0, 0, width, height);
-    }
-
-    if (mode === "karaoke") {
-      if (karaoke) {
-        drawKaraokeLyricsOnCanvas(ctx, width, height, karaoke, {
-          centerYRatio: 0.44,
-          recessed: true,
-        });
-      }
-      if (!this.karaokeDimGradient || this.karaokeDimHeight !== height) {
-        const g = ctx.createLinearGradient(0, 0, 0, height);
-        g.addColorStop(0, "rgba(4, 8, 14, 0.48)");
-        g.addColorStop(0.55, "rgba(4, 8, 14, 0.64)");
-        g.addColorStop(1, "rgba(4, 8, 14, 0.86)");
-        this.karaokeDimGradient = g;
-        this.karaokeDimHeight = height;
-      }
-      ctx.fillStyle = this.karaokeDimGradient;
-      ctx.fillRect(0, 0, width, height);
     }
   }
 }

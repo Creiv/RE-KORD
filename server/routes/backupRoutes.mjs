@@ -64,9 +64,6 @@ function themeSettingsPatchFromPayload(payload) {
   if (typeof payload.theme === "string" && payload.theme.trim()) {
     out.theme = payload.theme.trim();
   }
-  if (payload.uiStyle === "modern" || payload.uiStyle === "classic") {
-    out.uiStyle = payload.uiStyle;
-  }
   if (typeof payload.glassSurfaces === "boolean") {
     out.glassSurfaces = payload.glassSurfaces;
   }
@@ -118,7 +115,6 @@ export function registerBackupRoutes(app) {
         kind: "rekord-theme",
         version: 1,
         theme: s.theme,
-        uiStyle: s.uiStyle,
         glassSurfaces: s.glassSurfaces === true,
         glassOpacity: s.glassOpacity,
       };

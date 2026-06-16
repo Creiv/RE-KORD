@@ -16,7 +16,6 @@ interface TopBarProps {
   onSync: () => void;
   onToggleSearch: () => void;
   onInstall: () => void;
-  onOpenSettings: () => void;
 }
 
 export const TopBar = memo(function TopBar({
@@ -36,23 +35,27 @@ export const TopBar = memo(function TopBar({
   const sectionTitle = currentNavItem ? t(currentNavItem.labelKey) : "RE-KORD";
 
   return (
-    <header className={styles.topbar} role="banner">
-      {/* Screen-reader page title */}
+    <header className={`${styles.topbar} rekord-context-header`} role="banner">
       <h1 className={styles.srOnly}>{sectionTitle}</h1>
 
       <div className={styles.row}>
-        {/* Start: brand (desktop) / section title (mobile) */}
         <div className={styles.start}>
-          {/* Wordmark visible only when no section title shown (fallback / very small) */}
           <div className={styles.brand} aria-hidden>
-            <RekordBrandLogo className="rekord-brand-logo rekord-brand-logo--topbar" decorative />
+            <RekordBrandLogo
+              className="rekord-brand-logo rekord-brand-logo--topbar"
+              decorative
+            />
           </div>
-          <span className={styles.pageTitle} aria-hidden>
-            {sectionTitle}
-          </span>
+          <div className={styles.titleBlock}>
+            <p className={styles.breadcrumb} aria-hidden>
+              RE-KORD
+            </p>
+            <span className={styles.pageTitle} aria-hidden>
+              {sectionTitle}
+            </span>
+          </div>
         </div>
 
-        {/* End: action buttons */}
         <div className={styles.end}>
           <button
             type="button"
@@ -119,7 +122,6 @@ export const TopBar = memo(function TopBar({
               </span>
             </button>
           ) : null}
-
         </div>
       </div>
     </header>

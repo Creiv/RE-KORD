@@ -964,10 +964,20 @@ html:not([data-glass-surfaces="1"]) .settings-page > .surface-card {
   }
 
   .library-page__chrome .section-head__tools .hero-card__actions > .primary-btn,
-  .library-page__chrome .section-head__tools .hero-card__actions > .ghost-btn,
-  .library-view > .surface-card--toolbar-only .section-head__tools .hero-card__actions > .primary-btn,
-  .library-view > .surface-card--toolbar-only .section-head__tools .hero-card__actions > .ghost-btn {
-    flex: 1 1 auto;
+  .library-view > .surface-card--toolbar-only .section-head__tools .hero-card__actions > .primary-btn {
+    flex: 1 1 100%;
     min-width: 0;
+  }
+
+  .library-page__chrome
+    .section-head__tools
+    .hero-card__actions:has(.entity-info-btn)
+    > .primary-btn,
+  .library-view
+    > .surface-card--toolbar-only
+    .section-head__tools
+    .hero-card__actions:has(.entity-info-btn)
+    > .primary-btn {
+    flex: 1 1 calc(50% - 0.225rem);
   }
 }

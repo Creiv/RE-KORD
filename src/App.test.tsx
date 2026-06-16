@@ -126,7 +126,6 @@ const userState: UserStateV1 = {
     glassOpacity: 62,
     nativePlayback: false,
     glassSurfaces: false,
-    uiStyle: "classic",
   },
   migratedLegacy: true,
 };
