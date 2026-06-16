@@ -5,6 +5,7 @@ import {
   castStreamUrl,
   isLoopbackHostname,
   resolveCastMediaBaseUrl,
+  resolvePlaybackBaseOrigin,
 } from "./castMedia"
 import type { EnrichedTrack } from "../types"
 
@@ -46,6 +47,14 @@ describe("castMedia", () => {
         pageOrigin: "http://localhost:3001",
       }),
     ).toBeNull()
+  })
+
+  it("resolvePlaybackBaseOrigin usa lanAccessUrl su localhost", () => {
+    expect(
+      resolvePlaybackBaseOrigin({
+        lanAccessUrl: "http://192.168.0.10:3001",
+      }),
+    ).toBe("http://192.168.0.10:3001")
   })
 
   it("castStreamUrl costruisce URL assoluto per il receiver Cast", () => {

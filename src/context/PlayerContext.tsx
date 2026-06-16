@@ -20,9 +20,30 @@ import {
   resolveMediaSessionPauseAction,
   syncMediaSessionState,
   buildMediaSessionQueueEntries,
-  resolveMediaSessionBaseOrigin,
 } from "../lib/mediaSession";
-import { castStreamUrl } from "../lib/castMedia";
+import {
+  buildCastTrackPayload,
+  castStreamUrl,
+  resolvePlaybackBaseOrigin,
+} from "../lib/castMedia";
+import {
+  canUseWebCastSender,
+  registerCastPlaybackCallbacks,
+  syncWebCastNow,
+} from "../lib/castPlayback";
+import {
+  configureNativePlayback,
+  isNativePlaybackBridgeAvailable,
+  nativeLoad,
+  nativePause,
+  nativePlay,
+  nativeSeek,
+  nativeStop,
+  nativeCancelSleepFade,
+  nativeSleepFadeAndPause,
+  setNativePlaybackEventHandler,
+} from "../lib/nativePlayback";
+import { prefetchQueueCovers } from "../lib/coverPrefetch";
 import { isAutomotiveDisplayMode } from "../lib/routing";
 import {
   fisherYatesShuffle,
@@ -87,6 +108,8 @@ type Ctx = {
   toggleFavorite: (relPath: string) => void;
   isFavorite: (relPath: string) => boolean;
   resyncTracksFromIndex: (index: LibraryIndex) => void;
+  sleepTimerEndsAt: number | null;
+  setSleepTimer: (minutes: number | null) => void;
 };
 
 const PlayerContext = createContext<Ctx | null>(null);
@@ -241,6 +264,16 @@ export function PlayerProvider({ children }: { children: React.ReactNode }) {
   });
   const trackLoadingRef = useRef(false);
   const transcodeAvailableRef = useRef(true);
+  const appConfigRef = useRef<{
+    lanAccessUrl: string | null;
+    remotePublicUrl: string | null;
+  }>({ lanAccessUrl: null, remotePublicUrl: null });
+  const nativeFailedRef = useRef(false);
+  const nativeActiveRef = useRef(false);
+  const outputGainRef = useRef<GainNode | null>(null);
+  const sleepTimerTimeoutRef = useRef(0);
+  const sleepFadeIntervalRef = useRef(0);
+  const [sleepTimerEndsAt, setSleepTimerEndsAt] = useState<number | null>(null);
   const restoredRef = useRef(false);
   const repeatRef = useRef<RepeatMode>("all");
   const lastTrackBoundaryAdvanceAtRef = useRef(0);
@@ -316,6 +349,10 @@ export function PlayerProvider({ children }: { children: React.ReactNode }) {
     void fetchConfig()
       .then((cfg) => {
         transcodeAvailableRef.current = cfg.transcodeAvailable !== false;
+        appConfigRef.current = {
+          lanAccessUrl: cfg.lanAccessUrl ?? null,
+          remotePublicUrl: cfg.remoteAccess?.publicUrl ?? null,
+        };
         syncMediaSessionNowRef.current();
       })
       .catch(() => {
@@ -473,6 +510,7 @@ export function PlayerProvider({ children }: { children: React.ReactNode }) {
   }, [snapGainsToSolo]);
 
   const prefetchNextOnInactiveDeck = useCallback(() => {
+    if (nativeActiveRef.current && !nativeFailedRef.current) return;
     if (crossfadeBusyRef.current) return;
     if (audioCrossfadeSecRef.current > 0) return;
     if (repeatRef.current === "one") return;
@@ -580,6 +618,32 @@ export function PlayerProvider({ children }: { children: React.ReactNode }) {
     const now = performance.now();
     if (now - lastTrackBoundaryAdvanceAtRef.current < 450) return;
     if (crossfadeBusyRef.current) return;
+
+    if (nativeActiveRef.current && !nativeFailedRef.current) {
+      lastTrackBoundaryAdvanceAtRef.current = now;
+      if (repeatRef.current === "one") {
+        nativeSeek(0);
+        nativePlay();
+        keepPlayingRef.current = true;
+        setIsPlaying(true);
+        return;
+      }
+      const nextIndex = pickNextIndex(
+        queueRef.current.length,
+        indexRef.current,
+        repeatRef.current,
+      );
+      if (nextIndex == null) {
+        keepPlayingRef.current = false;
+        setIsPlaying(false);
+        return;
+      }
+      setCurrentIndex(nextIndex);
+      setCurrent(queueRef.current[nextIndex] || null);
+      keepPlayingRef.current = true;
+      return;
+    }
+
     const audio = audioRef.current;
     const cur = currentRef.current;
     if (!audio || !cur) return;
@@ -612,6 +676,53 @@ export function PlayerProvider({ children }: { children: React.ReactNode }) {
     setCurrent(queueRef.current[nextIndex] || null);
     keepPlayingRef.current = true;
   }, []);
+
+  useEffect(() => {
+    if (!isNativePlaybackBridgeAvailable()) {
+      nativeActiveRef.current = false;
+      return;
+    }
+    const want =
+      user.state.settings.nativePlayback && !nativeFailedRef.current;
+    nativeActiveRef.current = want;
+    configureNativePlayback(want);
+    if (!want) nativeStop();
+  }, [user.state.settings.nativePlayback]);
+
+  useEffect(() => {
+    if (!isNativePlaybackBridgeAvailable()) return;
+    return setNativePlaybackEventHandler((ev) => {
+      switch (ev.type) {
+        case "timeupdate":
+          if (ev.position != null) {
+            setCurrentTime(ev.position);
+            setPlayerProgressTime(ev.position, true);
+          }
+          if (ev.duration != null && ev.duration > 0) setDuration(ev.duration);
+          break;
+        case "ready":
+          if (ev.duration != null && ev.duration > 0) setDuration(ev.duration);
+          break;
+        case "playing":
+          keepPlayingRef.current = true;
+          setIsPlaying(true);
+          break;
+        case "paused":
+          keepPlayingRef.current = false;
+          setIsPlaying(false);
+          break;
+        case "ended":
+          advanceAfterTrackCompleted();
+          break;
+        case "error":
+          nativeFailedRef.current = true;
+          nativeActiveRef.current = false;
+          configureNativePlayback(false);
+          break;
+      }
+      syncMediaSessionNowRef.current();
+    });
+  }, [advanceAfterTrackCompleted]);
 
   useLayoutEffect(() => {
     const a0 = audioDeck0Ref.current;
@@ -648,10 +759,15 @@ export function PlayerProvider({ children }: { children: React.ReactNode }) {
     analyser.minDecibels = -88;
     analyser.maxDecibels = -28;
 
+    const outputGain = ctx.createGain();
+    outputGain.gain.value = 1;
+    outputGainRef.current = outputGain;
+
     src0.connect(g0);
     src1.connect(g1);
-    g0.connect(analyser);
-    g1.connect(analyser);
+    g0.connect(outputGain);
+    g1.connect(outputGain);
+    outputGain.connect(analyser);
     analyser.connect(ctx.destination);
 
     audioCtxRef.current = ctx;
@@ -661,6 +777,7 @@ export function PlayerProvider({ children }: { children: React.ReactNode }) {
       analyserRef.current = null;
       gain0Ref.current = null;
       gain1Ref.current = null;
+      outputGainRef.current = null;
       audioCtxRef.current = null;
       void ctx.close();
     };
@@ -771,6 +888,15 @@ export function PlayerProvider({ children }: { children: React.ReactNode }) {
       a1?.removeAttribute("src");
       void a0?.load();
       void a1?.load();
+      if (nativeActiveRef.current) nativeStop();
+      return;
+    }
+    if (
+      nativeActiveRef.current &&
+      !nativeFailedRef.current &&
+      skipNextCurrentLoadRef.current
+    ) {
+      skipNextCurrentLoadRef.current = false;
       return;
     }
     if (skipNextCurrentLoadRef.current) {
@@ -802,6 +928,31 @@ export function PlayerProvider({ children }: { children: React.ReactNode }) {
     if (!outEl || !inEl) return;
 
     const run = async () => {
+      if (nativeActiveRef.current && !nativeFailedRef.current) {
+        trackLoadingRef.current = true;
+        syncMediaSessionNowRef.current();
+        audioDeck0Ref.current?.pause();
+        audioDeck1Ref.current?.pause();
+        try {
+          const baseOrigin = resolvePlaybackBaseOrigin(appConfigRef.current);
+          const castOpts = {
+            forCast: true as const,
+            transcodeAvailable: transcodeAvailableRef.current,
+          };
+          const url = castStreamUrl(track.relPath, baseOrigin, castOpts);
+          nativeLoad(url, 0, keepPlayingRef.current);
+          if (keepPlayingRef.current) {
+            setIsPlaying(true);
+            pushRecent(track);
+          }
+        } finally {
+          if (gen === trackLoadGenRef.current) {
+            trackLoadingRef.current = false;
+            syncMediaSessionNowRef.current();
+          }
+        }
+        return;
+      }
       trackLoadingRef.current = true;
       syncMediaSessionNowRef.current();
       try {
@@ -1058,17 +1209,20 @@ export function PlayerProvider({ children }: { children: React.ReactNode }) {
       return;
     }
     const audio = audioRef.current;
-    const rawDur = audio?.duration;
+    const usingNative = nativeActiveRef.current && !nativeFailedRef.current;
+    const rawDur = usingNative
+      ? duration
+      : audio?.duration;
     const dur =
       Number.isFinite(duration) && duration > 0
         ? duration
         : rawDur && Number.isFinite(rawDur) && rawDur > 0
           ? rawDur
           : 0;
-    const pos = audio ? readPlayerProgressTime() : 0;
+    const pos = usingNative || audio ? readPlayerProgressTime() : 0;
     const keepPlaying = keepPlayingRef.current;
     const loading = trackLoadingRef.current;
-    const baseOrigin = resolveMediaSessionBaseOrigin();
+    const baseOrigin = resolvePlaybackBaseOrigin(appConfigRef.current);
     const q = queueRef.current;
     const qIndex = indexRef.current;
     const castOpts = {
@@ -1116,9 +1270,45 @@ export function PlayerProvider({ children }: { children: React.ReactNode }) {
     [syncMediaSessionNow],
   );
 
+  useEffect(() => {
+    if (!canUseWebCastSender()) return;
+    return registerCastPlaybackCallbacks({
+      onSessionStart: () => applyMediaMute(true),
+      onSessionEnd: () => applyMediaMute(false),
+      onRequestSync: () => {
+        const track = currentRef.current;
+        if (!track) return null;
+        const base = resolvePlaybackBaseOrigin(appConfigRef.current);
+        return buildCastTrackPayload(
+          track,
+          base,
+          readPlayerProgressTime(),
+          {
+            forCast: true,
+            transcodeAvailable: transcodeAvailableRef.current,
+          },
+        );
+      },
+    });
+  }, [applyMediaMute]);
+
+  useEffect(() => {
+    syncWebCastNow();
+    prefetchQueueCovers(queue, currentIndex, 4);
+  }, [current?.relPath, currentIndex, queue]);
+
   const play = useCallback(async () => {
     void abortCrossfade();
     if (mediaMutedRef.current) applyMediaMute(false);
+    if (nativeActiveRef.current && !nativeFailedRef.current) {
+      nativePlay();
+      keepPlayingRef.current = true;
+      setIsPlaying(true);
+      const cur = currentRef.current;
+      if (cur) pushRecent(cur);
+      syncMediaSessionNow();
+      return;
+    }
     const ix = activeDeckRef.current;
     const audio = ix === 0 ? audioDeck0Ref.current : audioDeck1Ref.current;
     if (!audio) return;
@@ -1140,6 +1330,14 @@ export function PlayerProvider({ children }: { children: React.ReactNode }) {
   const pause = useCallback(() => {
     appInitiatedPauseRef.current = true;
     void abortCrossfade();
+    if (nativeActiveRef.current && !nativeFailedRef.current) {
+      nativePause();
+      keepPlayingRef.current = false;
+      setIsPlaying(false);
+      appInitiatedPauseRef.current = false;
+      syncMediaSessionNow();
+      return;
+    }
     audioDeck0Ref.current?.pause();
     audioDeck1Ref.current?.pause();
     keepPlayingRef.current = false;
@@ -1147,6 +1345,57 @@ export function PlayerProvider({ children }: { children: React.ReactNode }) {
     appInitiatedPauseRef.current = false;
     syncMediaSessionNow();
   }, [abortCrossfade, syncMediaSessionNow]);
+
+  const clearSleepTimer = useCallback(() => {
+    if (sleepTimerTimeoutRef.current) {
+      window.clearTimeout(sleepTimerTimeoutRef.current);
+      sleepTimerTimeoutRef.current = 0;
+    }
+    if (sleepFadeIntervalRef.current) {
+      window.clearInterval(sleepFadeIntervalRef.current);
+      window.clearTimeout(sleepFadeIntervalRef.current);
+      sleepFadeIntervalRef.current = 0;
+    }
+    if (nativeActiveRef.current && !nativeFailedRef.current) {
+      nativeCancelSleepFade();
+    }
+    const out = outputGainRef.current;
+    if (out) out.gain.value = 1;
+    setSleepTimerEndsAt(null);
+  }, []);
+
+  const setSleepTimer = useCallback(
+    (minutes: number | null) => {
+      clearSleepTimer();
+      if (minutes == null || minutes <= 0) return;
+      const endsAt = Date.now() + minutes * 60_000;
+      setSleepTimerEndsAt(endsAt);
+      const fadeMs = 30_000;
+      const delay = Math.max(0, endsAt - Date.now() - fadeMs);
+      sleepTimerTimeoutRef.current = window.setTimeout(() => {
+        if (nativeActiveRef.current && !nativeFailedRef.current) {
+          nativeSleepFadeAndPause(fadeMs / 1000);
+          sleepFadeIntervalRef.current = window.setTimeout(() => {
+            clearSleepTimer();
+            pause();
+          }, fadeMs);
+          return;
+        }
+        const out = outputGainRef.current;
+        const fadeStart = Date.now();
+        sleepFadeIntervalRef.current = window.setInterval(() => {
+          const elapsed = Date.now() - fadeStart;
+          const ratio = Math.max(0, 1 - elapsed / fadeMs);
+          if (out) out.gain.value = ratio;
+          if (elapsed >= fadeMs) {
+            clearSleepTimer();
+            pause();
+          }
+        }, 180);
+      }, delay);
+    },
+    [clearSleepTimer, pause],
+  );
 
   const pauseForMediaSession = useCallback(() => {
     const action = resolveMediaSessionPauseAction({
@@ -1177,9 +1426,16 @@ export function PlayerProvider({ children }: { children: React.ReactNode }) {
 
   const seek = useCallback((time: number) => {
     void abortCrossfade();
+    const t = Math.max(0, time);
+    if (nativeActiveRef.current && !nativeFailedRef.current) {
+      nativeSeek(t);
+      setCurrentTime(t);
+      setPlayerProgressTime(t, true);
+      syncMediaSessionNow();
+      return;
+    }
     const audio = audioRef.current;
     if (!audio) return;
-    const t = Math.max(0, time);
     audio.currentTime = t;
     setCurrentTime(t);
     setPlayerProgressTime(t, true);
@@ -1656,6 +1912,8 @@ export function PlayerProvider({ children }: { children: React.ReactNode }) {
       toggleFavorite: user.toggleFavorite,
       isFavorite: user.isFavorite,
       resyncTracksFromIndex,
+      sleepTimerEndsAt,
+      setSleepTimer,
     }),
     [
       getAnalyser,
@@ -1689,6 +1947,8 @@ export function PlayerProvider({ children }: { children: React.ReactNode }) {
       user.isFavorite,
       user.toggleFavorite,
       volume,
+      sleepTimerEndsAt,
+      setSleepTimer,
     ]
   );
 

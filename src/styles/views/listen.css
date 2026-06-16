@@ -334,3 +334,169 @@
     grid-template-columns: minmax(0, 1fr);
   }
 }
+
+.listen-sleep-timer {
+  margin: 0;
+  padding: 0;
+  border-top: 1px solid color-mix(in srgb, var(--border, #333) 55%, transparent);
+}
+
+.listen-sleep-timer__toggle {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  width: 100%;
+  gap: 0.5rem;
+  padding: 0.42rem 0.15rem;
+  border: none;
+  background: transparent;
+  cursor: pointer;
+  font: inherit;
+  color: inherit;
+  text-align: left;
+  box-sizing: border-box;
+}
+
+.listen-sleep-timer__toggle:hover {
+  color: var(--accent2, #c8b6ff);
+}
+
+.listen-sleep-timer__toggle-main {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  min-width: 0;
+}
+
+.listen-sleep-timer__ic {
+  flex-shrink: 0;
+  display: block;
+  width: 15px;
+  height: 15px;
+  opacity: 0.65;
+}
+
+.listen-sleep-timer__toggle-title {
+  font-size: 0.72rem;
+  font-weight: 700;
+  line-height: 1;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  opacity: 0.78;
+}
+
+.listen-sleep-timer.is-active .listen-sleep-timer__toggle-title {
+  opacity: 0.95;
+}
+
+.listen-sleep-timer__badge {
+  font-variant-numeric: tabular-nums;
+  font-size: 0.78rem;
+  font-weight: 700;
+  letter-spacing: 0.03em;
+  padding: 0.12rem 0.42rem;
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--accent2, #c8b6ff) 16%, transparent);
+  color: var(--accent2, #c8b6ff);
+}
+
+.listen-sleep-timer__chev {
+  flex-shrink: 0;
+  display: block;
+  width: 14px;
+  height: 14px;
+  opacity: 0.55;
+  transition: transform 0.2s ease;
+}
+
+.listen-sleep-timer__chev.is-open {
+  transform: rotate(90deg);
+}
+
+.listen-sleep-timer__panel {
+  padding: 0.4rem 0 0.5rem;
+}
+
+.listen-sleep-timer__row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  gap: 0.35rem 0.4rem;
+}
+
+.listen-sleep-timer__field {
+  display: grid;
+  gap: 0.22rem;
+  min-width: 0;
+}
+
+.listen-sleep-timer__field-label {
+  font-size: 0.66rem;
+  font-weight: 700;
+  letter-spacing: 0.07em;
+  text-transform: uppercase;
+  opacity: 0.68;
+}
+
+.listen-sleep-timer__input {
+  width: 3.25rem;
+  min-height: max(34px, var(--tap-comfort, 34px));
+  padding: 0.32rem 0.45rem;
+  font-size: 0.84rem;
+  font-weight: 650;
+  font-variant-numeric: tabular-nums;
+  text-align: center;
+}
+
+.listen-sleep-timer__cancel {
+  margin-left: auto;
+  font-size: 0.78rem;
+}
+
+.listen-sleep-timer__error {
+  margin: 0.35rem 0 0;
+}
+
+@media (min-width: 901px) {
+  .listen-sleep-timer__row {
+    flex-wrap: nowrap;
+    gap: 0.35rem;
+  }
+
+  .listen-sleep-timer__field {
+    padding-left: 0.35rem;
+    border-left: 1px solid color-mix(in srgb, var(--border, #333) 45%, transparent);
+  }
+
+  .listen-sleep-timer__field:first-of-type {
+    margin-left: 0.15rem;
+  }
+}
+
+@media (max-width: 900px) {
+  .listen-sleep-timer__row {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    align-items: end;
+    gap: 0.35rem;
+  }
+
+  .listen-sleep-timer__field {
+    border-left: 0;
+    padding-left: 0;
+  }
+
+  .listen-sleep-timer__field-label {
+    grid-column: span 1;
+  }
+
+  .listen-sleep-timer__input {
+    width: 100%;
+  }
+
+  .listen-sleep-timer__cancel {
+    grid-column: 1 / -1;
+    margin-left: 0;
+    justify-self: start;
+  }
+}

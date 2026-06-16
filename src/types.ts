@@ -198,6 +198,11 @@ export type UserSettings = {
   glassSurfaces: boolean;
   /** Opacità delle superfici vetro in percento (0–100, default 62). */
   glassOpacity: number;
+  /**
+   * APK Android: riproduzione via ExoPlayer nativo invece del WebView.
+   * Default off fino a QA; fallback automatico su WebAudio se fallisce.
+   */
+  nativePlayback: boolean;
 };
 
 /** Patch impostazioni utente: customTheme può essere parziale (merge profondo). */

@@ -913,15 +913,23 @@ export const TrackListRow = memo(function TrackListRow({
 export function AlbumCover({
   album,
   compact,
+  artworkSize,
 }: {
   album: LibraryAlbumIndex;
   compact?: boolean;
+  /** Risoluzione cache SQLite; default 128 in lista, full nell'hero album. */
+  artworkSize?: "128" | "256" | "full";
 }) {
+  const resolvedArtworkSize = artworkSize ?? (compact ? "128" : "full");
   const coverArtId = album.coverArtId?.trim() || "";
   if (coverArtId) {
-    const src = versionedUrl(artworkUrl(coverArtId, "128"), album.updatedAt);
+    const src = versionedUrl(
+      artworkUrl(coverArtId, resolvedArtworkSize),
+      album.updatedAt,
+    );
     return (
       <CoverImg
+        priority={!compact}
         className={`album-cover ${compact ? "is-compact" : ""}`}
         src={src}
         alt=""
@@ -938,6 +946,7 @@ export function AlbumCover({
     const src = versionedUrl(coverUrlForAlbumRelPath(coverPath), album.updatedAt);
     return (
       <CoverImg
+        priority={!compact}
         className={`album-cover ${compact ? "is-compact" : ""}`}
         src={src}
         alt=""

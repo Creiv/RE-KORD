@@ -22,6 +22,7 @@ public class MainActivity extends BridgeActivity {
     private final Handler mainHandler = new Handler(Looper.getMainLooper());
     private RekordMediaService mediaService;
     private RekordCastManager castManager;
+    private RekordPlaybackEngine playbackEngine;
     private String pendingStateJson;
     private String pendingMediaAction;
     private double pendingMediaSeekSec = -1;
@@ -62,9 +63,12 @@ public class MainActivity extends BridgeActivity {
             android.util.Log.w("RekordClient", "Cast SDK non disponibile: " + e.getMessage());
         }
         WebView webView = this.bridge.getWebView();
+        playbackEngine = new RekordPlaybackEngine(this, mainHandler);
+        playbackEngine.bindWebView(webView);
         // Ponte media minimale, disponibile su OGNI pagina (anche l'app
         // caricata dal server): niente runtime Capacitor nelle pagine remote.
         webView.addJavascriptInterface(new MediaJsApi(), "RekordMediaNative");
+        webView.addJavascriptInterface(new NativePlaybackJsApi(), "RekordNativePlayback");
         bindService(
             new Intent(this, RekordMediaService.class),
             mediaConnection,
@@ -91,6 +95,9 @@ public class MainActivity extends BridgeActivity {
 
     @Override
     public void onDestroy() {
+        if (playbackEngine != null) {
+            playbackEngine.configure(false);
+        }
         try {
             unbindService(mediaConnection);
         } catch (Exception ignored) {
@@ -188,6 +195,71 @@ public class MainActivity extends BridgeActivity {
         @JavascriptInterface
         public void update(String json) {
             mainHandler.post(() -> applyMediaState(json));
+        }
+    }
+
+    private class NativePlaybackJsApi {
+
+        @JavascriptInterface
+        public void configure(boolean enabled) {
+            mainHandler.post(() -> {
+                if (playbackEngine != null) playbackEngine.configure(enabled);
+            });
+        }
+
+        @JavascriptInterface
+        public void load(String url, double positionSec, boolean autoplay) {
+            mainHandler.post(() -> {
+                if (playbackEngine != null) playbackEngine.load(url, positionSec, autoplay);
+            });
+        }
+
+        @JavascriptInterface
+        public void play() {
+            mainHandler.post(() -> {
+                if (playbackEngine != null) playbackEngine.play();
+            });
+        }
+
+        @JavascriptInterface
+        public void pause() {
+            mainHandler.post(() -> {
+                if (playbackEngine != null) playbackEngine.pause();
+            });
+        }
+
+        @JavascriptInterface
+        public void seek(double positionSec) {
+            mainHandler.post(() -> {
+                if (playbackEngine != null) playbackEngine.seek(positionSec);
+            });
+        }
+
+        @JavascriptInterface
+        public void stop() {
+            mainHandler.post(() -> {
+                if (playbackEngine != null) playbackEngine.stop();
+            });
+        }
+
+        @JavascriptInterface
+        public void cancelSleepFade() {
+            mainHandler.post(() -> {
+                if (playbackEngine != null) {
+                    playbackEngine.cancelVolumeFade();
+                    playbackEngine.setVolume(1f);
+                }
+            });
+        }
+
+        @JavascriptInterface
+        public void sleepFadeAndPause(double durationSec) {
+            mainHandler.post(() -> {
+                if (playbackEngine != null) {
+                    long ms = (long) Math.max(0, durationSec * 1000.0);
+                    playbackEngine.sleepFadeAndPause(ms);
+                }
+            });
         }
     }
 }

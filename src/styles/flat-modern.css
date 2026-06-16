@@ -35,14 +35,6 @@
   gap: var(--space-3) var(--space-4);
 }
 
-/* Padding base delle card: desktop 16px, bilanciato */
-.surface-card,
-.hero-card,
-.listen-stage,
-.album-hero {
-  padding: var(--space-5);
-}
-
 /* ── Section head: spazio rispettoso sotto il titolo ── */
 .section-head {
   gap: var(--space-4);
@@ -53,15 +45,6 @@
 
 .section-head--page-toolbar h2 {
   font-size: 1.18rem;
-}
-
-/* ── Gap griglie e stack: respiro uniforme ── */
-.dashboard-grid,
-.view-stack,
-.view-page,
-.list-stack,
-.settings-grid {
-  gap: var(--space-5);
 }
 
 /* ── Content shell: padding top + safe-area ── */
@@ -127,15 +110,23 @@
 :root:not([data-glass-surfaces="1"]) .view-page__intro > .hero-card,
 :root:not([data-glass-surfaces="1"]) .view-page__intro > .achievements-hero,
 :root:not([data-glass-surfaces="1"]) .view-page__toolbar-band > :first-child,
-:root:not([data-glass-surfaces="1"]) .view-page--studio > .surface-card:first-child,
+:root:not([data-glass-surfaces="1"])
+  .view-page--studio
+  > .surface-card:first-child,
 :root:not([data-glass-surfaces="1"]) .settings-page > .surface-card:first-child,
 :root:not([data-glass-surfaces="1"]) .library-page__chrome > :first-child,
 :root:not([data-glass-surfaces="1"]) .library-view > .album-hero:first-child,
-:root:not([data-glass-surfaces="1"]) .library-view > .surface-card.surface-card--toolbar-only:first-child,
-:root:not([data-glass-surfaces="1"]) .library-page.library-view--search-results > :first-child,
-:root:not([data-glass-surfaces="1"]) .view-page--listen .listen-page > .listen-stage {
-  background:
-    radial-gradient(
+:root:not([data-glass-surfaces="1"])
+  .library-view
+  > .surface-card.surface-card--toolbar-only:first-child,
+:root:not([data-glass-surfaces="1"])
+  .library-page.library-view--search-results
+  > :first-child,
+:root:not([data-glass-surfaces="1"])
+  .view-page--listen
+  .listen-page
+  > .listen-stage {
+  background: radial-gradient(
       ellipse 85% 140% at 0% 50%,
       color-mix(in srgb, var(--accent) 12%, var(--surface2)) 0%,
       transparent 52%
@@ -152,7 +143,6 @@
       var(--surface2) 58%
     );
   border-color: color-mix(in srgb, var(--accent) 16%, var(--border) 84%);
-  box-shadow:
-    var(--shadow-elev-1),
+  box-shadow: var(--shadow-elev-1),
     inset 1px 0 0 color-mix(in srgb, var(--accent) 10%, transparent);
 }

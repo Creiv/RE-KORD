@@ -18,10 +18,23 @@ function configureDb(db) {
 function runMigrations(db) {
   db.exec(MIGRATION_SQL)
   const row = db.prepare("SELECT version FROM schema_migrations ORDER BY version DESC LIMIT 1").get()
+  let version = row?.version ?? 0
   if (!row) {
-    db.prepare("INSERT INTO schema_migrations (version) VALUES (?)").run(SCHEMA_VERSION)
-  } else if (row.version < SCHEMA_VERSION) {
-    db.prepare("INSERT INTO schema_migrations (version) VALUES (?)").run(SCHEMA_VERSION)
+    db.prepare("INSERT INTO schema_migrations (version) VALUES (?)").run(1)
+    version = 1
+  }
+  if (version < 2) {
+    for (const sql of [
+      "ALTER TABLE tracks ADD COLUMN replaygain_track_db REAL",
+      "ALTER TABLE tracks ADD COLUMN replaygain_peak REAL",
+    ]) {
+      try {
+        db.exec(sql)
+      } catch {
+        /* colonna già presente */
+      }
+    }
+    db.prepare("INSERT INTO schema_migrations (version) VALUES (?)").run(2)
   }
 }
 

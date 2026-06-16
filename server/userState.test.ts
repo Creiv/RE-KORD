@@ -104,6 +104,21 @@ describe("userState", () => {
     expect(reloaded.settings.vizMode).toBe("discowall")
   })
 
+  it("conserva nativePlayback in sanitizeSettings", async () => {
+    const musicRoot = await fs.mkdtemp(path.join(os.tmpdir(), "rekord-user-state-np-"))
+    const state = await writeUserState(
+      musicRoot,
+      {
+        ...defaultUserState(),
+        settings: { ...defaultUserState().settings, nativePlayback: true },
+      },
+      "npacct",
+    )
+    expect(state.settings.nativePlayback).toBe(true)
+    const reloaded = await readUserState(musicRoot, "npacct")
+    expect(reloaded.settings.nativePlayback).toBe(true)
+  })
+
   it("PATCH server-side mergea su stato fresco senza expectedRevision", async () => {
     const musicRoot = await fs.mkdtemp(path.join(os.tmpdir(), "rekord-user-state-patch-"))
     await writeUserState(

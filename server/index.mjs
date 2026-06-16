@@ -34,7 +34,7 @@ import { registerDownloadRoutes } from "./routes/downloadRoutes.mjs";
 import { registerFsRoutes } from "./routes/fsRoutes.mjs";
 import { registerMetadataRoutes } from "./routes/metadataRoutes.mjs";
 import { registerTranscodeRoutes } from "./transcode.mjs";
-import { applyMediaFileHeaders } from "./mediaStream.mjs";
+import { registerMediaRoutes } from "./mediaRoutes.mjs";
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
 const app = express();
@@ -101,18 +101,7 @@ app.use("/media", (req, res, next) => {
 });
 
 registerTranscodeRoutes(app);
-
-app.use("/media", (req, res, next) => {
-  if (!isLibraryRootConfigured()) return res.status(503).end();
-  const root = getMusicRoot();
-  if (!root) return res.status(503).end();
-  express.static(root, {
-    index: false,
-    setHeaders: (res, filePath, stat) => {
-      applyMediaFileHeaders(res, filePath, stat);
-    },
-  })(req, res, next);
-});
+registerMediaRoutes(app);
 
 registerSystemRoutes(app);
 registerBackupRoutes(app);

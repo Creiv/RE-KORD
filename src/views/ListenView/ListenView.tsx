@@ -17,6 +17,7 @@ import { TrackMetaEditGlyph } from "../../components/TrackMetaEditor";
 import { CoverImg } from "../../components/CoverImg";
 import { ExcludeShuffleIcon } from "../../components/ExcludeShuffleIcon";
 import { Visualizer } from "../../components/Visualizer";
+import { ListenSleepTimer } from "../../components/ListenSleepTimer";
 
 const LazyDiscoWallVisualizer = lazy(
   () => import("../../components/DiscoWallVisualizer"),
@@ -418,6 +419,7 @@ export default function ListenView({
               <Visualizer mode={user.state.settings.vizMode} />
             )}
           </div>
+          <ListenSleepTimer />
         </section>
 
         <div className="listen-page__panels listen-dashboard-row">

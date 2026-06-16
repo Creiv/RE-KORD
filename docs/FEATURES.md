@@ -17,6 +17,8 @@
 - **Rifiniture**: dialog con Escape ovunque, popover che evitano la tastiera/bottom nav, scala z-index unificata (toast), token colore per stati danger/warning leggibili su ogni tema
 - **Client Android (APK)**: app nativa Capacitor che si connette a un server RE-KORD come il client desktop — indirizzo manuale o **scan del QR di Impostazioni → Rete**, che autocompila e porta dritti alla scelta account; riconnessione automatica all'avvio
 - **QR generato in locale**: il QR di Impostazioni → Rete non passa più da un servizio esterno
+- **Playback avanzato (2026)**: Cast Google Home (APK + Chrome), ExoPlayer nativo opzionale, sleep timer con fade 30s (WebAudio + ExoPlayer), prefetch copertine coda, streaming `/media` con Range robusto per FLAC grandi via tunnel Cloudflare
+- **Cast TLS**: per Chromecast da tunnel remoto serve HTTPS pubblico raggiungibile dallo speaker (vedi Impostazioni → Rete)
 
 ## Indice
 

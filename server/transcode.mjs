@@ -1,11 +1,11 @@
 import { createHash } from "crypto"
 import { spawn } from "child_process"
-import { createReadStream, existsSync, mkdirSync, statSync } from "fs"
+import { existsSync, mkdirSync, statSync } from "fs"
 import path from "path"
 import { getMusicRoot } from "./musicRootConfig.mjs"
 import { hasReservedPathSegment, pathHasParentDirSegment, underRoot } from "./pathSafety.mjs"
 import { sendError } from "./httpUtils.mjs"
-import { applyMediaFileHeaders } from "./mediaStream.mjs"
+import { serveMediaFileWithRange } from "./mediaStream.mjs"
 import { resolveFfmpegPath, isTranscodeAvailable } from "./ffmpegBin.mjs"
 
 export { isTranscodeAvailable } from "./ffmpegBin.mjs"
@@ -110,31 +110,6 @@ async function ensureTranscodedFile(libraryRoot, sourcePath, relPath, format, bi
   return outPath
 }
 
-function serveFileWithRange(req, res, filePath) {
-  const stat = statSync(filePath)
-  applyMediaFileHeaders(res, filePath, stat)
-  if (req.method === "HEAD") {
-    res.setHeader("Content-Length", stat.size)
-    return res.status(200).end()
-  }
-  const range = req.headers.range
-  if (range) {
-    const m = /^bytes=(\d*)-(\d*)$/.exec(String(range))
-    if (m) {
-      const start = m[1] ? Number.parseInt(m[1], 10) : 0
-      const end = m[2] ? Number.parseInt(m[2], 10) : stat.size - 1
-      if (Number.isFinite(start) && Number.isFinite(end) && start <= end && end < stat.size) {
-        res.status(206)
-        res.setHeader("Content-Range", `bytes ${start}-${end}/${stat.size}`)
-        res.setHeader("Content-Length", end - start + 1)
-        return createReadStream(filePath, { start, end }).pipe(res)
-      }
-    }
-  }
-  res.setHeader("Content-Length", stat.size)
-  return createReadStream(filePath).pipe(res)
-}
-
 export function registerTranscodeRoutes(app) {
   app.use("/media/transcode", async (req, res) => {
     if (req.method !== "GET" && req.method !== "HEAD") {
@@ -172,7 +147,8 @@ export function registerTranscodeRoutes(app) {
         bitrate,
         st.mtimeMs,
       )
-      return serveFileWithRange(req, res, outPath)
+      const outStat = statSync(outPath)
+      return serveMediaFileWithRange(req, res, outPath, outStat)
     } catch (error) {
       console.error("[rekord] transcode:", error?.message || error)
       if (!res.headersSent) {

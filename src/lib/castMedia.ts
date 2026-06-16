@@ -40,6 +40,21 @@ export function resolveCastMediaBaseUrl(options: {
   }
 }
 
+/** Origin per stream/cast: preferisce LAN se la pagina è su localhost. */
+export function resolvePlaybackBaseOrigin(config?: {
+  lanAccessUrl?: string | null
+  remotePublicUrl?: string | null
+}): string {
+  if (typeof window === "undefined") return ""
+  return (
+    resolveCastMediaBaseUrl({
+      pageOrigin: window.location.origin,
+      lanAccessUrl: config?.lanAccessUrl,
+      remotePublicUrl: config?.remotePublicUrl,
+    }) ?? window.location.origin
+  )
+}
+
 export function castMimeTypeForRelPath(relPath: string): string {
   const ext = relPath.split(".").pop()?.toLowerCase() ?? ""
   return CAST_MIME_BY_EXT[ext] ?? "audio/mpeg"

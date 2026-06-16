@@ -145,6 +145,17 @@ export function UiSkipNext({ className }: { className?: string }) {
   );
 }
 
+export function UiCast({ className }: { className?: string }) {
+  return (
+    <svg className={className} viewBox="0 0 24 24" aria-hidden="true">
+      <path
+        fill="currentColor"
+        d="M1 18v3h3c0-4.97 4.03-9 9-9s9 4.03 9 9h3v-3c0-6.63-5.37-12-12-12S1 11.37 1 18zm9-7c-3.87 0-7 3.13-7 7h3c0-2.21 1.79-4 4-4s4 1.79 4 4h3c0-3.87-3.13-7-7-7zm0 4c-1.66 0-3 1.34-3 3h3v-3z"
+      />
+    </svg>
+  );
+}
+
 export function UiRepeat({ className }: { className?: string }) {
   return (
     <svg className={className} viewBox="0 0 24 24" aria-hidden="true">

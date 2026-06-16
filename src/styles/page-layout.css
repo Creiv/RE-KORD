@@ -776,6 +776,10 @@ html:not([data-glass-surfaces="1"]) .settings-page > .surface-card {
   min-width: 0;
 }
 
+.listen-page__stage .listen-sleep-timer {
+  grid-column: 1 / -1;
+}
+
 .listen-page__panels.listen-dashboard-row {
   display: grid;
   grid-template-columns: minmax(0, 1fr);
