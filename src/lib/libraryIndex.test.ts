@@ -3,6 +3,7 @@ import {
   applyLibraryDeltaToIndex,
   applyLibraryDeltasToIndex,
   enrichedTracksNeedPlayerResync,
+  libraryDeltaTouchesCover,
   libraryIndexRehydrateSig,
   mergeLibraryIndexFromServer,
 } from "./libraryIndex";
@@ -188,5 +189,17 @@ describe("libraryIndex", () => {
     expect(next?.albums[0]?.coverArtId).toBe("art-42");
     expect(next?.albums[0]?.updatedAt).toBe(55_000);
     expect(next?.tracks[0]?.updatedAt).toBe(55_000);
+  });
+
+  it("libraryDeltaTouchesCover rileva delta copertina", () => {
+    expect(
+      libraryDeltaTouchesCover({
+        albumPath: "A/B",
+        coverArtId: "art-1",
+      }),
+    ).toBe(true);
+    expect(libraryDeltaTouchesCover({ track: { relPath: "A/B/1.mp3" } })).toBe(
+      false,
+    );
   });
 });

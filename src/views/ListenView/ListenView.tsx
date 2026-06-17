@@ -60,12 +60,15 @@ interface ListenViewProps {
 }
 
 function ListenStageArt({ track }: { track: EnrichedTrack }) {
-  const { src, version } = useTrackCoverDisplay(track, "full");
+  const { src, fallbackSrc, version } = useTrackCoverDisplay(track, "full");
   return (
     <CoverImg
       priority
       className="listen-stage__art"
       src={versionedUrl(src, version)}
+      fallbackSrc={
+        fallbackSrc ? versionedUrl(fallbackSrc, version) : undefined
+      }
       alt=""
       fallbackClassName="listen-stage__art listen-stage__art--empty"
       fallback={<UiMusicNote className="listen-stage__empty-ic" />}

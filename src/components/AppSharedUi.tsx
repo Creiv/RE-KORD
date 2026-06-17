@@ -118,11 +118,14 @@ function TrackRowArt({
 }: {
   track: Pick<EnrichedTrack, "relPath" | "albumId" | "updatedAt">;
 }) {
-  const { src, version } = useTrackCoverDisplay(track);
+  const { src, fallbackSrc, version } = useTrackCoverDisplay(track);
   return (
     <CoverImg
       className="track-row__art"
       src={versionedUrl(src, version)}
+      fallbackSrc={
+        fallbackSrc ? versionedUrl(fallbackSrc, version) : undefined
+      }
       alt=""
       fallbackClassName="track-row__art track-row__art--fallback"
       fallback={<UiMusicNote className="track-row__art-fallback-ic" />}
@@ -182,7 +185,7 @@ export function PlayerBarTrackArt({
 }: {
   track: Pick<EnrichedTrack, "relPath" | "albumId" | "updatedAt">;
 }) {
-  const { src, version } = useTrackCoverDisplay(track, "256");
+  const { src, fallbackSrc, version } = useTrackCoverDisplay(track, "256");
   const cacheKey =
     version && Number.isFinite(version) ? Math.floor(version) : null;
   const remountKey = `${track.relPath}:${src}:${cacheKey ?? ""}`;
@@ -192,6 +195,9 @@ export function PlayerBarTrackArt({
       priority
       className="player-bar2__art"
       src={versionedUrl(src, version)}
+      fallbackSrc={
+        fallbackSrc ? versionedUrl(fallbackSrc, version) : undefined
+      }
       alt=""
       fallbackClassName="player-bar2__art fallback"
       fallback={<UiMusicNote className="player-bar2__art-fallback-ic" />}
@@ -900,16 +906,22 @@ export function AlbumCover({
 }) {
   const resolvedArtworkSize = artworkSize ?? (compact ? "128" : "full");
   const coverArtId = album.coverArtId?.trim() || "";
+  const coverPath =
+    album.coverRelPath?.trim() || (album.hasCover ? album.relPath : "");
   if (coverArtId) {
     const src = versionedUrl(
       artworkUrl(coverArtId, resolvedArtworkSize),
       album.updatedAt,
     );
+    const fallbackSrc = coverPath
+      ? versionedUrl(coverUrlForAlbumRelPath(coverPath), album.updatedAt)
+      : undefined;
     return (
       <CoverImg
         priority={!compact}
         className={`album-cover ${compact ? "is-compact" : ""}`}
         src={src}
+        fallbackSrc={fallbackSrc}
         alt=""
         fallbackClassName={`album-cover is-fallback ${
           compact ? "is-compact" : ""
@@ -918,8 +930,6 @@ export function AlbumCover({
       />
     );
   }
-  const coverPath =
-    album.coverRelPath?.trim() || (album.hasCover ? album.relPath : "");
   if (coverPath) {
     const src = versionedUrl(coverUrlForAlbumRelPath(coverPath), album.updatedAt);
     return (

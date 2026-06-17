@@ -117,6 +117,21 @@ export function albumCoverVersion(
   );
 }
 
+/** True se il delta aggiorna copertina album (cache artwork o file su disco). */
+export function libraryDeltaTouchesCover(delta: LibraryEntityDelta): boolean {
+  if (
+    delta.albumPath &&
+    (delta.coverRelPath !== undefined || delta.coverArtId !== undefined)
+  ) {
+    return true;
+  }
+  const album = delta.album;
+  if (!album) return false;
+  return (
+    album.coverRelPath !== undefined || album.coverArtId !== undefined
+  );
+}
+
 export function applyLibraryDeltasToIndex(
   prev: LibraryIndex | null,
   deltas: LibraryEntityDelta[]

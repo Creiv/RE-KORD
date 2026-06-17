@@ -492,6 +492,9 @@ export type AppConfig = {
   musicRoot?: string | null
   lockedByEnv: boolean
   libraryRootConfigured?: boolean
+  /** RE-KORD può creare/aggiornare MUSIC_ROOT/.kord/ su disco. */
+  libraryDataWritable?: boolean
+  libraryWriteError?: { code?: string; path?: string; message?: string } | null
   localAccess?: boolean
   /** Richiesta arrivata via tunnel Cloudflare: vista client + cookie YT read-only. */
   remoteTunnelAccess?: boolean

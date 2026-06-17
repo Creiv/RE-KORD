@@ -108,6 +108,8 @@ type Ctx = {
   toggleFavorite: (relPath: string) => void;
   isFavorite: (relPath: string) => boolean;
   resyncTracksFromIndex: (index: LibraryIndex) => void;
+  /** Aggiorna subito metadati OS (lock screen) e bridge nativo/Cast. */
+  syncMediaSessionNow: () => void;
   sleepTimerEndsAt: number | null;
   setSleepTimer: (minutes: number | null) => void;
 };
@@ -1912,6 +1914,7 @@ export function PlayerProvider({ children }: { children: React.ReactNode }) {
       toggleFavorite: user.toggleFavorite,
       isFavorite: user.isFavorite,
       resyncTracksFromIndex,
+      syncMediaSessionNow,
       sleepTimerEndsAt,
       setSleepTimer,
     }),
@@ -1922,6 +1925,7 @@ export function PlayerProvider({ children }: { children: React.ReactNode }) {
       isTrackInQueue,
       removeFromQueueByRelPath,
       resyncTracksFromIndex,
+      syncMediaSessionNow,
       current,
       currentIndex,
       currentTime,

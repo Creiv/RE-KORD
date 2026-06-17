@@ -1,4 +1,4 @@
-import { artworkUrl, coverUrlForTrackRelPath } from "./api"
+import { artworkUrl, coverUrlForAlbumRelPath, coverUrlForTrackRelPath } from "./api"
 import type { EnrichedTrack, LibraryAlbumIndex } from "../types"
 
 export type AlbumArtworkRef = Pick<
@@ -6,15 +6,26 @@ export type AlbumArtworkRef = Pick<
   "coverArtId" | "updatedAt" | "coverRelPath"
 >
 
+export type CoverDisplay = {
+  src: string
+  /** URL di riserva se la cache artwork non risponde (cover su disco). */
+  fallbackSrc?: string
+  version: number | null
+}
+
 export function trackCoverDisplay(
   track: Pick<EnrichedTrack, "relPath" | "updatedAt">,
   album?: AlbumArtworkRef | null,
   artworkSize: "128" | "256" | "full" = "128",
-): { src: string; version: number | null } {
+): CoverDisplay {
   const artId = album?.coverArtId?.trim()
+  const coverRel = album?.coverRelPath?.trim()
   if (artId) {
     return {
       src: artworkUrl(artId, artworkSize),
+      fallbackSrc: coverRel
+        ? coverUrlForAlbumRelPath(coverRel)
+        : coverUrlForTrackRelPath(track.relPath),
       version: album?.updatedAt ?? null,
     }
   }

@@ -50,7 +50,41 @@ const state = {
   youtubeCookiesFromEnv: false,
   cloudflareLoggedIn: false,
   cloudflareTunnelEnabled: false,
+  /** @type {{ code?: string, path?: string, message?: string } | null} */
+  libraryWriteError: null,
 };
+
+function isPathWriteError(err) {
+  const code = err && typeof err === "object" ? err.code : null;
+  return code === "EACCES" || code === "EROFS" || code === "EPERM";
+}
+
+function setLibraryWriteError(err, fallbackPath) {
+  if (!isPathWriteError(err)) return false;
+  state.libraryWriteError = {
+    code: String(err.code || ""),
+    path: String(err.path || fallbackPath || ""),
+    message: String(err.message || err.code || "permission denied"),
+  };
+  console.error(
+    `[rekord] cartella libreria non scrivibile: ${state.libraryWriteError.path} (${state.libraryWriteError.code})`,
+  );
+  return true;
+}
+
+function probeLibraryWritable(libraryRoot) {
+  if (!libraryRoot) return;
+  const probeDir = rekordGlobalInfoDir(libraryRoot);
+  try {
+    fs.mkdirSync(probeDir, { recursive: true });
+    const probeFile = path.join(probeDir, ".write-probe");
+    fs.writeFileSync(probeFile, "ok", "utf8");
+    fs.unlinkSync(probeFile);
+    state.libraryWriteError = null;
+  } catch (err) {
+    if (!setLibraryWriteError(err, probeDir)) throw err;
+  }
+}
 
 function readEnv() {
   const e = process.env.MUSIC_ROOT;
@@ -152,8 +186,13 @@ function configNeedsPersistRewrite(file) {
 
 function writeAccountsFileSync(libraryRoot, accounts) {
   const accPath = rekordGlobalAccountsPath(libraryRoot);
-  fs.mkdirSync(path.dirname(accPath), { recursive: true });
-  fs.writeFileSync(accPath, JSON.stringify({ schemaVersion: 1, accounts }, null, 2), "utf8");
+  try {
+    fs.mkdirSync(path.dirname(accPath), { recursive: true });
+    fs.writeFileSync(accPath, JSON.stringify({ schemaVersion: 1, accounts }, null, 2), "utf8");
+  } catch (err) {
+    if (setLibraryWriteError(err, path.dirname(accPath))) return;
+    throw err;
+  }
 }
 
 function loadOrCreateAccountsInLibrarySync(libraryRoot, rawBootstrapAccounts) {
@@ -270,6 +309,7 @@ function applyConfigFileToState() {
 
   const cfgDir = path.dirname(CONFIG_FILE);
   if (state.path) {
+    probeLibraryWritable(state.path);
     enqueueLayoutMigration({
       libraryRoot: state.path,
       accounts: state.accounts,
@@ -280,13 +320,23 @@ function applyConfigFileToState() {
 }
 
 function init() {
-  applyConfigFileToState();
+  try {
+    applyConfigFileToState();
+  } catch (err) {
+    console.error("[rekord] musicRootConfig init:", err?.message ?? err);
+    if (!setLibraryWriteError(err)) throw err;
+  }
 }
 
 init();
 
 export function reloadConfigFromDisk() {
-  applyConfigFileToState();
+  try {
+    applyConfigFileToState();
+  } catch (err) {
+    console.error("[rekord] reloadConfigFromDisk:", err?.message ?? err);
+    if (!setLibraryWriteError(err)) throw err;
+  }
 }
 
 export function isLibraryRootConfigured() {
@@ -297,6 +347,14 @@ export function isLibraryRootConfigured() {
   } catch {
     return false;
   }
+}
+
+export function getLibraryWriteError() {
+  return state.libraryWriteError;
+}
+
+export function isLibraryRootWritable() {
+  return isLibraryRootConfigured() && !state.libraryWriteError;
 }
 
 export function getMusicRoot() {
@@ -364,6 +422,8 @@ export function getConfigSnapshot(includeMusicRoot) {
   const snap = {
     lockedByEnv: state.fromEnv,
     libraryRootConfigured: isLibraryRootConfigured(),
+    libraryDataWritable: isLibraryRootWritable(),
+    libraryWriteError: getLibraryWriteError(),
     serverPort,
     devClientPort: 5173,
     lanAccessUrl,

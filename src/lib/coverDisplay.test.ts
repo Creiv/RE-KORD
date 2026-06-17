@@ -8,6 +8,7 @@ describe("trackCoverDisplay", () => {
       { coverArtId: "art-1", updatedAt: 9_000, coverRelPath: "A/B/cover.jpg" },
     )
     expect(out.src).toContain("/api/library/artwork/art-1")
+    expect(out.fallbackSrc).toContain("/api/cover")
     expect(out.version).toBe(9_000)
   })
 

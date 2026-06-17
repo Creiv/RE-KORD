@@ -96,11 +96,16 @@ export const IT: Record<string, string> = {
     "Scegli su questo server la cartella madre della musica (Impostazioni). Tutti i dati e gli account sono salvati lì dentro, nella cartella .kord/.",
   "gate.libraryRequiredLeadRemote":
     "Questo server RE-KORD non ha ancora una cartella libreria configurata. Impostala sulla macchina che esegue il server: apri RE-KORD in localhost (oppure MUSIC_ROOT / music-root.config.json nella cartella del server). Da browser remoto non è possibile scegliere il percorso.",
+  "gate.libraryNotWritableTitle": "Cartella libreria non scrivibile",
+  "gate.libraryNotWritableLead":
+    "RE-KORD deve poter creare la cartella .kord/ dentro la libreria musicale (account, database, impostazioni). Il percorso {{path}} non è scrivibile da questo utente. Su dischi esterni montati in sola lettura: sudo chown -R $USER:$USER \"percorso\" oppure rimonta il volume con permessi di scrittura, poi riavvia RE-KORD.",
   "gate.openSettings": "Apri Impostazioni",
   "loading.dashboard": "Sto preparando la dashboard della collezione…",
   "empty.noData": "Nessun dato disponibile.",
   "errors.backendUnreachable":
     "Impossibile raggiungere il server RE-KORD. Avvialo con npm run dev (oppure npm run dev:server in un secondo terminale) e ricarica la pagina.",
+  "errors.backendUnreachableElectron":
+    "Il server interno di RE-KORD non risponde. Controlla ~/.config/rekord/rekord-server.log e rekord-launch.log, poi riavvia l'app.",
   "persist.banner": "Persistenza utente:",
   "trackMeta.gapOnTitle": "Brano senza data o genere nei metadati",
   "trackMeta.gapOffTitle": "Data o genere presenti nei metadati brano",

@@ -36,6 +36,7 @@ import { clientLegacyLibrary } from "../../lib/libraryIndex";
 import {
   applyLibraryDeltaToIndex,
   applyLibraryDeltasToIndex,
+  libraryDeltaTouchesCover,
   mergeLibraryIndexFromServer,
   libraryIndexRehydrateSig,
 } from "../../lib/libraryIndex";
@@ -109,11 +110,22 @@ export function AppShell() {
   const formatLoadError = useCallback(
     (message: string | null) => {
       if (!message) return null;
+      const electronClient =
+        typeof document !== "undefined" &&
+        document.documentElement.dataset.rekordClient === "1";
       if (message === "errors.backendUnreachable") {
-        return t("errors.backendUnreachable");
+        return t(
+          electronClient
+            ? "errors.backendUnreachableElectron"
+            : "errors.backendUnreachable",
+        );
       }
       if (isBackendUnreachableError(message)) {
-        return t("errors.backendUnreachable");
+        return t(
+          electronClient
+            ? "errors.backendUnreachableElectron"
+            : "errors.backendUnreachable",
+        );
       }
       return message;
     },
@@ -273,9 +285,10 @@ export function AppShell() {
         return next;
       });
       endActivity();
+      if (libraryDeltaTouchesCover(delta)) p.syncMediaSessionNow();
       if (reconcile) scheduleDebouncedLibraryReconcile();
     },
-    [beginLibrarySyncActivity, scheduleDebouncedLibraryReconcile]
+    [beginLibrarySyncActivity, p, scheduleDebouncedLibraryReconcile]
   );
 
   const applyLibraryDeltas = useCallback(
@@ -290,9 +303,10 @@ export function AppShell() {
         return next;
       });
       endActivity();
+      if (deltas.some(libraryDeltaTouchesCover)) p.syncMediaSessionNow();
       if (reconcile) scheduleDebouncedLibraryReconcile();
     },
-    [beginLibrarySyncActivity, scheduleDebouncedLibraryReconcile]
+    [beginLibrarySyncActivity, p, scheduleDebouncedLibraryReconcile]
   );
 
   const refreshAfterAlbumMetaSaved = useCallback(
@@ -891,7 +905,7 @@ export function AppShell() {
               {user.error ? (
                 <div className={styles.banner}>
                   {user.error === "errors.backendUnreachable"
-                    ? t("errors.backendUnreachable")
+                    ? formatLoadError(user.error)
                     : `${t("persist.banner")} ${formatLoadError(user.error)}`}
                 </div>
               ) : null}

@@ -52,7 +52,6 @@
     "qrcode": "^1.5.4",
     "react": "^19.2.5",
     "react-dom": "^19.2.5",
-    "sharp": "^0.35.1",
     "unzipper": "^0.12.3"
   },
   "devDependencies": {

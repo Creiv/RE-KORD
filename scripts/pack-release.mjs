@@ -90,50 +90,6 @@ function rmBetterSqliteBuildDir() {
   if (fs.existsSync(bsqlBuildDir)) fs.rmSync(bsqlBuildDir, { recursive: true, force: true })
 }
 
-/** Binari sharp per la piattaforma target (cross-compile: host Linux ha solo @img/sharp-linux-*). */
-function ensureSharpPlatformBins(targetPlatform) {
-  if (!isCrossCompile(targetPlatform)) return
-  const sharpPkgPath = path.join(root, "node_modules/sharp/package.json")
-  if (!fs.existsSync(sharpPkgPath)) {
-    throw new Error("sharp non installato in node_modules")
-  }
-  const sharpPkg = JSON.parse(fs.readFileSync(sharpPkgPath, "utf8"))
-  const ver = sharpPkg.version
-  const opt = sharpPkg.optionalDependencies || {}
-  const os = electronOsName(targetPlatform)
-  const arch = "x64"
-  const platformPkg = `@img/sharp-${os === "win32" ? "win32" : os === "darwin" ? "darwin" : "linux"}-${arch}`
-  const libPkg = `@img/sharp-libvips-${os === "win32" ? "win32" : os === "darwin" ? "darwin" : "linux"}-${arch}`
-  const toInstall = [`${platformPkg}@${ver}`]
-  if (opt[libPkg]) toInstall.push(`${libPkg}@${opt[libPkg]}`)
-  console.log(`\n[pack] sharp optional binaries per ${os}/${arch}: ${toInstall.join(", ")}\n`)
-  execSync(
-    `npm install --no-save --force --os=${os} --cpu=${arch} ${toInstall.join(" ")}`,
-    { stdio: "inherit", cwd: root },
-  )
-}
-
-function sharpPlatformDirInTree(baseDir, targetPlatform) {
-  const os = electronOsName(targetPlatform)
-  const arch = "x64"
-  const folder =
-    os === "win32"
-      ? "sharp-win32-x64"
-      : os === "darwin"
-        ? "sharp-darwin-x64"
-        : "sharp-linux-x64"
-  return path.join(baseDir, "resources/app.asar.unpacked/node_modules/@img", folder)
-}
-
-function verifySharpInUnpacked(targetPlatform) {
-  const unpackedDir = unpackedDirForPlatform(targetPlatform)
-  const sharpDir = sharpPlatformDirInTree(unpackedDir, targetPlatform)
-  if (!fs.existsSync(sharpDir)) {
-    throw new Error(`sharp per ${targetPlatform} mancante nel pacchetto: ${sharpDir}`)
-  }
-  console.log(`[pack] sharp OK nel pacchetto: ${sharpDir}`)
-}
-
 /** Scarica il prebuild Electron (win/mac) senza compilare sul host Linux. */
 function fetchPrebuiltBetterSqlite(targetPlatform, electronVer) {
   const os = electronOsName(targetPlatform)
@@ -148,12 +104,11 @@ function fetchPrebuiltBetterSqlite(targetPlatform, electronVer) {
   )
 }
 
-/** better-sqlite3 e sharp devono matchare l'ABI di Electron (server child con ELECTRON_RUN_AS_NODE). */
+/** better-sqlite3 deve matchare l'ABI di Electron (server child con ELECTRON_RUN_AS_NODE). */
 function rebuildNativeForElectron(targetPlatform) {
   const electronVer = electronVersionFromPkg()
   if (isCrossCompile(targetPlatform)) {
     fetchPrebuiltBetterSqlite(targetPlatform, electronVer)
-    ensureSharpPlatformBins(targetPlatform)
     try {
       verifyBetterSqliteNative(targetPlatform)
     } catch (err) {
@@ -166,7 +121,7 @@ function rebuildNativeForElectron(targetPlatform) {
   const env = nativeRebuildEnv(targetPlatform)
   rmBetterSqliteBuildDir()
   console.log(
-    `\n[pack] electron-rebuild per ${env.npm_config_target_platform}/${env.npm_config_target_arch} (Electron ${electronVer}): better-sqlite3, sharp\n`,
+    `\n[pack] electron-rebuild per ${env.npm_config_target_platform}/${env.npm_config_target_arch} (Electron ${electronVer}): better-sqlite3\n`,
   )
   runElectronRebuild(electronVer, env, false)
   try {
@@ -181,7 +136,7 @@ function rebuildNativeForElectron(targetPlatform) {
 
 function runElectronRebuild(electronVer, env, fromSource) {
   const srcFlag = fromSource ? " --build-from-source" : ""
-  const cmd = `npx @electron/rebuild --version=${electronVer} -f${srcFlag} -w better-sqlite3,sharp`
+  const cmd = `npx @electron/rebuild --version=${electronVer} -f${srcFlag} -w better-sqlite3`
   try {
     execSync(cmd, { stdio: "inherit", cwd: root, env })
   } catch (err) {
@@ -257,7 +212,6 @@ execSync(`npx electron-builder ${platFlag} --config ${configPath}`, {
 
 if (flavor === "server") {
   verifyUnpackedBetterSqlite(platform)
-  verifySharpInUnpacked(platform)
 }
 
 // Build Windows da host non-Windows: electron-builder salta l'editing

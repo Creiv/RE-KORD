@@ -3,6 +3,8 @@ import { useState, type ImgHTMLAttributes, type ReactNode } from "react";
 /** Copertine da `/api/cover`: di default `loading="lazy"` così titoli e card restano leggibili subito. `priority` imposta caricamento urgente (player). */
 export type CoverImgProps = ImgHTMLAttributes<HTMLImageElement> & {
   priority?: boolean;
+  /** URL alternativo se `src` fallisce (es. cache artwork rotta → cover su disco). */
+  fallbackSrc?: string;
   fallback?: ReactNode;
   fallbackClassName?: string;
 };
@@ -43,6 +45,7 @@ function retryInBackground(src: string): Promise<string | null> {
 
 export function CoverImg({
   priority = false,
+  fallbackSrc,
   fallback,
   fallbackClassName,
   loading,
@@ -54,15 +57,20 @@ export function CoverImg({
   ...rest
 }: CoverImgProps) {
   const [failedSrc, setFailedSrc] = useState<string | undefined>();
+  const [activeFallbackSrc, setActiveFallbackSrc] = useState<string | undefined>();
   // URL (con parametro retry) andato a buon fine dopo un primo errore flaky.
   const [recovered, setRecovered] = useState<
     { src: string; url: string } | undefined
   >();
 
-  const recoveredUrl = src && recovered?.src === src ? recovered.url : undefined;
+  const displaySrc = activeFallbackSrc ?? src;
+  const recoveredUrl =
+    displaySrc && recovered?.src === displaySrc ? recovered.url : undefined;
   // Niente src, già fallita ora o in una mount precedente → iniziali subito.
   const missing =
-    !src || (!recoveredUrl && (failedSrc === src || knownMissing.has(src)));
+    !displaySrc ||
+    (!recoveredUrl &&
+      (failedSrc === displaySrc || knownMissing.has(displaySrc)));
 
   if (missing && fallback != null) {
     return (
@@ -90,17 +98,26 @@ export function CoverImg({
       decoding={decoding}
       loading={loadAttr}
       onError={(event) => {
-        if (!src || recoveredUrl) return;
+        if (!displaySrc || recoveredUrl) return;
+        if (
+          fallbackSrc &&
+          !activeFallbackSrc &&
+          displaySrc !== fallbackSrc
+        ) {
+          setActiveFallbackSrc(fallbackSrc);
+          setFailedSrc(undefined);
+          return;
+        }
         // Fallback immediato: un 404 è una risposta, non un'attesa. I retry
         // anti-flaky proseguono in background e, se la cover esiste davvero,
         // l'immagine ricompare appena caricata (ormai in cache HTTP).
-        knownMissing.add(src);
-        setFailedSrc(src);
-        retryInBackground(src).then((url) => {
+        knownMissing.add(displaySrc);
+        setFailedSrc(displaySrc);
+        retryInBackground(displaySrc).then((url) => {
           if (url) {
-            knownMissing.delete(src);
-            setRecovered({ src, url });
-            setFailedSrc((cur) => (cur === src ? undefined : cur));
+            knownMissing.delete(displaySrc);
+            setRecovered({ src: displaySrc, url });
+            setFailedSrc((cur) => (cur === displaySrc ? undefined : cur));
           }
         });
         onError?.(event);

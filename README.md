@@ -80,8 +80,8 @@ self-updating client model: update the server once, every client follows.
   truth for the library index, album/track metadata, and artwork thumbnails.
   One-shot bootstrap from the legacy JSON cache or a full filesystem scan on
   first run.
-- 🖼️ **Artwork cache** — cover thumbnails served from `/api/library/artwork/:id`
-  with sharp-generated sizes; no more hammering the filesystem for every tile.
+- 🖼️ **Artwork cache** — cover images copied into `.kord/artwork/` and served
+  from `/api/library/artwork/:id`; falls back to `/api/cover` on disk when needed.
 - 🧹 **Library metadata cleanup** — Studio → Tools migrates useful fields from
   legacy JSON sidecars into the DB, removes per-track sidecars, and compacts
   album files (trivia/`infoItems` stay on disk).
@@ -154,6 +154,19 @@ npm run dev:app      # Electron desktop + server
 
 npm test && npm run lint && npm run build
 ```
+
+On a fresh **Ubuntu/Debian** machine, if `npm run dev` fails on `better-sqlite3`,
+install build tools then rebuild the native module:
+
+```bash
+sudo apt update && sudo apt install -y build-essential python3
+npm run rebuild:native:dev
+```
+
+If the **AppImage** opens but shows “cannot reach the server”, check
+`~/.config/rekord/rekord-server.log`. A common cause on external drives is
+**EACCES** (library folder not writable): RE-KORD needs to create `MUSIC_ROOT/.kord/`.
+Fix permissions, e.g. `sudo chown -R $USER:$USER /path/to/music`, then restart.
 
 Library root: `MUSIC_ROOT` env or in-app Settings. Per-profile state and the
 library database live in `MUSIC_ROOT/.kord/` (`rekord.db` plus account data) and

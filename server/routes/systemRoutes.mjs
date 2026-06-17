@@ -4,7 +4,7 @@
  */
 import { readActivityLogs } from "../activityLog.mjs";
 import { accountIdFromReq, sendError, sendOk } from "../httpUtils.mjs";
-import { getMusicRoot, isLibraryRootConfigured } from "../musicRootConfig.mjs";
+import { getMusicRoot, getLibraryWriteError, isLibraryRootConfigured, isLibraryRootWritable } from "../musicRootConfig.mjs";
 import { isServerAdminRequest } from "../requestAccess.mjs";
 import { readUserState } from "../userState.mjs";
 import { existsSync } from "fs";
@@ -35,14 +35,17 @@ export function registerSystemRoutes(app) {
         return sendOk(res, payload);
       }
       const root = getMusicRoot();
+      const writeErr = getLibraryWriteError();
       const state = await readUserState(root, accountId);
       const payload = {
         exists: existsSync(root),
         libraryRootConfigured: true,
+        libraryWritable: isLibraryRootWritable(),
         userStateVersion: state.version,
         accountId,
         libraryDb: { enabled: true },
       };
+      if (writeErr) payload.libraryWriteError = writeErr;
       try {
         const libraryDb = {
           enabled: true,

@@ -4,31 +4,11 @@ import { existsSync } from "fs"
 import { getLibraryDb } from "../db/index.mjs"
 import { rekordArtworkDir } from "../db/paths.mjs"
 import { newArtworkId } from "../db/queries/library.mjs"
-import { getMusicRoot } from "../musicRootConfig.mjs"
 import { coverCandidates } from "../musicLibrary.mjs"
 
-let sharpModule = null
-/** @type {Promise<import("sharp").default | null> | null} */
-let sharpLoadPromise = null
-
-async function loadSharp() {
-  if (sharpModule) return sharpModule
-  if (!sharpLoadPromise) {
-    sharpLoadPromise = import("sharp")
-      .then((mod) => {
-        sharpModule = mod.default
-        return sharpModule
-      })
-      .catch((err) => {
-        console.error("[rekord] sharp non disponibile:", err?.message || err)
-        return null
-      })
-  }
-  return sharpLoadPromise
-}
-
 /**
- * Registra copertina da file cartella e genera thumbnail in .kord/artwork/.
+ * Registra copertina da file cartella in .kord/artwork/.
+ * Copia l'originale; le entry thumb puntano allo stesso file (ridimensionato via CSS).
  * @param {string} libraryRoot
  * @param {string} albumId
  * @param {string} coverRelPath
@@ -62,29 +42,17 @@ export async function registerFolderCoverArtwork(libraryRoot, albumId, coverRelP
 
   const ext = path.extname(sourcePath).toLowerCase() === ".png" ? "png" : "jpg"
   const fullDest = path.join(artDir, `${artId}.${ext}`)
-  const thumb128 = path.join(artDir, `${artId}-128.${ext}`)
-  const thumb256 = path.join(artDir, `${artId}-256.${ext}`)
-
-  const sharp = await loadSharp()
-  if (!sharp) return null
 
   try {
     await fs.copyFile(sourcePath, fullDest)
-    await sharp(fullDest)
-      .resize(128, 128, { fit: "cover" })
-      .toFile(thumb128)
-    await sharp(fullDest)
-      .resize(256, 256, { fit: "cover" })
-      .toFile(thumb256)
   } catch {
     return null
   }
 
-  const meta = await sharp(fullDest).metadata().catch(() => ({}))
   const now = Date.now()
   db.prepare(
-    `INSERT INTO artwork (id, album_id, kind, mime, width, height, full_path, thumb_128_path, thumb_256_path, updated_at)
-     VALUES (@id, @album_id, 'folder', @mime, @width, @height, @full_path, @thumb_128_path, @thumb_256_path, @updated_at)
+    `INSERT INTO artwork (id, album_id, kind, mime, full_path, thumb_128_path, thumb_256_path, updated_at)
+     VALUES (@id, @album_id, 'folder', @mime, @full_path, @thumb_128_path, @thumb_256_path, @updated_at)
      ON CONFLICT(id) DO UPDATE SET
        album_id=excluded.album_id,
        full_path=excluded.full_path,
@@ -95,11 +63,9 @@ export async function registerFolderCoverArtwork(libraryRoot, albumId, coverRelP
     id: artId,
     album_id: albumId,
     mime: ext === "png" ? "image/png" : "image/jpeg",
-    width: meta.width || null,
-    height: meta.height || null,
     full_path: fullDest,
-    thumb_128_path: thumb128,
-    thumb_256_path: thumb256,
+    thumb_128_path: fullDest,
+    thumb_256_path: fullDest,
     updated_at: now,
   })
 
@@ -141,15 +107,8 @@ export async function registerDownloadedCoverArtwork(
   const artId = newArtworkId()
   const safeExt = ext === "png" ? "png" : "jpg"
   const fullDest = path.join(artDir, `${artId}.${safeExt}`)
-  const thumb128 = path.join(artDir, `${artId}-128.${safeExt}`)
-  const thumb256 = path.join(artDir, `${artId}-256.${safeExt}`)
-
-  const sharp = await loadSharp()
-  if (!sharp) return null
 
   await fs.writeFile(fullDest, imageBuffer)
-  await sharp(fullDest).resize(128, 128, { fit: "cover" }).toFile(thumb128)
-  await sharp(fullDest).resize(256, 256, { fit: "cover" }).toFile(thumb256)
 
   const coverRelPath = `${albumFolderRel}/cover.${safeExt}`.replace(/\\/g, "/")
   const now = Date.now()
@@ -161,8 +120,8 @@ export async function registerDownloadedCoverArtwork(
     album.id,
     safeExt === "png" ? "image/png" : "image/jpeg",
     fullDest,
-    thumb128,
-    thumb256,
+    fullDest,
+    fullDest,
     now,
   )
   db.prepare(
@@ -171,13 +130,24 @@ export async function registerDownloadedCoverArtwork(
   return { artId, coverRelPath }
 }
 
+function firstExistingPath(paths) {
+  for (const p of paths) {
+    if (p && existsSync(p)) return p
+  }
+  return null
+}
+
 /** @param {string} artworkId @param {'128'|'256'|'full'} size */
 export function resolveArtworkFilePath(libraryRoot, artworkId, size = "128") {
   const row = getLibraryDb(libraryRoot)
     .prepare("SELECT full_path, thumb_128_path, thumb_256_path FROM artwork WHERE id = ?")
     .get(String(artworkId || ""))
   if (!row) return null
-  if (size === "full") return row.full_path
-  if (size === "256") return row.thumb_256_path || row.full_path
-  return row.thumb_128_path || row.thumb_256_path || row.full_path
+  if (size === "full") {
+    return firstExistingPath([row.full_path, row.thumb_256_path, row.thumb_128_path])
+  }
+  if (size === "256") {
+    return firstExistingPath([row.thumb_256_path, row.full_path, row.thumb_128_path])
+  }
+  return firstExistingPath([row.thumb_128_path, row.thumb_256_path, row.full_path])
 }

@@ -4,7 +4,10 @@ import { randomUUID } from "crypto"
 import { getLibraryDb, withLibraryDbTransaction } from "../index.mjs"
 import { albumRowToIndex, artistRowToIndex, computeStatsFromIndex, trackRowToIndex } from "../mappers.mjs"
 import { parseTrackGenres } from "../../genres.mjs"
-import { registerFolderCoverArtwork } from "../../artwork/index.mjs"
+import {
+  registerFolderCoverArtwork,
+  resolveArtworkFilePath,
+} from "../../artwork/index.mjs"
 import { orderAlbumTrackList } from "../../albumExpectedOrder.mjs"
 
 const insertArtist = `
@@ -476,17 +479,21 @@ export function newArtworkId() {
   return randomUUID().replace(/-/g, "").slice(0, 16)
 }
 
-/** Album con cover su disco ma senza thumbnail in cache DB. */
+/** Album con cover su disco ma cache artwork assente o file mancanti. */
 export async function backfillMissingArtworkCache(libraryRoot) {
   const db = getLibraryDb(libraryRoot)
   const rows = db
     .prepare(
-      `SELECT id, folder_rel_path, cover_rel_path FROM albums
-       WHERE has_cover = 1 AND (cover_art_id IS NULL OR cover_art_id = '')`,
+      `SELECT id, cover_rel_path, cover_art_id FROM albums
+       WHERE has_cover = 1 AND cover_rel_path IS NOT NULL AND cover_rel_path != ''`,
     )
     .all()
   for (const row of rows) {
-    if (!row.cover_rel_path) continue
+    const artId = String(row.cover_art_id || "").trim()
+    if (artId && resolveArtworkFilePath(libraryRoot, artId, "128")) continue
+    if (artId) {
+      db.prepare("UPDATE albums SET cover_art_id = NULL WHERE id = ?").run(row.id)
+    }
     await registerFolderCoverArtwork(
       libraryRoot,
       row.id,

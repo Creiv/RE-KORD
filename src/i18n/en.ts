@@ -95,11 +95,16 @@ export const EN: Record<string, string> = {
     "Choose the root folder for your music on this server (Settings). All library data and accounts are stored inside that folder, under .kord/.",
   "gate.libraryRequiredLeadRemote":
     "This RE-KORD server does not have a music library folder configured yet. Set it on the machine that runs the server: open RE-KORD via localhost (or edit MUSIC_ROOT / server music-root.config.json on that host). Remote browsers cannot choose the folder path.",
+  "gate.libraryNotWritableTitle": "Library folder is not writable",
+  "gate.libraryNotWritableLead":
+    "RE-KORD must be able to create a .kord/ folder inside your music library (accounts, database, settings). The path {{path}} is not writable for this user. On read-only external drives: sudo chown -R $USER:$USER \"path\" or remount the volume with write access, then restart RE-KORD.",
   "gate.openSettings": "Open Settings",
   "loading.dashboard": "Preparing your collection dashboard…",
   "empty.noData": "No data available.",
   "errors.backendUnreachable":
     "Cannot reach the RE-KORD server. Start it with npm run dev (or npm run dev:server in a second terminal) and reload the page.",
+  "errors.backendUnreachableElectron":
+    "RE-KORD's embedded server is not responding. Check ~/.config/rekord/rekord-server.log and rekord-launch.log, then restart the app.",
   "persist.banner": "User persistence:",
   "trackMeta.gapOnTitle": "Track missing date or genre in metadata",
   "trackMeta.gapOffTitle": "Date or genre present in track metadata",

@@ -15,6 +15,10 @@ const nodePath = path.join(
 )
 
 function needsDevRebuild() {
+  const bsqlDir = path.join(root, "node_modules/better-sqlite3")
+  if (!fs.existsSync(bsqlDir)) {
+    throw new Error("better-sqlite3 non installato. Esegui prima: npm install")
+  }
   if (!fs.existsSync(nodePath)) return true
   try {
     const kind = execSync(`file -b "${nodePath}"`, { encoding: "utf8", cwd: root }).trim()
