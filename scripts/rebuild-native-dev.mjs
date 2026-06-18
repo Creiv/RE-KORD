@@ -8,11 +8,13 @@
  * prebuild-install || node-gyp rebuild --release
  */
 import { execSync } from "node:child_process"
+import { createRequire } from "node:module"
 import fs from "node:fs"
 import path from "node:path"
 import { fileURLToPath, pathToFileURL } from "node:url"
 
 const root = path.join(path.dirname(fileURLToPath(import.meta.url)), "..")
+const require = createRequire(import.meta.url)
 
 function betterSqliteNodePath() {
   return path.join(
@@ -21,10 +23,29 @@ function betterSqliteNodePath() {
   )
 }
 
+/** True se better-sqlite3 si carica con il Node.js che esegue dev/server. */
+export function canLoadBetterSqliteForSystemNode() {
+  try {
+    const Database = require("better-sqlite3")
+    const db = new Database(":memory:")
+    db.close()
+    return true
+  } catch {
+    return false
+  }
+}
+
 function verifyBetterSqliteNode() {
   const nodePath = betterSqliteNodePath()
   if (!fs.existsSync(nodePath)) {
     throw new Error(`better_sqlite3.node mancante dopo rebuild dev: ${nodePath}`)
+  }
+  if (!canLoadBetterSqliteForSystemNode()) {
+    throw new Error(
+      `better_sqlite3.node non caricabile con Node.js ${process.version} ` +
+        `(NODE_MODULE_VERSION ${process.versions.modules}). ` +
+        "Probabile binario Electron dopo pack — riesegui npm run rebuild:native:dev",
+    )
   }
   try {
     const kind = execSync(`file -b "${nodePath}"`, { encoding: "utf8", cwd: root }).trim()
@@ -81,6 +102,14 @@ export function restoreBetterSqliteForSystemNode() {
           (err instanceof Error ? `\nDettaglio: ${err.message}` : ""),
       )
     }
+  }
+
+  if (!canLoadBetterSqliteForSystemNode()) {
+    console.log(
+      "[rekord] binario prebuild non compatibile con Node.js locale → compile da sorgente…",
+    )
+    if (fs.existsSync(buildDir)) fs.rmSync(buildDir, { recursive: true, force: true })
+    execSync("npx node-gyp rebuild --release", { stdio: "inherit", cwd: bsqlDir })
   }
 
   verifyBetterSqliteNode()
