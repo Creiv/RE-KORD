@@ -8,7 +8,7 @@
   <a href="https://www.reddit.com/r/RE_KORD/"><strong>r/RE_KORD</strong></a>
 </p>
 
-<h1 align="center">RE-KORD 4.1</h1>
+<h1 align="center">RE-KORD 4.2</h1>
 
 <p align="center">
   <strong>Your music. Your server. Your rules.</strong><br />
@@ -74,7 +74,26 @@ LAN access out of the box, one-click **Cloudflare tunnel** with QR code for
 remote listening, multiple local profiles, full **backup/restore**, and a
 self-updating client model: update the server once, every client follows.
 
-## New in 4.1
+## New in 4.2
+
+- 📂 **Adaptive library scan** — detects how your music folder is organized
+  (`artist/album/track`, loose tracks per artist, flat files, or ID3 tags) and
+  indexes accordingly; layout config in `.kord/library-layout.json`; structure
+  probe when setting `MUSIC_ROOT`.
+- 🧭 **Real vs logical paths** — loose tracks keep the on-disk path (`file_path`)
+  separate from the library path (`rel_path`); albums store `folder_rel_path`
+  for the actual folder; incremental scans diff against a `files` table.
+- 🔄 **Loose-track migration** — schema v6 aligns legacy `Tracce` → `Tracks`
+  paths in SQLite; client state migrates old loose paths in queue, favorites,
+  and recent plays.
+- 💿 **Discogs integration** — optional personal token (Settings or
+  `REKORD_DISCOGS_TOKEN`); release search with scored candidates and a picker
+  when several matches exist; album enrichment (label, country, genres, format,
+  catalog no., community stats, lowest price); tracklist applied to files
+  (track/disc numbers, duration); automatic fallback to MusicBrainz / TheAudioDB
+  / iTunes when Discogs is unavailable.
+
+## Since 4.1
 
 - 🗄️ **SQLite library core** — `MUSIC_ROOT/.kord/rekord.db` is the source of
   truth for the library index, album/track metadata, and artwork thumbnails.
@@ -173,14 +192,14 @@ library database live in `MUSIC_ROOT/.kord/` (`rekord.db` plus account data) and
 survive reinstalls. After upgrading from 4.0, run **Library metadata cleanup**
 once in Studio → Tools to migrate legacy JSON sidecars.
 
-### Packaging 4.1
+### Packaging 4.2
 
 ```bash
-npm run pack:linux:server -- 4.1.0   # → release/RE-KORD-Server-4.1.0-linux-x86_64.AppImage
-npm run pack:win:server  -- 4.1.0    # Windows server (NSIS on Windows hosts, .7z from Linux)
-npm run pack:linux:client -- 4.1.0   # thin desktop client
-npm run pack:win:client  -- 4.1.0
-npm run pack:android:client -- 4.1.0 # → release/RE-KORD-Client-4.1.0-android.apk
+npm run pack:linux:server -- 4.2.0   # → release/RE-KORD-Server-4.2.0-linux-x86_64.AppImage
+npm run pack:win:server  -- 4.2.0    # Windows server (NSIS on Windows hosts, .7z from Linux)
+npm run pack:linux:client -- 4.2.0   # thin desktop client
+npm run pack:win:client  -- 4.2.0
+npm run pack:android:client -- 4.2.0 # → release/RE-KORD-Client-4.2.0-android.apk
 ```
 
 Server packs bundle **yt-dlp** and **cloudflared** for the target OS. Windows
@@ -201,4 +220,4 @@ law compliance. Use only content you have the rights or permission to use.
 
 ---
 
-<p align="center"><em>RE-KORD 4.1 by Creiv — local music, serious tools, play on the beat.</em></p>
+<p align="center"><em>RE-KORD 4.2 by Creiv — local music, serious tools, play on the beat.</em></p>

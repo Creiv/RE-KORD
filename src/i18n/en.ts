@@ -566,7 +566,7 @@ export const EN: Record<string, string> = {
   "settings.colophonLine4":
     "This tool is designed for legal/no-copyright music libraries (or any content used with proper rights). Each user is solely responsible for their own actions.",
   "settings.colophonLine5":
-    "4.1 highlights: SQLite library index (rekord.db), cached artwork thumbnails, library metadata cleanup from legacy JSON, and track order by filename.",
+    "4.2 highlights: adaptive library scan with configurable layout, real/logical paths for loose tracks, Tracce→Tracks migration, and Discogs integration for metadata and artwork.",
   "settings.tutorialEyebrow": "Help",
   "settings.tutorialHeading": "Tutorial",
   "settings.tutorialLead":

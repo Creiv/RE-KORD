@@ -574,7 +574,7 @@ export const IT: Record<string, string> = {
   "settings.colophonLine4":
     "Lo strumento è pensato per librerie con contenuti leciti/no copyright (o comunque con diritti d'uso disponibili). Ogni utente è l'unico responsabile delle proprie azioni.",
   "settings.colophonLine5":
-    "Novità 4.1: indice libreria in SQLite (rekord.db), thumbnail copertine in cache, pulizia metadati da JSON legacy e ordine tracce per nome file.",
+    "Novità 4.2: scan libreria adattivo con layout configurabile, path reali/logici per tracce loose, migrazione Tracce→Tracks e integrazione Discogs per metadati e copertine.",
   "settings.tutorialEyebrow": "Aiuto",
   "settings.tutorialHeading": "Tutorial",
   "settings.tutorialLead":

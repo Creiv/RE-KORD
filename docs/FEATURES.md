@@ -1,9 +1,16 @@
 # RE-KORD — Mappa completa delle funzionalità
 
-> Versione app: 4.1.0 — documento generato dall'analisi del codice (giugno 2026).
+> Versione app: 4.2.0 — documento generato dall'analisi del codice (giugno 2026).
 > Organizzato per pagina/sezione e categoria.
 
-## Novità — giugno 2026
+## Novità — giugno 2026 (4.2)
+
+- **Scan libreria adattivo**: rilevamento layout (`artist/album/track`, tracce loose per artista, file flat in root, fallback da tag ID3); configurazione in `.kord/library-layout.json`; probe struttura cartella all'impostazione di `MUSIC_ROOT` (`POST /api/library/probe`)
+- **Path reali vs logici**: `file_path` (percorso su disco) separato da `rel_path` (indice); `folder_rel_path` sugli album; scan incrementale con diff sulla tabella `files` e engine dedicato (`server/scanner/engine.mjs`)
+- **Tracce loose**: album virtuale `Tracks`; migrazione schema v6 in SQLite; client allinea path legacy in coda, preferiti e recenti (`loosePathsMigrated`)
+- **Discogs**: token personale opzionale (Impostazioni → Integrazioni o `REKORD_DISCOGS_TOKEN`); ricerca release con scoring; picker se più candidati; arricchimento album (etichetta, paese, generi, formato, n. catalogo, community have/want/rating, prezzo minimo); applicazione tracklist ai brani (numero traccia, disco, durata); fallback automatico a MusicBrainz / TheAudioDB / iTunes
+
+## Novità — 4.1
 
 - **Indice libreria in SQLite** (`rekord.db` in `.kord/`): bootstrap da cache legacy o scan filesystem; metadati album/brano e thumbnail copertine nel DB; watcher filesystem ed epoche
 - **API libreria paginate** (`/api/library/artists-page`, `/api/library/artists/:id/albums-list`, `/api/library/album-tracks`), `/api/library/changes`, copertine via `/api/library/artwork/:id`
@@ -93,12 +100,12 @@
 - Riproduzione shuffle dell'artista
 - Pulsante info entità (trivia/bio)
 - Ordinamento album: data / nome / play count
-- Griglia album cliccabile
+- Griglia album cliccabile; se l'artista ha solo tracce loose, apre direttamente l'album virtuale **Tracks**
 
 ### Dettaglio Album
 - Copertina grande con upload al click (badge edit al hover)
 - Play sequenziale dell'album
-- Editor metadati album
+- Editor metadati album (inclusa sezione **Discogs** quando i dati sono presenti)
 - Esclusione shuffle bulk (intero album)
 - Info entità
 - Gestione generi inline: chip con conteggi, aggiunta da popover, rimozione e applicazione a tracce mancanti (con conferma)
@@ -303,8 +310,15 @@
 
 ### Metadati album
 - Editor: titolo, data rilascio, etichetta, paese
-- Conteggio tracce attese vs presenti (da catalogo)
+- Sezione **Discogs** (formato, n. catalogo, prezzo minimo, community, link release) quando disponibile
+- Conteggio tracce attese vs presenti (da catalogo / tracklist Discogs)
 - Eliminazione cartella album (con conferma)
+
+### Metadati — Discogs (con token configurato)
+- Ricerca release per artista+album con scoring candidati
+- Picker release quando più match plausibili
+- Applicazione metadati album + tracklist ai file (numero traccia, disco, durata)
+- Priorità Discogs nello scan massivo metadati; fallback MusicBrainz / TheAudioDB / iTunes
 
 ### Copertine
 - Ricerca artwork multi-fonte: iTunes, Deezer, MusicBrainz, TheAudioDB, Cover Art Archive
@@ -358,10 +372,12 @@
 
 ### Libreria
 - Percorso root, stato lettura/scrittura, lock da variabile d'ambiente
+- **Probe struttura** all'impostazione del percorso: stima brani e layout suggerito (`artist/album/track`, `artist/track`, `flat`, `tags`)
 - Sola lettura da accesso remoto, label personalizzata da server
 
-### Download
-- Upload/rimozione file cookies YouTube (.txt), stato file attivo
+### Integrazioni (Studio)
+- **Discogs**: token personale opzionale (`PUT/DELETE /api/config/discogs-token` o `REKORD_DISCOGS_TOKEN`); validazione token; sola lettura da client remoto
+- **YouTube cookies**: upload/rimozione file cookies (.txt), stato file attivo
 
 ### Rete e accesso remoto
 - Indirizzo LAN stimato
@@ -384,8 +400,12 @@
 ## 15. Server / Backend (Express)
 
 ### Libreria & scansione
-- Scansione ricorsiva del filesystem; indice persistito in SQLite (`rekord.db` in `.kord/`) con epoche e watcher filesystem
-- API paginate (`/api/library/artists-page`, `/api/library/artists/:id/albums-list`, `/api/library/album-tracks`), FTS, `/api/library/changes`, copertine via `/api/library/artwork/:id`
+- Scansione adattiva del filesystem con layout configurabile (`.kord/library-layout.json`): preferenza `artist/album/track`, fallback cartella / tag ID3 / nome file
+- Probe struttura (`POST /api/library/probe`) e salvataggio layout (`POST /api/library/layout`)
+- Indice persistito in SQLite (`rekord.db` in `.kord/`) con `file_path` (disco) e `rel_path` (logico) per tracce loose; `folder_rel_path` sugli album
+- Engine scan incrementale: diff su tabella `files`, scope parziali, full rebuild oltre soglia modifiche
+- Migrazione schema v6: allineamento path loose `Tracce` → `Tracks`
+- Epoche e watcher filesystem; API paginate (`/api/library/artists-page`, `/api/library/artists/:id/albums-list`, `/api/library/album-tracks`), FTS, `/api/library/changes`, copertine via `/api/library/artwork/:id`
 - Ricerca full-text, dettaglio artisti/album, risoluzione batch tracce
 - Refresh in background, dedup richieste concorrenti (singleflight)
 - Selezione libreria per account (include/exclude artisti, album, tracce)
@@ -415,6 +435,7 @@
 
 ### Metadati
 - Aggregazione iTunes / Last.fm / MusicBrainz / LrcLib / Wikipedia / TheAudioDB
+- **Discogs** (con token): ricerca release, fetch release, applicazione metadati album e tracklist; scoring candidati; API `POST /api/discogs/search-releases`, `POST /api/discogs/apply-release`
 - Persistenza metadati album/brano in SQLite (`rekord.db`); sidecar JSON legacy solo migrazione/trivia
 - Ricerca e applicazione artwork (download da URL o upload max 15MB)
 - Sanitizzazione titoli, normalizzazione generi, mood per traccia
