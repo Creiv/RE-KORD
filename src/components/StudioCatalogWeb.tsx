@@ -139,9 +139,11 @@ function CatalogWebPickDialog({
   const [previewErr, setPreviewErr] = useState<string | null>(null);
   const audioRef = useRef<HTMLAudioElement | null>(null);
   const loadGenRef = useRef(0);
+  const previewSessionRef = useRef(0);
   const previewTimeUpdateRef = useRef<(() => void) | null>(null);
 
   const stopPreview = useCallback(() => {
+    previewSessionRef.current += 1;
     const audio = audioRef.current;
     if (audio) {
       const onTimeUpdate = previewTimeUpdateRef.current;
@@ -216,6 +218,7 @@ function CatalogWebPickDialog({
   const playPreview = useCallback(
     async (track: CatalogWebTrack) => {
       if (previewBusyUrl) return;
+      const session = previewSessionRef.current;
       setPreviewErr(null);
       setPreviewBusyUrl(track.url);
       setPlayingUrl(null);
@@ -229,13 +232,33 @@ function CatalogWebPickDialog({
       audio.load();
       try {
         const previewSrc = await catalogWebPreviewAudioSrc(track.url);
+        if (session !== previewSessionRef.current) {
+          audio.pause();
+          audio.removeAttribute("src");
+          audio.load();
+          return;
+        }
         await new Promise<void>((resolve, reject) => {
+          if (session !== previewSessionRef.current) {
+            resolve();
+            return;
+          }
           const timeout = window.setTimeout(() => {
             cleanup();
             reject(new Error("Preview playback timed out"));
           }, 45_000);
           let settled = false;
           const onReady = () => {
+            if (session !== previewSessionRef.current) {
+              if (!settled) {
+                settled = true;
+                cleanup();
+                audio.pause();
+                audio.removeAttribute("src");
+                audio.load();
+              }
+              return;
+            }
             if (settled) return;
             settled = true;
             cleanup();
@@ -259,6 +282,7 @@ function CatalogWebPickDialog({
             resolve();
           };
           const onError = () => {
+            if (session !== previewSessionRef.current) return;
             if (settled) return;
             settled = true;
             cleanup();
@@ -283,6 +307,7 @@ function CatalogWebPickDialog({
           audio.preload = "auto";
           audio.src = previewSrc;
           void audio.play().catch((err: unknown) => {
+            if (session !== previewSessionRef.current) return;
             if (settled) return;
             settled = true;
             cleanup();
@@ -290,6 +315,7 @@ function CatalogWebPickDialog({
           });
         });
       } catch (e: unknown) {
+        if (session !== previewSessionRef.current) return;
         setPreviewBusyUrl(null);
         setPlayingUrl(null);
         const errMsg = isBackendUnreachableError(e)
@@ -319,7 +345,10 @@ function CatalogWebPickDialog({
       className="meta-edit-backdrop studio-catalog-web-pick-backdrop"
       role="presentation"
       onClick={(ev) => {
-        if (ev.target === ev.currentTarget) onClose();
+        if (ev.target === ev.currentTarget) {
+          stopPreview();
+          onClose();
+        }
       }}
     >
       <div
@@ -366,7 +395,10 @@ function CatalogWebPickDialog({
           <button
             type="button"
             className="icon-btn studio-catalog-web-pick-dialog__close"
-            onClick={onClose}
+            onClick={() => {
+              stopPreview();
+              onClose();
+            }}
             aria-label={t("common.close")}
           >
             <UiClose />

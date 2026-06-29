@@ -6,6 +6,9 @@ import {
   normalizeCatalogWebUrl,
   parseTracksFromBrowseJson,
   playlistIdFromPageUrl,
+  publicUrlFromMediaId,
+  publicYoutubeDiscoverUrl,
+  publicYoutubeMediaUrl,
   urlForYtdlpFetch,
 } from "./catalogWebPreview.mjs"
 
@@ -41,6 +44,19 @@ describe("catalogWebPreview", () => {
     ).toBe("https://music.youtube.com/watch?v=abc12345678")
   })
 
+  it("normalizeCatalogWebUrl rejects innertube API URLs and strips key", () => {
+    expect(
+      normalizeCatalogWebUrl(
+        "https://music.youtube.com/youtubei/v1/browse?key=AIzaSy_test",
+      ),
+    ).toBe("")
+    expect(
+      normalizeCatalogWebUrl(
+        "https://www.youtube.com/watch?v=abc12345678&key=AIzaSy_test",
+      ),
+    ).toBe("https://www.youtube.com/watch?v=abc12345678")
+  })
+
   it("isYoutubePlaylistUrl detects playlist pages", () => {
     expect(
       isYoutubePlaylistUrl(
@@ -73,6 +89,33 @@ describe("catalogWebPreview", () => {
     expect(urlForYtdlpFetch(page)).toBe(
       "https://www.youtube.com/playlist?list=OLAK5uy_abcdefghijklmnop",
     )
+  })
+
+  it("publicYoutubeMediaUrl returns canonical youtube.com URLs", () => {
+    expect(
+      publicYoutubeMediaUrl(
+        "https://music.youtube.com/playlist?list=OLAK5uy_abcdefghijklmnop",
+      ),
+    ).toBe("https://www.youtube.com/playlist?list=OLAK5uy_abcdefghijklmnop")
+    expect(
+      publicYoutubeMediaUrl(
+        "https://music.youtube.com/watch?v=dQw4w9WgXcQ&key=AIzaSy_test",
+      ),
+    ).toBe("https://www.youtube.com/watch?v=dQw4w9WgXcQ")
+    expect(
+      publicYoutubeMediaUrl(
+        "https://music.youtube.com/browse/MPREb_abcdefghijklmnop",
+      ),
+    ).toBe("")
+    expect(publicUrlFromMediaId("dQw4w9WgXcQ")).toBe(
+      "https://www.youtube.com/watch?v=dQw4w9WgXcQ",
+    )
+    expect(
+      publicYoutubeDiscoverUrl({
+        id: "OLAK5uy_abcdefghijklmnop",
+        url: "https://music.youtube.com/browse/MPREb_fallback",
+      }),
+    ).toBe("https://www.youtube.com/playlist?list=OLAK5uy_abcdefghijklmnop")
   })
 
   it("parseTracksFromBrowseJson extracts watch tracks", () => {
@@ -131,7 +174,9 @@ describe("catalogWebPreview", () => {
     const tracks = parseTracksFromBrowseJson(json)
     expect(tracks).toHaveLength(2)
     expect(tracks[0].title).toBe("Song One")
-    expect(tracks[0].url).toContain("vid11111111a")
+    expect(tracks[0].url).toBe(
+      "https://www.youtube.com/watch?v=vid11111111a",
+    )
   })
 
   it("parseTracksFromBrowseJson reads playlistVideoRenderer", () => {

@@ -882,7 +882,6 @@ export function AppShell() {
                 activeSection={route.section}
                 onNavigate={navToSection}
                 onLibraryHome={onLibraryHome}
-                onOpenSettings={() => navigate({ section: "settings" })}
               />
             ) : null}
 

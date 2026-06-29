@@ -76,6 +76,8 @@ export function normalizeCatalogWebUrl(raw) {
   if (!/^https?:\/\//i.test(s)) return ""
   try {
     const u = new URL(s)
+    if (u.pathname.includes("/youtubei/")) return ""
+    u.searchParams.delete("key")
     u.searchParams.delete("accountId")
     u.searchParams.delete("r")
     const h = u.hostname.replace(/^www\./, "").toLowerCase()
@@ -91,6 +93,42 @@ export function normalizeCatalogWebUrl(raw) {
     return ""
   }
   return ""
+}
+
+/** URL pubblico da id playlist/video (mai innertube o browse MPREb). */
+export function publicUrlFromMediaId(id) {
+  const s = String(id ?? "").trim()
+  if (!s) return ""
+  if (s.startsWith("VL") && s.length > 2) {
+    return publicUrlFromMediaId(s.slice(2))
+  }
+  if (s.startsWith("MPREb_")) return ""
+  if (/^(?:PL|OLAK5uy_|UU|FL|RD|WL|LL|LM)[a-zA-Z0-9_-]+$/.test(s)) {
+    return `https://www.youtube.com/playlist?list=${encodeURIComponent(s)}`
+  }
+  if (/^[a-zA-Z0-9_-]{11}$/.test(s)) {
+    return `https://www.youtube.com/watch?v=${encodeURIComponent(s)}`
+  }
+  return ""
+}
+
+/** URL canonico per UI/download: youtube.com, senza chiavi API né browse interni. */
+export function publicYoutubeMediaUrl(raw) {
+  const fromId = publicUrlFromMediaId(raw)
+  if (fromId) return fromId
+  let s = normalizeCatalogWebUrl(raw)
+  if (!s) return ""
+  if (/\/browse\/MPREb_/i.test(s)) return ""
+  const canonical = urlForYtdlpFetch(s)
+  if (canonical && !/\/browse\/MPREb_/i.test(canonical)) return canonical
+  return canonical || s
+}
+
+/** URL discover da voce { id, url } restituita da innertube. */
+export function publicYoutubeDiscoverUrl(item) {
+  const fromId = publicUrlFromMediaId(item?.id)
+  if (fromId) return fromId
+  return publicYoutubeMediaUrl(item?.url)
 }
 
 export function isYoutubePlaylistUrl(url) {
@@ -118,9 +156,9 @@ export function isWatchSingleUrl(url) {
 }
 
 function watchUrlFromEndpoint(ep) {
-  const vid = ep?.watchEndpoint?.videoId
+  const vid = String(ep?.watchEndpoint?.videoId ?? "").trim()
   if (!vid) return ""
-  return `https://music.youtube.com/watch?v=${encodeURIComponent(String(vid).trim())}`
+  return `https://www.youtube.com/watch?v=${encodeURIComponent(vid)}`
 }
 
 function parseTrackFromResponsiveRenderer(renderer) {
@@ -145,10 +183,13 @@ function parseTrackFromPlaylistVideoRenderer(renderer) {
       "",
   ).trim()
   if (!title || !vid) return null
+  const url =
+    publicUrlFromMediaId(vid) ||
+    `https://www.youtube.com/watch?v=${encodeURIComponent(vid)}`
   return {
     id: vid,
     title,
-    url: `https://music.youtube.com/watch?v=${encodeURIComponent(vid)}`,
+    url,
   }
 }
 
@@ -320,7 +361,7 @@ async function ytdlpFlatPlaylistTracks(
     let url = String(e.url ?? "").trim()
     if (url.startsWith("//")) url = `https:${url}`
     if (!url) url = guessYoutubeUrlFromEntryId(id)
-    url = normalizeCatalogWebUrl(url)
+    url = publicYoutubeMediaUrl(url)
     if (!url || !id || seen.has(id)) continue
     seen.add(id)
     tracks.push({ id, title, url })

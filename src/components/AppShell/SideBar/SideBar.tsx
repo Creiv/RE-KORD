@@ -12,14 +12,12 @@ interface SideBarProps {
   activeSection: AppSection;
   onNavigate: (section: AppSection) => void;
   onLibraryHome: () => void;
-  onOpenSettings: () => void;
 }
 
 export const SideBar = memo(function SideBar({
   activeSection,
   onNavigate,
   onLibraryHome,
-  onOpenSettings,
 }: SideBarProps) {
   const { t } = useI18n();
   const { open: rhythmOpen, toggle: toggleRhythm } = useRhythmMode();
@@ -97,18 +95,6 @@ export const SideBar = memo(function SideBar({
           ))}
         </div>
       </nav>
-
-      <div className={styles.footer}>
-        <button
-          type="button"
-          className={styles.footerBtn}
-          onClick={onOpenSettings}
-          title={t("nav.settings")}
-          aria-label={t("nav.settings")}
-        >
-          <RekordNavIcon section="settings" className={styles.footerBtnIc} />
-        </button>
-      </div>
     </aside>
   );
 });

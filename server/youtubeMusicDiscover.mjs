@@ -1,3 +1,5 @@
+import { publicYoutubeDiscoverUrl } from "./catalogWebPreview.mjs"
+
 const YTM_INNERTUBE_KEY = "AIzaSyC9XL3QWnjsQplBUbSJY1cffBoVwD0aN1U"
 const YTM_BROWSE_URL = `https://music.youtube.com/youtubei/v1/browse?key=${YTM_INNERTUBE_KEY}`
 
@@ -97,6 +99,12 @@ function urlFromBrowseEndpoint(ep) {
   return ""
 }
 
+function urlFromWatchEndpoint(ep) {
+  const vid = ep?.watchEndpoint?.videoId
+  if (!vid) return ""
+  return publicYoutubeDiscoverUrl({ id: String(vid).trim(), url: "" })
+}
+
 function resolveAlbumUrl(renderer) {
   const ep =
     renderer.overlay?.musicItemThumbnailOverlayRenderer?.content
@@ -104,11 +112,20 @@ function resolveAlbumUrl(renderer) {
     renderer.navigationEndpoint
   const menuPid = playlistIdFromMenu(renderer)
   const navPid = playlistIdFromEndpoint(ep)
+  const watchVid = ep?.watchEndpoint?.videoId
+    ? String(ep.watchEndpoint.videoId).trim()
+    : ""
   const url =
     urlFromPlaylistId(menuPid) ||
     urlFromPlaylistId(navPid) ||
+    urlFromWatchEndpoint(ep) ||
     urlFromBrowseEndpoint(ep)
-  const id = menuPid || navPid || ep?.browseEndpoint?.browseId || url
+  const id =
+    menuPid ||
+    navPid ||
+    watchVid ||
+    ep?.browseEndpoint?.browseId ||
+    url
   return { url, id: String(id) }
 }
 
@@ -344,7 +361,7 @@ function mapDiscoverEntry(item, kind) {
     subtitle,
     releaseType,
     artistName,
-    url: item.url,
+    url: publicYoutubeDiscoverUrl(item),
     thumbnailUrl: item.thumbnailUrl ?? null,
     ...(trackCount != null ? { trackCount } : {}),
   }
@@ -387,6 +404,7 @@ export async function fetchCatalogWebDiscover(index) {
     seen.add(item.id)
     const kind = classifyDiscoverKind(item, sourceKind)
     const mapped = mapDiscoverEntry(item, kind)
+    if (!mapped.url) return
     if (mapped.type === "song") songs.push(mapped)
     else albums.push(mapped)
   }
