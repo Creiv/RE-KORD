@@ -44,7 +44,7 @@ import { isTrackAlbumShuffleExcluded } from "../../lib/randomExclusions";
 import { eligibleTracksForIntelligentRandom } from "../../lib/randomExclusions";
 import { PlayCollectionButton } from "../../components/PlayCollectionButton";
 import { formatDurationMs } from "../../lib/duration";
-import { trackInfoBadges } from "../../lib/metaFormat";
+import { fmtDate, trackInfoBadges, trackReleaseYear } from "../../lib/metaFormat";
 import { parseLrcLyrics, currentLrcLineIndex } from "../../lib/lrc";
 import type {
   AppSection,
@@ -103,11 +103,19 @@ export default function ListenView({
   const shuffleExcluded = albumShuffleExcluded || trackShuffleExcluded;
   const playCount = cur ? user.getTrackPlayCount(cur.relPath) : 0;
   const listenDurationStr = cur ? formatDurationMs(cur.meta?.durationMs) : null;
+  const listenBadgeLabels = {
+    track: t("badges.track"),
+    album: t("badges.album"),
+  };
+  const listenTrackYear = cur ? trackReleaseYear(cur) : null;
+  const listenTrackYearTitle =
+    listenTrackYear && cur?.meta?.releaseDate
+      ? `${listenBadgeLabels.track} ${fmtDate(cur.meta.releaseDate)}`
+      : undefined;
   const listenInfoLine = cur
-    ? trackInfoBadges(cur, {
-        track: t("badges.track"),
-        album: t("badges.album"),
-      }).join(" · ") || t("common.emDash")
+    ? trackInfoBadges(cur, listenBadgeLabels)
+        .filter((line) => !line.startsWith(`${listenBadgeLabels.track} `))
+        .join(" · ") || ""
     : "";
 
   const runLibraryShuffle = () => {
@@ -282,6 +290,7 @@ export default function ListenView({
                   <div className="listen-stage__eyebrow-row">
                   <p className="eyebrow">{t("listen.currentEyebrow")}</p>
                   {cur ? (
+                    <>
                     <div className="listen-stage__eyebrow-actions">
                       <button
                         type="button"
@@ -342,6 +351,15 @@ export default function ListenView({
                         </span>
                       </button>
                     </div>
+                    {listenTrackYear ? (
+                      <span
+                        className="listen-stage__track-year"
+                        title={listenTrackYearTitle}
+                      >
+                        {listenTrackYear}
+                      </span>
+                    ) : null}
+                    </>
                   ) : null}
                 </div>
                 <h1 className="listen-stage__title">
@@ -401,11 +419,13 @@ export default function ListenView({
                   </span>
                   <TrackFileMetaChip meta={cur.meta} />
                 </p>
+                {listenInfoLine ? (
                 <div className="listen-stage__detail">
                   <p className="track-row__badges listen-stage__meta-badges">
                     {listenInfoLine}
                   </p>
                 </div>
+                ) : null}
                   </div>
                 ) : null}
               </div>

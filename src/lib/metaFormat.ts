@@ -24,6 +24,19 @@ export function fmtDate(d: string | null | undefined | Date): string {
   return `${pad2(dt.getDate())}-${pad2(dt.getMonth() + 1)}-${dt.getFullYear()}`
 }
 
+/** Anno di pubblicazione del brano (solo se presente nei metadati). */
+export function trackReleaseYear(t: EnrichedTrack): string | null {
+  const d = t.meta?.releaseDate
+  if (!d) return null
+  const v = String(d).trim()
+  if (!v) return null
+  const iso = v.match(/^(\d{4})/)
+  if (iso) return iso[1]
+  const dt = new Date(v)
+  if (Number.isNaN(dt.getTime())) return null
+  return String(dt.getFullYear())
+}
+
 export function trackInfoBadges(
   t: EnrichedTrack,
   labels: { track: string; album: string } = { track: "Track", album: "Album" }

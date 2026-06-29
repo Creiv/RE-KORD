@@ -839,6 +839,23 @@
   filter: grayscale(0.45);
 }
 
+/* Desktop (icone inline a destra): titolo + durata + chip sempre su una riga */
+.track-row:not(:has(.track-row__actions--compact-tools)) .track-row__title-row {
+  flex-wrap: nowrap;
+}
+
+.track-row:not(:has(.track-row__actions--compact-tools)) .track-row__stats {
+  flex: 0 0 auto;
+  flex-wrap: nowrap;
+}
+
+.track-row:not(:has(.track-row__actions--compact-tools))
+  .track-row__title-row
+  .track-row__title {
+  flex: 1 1 0;
+  max-width: none;
+}
+
 /* Desktop: icona testi in meta (vicino ad artista/album), non accanto ai mood in stats */
 .track-row__lyrics-inline.track-row__lyrics-inline--stats {
   display: none;
