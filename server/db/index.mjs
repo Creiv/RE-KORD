@@ -3,7 +3,8 @@ import path from "path"
 import Database from "better-sqlite3"
 import { ensureRekordSchemaFile, rekordBaseDir } from "../rekordDataStore.mjs"
 import { rekordArtworkDir, rekordDbPath } from "./paths.mjs"
-import { MIGRATION_SQL, SCHEMA_VERSION } from "./schema.mjs"
+import { migrateV6LoosePaths } from "./migrateV6.mjs"
+import { MIGRATION_SQL } from "./schema.mjs"
 
 /** @type {Map<string, import('better-sqlite3').Database>} */
 const openDbs = new Map()
@@ -66,6 +67,7 @@ function runMigrations(db) {
       /* ok */
     }
     db.prepare("INSERT INTO schema_migrations (version) VALUES (?)").run(4)
+    version = 4
   }
   if (version < 5) {
     for (const sql of [
@@ -79,6 +81,11 @@ function runMigrations(db) {
       }
     }
     db.prepare("INSERT INTO schema_migrations (version) VALUES (?)").run(5)
+    version = 5
+  }
+  if (version < 6) {
+    migrateV6LoosePaths(db)
+    db.prepare("INSERT INTO schema_migrations (version) VALUES (?)").run(6)
   }
 }
 

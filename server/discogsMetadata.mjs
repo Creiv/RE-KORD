@@ -126,6 +126,26 @@ export function scoreDiscogsCandidate(result, artist, album) {
   return Math.round(score * 10) / 10
 }
 
+/** Soglia minima per apply release su cartella album. */
+export const DISCOGS_APPLY_MIN_SCORE = 25
+
+/**
+ * @param {Record<string, unknown>} meta normalized release from fetchDiscogsRelease
+ * @param {string} artist
+ * @param {string} album
+ */
+export function scoreDiscogsReleaseForFolder(meta, artist, album) {
+  if (!meta?.ok) return 0
+  const fakeResult = {
+    title: String(meta.title || album || ""),
+    type: "release",
+    format: meta.formatSummary ? [meta.formatSummary] : [],
+    year: meta.releaseDate || meta.date,
+    artist: artist,
+  }
+  return scoreDiscogsCandidate(fakeResult, artist, album)
+}
+
 /**
  * @param {Record<string, unknown>} release full release JSON
  * @param {Record<string, unknown> | null} [stats] marketplace stats

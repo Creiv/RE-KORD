@@ -27,7 +27,7 @@ export function LibraryArtworkProvider({
 }
 
 export function useTrackCoverDisplay(
-  track: Pick<EnrichedTrack, "relPath" | "albumId" | "updatedAt">,
+  track: Pick<EnrichedTrack, "relPath" | "albumId" | "filePath" | "updatedAt">,
   artworkSize: "128" | "256" | "full" = "128",
 ) {
   useContext(LibraryArtworkIndexContext)

@@ -4,12 +4,30 @@ import { rekordApiUserAgentWithUrl } from "./rekordVersion.mjs"
 const BASE = "https://api.discogs.com"
 const UA = rekordApiUserAgentWithUrl()
 
-let lastRequestAt = 0
 const MIN_GAP_MS_AUTH = 1100
 const MIN_GAP_MS_FREE = 2500
+const MAX_429_RETRIES = 3
+
+let lastRequestAt = 0
+/** @type {Promise<unknown>} */
+let fetchQueue = Promise.resolve()
 
 function sleep(ms) {
   return new Promise((r) => setTimeout(r, ms))
+}
+
+/**
+ * @template T
+ * @param {() => Promise<T>} fn
+ * @returns {Promise<T>}
+ */
+function enqueueDiscogsRequest(fn) {
+  const run = fetchQueue.then(fn, fn)
+  fetchQueue = run.then(
+    () => undefined,
+    () => undefined,
+  )
+  return run
 }
 
 /** Discogs è sempre disponibile: API pubblica senza token, o autenticata se configurato. */
@@ -17,18 +35,22 @@ export function isDiscogsConfigured() {
   return true
 }
 
+async function waitForRateGap() {
+  const token = getDiscogsToken()
+  const gap = token ? MIN_GAP_MS_AUTH : MIN_GAP_MS_FREE
+  const now = Date.now()
+  const wait = gap - (now - lastRequestAt)
+  if (wait > 0) await sleep(wait)
+}
+
 /**
  * @param {string} path e.g. `/releases/123`
  * @param {{ method?: string, query?: Record<string, string | number | undefined> }} [opts]
  */
-export async function discogsFetch(path, opts = {}) {
+async function discogsFetchOnce(path, opts = {}) {
   const token = getDiscogsToken()
 
-  const now = Date.now()
-  const gap = token ? MIN_GAP_MS_AUTH : MIN_GAP_MS_FREE
-  const wait = gap - (now - lastRequestAt)
-  if (wait > 0) await sleep(wait)
-  lastRequestAt = Date.now()
+  await waitForRateGap()
 
   const url = new URL(path.startsWith("http") ? path : `${BASE}${path}`)
   const query = opts.query || {}
@@ -49,6 +71,7 @@ export async function discogsFetch(path, opts = {}) {
     method: opts.method || "GET",
     headers,
   })
+  lastRequestAt = Date.now()
 
   if (r.status === 401) {
     const err = new Error("Discogs token invalid or expired")
@@ -58,6 +81,11 @@ export async function discogsFetch(path, opts = {}) {
   if (r.status === 429) {
     const err = new Error("Discogs rate limit exceeded")
     err.code = "DISCOGS_RATE_LIMIT"
+    const retryAfterSec = Number(r.headers.get("Retry-After"))
+    err.retryAfterMs =
+      Number.isFinite(retryAfterSec) && retryAfterSec >= 0
+        ? retryAfterSec * 1000
+        : 3000
     throw err
   }
   if (!r.ok) {
@@ -77,30 +105,63 @@ export async function discogsFetch(path, opts = {}) {
   return r.json()
 }
 
+/**
+ * @param {string} path e.g. `/releases/123`
+ * @param {{ method?: string, query?: Record<string, string | number | undefined> }} [opts]
+ */
+export async function discogsFetch(path, opts = {}) {
+  return enqueueDiscogsRequest(async () => {
+    let lastErr = null
+    for (let attempt = 0; attempt <= MAX_429_RETRIES; attempt += 1) {
+      try {
+        return await discogsFetchOnce(path, opts)
+      } catch (err) {
+        lastErr = err
+        if (err?.code !== "DISCOGS_RATE_LIMIT" || attempt >= MAX_429_RETRIES) throw err
+        await sleep(Math.max(500, Number(err.retryAfterMs) || 3000))
+      }
+    }
+    throw lastErr
+  })
+}
+
 /** Validate token against Discogs identity endpoint. */
 export async function validateDiscogsToken(token) {
-  const t = String(token || "").trim()
-  if (!t) {
-    const err = new Error("Token is empty")
-    err.code = "EMPTY"
-    throw err
-  }
-  const r = await fetch(`${BASE}/oauth/identity`, {
-    headers: {
-      Authorization: `Discogs token=${t}`,
-      "User-Agent": UA,
-      Accept: "application/vnd.discogs.v2.discogs+json",
-    },
+  return enqueueDiscogsRequest(async () => {
+    const t = String(token || "").trim()
+    if (!t) {
+      const err = new Error("Token is empty")
+      err.code = "EMPTY"
+      throw err
+    }
+
+    await waitForRateGap()
+
+    const r = await fetch(`${BASE}/oauth/identity`, {
+      headers: {
+        Authorization: `Discogs token=${t}`,
+        "User-Agent": UA,
+        Accept: "application/vnd.discogs.v2.discogs+json",
+      },
+    })
+    lastRequestAt = Date.now()
+
+    if (r.status === 401) {
+      const err = new Error("Discogs token invalid")
+      err.code = "DISCOGS_UNAUTHORIZED"
+      throw err
+    }
+    if (!r.ok) {
+      const err = new Error(`Discogs validation failed (${r.status})`)
+      err.code = "DISCOGS_HTTP"
+      throw err
+    }
+    return r.json()
   })
-  if (r.status === 401) {
-    const err = new Error("Discogs token invalid")
-    err.code = "DISCOGS_UNAUTHORIZED"
-    throw err
-  }
-  if (!r.ok) {
-    const err = new Error(`Discogs validation failed (${r.status})`)
-    err.code = "DISCOGS_HTTP"
-    throw err
-  }
-  return r.json()
+}
+
+/** @internal test hook */
+export function resetDiscogsClientForTests() {
+  lastRequestAt = 0
+  fetchQueue = Promise.resolve()
 }

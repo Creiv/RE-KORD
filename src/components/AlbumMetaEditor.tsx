@@ -80,7 +80,7 @@ function AlbumMetaEditorModal({
   const submit = useCallback(
     async (event: FormEvent) => {
       event.preventDefault();
-      if (!album || album.loose) return;
+      if (!album) return;
       setBusy(true);
       setErr(null);
       try {
@@ -263,7 +263,7 @@ function AlbumMetaEditorModal({
             <button
               type="submit"
               className="primary-btn"
-              disabled={busy || deleteBusy || album.loose}
+              disabled={busy || deleteBusy}
             >
               {busy ? t("trackMeta.editSaving") : t("trackMeta.editSave")}
             </button>

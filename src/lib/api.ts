@@ -296,6 +296,13 @@ export function coverUrlForTrackRelPath(relPath: string) {
   return apiUrl("/api/cover", { path: relPath })
 }
 
+/** Copertina brano: usa filePath su disco se diverso da relPath logico (tracce loose). */
+export function coverUrlForTrack(
+  track: { relPath: string; filePath?: string | null },
+) {
+  return coverUrlForTrackRelPath(track.filePath?.trim() || track.relPath)
+}
+
 export function coverUrlForAlbumRelPath(relPath: string) {
   return apiUrl("/api/cover", { path: relPath })
 }

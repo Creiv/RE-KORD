@@ -29,8 +29,9 @@ import { DEFAULT_CUSTOM_THEME } from "../lib/themeCatalog";
 import { touchListeningActivity } from "../lib/achievements";
 import {
   buildLibraryTrackLookup,
+  isFavoriteRelPath,
   lookupLibraryTrack,
-  resolveTrackFromLibrary,
+  migrateLooseTrackPathsInUserState,
 } from "../lib/libraryNav";
 import { enrichedTracksNeedPlayerResync } from "../lib/libraryIndex";
 import { isTrackAlbumShuffleExcluded } from "../lib/randomExclusions";
@@ -455,14 +456,15 @@ function applyCustomThemeVars(
 }
 
 function normalizeUserState(s: UserStateV1): UserStateV1 {
-  const revRaw = s.revision;
+  const migrated = migrateLooseTrackPathsInUserState(s);
+  const revRaw = migrated.revision;
   const revision =
     typeof revRaw === "number" &&
     Number.isFinite(revRaw) &&
     revRaw >= 1
       ? Math.floor(revRaw)
       : 1;
-  const rawCounts = s.trackPlayCounts || {};
+  const rawCounts = migrated.trackPlayCounts || {};
   const trackPlayCounts = Object.fromEntries(
     Object.entries(rawCounts).filter(
       ([relPath, count]) =>
@@ -470,14 +472,14 @@ function normalizeUserState(s: UserStateV1): UserStateV1 {
     )
   ) as Record<string, number>;
   return {
-    ...s,
+    ...migrated,
     revision,
     trackPlayCounts,
-    plectrBests: s.plectrBests ?? {},
-    settings: normalizeSettings(s.settings),
-    shuffleExcludedAlbumIds: uniqStrings(s.shuffleExcludedAlbumIds || []),
+    plectrBests: migrated.plectrBests ?? {},
+    settings: normalizeSettings(migrated.settings),
+    shuffleExcludedAlbumIds: uniqStrings(migrated.shuffleExcludedAlbumIds || []),
     shuffleExcludedTrackRelPaths: uniqStrings(
-      s.shuffleExcludedTrackRelPaths || []
+      migrated.shuffleExcludedTrackRelPaths || []
     ),
   };
 }
@@ -1676,7 +1678,8 @@ export function UserStateProvider({ children }: { children: React.ReactNode }) {
           trackRowListenersRef.current.delete(listener);
         };
       },
-      isFavorite: (relPath) => trackRowSnapRef.current.favorites.has(relPath),
+      isFavorite: (relPath) =>
+        isFavoriteRelPath(trackRowSnapRef.current.favorites, relPath),
       getTrackPlayCount: (relPath) =>
         trackRowSnapRef.current.playCounts[relPath] ?? 0,
       isShuffleExcludedTrack: (relPath) =>
@@ -1701,7 +1704,7 @@ export function UserStateProvider({ children }: { children: React.ReactNode }) {
       selectedPlaylist,
       setSelectedPlaylist,
       toggleFavorite,
-      isFavorite: (relPath: string) => favorites.has(relPath),
+      isFavorite: (relPath: string) => isFavoriteRelPath(favorites, relPath),
       pushRecent,
       getTrackPlayCount,
       incrementTrackPlayCount,

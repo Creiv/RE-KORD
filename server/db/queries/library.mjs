@@ -2,6 +2,7 @@ import path from "path"
 import { existsSync, statSync } from "fs"
 import { randomUUID } from "crypto"
 import { getLibraryDb, withLibraryDbTransaction } from "../index.mjs"
+import { trackPathLookupVariants } from "../migrateV6.mjs"
 import { albumRowToIndex, artistRowToIndex, computeStatsFromIndex, trackRowToIndex } from "../mappers.mjs"
 import { parseTrackGenres } from "../../genres.mjs"
 import {
@@ -185,8 +186,8 @@ function upsertAlbumRow(db, album, statements) {
     updated_at: album.updatedAt || Date.now(),
     user_edited: 0,
   })
-  db.prepare("DELETE FROM album_expected_tracks WHERE album_id = ?").run(album.id)
   if (Array.isArray(album.expectedTracks)) {
+    db.prepare("DELETE FROM album_expected_tracks WHERE album_id = ?").run(album.id)
     for (const row of album.expectedTracks) {
       if (!row?.title) continue
       insExpected.run(
@@ -216,14 +217,27 @@ function upsertArtistRow(db, artist, insArtist) {
 }
 
 function removeTrackByFilePath(db, filePath) {
-  const row = db
-    .prepare("SELECT rel_path FROM tracks WHERE file_path = ? OR rel_path = ? LIMIT 1")
-    .get(filePath, filePath)
+  const variants = trackPathLookupVariants(filePath)
+  let row = null
+  for (const fp of variants) {
+    row = db
+      .prepare(
+        `SELECT t.rel_path, t.album_id, a.artist_id
+         FROM tracks t
+         JOIN albums a ON a.id = t.album_id
+         WHERE t.file_path = ? OR t.rel_path = ?
+         LIMIT 1`,
+      )
+      .get(fp, fp)
+    if (row) break
+  }
   if (!row) return null
   db.prepare("DELETE FROM tracks_fts WHERE rel_path = ?").run(row.rel_path)
   db.prepare("DELETE FROM tracks WHERE rel_path = ?").run(row.rel_path)
-  db.prepare("DELETE FROM files WHERE rel_path = ?").run(filePath)
-  return row.rel_path
+  for (const fp of variants) {
+    db.prepare("DELETE FROM files WHERE rel_path = ?").run(fp)
+  }
+  return { relPath: row.rel_path, albumId: row.album_id, artistId: row.artist_id }
 }
 
 function pruneEmptyAlbumsForArtists(db, artistIds) {
@@ -406,7 +420,8 @@ export async function persistIncrementalToDb(libraryRoot, index, opts = {}) {
     const stmts = { insAlbum, insExpected, insTrack, insFts, insFile }
 
     for (const fp of removedPaths) {
-      removeTrackByFilePath(db, fp)
+      const removed = removeTrackByFilePath(db, fp)
+      if (removed?.artistId) touchedArtistIds.add(removed.artistId)
     }
 
     for (const artist of index.artists || []) {
@@ -418,7 +433,11 @@ export async function persistIncrementalToDb(libraryRoot, index, opts = {}) {
       upsertAlbumRow(db, album, stmts)
     }
     for (const track of index.tracks || []) {
-      touchedArtistIds.add(track.artist)
+      const albumRow = db
+        .prepare("SELECT artist_id FROM albums WHERE id = ? LIMIT 1")
+        .get(track.albumId)
+      if (albumRow?.artist_id) touchedArtistIds.add(albumRow.artist_id)
+      else if (track.artist) touchedArtistIds.add(track.artist)
       upsertTrackRow(db, track, musicRoot, stmts)
     }
 

@@ -78,8 +78,6 @@ body,
   align-items: center;
   column-gap: 0.45rem;
   row-gap: 0;
-  padding: 0.55rem 0.7rem;
-  padding-left: max(0.65rem, env(safe-area-inset-left));
 }
 
 .track-row:has(.track-row__actions--compact-tools) .track-row__art-wrap {

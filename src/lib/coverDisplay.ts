@@ -1,4 +1,4 @@
-import { artworkUrl, coverUrlForAlbumRelPath, coverUrlForTrackRelPath } from "./api"
+import { artworkUrl, coverUrlForAlbumRelPath, coverUrlForTrack } from "./api"
 import type { EnrichedTrack, LibraryAlbumIndex } from "../types"
 
 export type AlbumArtworkRef = Pick<
@@ -13,8 +13,13 @@ export type CoverDisplay = {
   version: number | null
 }
 
+export type TrackCoverSeed = Pick<
+  EnrichedTrack,
+  "relPath" | "filePath" | "updatedAt"
+>
+
 export function trackCoverDisplay(
-  track: Pick<EnrichedTrack, "relPath" | "updatedAt">,
+  track: TrackCoverSeed,
   album?: AlbumArtworkRef | null,
   artworkSize: "128" | "256" | "full" = "128",
 ): CoverDisplay {
@@ -25,12 +30,12 @@ export function trackCoverDisplay(
       src: artworkUrl(artId, artworkSize),
       fallbackSrc: coverRel
         ? coverUrlForAlbumRelPath(coverRel)
-        : coverUrlForTrackRelPath(track.relPath),
+        : coverUrlForTrack(track),
       version: album?.updatedAt ?? null,
     }
   }
   const version =
     Math.max(Number(track.updatedAt) || 0, Number(album?.updatedAt) || 0) ||
     null
-  return { src: coverUrlForTrackRelPath(track.relPath), version }
+  return { src: coverUrlForTrack(track), version }
 }

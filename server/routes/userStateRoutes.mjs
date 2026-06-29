@@ -16,6 +16,8 @@ import { accountIdFromReq, actLog, sendError, sendOk } from "../httpUtils.mjs";
 import { getFilteredIndexForAccount } from "../libraryIndexService.mjs";
 import { buildDashboard, coverCandidates, isAudioFile } from "../musicLibrary.mjs";
 import { getMusicRoot } from "../musicRootConfig.mjs";
+import { isLibraryDbBootstrapped } from "../db/index.mjs";
+import { resolveTrackFileRelPath } from "../scanner/engine.mjs";
 import {
   albumFolderFromRelPath,
   hasReservedPathSegment,
@@ -261,11 +263,18 @@ export function registerUserStateRoutes(app) {
       return res.status(400).end();
     }
     const filePath = path.join(root, relPath.replaceAll("/", path.sep));
-    if (!underRoot(filePath, root) || !existsSync(filePath))
+    let resolvedPath = filePath;
+    if (!existsSync(resolvedPath) && isLibraryDbBootstrapped(root)) {
+      const mediaRel = resolveTrackFileRelPath(root, relPath);
+      if (mediaRel && mediaRel !== relPath) {
+        resolvedPath = path.join(root, mediaRel.replaceAll("/", path.sep));
+      }
+    }
+    if (!underRoot(resolvedPath, root) || !existsSync(resolvedPath))
       return res.status(404).end();
-    const dir = statSync(filePath).isDirectory()
-      ? filePath
-      : path.dirname(filePath);
+    const dir = statSync(resolvedPath).isDirectory()
+      ? resolvedPath
+      : path.dirname(resolvedPath);
     for (const name of coverCandidates()) {
       const full = path.join(dir, name);
       if (existsSync(full) && underRoot(full, root)) {

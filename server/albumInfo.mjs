@@ -10,17 +10,24 @@ import { isLibraryDbBootstrapped } from "./db/index.mjs"
 import {
   getAlbumRowByFolderRel,
   saveAlbumMetaToDb,
+  saveAlbumFetchedMetaToDb,
   saveTrackMetaToDb,
+  saveTrackFetchedMetaToDb,
   clearAlbumOrderingMetaInDb,
   clearTrackOrderingMetaInAlbumDb,
   mergeLegacyAlbumJsonIntoDb,
   mergeLegacyTrackMapIntoDb,
 } from "./db/queries/metadata.mjs"
 import { getLibraryDb } from "./db/index.mjs"
+import {
+  resolveTrackIndexRelPath,
+  resolveTrackRelPathByAlbumFile,
+} from "./trackPathResolve.mjs"
 import { isDiscogsConfigured } from "./discogsClient.mjs"
 import {
   fetchReleaseMetadataDiscogs,
   mergeReleaseMetadata,
+  fetchDiscogsRelease,
 } from "./discogsMetadata.mjs"
 import { matchTrackToDiscogsEntry } from "./discogsTrackMatch.mjs"
 import { readdirSync } from "fs"
@@ -439,7 +446,7 @@ export async function saveAlbumFetchedMeta(albumDir, payload) {
   const safe = stripAlbumOrderingFromFetchPayload(payload)
   const folderRel = canUseLibraryDbForAlbumDir(albumDir)
   if (folderRel) {
-    return saveAlbumMetaToDb(getMusicRoot(), folderRel, safe)
+    return saveAlbumFetchedMetaToDb(getMusicRoot(), folderRel, safe)
   }
   const readPath = pickAlbumMetaPath(albumDir)
   const writePath = path.join(albumDir, FILE_ALBUM)
@@ -457,12 +464,16 @@ export async function saveAlbumFetchedMeta(albumDir, payload) {
  * @param {string} albumDir assoluto
  * @param {string} fileName es. "01 - Song.flac"
  * @param {Record<string, unknown>} patch solo chiavi ammesse
+ * @param {string} [trackRelPath] rel_path logico dal client (es. loose Artist/Tracks/file.mp3)
  */
-export async function saveTrackManualMeta(albumDir, fileName, patch) {
+export async function saveTrackManualMeta(albumDir, fileName, patch, trackRelPath = null) {
   const folderRel = canUseLibraryDbForAlbumDir(albumDir)
   if (folderRel) {
-    const relPath = `${folderRel}/${fileName}`.replace(/\\/g, "/")
-    const meta = saveTrackMetaToDb(getMusicRoot(), relPath, patch)
+    const root = getMusicRoot()
+    const relPath = trackRelPath
+      ? resolveTrackIndexRelPath(root, trackRelPath)
+      : resolveTrackRelPathByAlbumFile(root, folderRel, fileName)
+    const meta = saveTrackMetaToDb(root, relPath, patch)
     return { ...meta, editedAt: new Date().toISOString() }
   }
   const readPath = pickTrackMetaPath(albumDir)
@@ -520,12 +531,14 @@ export async function saveTrackManualMeta(albumDir, fileName, patch) {
   })
 }
 
-export async function saveTrackFetchedMeta(albumDir, fileName, patch) {
+export async function saveTrackFetchedMeta(albumDir, fileName, patch, trackRelPath = null) {
   const safe = stripTrackOrderingFromFetchPayload(patch)
   const folderRel = canUseLibraryDbForAlbumDir(albumDir)
   if (folderRel) {
     const root = getMusicRoot()
-    const relPath = `${folderRel}/${fileName}`.replace(/\\/g, "/")
+    const relPath = trackRelPath
+      ? resolveTrackIndexRelPath(root, trackRelPath)
+      : resolveTrackRelPathByAlbumFile(root, folderRel, fileName)
     const { durationMs, ...rest } = safe || {}
     saveTrackMetaToDb(root, relPath, rest)
     const row = getLibraryDb(root).prepare("SELECT * FROM tracks WHERE rel_path = ?").get(relPath)
@@ -1677,6 +1690,16 @@ export async function resolveDiscogsAlbumTrackContext(albumDir, artist, album) {
   let releaseDate = albumMeta?.releaseDate || null
   let genre = albumMeta?.genre || null
   let discogsUri = albumMeta?.discogsUri || null
+
+  if ((!tracklist || !tracklist.length) && albumMeta?.discogsReleaseId) {
+    const rel = await fetchDiscogsRelease(albumMeta.discogsReleaseId)
+    if (rel?.ok && Array.isArray(rel.expectedTracks) && rel.expectedTracks.length) {
+      tracklist = rel.expectedTracks
+      releaseDate = rel.releaseDate || rel.date || releaseDate
+      genre = rel.genre || genre
+      discogsUri = rel.discogsUri || discogsUri
+    }
+  }
 
   if ((!tracklist || !tracklist.length) && (artist || album)) {
     const rel = await fetchReleaseMetadataDiscogs(artist, album)

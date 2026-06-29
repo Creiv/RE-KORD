@@ -7,9 +7,11 @@ vi.mock("./musicRootConfig.mjs", () => ({
 }))
 
 describe("discogsClient", () => {
-  beforeEach(() => {
+  beforeEach(async () => {
     for (const k of ENV_KEYS) delete process.env[k]
     vi.resetModules()
+    const { resetDiscogsClientForTests } = await import("./discogsClient.mjs")
+    resetDiscogsClientForTests()
     vi.stubGlobal(
       "fetch",
       vi.fn(async () => ({
@@ -57,16 +59,50 @@ describe("discogsClient", () => {
     })
   })
 
-  it("maps 429 to rate limit", async () => {
+  it("maps 429 to rate limit after retries", async () => {
     process.env.REKORD_DISCOGS_TOKEN = "ok"
     vi.resetModules()
+    let calls = 0
     vi.stubGlobal(
       "fetch",
-      vi.fn(async () => ({ ok: false, status: 429, json: async () => ({}) })),
+      vi.fn(async () => {
+        calls += 1
+        return {
+          ok: false,
+          status: 429,
+          json: async () => ({}),
+          headers: { get: () => "0" },
+        }
+      }),
     )
-    const { discogsFetch } = await import("./discogsClient.mjs")
+    const { discogsFetch, resetDiscogsClientForTests } = await import("./discogsClient.mjs")
+    resetDiscogsClientForTests()
     await expect(discogsFetch("/releases/1")).rejects.toMatchObject({
       code: "DISCOGS_RATE_LIMIT",
     })
+    expect(calls).toBeGreaterThan(1)
+  }, 15000)
+
+  it("serializes parallel discogsFetch calls", async () => {
+    vi.resetModules()
+    const order: number[] = []
+    let n = 0
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async () => {
+        const id = ++n
+        order.push(id)
+        await new Promise((r) => setTimeout(r, 5))
+        order.push(-id)
+        return { ok: true, status: 200, json: async () => ({ id }) }
+      }),
+    )
+    const { discogsFetch, resetDiscogsClientForTests } = await import(
+      "./discogsClient.mjs"
+    )
+    resetDiscogsClientForTests()
+    await Promise.all([discogsFetch("/a"), discogsFetch("/b")])
+    expect(order.filter((x) => x > 0)).toEqual([1, 2])
+    expect(order).toEqual([1, -1, 2, -2])
   })
 })

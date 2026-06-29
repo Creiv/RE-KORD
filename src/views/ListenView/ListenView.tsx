@@ -40,7 +40,7 @@ import { uploadAlbumCover } from "../../lib/api";
 import { useTrackCoverDisplay } from "../../context/LibraryArtworkContext";
 import { versionedUrl } from "../../lib/versionedUrl";
 import { albumFolderFromTrack } from "../../lib/trackPaths";
-import { formatTrackByline } from "../../lib/libraryNav";
+import { enrichTracksFromLibrary, formatTrackByline } from "../../lib/libraryNav";
 import { isTrackAlbumShuffleExcluded } from "../../lib/randomExclusions";
 import { eligibleTracksForIntelligentRandom } from "../../lib/randomExclusions";
 import { PlayCollectionButton } from "../../components/PlayCollectionButton";
@@ -136,10 +136,11 @@ export default function ListenView({
 
   const recentTracks = useMemo(() => {
     const curRel = cur?.relPath;
-    return user.state.recent
+    const seeds = user.state.recent
       .filter((tr) => !curRel || tr.relPath !== curRel)
       .slice(0, 6);
-  }, [user.state.recent, cur?.relPath]);
+    return enrichTracksFromLibrary(seeds, index.tracks);
+  }, [user.state.recent, cur?.relPath, index.tracks]);
 
   const [listenRecentPanel, setListenRecentPanel] = useState<
     "recent" | "lyrics"

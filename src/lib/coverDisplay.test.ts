@@ -12,6 +12,19 @@ describe("trackCoverDisplay", () => {
     expect(out.version).toBe(9_000)
   })
 
+  it("usa filePath su disco per tracce loose senza coverArtId", () => {
+    const out = trackCoverDisplay(
+      {
+        relPath: "Artist/Tracks/Loose.mp3",
+        filePath: "Artist/Loose.mp3",
+        updatedAt: 100,
+      },
+      null,
+    )
+    expect(out.src).toContain("Loose.mp3")
+    expect(out.src).not.toContain("Tracks")
+  })
+
   it("usa /api/cover con versione max track/album senza coverArtId", () => {
     const out = trackCoverDisplay(
       { relPath: "A/B/01.flac", updatedAt: 100 },

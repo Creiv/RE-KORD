@@ -248,6 +248,8 @@ export type UserStateV1 = {
   trackMoods?: Record<string, string[]>;
   trackMoodsMigrated?: boolean;
   playlistsMigrated?: boolean;
+  /** Path loose Tracce→Tracks migrati in favorites/recent/queue. */
+  loosePathsMigrated?: boolean;
   /** Migliori punteggi Plectr per relPath (per account). */
   plectrBests?: Record<string, PlectrBestScore>;
 };

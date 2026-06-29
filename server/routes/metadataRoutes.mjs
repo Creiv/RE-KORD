@@ -44,7 +44,7 @@ import { isAudioFile } from "../musicLibrary.mjs";
 import { resolveTrackFileRelPath, resolveAlbumFolderRelPath } from "../scanner/engine.mjs";
 import { getMusicRoot } from "../musicRootConfig.mjs";
 import { isDiscogsConfigured } from "../discogsClient.mjs";
-import { searchDiscogsReleases } from "../discogsMetadata.mjs";
+import { searchDiscogsReleases, fetchDiscogsRelease, scoreDiscogsReleaseForFolder, DISCOGS_APPLY_MIN_SCORE } from "../discogsMetadata.mjs";
 import { applyDiscogsReleaseToAlbum } from "../discogsApply.mjs";
 import {
   albumFolderFromRelPath,
@@ -133,7 +133,7 @@ async function fetchAndSaveOneTrack(root, relPath, discogsContext = null) {
   const row = await saveTrackFetchedMeta(albumDir, fileName, {
     ...meta,
     fetchedAt: new Date().toISOString(),
-  });
+  }, relPath);
   applyFetchedTrackOrdering(root, relPath, meta);
   const fileMs = await getAudioFileDurationMs(fullTrackPath);
   const metaOut = {
@@ -416,7 +416,7 @@ export function registerMetadataRoutes(app) {
           const relPath = `${albumPath}/${entry.name}`.replaceAll(path.sep, "/");
           const row = await saveTrackManualMeta(full, entry.name, {
             genre: normalizeStoredGenreString(mergedGenres.join("; ")) || null,
-          });
+          }, relPath);
           touchedTracks.push({
             relPath,
             meta: row,
@@ -678,7 +678,7 @@ export function registerMetadataRoutes(app) {
       const accId = accountIdFromReq(req);
       let meta = {};
       if (Object.keys(safe).length) {
-        meta = await saveTrackManualMeta(albumDir, fileName, safe);
+        meta = await saveTrackManualMeta(albumDir, fileName, safe, relPath);
       }
       let moods = [];
       if (hasMood) {
@@ -917,9 +917,6 @@ export function registerMetadataRoutes(app) {
   });
 
   app.post("/api/discogs/search-releases", async (req, res) => {
-    if (!isDiscogsConfigured()) {
-      return sendError(res, 400, "Discogs token not configured");
-    }
     try {
       const artist = String(req.body?.artist || "").trim();
       const album = String(req.body?.album || "").trim();
@@ -935,9 +932,6 @@ export function registerMetadataRoutes(app) {
   });
 
   app.post("/api/discogs/apply-release", async (req, res) => {
-    if (!isDiscogsConfigured()) {
-      return sendError(res, 400, "Discogs token not configured");
-    }
     const root = getMusicRoot();
     const albumPath = safeRelSeg(String(req.body?.albumPath || ""));
     const releaseId = Number(req.body?.releaseId);
@@ -953,9 +947,28 @@ export function registerMetadataRoutes(app) {
       if (!statSync(full).isDirectory()) {
         return sendError(res, 400, "Not a directory");
       }
+      const artistName =
+        String(req.body?.artist || "").trim() ||
+        path.dirname(albumPath).split("/").filter(Boolean).pop() ||
+        "";
+      const albumName =
+        String(req.body?.album || "").trim() || path.basename(albumPath);
+      const releaseMeta = await fetchDiscogsRelease(releaseId);
+      if (!releaseMeta.ok) {
+        return sendError(res, 404, releaseMeta.error || "Release not found");
+      }
+      const score = scoreDiscogsReleaseForFolder(releaseMeta, artistName, albumName);
+      if (score < DISCOGS_APPLY_MIN_SCORE) {
+        return sendError(
+          res,
+          400,
+          `Discogs release does not match album folder (score ${score})`,
+        );
+      }
       const { savedMeta, trackDeltas } = await applyDiscogsReleaseToAlbum(
         full,
         releaseId,
+        releaseMeta,
       );
       void actLog(req, {
         kind: "library",

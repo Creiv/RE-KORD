@@ -10,6 +10,10 @@ import {
   resolveScopesFromPaths,
   walkFilesystemStats,
 } from "./engine.mjs"
+import {
+  resolveTrackIndexRelPath,
+  resolveTrackRelPathByAlbumFile,
+} from "../trackPathResolve.mjs"
 import { closeLibraryDb, getLibraryDb } from "../db/index.mjs"
 
 describe("scanner engine", () => {
@@ -100,5 +104,28 @@ describe("scanner engine", () => {
     expect(resolveAlbumFolderRelPath(tmp, "Artist/Album/01 Song.mp3")).toBe(
       "Artist/Album",
     )
+  })
+
+  it("resolveTrackIndexRelPath maps disk file_path to logical rel_path", () => {
+    const db = getLibraryDb(tmp)
+    db.prepare(`INSERT INTO artists (id, name) VALUES ('a1', 'Artist')`).run()
+    db.prepare(
+      `INSERT INTO albums (id, artist_id, name, folder_rel_path, loose)
+       VALUES ('al-loose', 'a1', 'Tracks', 'Artist', 1)`,
+    ).run()
+    db.prepare(
+      `INSERT INTO tracks (id, album_id, title, rel_path, file_path, file_name, artist_name, album_name, loose)
+       VALUES ('t-loose', 'al-loose', 'Loose', 'Artist/Tracks/Loose.mp3', 'Artist/Loose.mp3', 'Loose.mp3', 'Artist', 'Tracks', 1)`,
+    ).run()
+
+    expect(resolveTrackIndexRelPath(tmp, "Artist/Tracks/Loose.mp3")).toBe(
+      "Artist/Tracks/Loose.mp3",
+    )
+    expect(resolveTrackIndexRelPath(tmp, "Artist/Loose.mp3")).toBe(
+      "Artist/Tracks/Loose.mp3",
+    )
+    expect(
+      resolveTrackRelPathByAlbumFile(tmp, "Artist", "Loose.mp3"),
+    ).toBe("Artist/Tracks/Loose.mp3")
   })
 })

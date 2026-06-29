@@ -6,7 +6,8 @@
   grid-template-columns: 48px minmax(0, 1fr) auto;
   align-items: center;
   gap: var(--space-3);
-  padding: var(--space-3) var(--space-5);
+  padding: 0.55rem 0.7rem;
+  padding-left: max(0.65rem, env(safe-area-inset-left));
   position: relative;
   border-radius: calc(var(--radius-lg) + 8px);
   transition: background 0.16s ease, border-color 0.16s ease,

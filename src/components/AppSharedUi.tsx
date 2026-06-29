@@ -28,7 +28,7 @@ import {
   coverUrlForAlbumRelPath,
 } from "../lib/api";
 import { fmtDate } from "../lib/metaFormat";
-import { formatTrackByline } from "../lib/libraryNav";
+import { formatTrackByline, isFavoriteRelPath } from "../lib/libraryNav";
 import { formatDurationMs } from "../lib/duration";
 import { versionedUrl } from "../lib/versionedUrl";
 import { initials } from "../lib/initials";
@@ -117,7 +117,7 @@ export function TrackFileMetaChip({ meta }: { meta?: TrackMeta | null }) {
 function TrackRowArt({
   track,
 }: {
-  track: Pick<EnrichedTrack, "relPath" | "albumId" | "updatedAt">;
+  track: Pick<EnrichedTrack, "relPath" | "albumId" | "filePath" | "updatedAt">;
 }) {
   const { src, fallbackSrc, version } = useTrackCoverDisplay(track);
   return (
@@ -139,7 +139,7 @@ function TrackRowArtPlay({
   onPlay,
   isNowPlaying = false,
 }: {
-  track: Pick<EnrichedTrack, "relPath" | "albumId" | "updatedAt">;
+  track: Pick<EnrichedTrack, "relPath" | "albumId" | "filePath" | "updatedAt">;
   onPlay: () => void;
   isNowPlaying?: boolean;
 }) {
@@ -1217,7 +1217,7 @@ export function LibraryGenreFavoriteChips({
   const n = useMemo(() => {
     let c = 0;
     for (const t of tracksInGenreByKey(libraryIndex, genreKey)) {
-      if (favorites.has(t.relPath)) c += 1;
+      if (isFavoriteRelPath(favorites, t.relPath)) c += 1;
     }
     return c;
   }, [genreKey, libraryIndex, favorites]);
@@ -1323,7 +1323,7 @@ export function LibraryArtistFavoriteChips({
   const n = useMemo(() => {
     let c = 0;
     for (const t of libraryIndex.tracks) {
-      if (t.artist === artist.name && favorites.has(t.relPath)) c += 1;
+      if (t.artist === artist.name && isFavoriteRelPath(favorites, t.relPath)) c += 1;
     }
     return c;
   }, [artist.name, libraryIndex.tracks, favorites]);
@@ -1361,7 +1361,7 @@ export function LibraryAlbumFavoriteChips({
   const { t } = useI18n();
   const { favorites } = useUserState();
   const n = useMemo(
-    () => album.tracks.filter((rel) => favorites.has(rel)).length,
+    () => album.tracks.filter((rel) => isFavoriteRelPath(favorites, rel)).length,
     [album.tracks, favorites]
   );
   const wrap =

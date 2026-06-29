@@ -850,35 +850,47 @@ export function ToolsView({
       setMetaLog(t("tools.metaPickAlbum"));
       return;
     }
+    const runFallbackFetch = () => {
+      setMetaBusy(true);
+      fetchAlbumInfo(metaAlbumPath.trim(), metaArt.trim(), metaAlb.trim())
+        .then((r) => {
+          const d = r.meta?.date;
+          setMetaLog(
+            (s) =>
+              s + t("tools.metaOkLine", { path: r.albumPath, date: fmtDate(d) })
+          );
+          if (r.album && onLibraryDelta) {
+            onLibraryDelta({ album: r.album }, false);
+          } else {
+            void onReconcileLibrary({ mode: "debounced" });
+          }
+        })
+        .catch((e) => setMetaLog((s) => s + t("tools.metaErr", { e: String(e) })))
+        .finally(() => setMetaBusy(false));
+    };
     if (discogsConfigured) {
       setMetaBusy(true);
       searchDiscogsReleases(metaArt.trim(), metaAlb.trim())
         .then((r) => {
+          if (!r.candidates?.length) {
+            setMetaLog((s) => s + t("tools.metaDiscogsFallback"));
+            runFallbackFetch();
+            return;
+          }
           setDiscogsCandidates(r.candidates);
           setDiscogsPickerOpen(true);
+          setMetaBusy(false);
         })
-        .catch((e) =>
-          setMetaLog((s) => s + t("tools.metaErr", { e: String(e) }))
-        )
-        .finally(() => setMetaBusy(false));
+        .catch((e) => {
+          setMetaLog(
+            (s) =>
+              s + t("tools.metaDiscogsFallbackErr", { e: String(e) })
+          );
+          runFallbackFetch();
+        });
       return;
     }
-    setMetaBusy(true);
-    fetchAlbumInfo(metaAlbumPath.trim(), metaArt.trim(), metaAlb.trim())
-      .then((r) => {
-        const d = r.meta?.date;
-        setMetaLog(
-          (s) =>
-            s + t("tools.metaOkLine", { path: r.albumPath, date: fmtDate(d) })
-        );
-        if (r.album && onLibraryDelta) {
-          onLibraryDelta({ album: r.album }, false);
-        } else {
-          void onReconcileLibrary({ mode: "debounced" });
-        }
-      })
-      .catch((e) => setMetaLog((s) => s + t("tools.metaErr", { e })))
-      .finally(() => setMetaBusy(false));
+    runFallbackFetch();
   };
 
   const applyDiscogsReleaseChoice = (releaseId: number) => {

@@ -130,6 +130,60 @@ export function legacyLooseRelPath(relPath: string): string {
   return relPath.replace("/Tracce/", "/Tracks/")
 }
 
+/** @deprecated alias for legacyLooseRelPath */
+export const normalizeLooseRelPath = legacyLooseRelPath
+
+export function isFavoriteRelPath(
+  favorites: ReadonlySet<string>,
+  relPath: string,
+): boolean {
+  if (favorites.has(relPath)) return true
+  const migrated = legacyLooseRelPath(relPath)
+  if (migrated !== relPath && favorites.has(migrated)) return true
+  const legacy = relPath.replace("/Tracks/", "/Tracce/")
+  if (legacy !== relPath && favorites.has(legacy)) return true
+  return false
+}
+
+function uniqRelPaths(paths: string[]): string[] {
+  return [...new Set(paths.filter(Boolean))]
+}
+
+/** Migra path loose Tracce → Tracks in user state (una tantum). */
+export function migrateLooseTrackPathsInUserState<T extends import("../types").UserStateV1>(
+  state: T,
+): T {
+  if (state.loosePathsMigrated) return state
+  const mapRel = (p: string) => legacyLooseRelPath(p)
+  const favorites = uniqRelPaths((state.favorites || []).map(mapRel))
+  const recent = (state.recent || []).map((track) => {
+    const relPath = mapRel(track.relPath)
+    return relPath === track.relPath ? track : { ...track, relPath }
+  })
+  const queueTracks = (state.queue?.tracks || []).map((track) => {
+    const relPath = mapRel(track.relPath)
+    return relPath === track.relPath ? track : { ...track, relPath }
+  })
+  const playlists = (state.playlists || []).map((pl) => ({
+    ...pl,
+    tracks: (pl.tracks || []).map((track) => {
+      const relPath = mapRel(track.relPath)
+      return relPath === track.relPath ? track : { ...track, relPath }
+    }),
+  }))
+  return {
+    ...state,
+    favorites,
+    recent,
+    queue: { ...state.queue, tracks: queueTracks },
+    playlists,
+    shuffleExcludedTrackRelPaths: uniqRelPaths(
+      (state.shuffleExcludedTrackRelPaths || []).map(mapRel),
+    ),
+    loosePathsMigrated: true,
+  }
+}
+
 export function trackPlaybackKey(track: {
   relPath: string
   filePath?: string | null
@@ -158,6 +212,15 @@ export function resolveTrackFromLibrary<T extends EnrichedTrack>(
     if (fromFile) return fromFile
   }
   return seed
+}
+
+/** Allinea brani da user state (recenti, playlist stub) con l'indice libreria corrente. */
+export function enrichTracksFromLibrary<T extends EnrichedTrack>(
+  seeds: readonly T[],
+  libraryTracks: readonly T[],
+): T[] {
+  if (!libraryTracks.length) return [...seeds]
+  return seeds.map((seed) => resolveTrackFromLibrary(seed, libraryTracks))
 }
 
 export function buildLibraryTrackLookup(tracks: readonly LibraryTrackIndex[]) {

@@ -1207,6 +1207,8 @@ export const IT: Record<string, string> = {
   "tools.discogsPickerCancel": "Annulla",
   "tools.discogsCommunity": "Collezione: {{have}} have · {{want}} want",
   "tools.metaDiscogsOkLine": "Discogs #{{id}} — {{path}} ({{date}}).\n",
+  "tools.metaDiscogsFallback": "Nessun risultato Discogs — fallback MusicBrainz/TheAudioDB…\n",
+  "tools.metaDiscogsFallbackErr": "Discogs non disponibile ({{e}}) — fallback altre fonti…\n",
   "tools.progressTrackMeta": "Metadati brani",
   "tools.progressTrackMetaPrune": "Pulizia metadati libreria",
   "tools.trackMetaPruneOrphans": "Pulizia metadati libreria",

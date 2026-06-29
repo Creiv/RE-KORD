@@ -1,4 +1,4 @@
-export const SCHEMA_VERSION = 4
+export const SCHEMA_VERSION = 6
 
 export const MIGRATION_SQL = `
 CREATE TABLE IF NOT EXISTS schema_migrations (

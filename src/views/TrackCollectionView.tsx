@@ -1,10 +1,12 @@
 import type { ReactNode } from "react";
+import { useMemo } from "react";
 import { useI18n } from "../i18n/useI18n";
 import { useLibraryPlayback } from "../hooks/useLibraryPlayback";
 import { PlayCollectionButton } from "../components/PlayCollectionButton";
 import { SectionHeadLead } from "../components/SectionHeadLead";
 import { TrackListRow } from "../components/AppSharedUi";
 import { VirtualTrackList } from "../components/VirtualTrackList";
+import { enrichTracksFromLibrary } from "../lib/libraryNav";
 import type { EnrichedTrack } from "../types";
 
 function TrackCollectionView({
@@ -24,6 +26,13 @@ function TrackCollectionView({
   leadIcon?: ReactNode;
 }) {
   const { t } = useI18n();
+  const displayTracks = useMemo(
+    () =>
+      libraryTracks?.length
+        ? enrichTracksFromLibrary(tracks, libraryTracks)
+        : tracks,
+    [tracks, libraryTracks],
+  );
   const { playGlobalRadio, playCollectionShuffle, playPoolShuffle } =
     useLibraryPlayback(libraryTracks);
 
@@ -49,18 +58,18 @@ function TrackCollectionView({
             {tracks.length > 0 ? (
               <PlayCollectionButton
                 label={playAllLabel}
-                onClick={() => playPoolShuffle(tracks, true)}
+                onClick={() => playPoolShuffle(displayTracks, true)}
               />
             ) : null}
           </div>
         </section>
       </header>
       <section className="surface-card collection-page__list view-page__body">
-        {tracks.length === 0 ? (
+        {displayTracks.length === 0 ? (
           <p className="panel-empty">{t("collection.empty")}</p>
         ) : (
           <VirtualTrackList
-            items={tracks}
+            items={displayTracks}
             getKey={(track, index) => `${track.relPath}-${index}`}
             renderRow={(track, index, virtualized) => (
               <TrackListRow
