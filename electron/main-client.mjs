@@ -299,11 +299,6 @@ if (!app.requestSingleInstanceLock()) {
     app.setName(APP_NAME);
     installAppMenu();
     createWindow();
-    const saved = readRemoteState();
-    if (saved?.baseUrl && saved?.accountId) {
-      openAppFromState(saved.baseUrl, saved.accountId);
-    } else {
-      showConnect();
-    }
+    showConnect();
   });
 }

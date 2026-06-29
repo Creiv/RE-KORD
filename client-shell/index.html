@@ -469,6 +469,89 @@
         }
       }
 
+      .reconnect-panel {
+        max-width: 22rem;
+        text-align: center;
+      }
+
+      .reconnect-splash {
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        gap: var(--space-4);
+        padding: var(--space-3) 0 var(--space-4);
+      }
+
+      .reconnect-splash .brand-mark {
+        justify-content: center;
+        margin-bottom: 0;
+      }
+
+      .reconnect-splash .brand-mark img {
+        animation: reconnectPulse 2.1s ease-in-out infinite;
+      }
+
+      @keyframes reconnectPulse {
+        0%,
+        100% {
+          opacity: 1;
+          transform: scale(1);
+        }
+
+        50% {
+          opacity: 0.82;
+          transform: scale(0.96);
+        }
+      }
+
+      .reconnect-splash__spinner {
+        width: 3.25rem;
+        height: 3.25rem;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+      }
+
+      .reconnect-splash__spinner .rekord-splash__ring {
+        width: 100%;
+        height: 100%;
+        border-width: 3px;
+      }
+
+      .reconnect-splash__title {
+        margin: 0;
+        font-size: 1.18rem;
+        font-weight: 700;
+        letter-spacing: -0.02em;
+        line-height: 1.2;
+      }
+
+      .reconnect-splash__lead {
+        margin: 0;
+        color: var(--muted);
+        font-size: var(--text-sm);
+        line-height: 1.5;
+        max-width: 18rem;
+      }
+
+      .reconnect-splash__host {
+        margin: 0;
+        padding: 0.35rem 0.65rem;
+        border-radius: var(--radius-pill);
+        font-size: var(--text-xs);
+        font-family: ui-monospace, "JetBrains Mono", monospace;
+        color: var(--accent2);
+        background: rgba(56, 189, 248, 0.08);
+        border: 1px solid rgba(56, 189, 248, 0.18);
+        word-break: break-all;
+      }
+
+      @media (prefers-reduced-motion: reduce) {
+        .reconnect-splash .brand-mark img {
+          animation: none;
+        }
+      }
+
       .hidden {
         display: none !important;
       }
@@ -497,6 +580,28 @@
     </header>
 
     <div class="connect-shell">
+      <section
+        class="surface-card reconnect-panel hidden"
+        id="reconnect-panel"
+        aria-live="polite"
+        aria-busy="true"
+      >
+        <div class="reconnect-splash">
+          <div class="brand-mark">
+            <img src="rekord-logo.png" alt="" width="40" height="40" decoding="async" />
+            <p class="eyebrow">RE-KORD</p>
+          </div>
+          <div class="reconnect-splash__spinner" aria-hidden="true">
+            <span class="rekord-splash__ring"></span>
+          </div>
+          <h2 class="reconnect-splash__title" id="reconnect-title">Reconnecting…</h2>
+          <p class="reconnect-splash__lead" id="reconnect-lead">
+            Checking your saved server…
+          </p>
+          <p class="reconnect-splash__host" id="reconnect-host"></p>
+        </div>
+      </section>
+
       <section class="surface-card" id="card" role="main">
         <div class="section-head">
           <div>
@@ -731,6 +836,10 @@
           publicUrlPlaceholder: "https://name.trycloudflare.com",
           connect: "Connect",
           connecting: "Connecting…",
+          reconnectTitle: "Reconnecting…",
+          reconnectLead: "Checking your saved server…",
+          reconnectOpening: "Opening library…",
+          reconnectOpeningLead: "Connection successful. Loading your library.",
           scanQr: "Scan QR",
           open: "Open",
           opening: "Opening…",
@@ -758,6 +867,10 @@
           publicUrlPlaceholder: "https://nome.trycloudflare.com",
           connect: "Connetti",
           connecting: "Connessione…",
+          reconnectTitle: "Riconnessione…",
+          reconnectLead: "Verifica del server salvato…",
+          reconnectOpening: "Apertura libreria…",
+          reconnectOpeningLead: "Connessione riuscita. Caricamento della libreria.",
           scanQr: "Scansiona QR",
           open: "Apri",
           opening: "Apertura…",
@@ -784,6 +897,7 @@
 
       const E = (id) => document.getElementById(id);
       const cardEl = E("card");
+      const reconnectPanel = E("reconnect-panel");
       const hostIn = E("host");
       const portIn = E("port");
       const modeSeg = E("mode-seg");
@@ -810,6 +924,51 @@
       let connectionMode = "local";
       let lastBase = "";
       let selectedAccountId = "";
+      let reconnectPhase = "checking";
+
+      function formatServerLabel(baseUrl) {
+        const p = parseBaseUrl(baseUrl);
+        if (p) return p.full.replace(/^https?:\/\//i, "");
+        return String(baseUrl || "").trim();
+      }
+
+      function setReconnectPhase(phase) {
+        reconnectPhase = phase === "opening" ? "opening" : "checking";
+        E("reconnect-title").textContent =
+          reconnectPhase === "opening" ? t("reconnectOpening") : t("reconnectTitle");
+        E("reconnect-lead").textContent =
+          reconnectPhase === "opening" ? t("reconnectOpeningLead") : t("reconnectLead");
+      }
+
+      function showReconnectPanel(baseUrl) {
+        cardEl.classList.add("hidden");
+        reconnectPanel.classList.remove("hidden");
+        reconnectPanel.setAttribute("aria-busy", "true");
+        E("reconnect-host").textContent = formatServerLabel(baseUrl);
+        setReconnectPhase("checking");
+      }
+
+      function hideReconnectPanel() {
+        reconnectPanel.classList.add("hidden");
+        reconnectPanel.setAttribute("aria-busy", "false");
+        cardEl.classList.remove("hidden");
+      }
+
+      function applySavedToForm(saved) {
+        if (!saved || !saved.baseUrl) return;
+        const p = parseBaseUrl(saved.baseUrl);
+        if (!p) return;
+        if (guessModeFromBase(p.full) === "public") {
+          setConnectionMode("public");
+          publicUrlIn.value = p.full;
+        } else {
+          setConnectionMode("local");
+          hostIn.value = p.h;
+          portIn.value = p.p;
+        }
+        syncModeUi();
+        updateProbeButton();
+      }
 
       function t(key) {
         return (I18N[locale] && I18N[locale][key]) || I18N.en[key] || key;
@@ -835,6 +994,7 @@
         btnScan.textContent = t("scanQr");
         if (!btnProbe.classList.contains("is-loading")) btnProbe.textContent = t("connect");
         if (!btnOpen.classList.contains("is-loading")) btnOpen.textContent = t("open");
+        if (!reconnectPanel.classList.contains("hidden")) setReconnectPhase(reconnectPhase);
         langSeg.querySelectorAll("button").forEach((btn) => {
           const active = btn.dataset.locale === locale;
           btn.classList.toggle("is-on", active);
@@ -1046,21 +1206,7 @@
       window.rekordClientConnect
         .getSaved()
         .then((s) => {
-          if (s && s.baseUrl && !fromUrl) {
-            const p = parseBaseUrl(s.baseUrl);
-            if (p) {
-              if (guessModeFromBase(p.full) === "public") {
-                setConnectionMode("public");
-                publicUrlIn.value = p.full;
-              } else {
-                setConnectionMode("local");
-                hostIn.value = p.h;
-                portIn.value = p.p;
-              }
-              syncModeUi();
-            }
-            updateProbeButton();
-          }
+          if (s && s.baseUrl && !fromUrl) applySavedToForm(s);
         })
         .catch(() => {});
 
@@ -1152,24 +1298,32 @@
       window.addEventListener("pageshow", (e) => {
         if (e.persisted) {
           returnedFromApp = true;
+          hideReconnectPanel();
           resetToConnect();
         }
       });
 
       /* Come il client desktop: con uno stato salvato si apre direttamente
-         l'app; se il server non risponde si resta sul form con l'errore. */
+         l'app; se il server non risponde si mostra il form con l'errore. */
       (async () => {
         if (fromUrl) return;
         const s = await window.rekordClientConnect.getSaved().catch(() => null);
         if (!s || !s.baseUrl || !s.accountId) return;
+        applySavedToForm(s);
+        showReconnectPanel(s.baseUrl);
         const r = await window.rekordClientConnect.probe(s.baseUrl);
-        if (returnedFromApp) return;
+        if (returnedFromApp) {
+          hideReconnectPanel();
+          return;
+        }
         if (r && r.ok) {
+          setReconnectPhase("opening");
           window.location.href = window.rekordClientConnect.buildAppUrl(
             r.baseUrl,
             s.accountId
           );
         } else {
+          hideReconnectPanel();
           showErr((r && r.error) || t("errConnection"));
         }
       })();
