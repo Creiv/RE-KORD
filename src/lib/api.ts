@@ -1,5 +1,6 @@
 import type {
   DashboardPayload,
+  DiscogsAlbumExtra,
   EntityInfoBundle,
   EntityInfoCandidate,
   EntityInfoItem,
@@ -565,6 +566,10 @@ export type AppConfig = {
   youtubeCookiesWritable?: boolean
   youtubeCookiesLockedByEnv?: boolean
   youtubeCookiesLabel?: string | null
+  discogsConfigured?: boolean
+  discogsTokenConfigured?: boolean
+  discogsWritable?: boolean
+  discogsLockedByEnv?: boolean
   serverPort: number
   devClientPort: number
   lanAccessUrl: string | null
@@ -663,6 +668,66 @@ export async function clearYoutubeCookies(): Promise<AppConfig> {
     method: "DELETE",
   })
   return unwrap<AppConfig>(response)
+}
+
+export async function saveDiscogsToken(token: string): Promise<AppConfig> {
+  const response = await apiFetch("/api/config/discogs-token", {
+    method: "PUT",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ token }),
+  })
+  return unwrap<AppConfig>(response)
+}
+
+export async function clearDiscogsToken(): Promise<AppConfig> {
+  const response = await apiFetch("/api/config/discogs-token", {
+    method: "DELETE",
+  })
+  return unwrap<AppConfig>(response)
+}
+
+export type DiscogsReleaseCandidate = {
+  releaseId: number
+  score: number
+  title: string
+  year: string | null
+  country: string | null
+  format: string
+  label: string
+  catno: string | null
+  thumb: string | null
+  uri: string | null
+  community: { have: number | null; want: number | null }
+}
+
+export async function searchDiscogsReleases(
+  artist: string,
+  album: string,
+): Promise<{ ok: true; candidates: DiscogsReleaseCandidate[] }> {
+  const response = await apiFetch("/api/discogs/search-releases", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ artist, album }),
+  })
+  return unwrap<{ ok: true; candidates: DiscogsReleaseCandidate[] }>(response)
+}
+
+export async function applyDiscogsRelease(
+  albumPath: string,
+  releaseId: number,
+): Promise<{
+  ok: true
+  albumPath: string
+  meta: FetchedAlbumMeta
+  album?: LibraryEntityDelta["album"]
+  tracks?: LibraryEntityDelta["tracks"]
+}> {
+  const response = await apiFetch("/api/discogs/apply-release", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ albumPath, releaseId }),
+  })
+  return unwrap(response)
 }
 
 export async function fetchAccounts(): Promise<AccountsResponse> {
@@ -1350,13 +1415,21 @@ export type FetchedAlbumMeta = {
   ok: boolean
   title?: string | null
   musicbrainzReleaseId?: string
+  discogsReleaseId?: number | null
+  discogsUri?: string | null
+  discogsExtra?: DiscogsAlbumExtra | null
   date: string | null
   country: string | null
   label: string | null
+  genre?: string | null
+  formatSummary?: string | null
+  catalogNo?: string | null
   fetchedAt?: string
   expectedTrackCount?: number
   expectedTracks?: { disc?: number; position?: number | null; title: string }[]
 }
+
+export type { DiscogsAlbumExtra }
 
 export type AlbumMetaSavePatch = {
   title?: string | null
@@ -1496,6 +1569,25 @@ export async function fetchTrackInfo(
     meta: FetchedTrackMeta;
     track?: LibraryEntityDelta["track"];
   }>(response)
+}
+
+export async function fetchAlbumTracksInfo(
+  albumPath: string,
+  artist?: string,
+  album?: string,
+): Promise<{
+  albumPath: string;
+  fetched: number;
+  failed: number;
+  tracks: LibraryEntityDelta["track"][];
+  errors: { relPath: string; error: string }[];
+}> {
+  const response = await apiFetch("/api/track-info/fetch-album", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ albumPath, artist, album }),
+  })
+  return unwrap(response)
 }
 
 export async function fetchTrackLyrics(

@@ -77,6 +77,9 @@ export function albumDeltaFromMeta(albumPath, meta, albumNameFallback) {
     label: meta?.label ?? null,
     country: meta?.country ?? null,
     musicbrainzReleaseId: meta?.musicbrainzReleaseId ?? null,
+    discogsReleaseId: meta?.discogsReleaseId ?? null,
+    discogsUri: meta?.discogsUri ?? meta?.discogsExtra?.discogsUri ?? null,
+    discogsExtra: meta?.discogsExtra ?? null,
     hasAlbumMeta: true,
   }
 }

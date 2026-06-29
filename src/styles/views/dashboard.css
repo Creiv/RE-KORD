@@ -264,13 +264,123 @@
 }
 
 @media (min-width: 901px) {
-  .settings-page.view-page .settings-youtube-cookies-section {
+  .settings-page.view-page .settings-integrations-section {
     grid-column: 1;
   }
 
-  /* Cookie YT ora visibile (read-only) anche per client/LAN/tunnel:
-     la rete sta sempre a fianco, niente più riga intera in vista remota. */
   .settings-page.view-page .settings-network-section {
     grid-column: 2;
   }
+}
+
+.settings-integrations-list {
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+}
+
+.settings-integration-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: 0.75rem;
+  padding: 0.9rem 0;
+  border-bottom: 1px solid color-mix(in srgb, var(--text) 10%, transparent);
+}
+
+.settings-integration-row:first-child {
+  padding-top: 0;
+}
+
+.settings-integration-row:last-child {
+  border-bottom: none;
+  padding-bottom: 0;
+}
+
+@media (min-width: 720px) {
+  .settings-integration-row {
+    grid-template-columns: minmax(0, 1fr) auto;
+    align-items: start;
+    column-gap: 1.25rem;
+    row-gap: 0.5rem;
+  }
+}
+
+.settings-integration-row__body {
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.28rem;
+}
+
+.settings-integration-row__lead {
+  margin: 0;
+  line-height: 1.45;
+  max-width: 42rem;
+}
+
+.settings-integration-row__status {
+  margin: 0.12rem 0 0;
+  line-height: 1.4;
+  color: color-mix(in srgb, var(--text) 72%, var(--muted) 28%);
+}
+
+.settings-integration-row__link {
+  white-space: nowrap;
+}
+
+.settings-integration-row__flash {
+  margin: 0.15rem 0 0;
+}
+
+.settings-integration-row__actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: flex-start;
+  gap: 0.45rem;
+}
+
+.settings-integration-row__btn-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: flex-start;
+  gap: 0.45rem;
+}
+
+@media (min-width: 720px) {
+  .settings-integration-row__actions {
+    justify-content: flex-end;
+    padding-top: 0.1rem;
+  }
+
+  .settings-integration-row__actions--discogs {
+    flex-direction: column;
+    align-items: stretch;
+    width: min(100%, 15.5rem);
+    min-width: 13.5rem;
+  }
+
+  .settings-integration-row__actions--discogs .settings-integration-row__btn-row {
+    justify-content: stretch;
+  }
+
+  .settings-integration-row__actions--discogs .settings-integration-row__btn-row .primary-btn,
+  .settings-integration-row__actions--discogs .settings-integration-row__btn-row .ghost-btn {
+    flex: 1 1 auto;
+    min-width: 0;
+  }
+}
+
+.settings-integration-block__title {
+  margin: 0 0 0.08rem;
+  font-size: 0.98rem;
+  font-weight: 650;
+  letter-spacing: -0.01em;
+}
+
+.settings-discogs-form__field {
+  width: 100%;
+  min-width: 0;
+  margin: 0;
 }

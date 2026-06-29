@@ -48,6 +48,8 @@ const state = {
   accounts: [],
   youtubeCookiesPath: null,
   youtubeCookiesFromEnv: false,
+  discogsTokenPath: null,
+  discogsTokenFromEnv: false,
   cloudflareLoggedIn: false,
   cloudflareTunnelEnabled: false,
   /** @type {{ code?: string, path?: string, message?: string } | null} */
@@ -104,6 +106,15 @@ function readYoutubeCookiesEnv() {
     process.env.KORD_YTDLP_COOKIES ||
     process.env.WPP_YTDLP_COOKIES;
   if (e && String(e).trim()) return path.resolve(String(e).trim());
+  return null;
+}
+
+function readDiscogsTokenEnv() {
+  const e =
+    process.env.REKORD_DISCOGS_TOKEN ||
+    process.env.KORD_DISCOGS_TOKEN ||
+    process.env.WPP_DISCOGS_TOKEN;
+  if (e && String(e).trim()) return String(e).trim();
   return null;
 }
 
@@ -169,6 +180,17 @@ function resolveYoutubeCookiesFromBootstrap(file) {
     return path.resolve(file.youtubeCookiesPath.trim());
   }
   return null;
+}
+
+function resolveDiscogsTokenPathFromBootstrap(file) {
+  if (typeof file.discogsTokenPath === "string" && file.discogsTokenPath.trim()) {
+    return path.resolve(file.discogsTokenPath.trim());
+  }
+  return null;
+}
+
+function defaultDiscogsTokenPath() {
+  return path.join(path.dirname(CONFIG_FILE), "discogs-token");
 }
 
 function resolveCloudflareLoggedInFromBootstrap(file) {
@@ -250,6 +272,11 @@ function persistBootstrapOnlySync() {
           ...(state.youtubeCookiesPath && !state.youtubeCookiesFromEnv
             ? { youtubeCookiesPath: state.youtubeCookiesPath }
             : {}),
+          ...(state.discogsTokenPath &&
+          !state.discogsTokenFromEnv &&
+          fs.existsSync(state.discogsTokenPath)
+            ? { discogsTokenPath: state.discogsTokenPath }
+            : {}),
         },
         null,
         2,
@@ -288,6 +315,17 @@ function applyConfigFileToState() {
   } else {
     state.youtubeCookiesPath = resolveYoutubeCookiesFromBootstrap(file);
     state.youtubeCookiesFromEnv = false;
+  }
+  const discogsTokenEnv = readDiscogsTokenEnv();
+  if (discogsTokenEnv) {
+    state.discogsTokenPath = null;
+    state.discogsTokenFromEnv = true;
+    state._discogsTokenEnvValue = discogsTokenEnv;
+  } else {
+    state.discogsTokenFromEnv = false;
+    state._discogsTokenEnvValue = null;
+    state.discogsTokenPath =
+      resolveDiscogsTokenPathFromBootstrap(file) || defaultDiscogsTokenPath();
   }
   state.cloudflareLoggedIn = resolveCloudflareLoggedInFromBootstrap(file);
   state.cloudflareTunnelEnabled = resolveCloudflareTunnelEnabledFromBootstrap(file);
@@ -443,6 +481,9 @@ export function getConfigSnapshot(includeMusicRoot) {
     youtubeCookiesLabel: state.youtubeCookiesPath
       ? path.basename(state.youtubeCookiesPath)
       : null,
+    discogsTokenConfigured: Boolean(getDiscogsToken()),
+    discogsConfigured: true,
+    discogsLockedByEnv: state.discogsTokenFromEnv,
     transcodeAvailable: isTranscodeAvailable(),
   };
   if (includeMusicRoot) {
@@ -510,6 +551,62 @@ export async function setPersistedYoutubeCookiesFile(buffer) {
   return dest;
 }
 
+export function getDiscogsToken() {
+  if (state.discogsTokenFromEnv && state._discogsTokenEnvValue) {
+    return String(state._discogsTokenEnvValue).trim() || null;
+  }
+  const p = state.discogsTokenPath || defaultDiscogsTokenPath();
+  try {
+    if (!fs.existsSync(p)) return null;
+    const t = fs.readFileSync(p, "utf8").trim();
+    return t || null;
+  } catch {
+    return null;
+  }
+}
+
+export async function setPersistedDiscogsToken(token) {
+  if (state.discogsTokenFromEnv) {
+    const err = new Error(
+      "REKORD_DISCOGS_TOKEN is set in the environment: unset it to use the in-app option.",
+    );
+    err.code = "ENV_LOCKED";
+    throw err;
+  }
+  const t = String(token || "").trim();
+  if (!t) {
+    const err = new Error("Token is empty");
+    err.code = "EMPTY";
+    throw err;
+  }
+  const dest = defaultDiscogsTokenPath();
+  await fsp.mkdir(path.dirname(dest), { recursive: true });
+  await fsp.writeFile(dest, `${t}\n`, { mode: 0o600 });
+  state.discogsTokenPath = dest;
+  await writeMergedConfigBootstrap();
+  return dest;
+}
+
+export async function clearPersistedDiscogsToken() {
+  if (state.discogsTokenFromEnv) {
+    const err = new Error(
+      "REKORD_DISCOGS_TOKEN is set in the environment: unset it to use the in-app option.",
+    );
+    err.code = "ENV_LOCKED";
+    throw err;
+  }
+  const prev = state.discogsTokenPath || defaultDiscogsTokenPath();
+  state.discogsTokenPath = defaultDiscogsTokenPath();
+  await writeMergedConfigBootstrap();
+  if (prev && fs.existsSync(prev)) {
+    try {
+      await fsp.unlink(prev);
+    } catch {
+      /* ignore */
+    }
+  }
+}
+
 export async function clearPersistedYoutubeCookiesFile() {
   if (state.youtubeCookiesFromEnv) {
     const err = new Error(
@@ -542,6 +639,11 @@ async function writeMergedConfigBootstrap() {
         cloudflareTunnelEnabled: Boolean(state.cloudflareTunnelEnabled),
         ...(state.youtubeCookiesPath && !state.youtubeCookiesFromEnv
           ? { youtubeCookiesPath: state.youtubeCookiesPath }
+          : {}),
+        ...(state.discogsTokenPath &&
+        !state.discogsTokenFromEnv &&
+        fs.existsSync(state.discogsTokenPath)
+          ? { discogsTokenPath: state.discogsTokenPath }
           : {}),
       },
       null,

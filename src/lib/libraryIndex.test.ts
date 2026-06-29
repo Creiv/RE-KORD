@@ -80,6 +80,9 @@ function miniIndex(): LibraryIndex {
         label: null,
         country: null,
         musicbrainzReleaseId: null,
+        discogsReleaseId: null,
+        discogsUri: null,
+        discogsExtra: null,
         expectedTrackCount: null,
         expectedTracks: null,
         addedAt: null,
@@ -182,6 +185,20 @@ describe("libraryIndex", () => {
     ];
     const next = applyLibraryDeltasToIndex(base, deltas);
     expect(next?.albums[0]?.hasAlbumMeta).toBe(true);
+  });
+
+  it("applyLibraryDeltaToIndex propaga il rename album su tutte le tracce", () => {
+    const base = miniIndex();
+    const next = applyLibraryDeltaToIndex(base, {
+      album: {
+        relPath: "Artist/Album",
+        name: "Renamed Album",
+        title: "Renamed Album",
+        hasAlbumMeta: true,
+      },
+    });
+    expect(next?.albums[0]?.name).toBe("Renamed Album");
+    expect(next?.tracks[0]?.album).toBe("Renamed Album");
   });
 
   it("applyLibraryDeltaToIndex aggiorna coverArtId e versione brani su cover delta", () => {

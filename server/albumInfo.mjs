@@ -17,6 +17,14 @@ import {
   mergeLegacyTrackMapIntoDb,
 } from "./db/queries/metadata.mjs"
 import { getLibraryDb } from "./db/index.mjs"
+import { isDiscogsConfigured } from "./discogsClient.mjs"
+import {
+  fetchReleaseMetadataDiscogs,
+  mergeReleaseMetadata,
+} from "./discogsMetadata.mjs"
+import { matchTrackToDiscogsEntry } from "./discogsTrackMatch.mjs"
+import { readdirSync } from "fs"
+import { isAudioFile } from "./musicLibrary.mjs"
 
 const LIB_EXCLUDE = new Set([
   "kord",
@@ -230,6 +238,22 @@ export async function loadAlbumJsonMetaFromDir(albumDir) {
       label: row.label || null,
       country: row.country || null,
       musicbrainzReleaseId: row.musicbrainz_release_id || null,
+      discogsReleaseId: row.discogs_release_id ?? null,
+      discogsExtra: (() => {
+        try {
+          return row.discogs_extra_json ? JSON.parse(row.discogs_extra_json) : null
+        } catch {
+          return null
+        }
+      })(),
+      discogsUri: (() => {
+        try {
+          const j = row.discogs_extra_json ? JSON.parse(row.discogs_extra_json) : null
+          return j?.discogsUri || null
+        } catch {
+          return null
+        }
+      })(),
       expectedTrackCount,
       expectedTracks,
     }
@@ -1312,9 +1336,25 @@ async function enrichMbPayloadWithFallbackTracklists(mb, artist, album) {
 }
 
 /**
- * MusicBrainz, poi TheAudioDB, poi iTunes.
+ * Discogs (se configurato), poi MusicBrainz, TheAudioDB, iTunes con merge dei campi mancanti.
  */
 export async function fetchReleaseMetadata(artist, album) {
+  let discogs = null
+  if (isDiscogsConfigured()) {
+    discogs = await fetchReleaseMetadataDiscogs(artist, album)
+    if (discogs?.ok) {
+      await sleep(400)
+      const mb = await fetchReleaseMetadataMusicBrainz(artist, album)
+      if (mb.ok) {
+        return mergeReleaseMetadata(
+          enrichMbPayloadWithFallbackTracklists(discogs, artist, album),
+          enrichMbPayloadWithFallbackTracklists(mb, artist, album),
+        )
+      }
+      return discogs
+    }
+  }
+
   const mb = await fetchReleaseMetadataMusicBrainz(artist, album)
   if (mb.ok) return enrichMbPayloadWithFallbackTracklists(mb, artist, album)
   await sleep(400)
@@ -1323,7 +1363,7 @@ export async function fetchReleaseMetadata(artist, album) {
   await sleep(300)
   const it = await fetchReleaseMetadataItunesAlbum(artist, album)
   if (it.ok) return it
-  const err = [mb.error, adb.error, it.error].filter(Boolean).join(" · ")
+  const err = [discogs?.error, mb.error, adb.error, it.error].filter(Boolean).join(" · ")
   return { error: err || "No album metadata found" }
 }
 
@@ -1627,9 +1667,85 @@ function withNormalizedTrackGenre(m) {
 }
 
 /**
- * Ordine: Deezer (niente 403) → TheAudioDB → MusicBrainz (date/durata) → iTunes (genere se disponibile).
+ * Carica tracklist Discogs dall'album in DB/JSON o con una search release.
+ * @param {string|null} albumDir percorso assoluto cartella album
  */
-export async function fetchTrackMetadata(artist, title, album, titleFromFile) {
+export async function resolveDiscogsAlbumTrackContext(albumDir, artist, album) {
+  if (!isDiscogsConfigured()) return null
+  const albumMeta = albumDir ? await loadAlbumJsonMetaFromDir(albumDir) : null
+  let tracklist = albumMeta?.expectedTracks
+  let releaseDate = albumMeta?.releaseDate || null
+  let genre = albumMeta?.genre || null
+  let discogsUri = albumMeta?.discogsUri || null
+
+  if ((!tracklist || !tracklist.length) && (artist || album)) {
+    const rel = await fetchReleaseMetadataDiscogs(artist, album)
+    if (rel?.ok && Array.isArray(rel.expectedTracks) && rel.expectedTracks.length) {
+      tracklist = rel.expectedTracks
+      releaseDate = rel.releaseDate || rel.date || releaseDate
+      genre = rel.genre || genre
+      discogsUri = rel.discogsUri || discogsUri
+    }
+  }
+
+  if (!tracklist?.length) return null
+  return { tracklist, releaseDate, genre, discogsUri }
+}
+
+function trackMetaFromDiscogsMatch(artist, titleRaw, fileName, ctx) {
+  const titlePrepared = prepareTrackTitleForMeta(artist, titleRaw) || titleRaw
+  const hit = matchTrackToDiscogsEntry(
+    fileName,
+    titleRaw,
+    artist,
+    ctx.tracklist,
+    titlePrepared,
+  )
+  if (!hit) return null
+  const row = hit.row
+  /** @type {Record<string, unknown>} */
+  const out = {
+    ok: true,
+    source: "discogs",
+    releaseDate: ctx.releaseDate || null,
+    genre: ctx.genre || null,
+    url: ctx.discogsUri || null,
+  }
+  if (row?.title) out.title = String(row.title).trim()
+  if (Number.isFinite(Number(row?.position))) {
+    out.trackNumber = Number(row.position)
+  } else {
+    out.trackNumber = hit.index + 1
+  }
+  if (Number.isFinite(Number(row?.disc))) out.discNumber = Number(row.disc)
+  if (Number.isFinite(Number(row?.durationMs)) && row.durationMs > 0) {
+    out.durationMs = row.durationMs
+  }
+  return out
+}
+
+function mergeTrackMetadata(discogs, other) {
+  if (!discogs?.ok) return other?.ok ? other : discogs
+  if (!other?.ok) return discogs
+  return {
+    ...other,
+    ...Object.fromEntries(
+      Object.entries(discogs).filter(
+        ([k, v]) => k !== "ok" && v != null && String(v).trim() !== "",
+      ),
+    ),
+    ok: true,
+    source: discogs.source || other.source,
+    trackNumber: discogs.trackNumber ?? other.trackNumber ?? null,
+    discNumber: discogs.discNumber ?? other.discNumber ?? null,
+    durationMs: discogs.durationMs ?? other.durationMs ?? null,
+    releaseDate: discogs.releaseDate || other.releaseDate || null,
+    genre: discogs.genre || other.genre || null,
+    url: discogs.url || other.url || null,
+  }
+}
+
+async function fetchTrackMetadataFromFallbacks(artist, title, album, titleFromFile) {
   const t = String(title || "").trim()
   const tFile =
     titleFromFile != null && String(titleFromFile).trim().length > 0
@@ -1650,10 +1766,44 @@ export async function fetchTrackMetadata(artist, title, album, titleFromFile) {
   if (it.error === "Title missing") return it
   const parts = [dz.error, adb.error, mb.error, it.error].filter(Boolean)
   return {
-    error: parts.length
-      ? [...new Set(parts)].join(" · ")
-      : "No results",
+    error: parts.length ? [...new Set(parts)].join(" · ") : "No results",
   }
+}
+
+/**
+ * Discogs (se configurato) + Deezer / TheAudioDB / MB / iTunes.
+ * @param {{ albumDir?: string|null, discogsContext?: object|null, fileName?: string|null }} [opts]
+ */
+export async function fetchTrackMetadata(artist, title, album, titleFromFile, opts = {}) {
+  const albumDir = opts?.albumDir || null
+  const discogsContext = opts?.discogsContext || null
+  const fileName = opts?.fileName || null
+
+  let discogs = null
+  if (isDiscogsConfigured()) {
+    const ctx =
+      discogsContext ||
+      (albumDir ? await resolveDiscogsAlbumTrackContext(albumDir, artist, album) : null)
+    if (ctx) {
+      const titleRaw =
+        titleFromFile != null && String(titleFromFile).trim().length > 0
+          ? String(titleFromFile).trim()
+          : String(title || "").trim()
+      const fn = fileName || `${titleRaw || "track"}.mp3`
+      discogs = trackMetaFromDiscogsMatch(artist, titleRaw, fn, ctx)
+    }
+  }
+
+  const fallback = await fetchTrackMetadataFromFallbacks(
+    artist,
+    title,
+    album,
+    titleFromFile,
+  )
+  if (discogs?.ok) {
+    return mergeTrackMetadata(discogs, fallback?.ok ? fallback : null)
+  }
+  return fallback
 }
 
 export async function fetchTrackLyricsLrcLib(artist, title, album, durationMs) {

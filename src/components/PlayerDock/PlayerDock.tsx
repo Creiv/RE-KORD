@@ -36,6 +36,9 @@ interface PlayerDockProps {
   onOpenLibraryArtist: (artist: string) => void;
   onOpenLibraryAlbum: (artist: string, album: string) => void;
   onOpenLibraryForTrack: (track: import("../../types").EnrichedTrack) => void;
+  resolvePlaybackTrack?: (
+    track: import("../../types").EnrichedTrack,
+  ) => import("../../types").EnrichedTrack;
   onLibraryDelta?: (delta: LibraryEntityDelta, reconcile?: boolean) => void;
 }
 
@@ -65,8 +68,9 @@ function DockTimeline({
 export const PlayerDock = memo(function PlayerDock({
   onGoToAscolta,
   onOpenLibraryArtist,
-  onOpenLibraryAlbum,
+  onOpenLibraryAlbum: _onOpenLibraryAlbum,
   onOpenLibraryForTrack,
+  resolvePlaybackTrack,
   onLibraryDelta,
 }: PlayerDockProps) {
   const p = usePlayer();
@@ -89,6 +93,7 @@ export const PlayerDock = memo(function PlayerDock({
     [user.state.shuffleExcludedTrackRelPaths],
   );
   const cur = p.current;
+  const shown = cur && resolvePlaybackTrack ? resolvePlaybackTrack(cur) : cur;
   const albumShuffleExcluded = Boolean(
     cur && isTrackAlbumShuffleExcluded(cur, exAlbums),
   );
@@ -154,18 +159,18 @@ export const PlayerDock = memo(function PlayerDock({
                 </div>
                 <div className="player-bar2__meta">
                   <div className="player-bar2__title-line">
-                    <strong>{cur?.title || t("player.pickTrack")}</strong>
+                    <strong>{shown?.title || t("player.pickTrack")}</strong>
                   </div>
-                  {cur ? (
+                  {shown ? (
                     <div className="player-bar2__byline">
-                      {isLooseTrack(cur) ? (
+                      {isLooseTrack(shown) ? (
                         <button
                           type="button"
                           className="player-bar2__crumb"
                           title={t("player.openAlbumLibTitle")}
-                          onClick={() => onOpenLibraryForTrack(cur)}
+                          onClick={() => onOpenLibraryForTrack(shown)}
                         >
-                          {cur.artist}
+                          {shown.artist}
                         </button>
                       ) : (
                         <>
@@ -173,9 +178,9 @@ export const PlayerDock = memo(function PlayerDock({
                             type="button"
                             className="player-bar2__crumb"
                             title={t("player.openArtistLibTitle")}
-                            onClick={() => onOpenLibraryArtist(cur.artist)}
+                            onClick={() => onOpenLibraryArtist(shown.artist)}
                           >
-                            {cur.artist}
+                            {shown.artist}
                           </button>
                           <span className="player-bar2__byline-sep" aria-hidden>
                             {" "}
@@ -185,11 +190,9 @@ export const PlayerDock = memo(function PlayerDock({
                             type="button"
                             className="player-bar2__crumb"
                             title={t("player.openAlbumLibTitle")}
-                            onClick={() =>
-                              onOpenLibraryAlbum(cur.artist, cur.album)
-                            }
+                            onClick={() => onOpenLibraryForTrack(shown)}
                           >
-                            {cur.album}
+                            {shown.album}
                           </button>
                         </>
                       )}

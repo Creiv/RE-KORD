@@ -311,6 +311,13 @@ export function applyLibraryDeltaToIndex(
   }
   if (delta.album?.relPath) {
     const patch = delta.album;
+    const targetAlbum = next.albums.find(
+      (album) => album.relPath === patch.relPath,
+    );
+    const albumId = targetAlbum?.id;
+    const albumPrefix = `${patch.relPath}/`;
+    const nextAlbumName =
+      patch.name || patch.title || targetAlbum?.name || null;
     next = {
       ...next,
       albums: next.albums.map((album) =>
@@ -318,7 +325,7 @@ export function applyLibraryDeltaToIndex(
           ? {
               ...album,
               ...patch,
-              name: patch.name || patch.title || album.name,
+              name: nextAlbumName || album.name,
               coverRelPath:
                 patch.coverRelPath !== undefined
                   ? patch.coverRelPath
@@ -337,13 +344,21 @@ export function applyLibraryDeltaToIndex(
             }
           : album
       ),
-      tracks: next.tracks.map((track) =>
-        track.albumMeta &&
-        track.albumId ===
-          next.albums.find((album) => album.relPath === patch.relPath)?.id
-          ? { ...track, album: patch.name || patch.title || track.album }
-          : track
-      ),
+      tracks: next.tracks.map((track) => {
+        const inAlbum =
+          (albumId && track.albumId === albumId) ||
+          track.relPath.startsWith(albumPrefix) ||
+          track.albumFolderRelPath === patch.relPath;
+        if (!inAlbum || !nextAlbumName) return track;
+        const updated = { ...track, album: nextAlbumName };
+        if (track.albumMeta) {
+          updated.albumMeta = {
+            ...track.albumMeta,
+            title: patch.title ?? track.albumMeta.title ?? nextAlbumName,
+          };
+        }
+        return updated;
+      }),
     };
   }
   if (delta.track?.relPath) {

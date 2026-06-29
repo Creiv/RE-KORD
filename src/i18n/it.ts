@@ -176,6 +176,12 @@ export const IT: Record<string, string> = {
   "albumMeta.fieldLabel": "Etichetta",
   "albumMeta.fieldCountry": "Paese",
   "albumMeta.deleteAlbum": "Elimina album",
+  "albumMeta.discogsSection": "Discogs",
+  "albumMeta.discogsFormat": "Formato",
+  "albumMeta.discogsCatalog": "N. catalogo",
+  "albumMeta.discogsPrice": "Prezzo minimo",
+  "albumMeta.discogsCommunity": "Community",
+  "albumMeta.discogsOpen": "Apri su Discogs",
   "albumMeta.deleteConfirm":
     "Eliminare dal disco la cartella album «{{path}}» con {{n}} file audio e tutti i file contenuti? L'operazione non è reversibile.",
   "albumMeta.deleteFailed": "Nessun album è stato eliminato.",
@@ -462,6 +468,30 @@ export const IT: Record<string, string> = {
   "settings.saveReload": "Salva e ricarica",
   "settings.saving": "Salvo…",
   "settings.youtubeCookiesEyebrow": "Download",
+  "settings.integrationsEyebrow": "Studio",
+  "settings.integrationsHeading": "Integrazioni",
+  "settings.integrationsReadOnly":
+    "Vista remota: gestisci queste integrazioni solo dal PC del server (localhost).",
+  "settings.discogsHeading": "Discogs",
+  "settings.discogsLead":
+    "Token personale opzionale per metadati, copertine e dettagli release da Discogs.",
+  "settings.discogsActive": "Token configurato.",
+  "settings.discogsHintNoToken":
+    "API senza autenticazione: ~25 richieste/min, copertine limitate.",
+  "settings.discogsHintWithToken":
+    "API autenticata: limiti più alti e accesso completo alle copertine.",
+  "settings.discogsMissing": "Nessun token Discogs configurato.",
+  "settings.discogsEnvLocked":
+    "Attivo da REKORD_DISCOGS_TOKEN: rimuovi la variabile d'ambiente per gestirlo dall'app.",
+  "settings.discogsReadOnly":
+    "Vista remota: il token Discogs si imposta solo sul PC del server.",
+  "settings.discogsTokenAria": "Token personale Discogs",
+  "settings.discogsTokenPh": "Token Discogs",
+  "settings.discogsSave": "Salva token",
+  "settings.discogsClear": "Rimuovi token",
+  "settings.discogsTokenSaved": "Token Discogs salvato sul server.",
+  "settings.discogsTokenCleared": "Token Discogs rimosso.",
+  "settings.discogsDevLink": "Impostazioni sviluppatore Discogs",
   "settings.youtubeCookiesHeading": "Cookie YouTube",
   "settings.youtubeCookiesLead":
     "File cookies.txt usato solo dal server per yt-dlp. È opzionale, ma può risolvere contenuti con age verification o accesso richiesto.",
@@ -1145,6 +1175,10 @@ export const IT: Record<string, string> = {
     "Salta album con metadati già nel database; ritardo tra le richieste (rate limit MusicBrainz)",
   "tools.tracks": "Brani",
   "tools.currentTrackMeta": "Metadati brano in riproduzione",
+  "tools.selectedAlbumTracksMeta": "Metadati brani album selezionato",
+  "tools.metaAlbumTracksStart": "Recupero metadati brani per l'album {{path}}…\n",
+  "tools.metaAlbumTracksDone": "Brani album: {{ok}} aggiornati, {{err}} errori.\n",
+  "tools.metaAlbumTrackErr": "{{path}}: {{e}}\n",
   "tools.scanAllTracks": "Scansione tutti i brani",
   "tools.scanChoiceAlbumTitle": "Scansione automatica album",
   "tools.scanChoiceAlbumHint":
@@ -1166,7 +1200,13 @@ export const IT: Record<string, string> = {
   "tools.applyAlbum": "Applica su album",
   "tools.previewLibrary": "Anteprima tutta la libreria",
   "tools.applyLibrary": "Applica a tutta la libreria",
-  "tools.progressAlbumMeta": "Metadati album (MB / TheAudioDB / iTunes)",
+  "tools.progressAlbumMeta": "Metadati album (Discogs / MB / TheAudioDB / iTunes)",
+  "tools.discogsPickerTitle": "Scegli release Discogs",
+  "tools.discogsPickerHint":
+    "Trovate più edizioni: seleziona quella che corrisponde ai tuoi file.",
+  "tools.discogsPickerCancel": "Annulla",
+  "tools.discogsCommunity": "Collezione: {{have}} have · {{want}} want",
+  "tools.metaDiscogsOkLine": "Discogs #{{id}} — {{path}} ({{date}}).\n",
   "tools.progressTrackMeta": "Metadati brani",
   "tools.progressTrackMetaPrune": "Pulizia metadati libreria",
   "tools.trackMetaPruneOrphans": "Pulizia metadati libreria",

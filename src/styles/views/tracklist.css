@@ -839,9 +839,10 @@
   filter: grayscale(0.45);
 }
 
-/* Desktop (icone inline a destra): titolo + durata + chip sempre su una riga */
+/* Desktop (icone inline a destra): titolo + durata + chip su una riga, allineati a sinistra */
 .track-row:not(:has(.track-row__actions--compact-tools)) .track-row__title-row {
   flex-wrap: nowrap;
+  justify-content: flex-start;
 }
 
 .track-row:not(:has(.track-row__actions--compact-tools)) .track-row__stats {
@@ -852,7 +853,8 @@
 .track-row:not(:has(.track-row__actions--compact-tools))
   .track-row__title-row
   .track-row__title {
-  flex: 1 1 0;
+  flex: 0 1 auto;
+  min-width: 0;
   max-width: none;
 }
 

@@ -22,6 +22,7 @@ import {
 } from "../lib/studioDownloadDest";
 
 export function sourceLabel(s: string | undefined): string {
+  if (s === "discogs") return "Discogs";
   if (s === "itunes") return "iTunes";
   if (s === "deezer") return "Deezer";
   if (s === "musicbrainz") return "MusicBrainz";

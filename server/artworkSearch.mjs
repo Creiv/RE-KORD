@@ -1,4 +1,6 @@
 import { rekordApiUserAgentWithUrl } from "./rekordVersion.mjs"
+import { isDiscogsConfigured } from "./discogsClient.mjs"
+import { searchDiscogsReleases } from "./discogsMetadata.mjs"
 
 const UA = rekordApiUserAgentWithUrl()
 
@@ -12,6 +14,33 @@ function pushUnique(out, seen, item) {
 export async function aggregateArtworkSearch(terms) {
   const out = []
   const seen = new Set()
+
+  if (isDiscogsConfigured()) {
+    for (const term of terms.slice(0, 2)) {
+      if (out.length >= 12) break
+      if (!term || term.length < 2) continue
+      const parts = term.split(" — ").map((s) => s.trim())
+      const artist = parts.length >= 2 ? parts[0] : ""
+      const album = parts.length >= 2 ? parts.slice(1).join(" — ") : term
+      try {
+        const search = await searchDiscogsReleases(artist, album, { limit: 4 })
+        if (!search.ok) continue
+        for (const c of search.candidates || []) {
+          if (!c.thumb) continue
+          const n = pushUnique(out, seen, {
+            name: album || c.title,
+            artist: artist || c.title.split(" - ")[0] || "",
+            artwork: c.thumb,
+            url: c.uri || "https://www.discogs.com",
+            source: "discogs",
+          })
+          if (n >= 12) break
+        }
+      } catch {
+        /* ignore */
+      }
+    }
+  }
 
   for (const term of terms) {
     if (out.length >= 32) break

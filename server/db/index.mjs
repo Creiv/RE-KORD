@@ -67,6 +67,19 @@ function runMigrations(db) {
     }
     db.prepare("INSERT INTO schema_migrations (version) VALUES (?)").run(4)
   }
+  if (version < 5) {
+    for (const sql of [
+      "ALTER TABLE albums ADD COLUMN discogs_release_id INTEGER",
+      "ALTER TABLE albums ADD COLUMN discogs_extra_json TEXT",
+    ]) {
+      try {
+        db.exec(sql)
+      } catch {
+        /* colonna già presente */
+      }
+    }
+    db.prepare("INSERT INTO schema_migrations (version) VALUES (?)").run(5)
+  }
 }
 
 /**

@@ -298,6 +298,9 @@ function buildAlbumItem({
     label: albumMeta?.label || null,
     country: albumMeta?.country || null,
     musicbrainzReleaseId: albumMeta?.musicbrainzReleaseId || null,
+    discogsReleaseId: albumMeta?.discogsReleaseId ?? null,
+    discogsUri: albumMeta?.discogsUri ?? null,
+    discogsExtra: albumMeta?.discogsExtra ?? null,
     expectedTrackCount:
       typeof albumMeta?.expectedTrackCount === "number"
         ? albumMeta.expectedTrackCount

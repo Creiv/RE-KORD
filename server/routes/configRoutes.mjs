@@ -6,6 +6,7 @@ import multer from "multer";
 import path from "path";
 import { actLog, sendError, sendOk } from "../httpUtils.mjs";
 import {
+  clearPersistedDiscogsToken,
   clearPersistedYoutubeCookiesFile,
   createAccount,
   deleteAccount,
@@ -15,10 +16,12 @@ import {
   getMusicRoot,
   isLibraryRootConfigured,
   setCloudflareLoggedIn,
+  setPersistedDiscogsToken,
   setPersistedMusicRoot,
   setPersistedYoutubeCookiesFile,
   updateAccount,
 } from "../musicRootConfig.mjs";
+import { validateDiscogsToken } from "../discogsClient.mjs";
 import {
   markRemoteError,
   remoteAccessState,
@@ -68,6 +71,7 @@ function buildConfigPayload(req) {
   }
   snap.libraryRootWritable = Boolean(admin && !snap.lockedByEnv);
   snap.youtubeCookiesWritable = Boolean(admin && !snap.youtubeCookiesLockedByEnv);
+  snap.discogsWritable = Boolean(admin && !snap.discogsLockedByEnv);
   if (!admin && isLibraryRootConfigured()) {
     const root = getMusicRoot();
     if (root)
@@ -239,6 +243,64 @@ export function registerConfigRoutes(app) {
         action: "config",
         folder: null,
         detail: "youtubeCookies:clear",
+      });
+      return sendOk(res, buildConfigPayload(req));
+    } catch (error) {
+      if (error?.code === "ENV_LOCKED") {
+        return sendError(res, 403, String(error.message || error));
+      }
+      return sendError(res, 500, String(error?.message || error));
+    }
+  });
+
+  app.put("/api/config/discogs-token", async (req, res) => {
+    try {
+      if (!isServerAdminRequest(req)) {
+        return sendError(
+          res,
+          403,
+          "Discogs token can only be configured from the machine running the server.",
+          { details: { code: "DISCOGS_TOKEN_REMOTE_FORBIDDEN" } },
+        );
+      }
+      const token = String(req.body?.token || "").trim();
+      if (!token) return sendError(res, 400, "Token is required");
+      await validateDiscogsToken(token);
+      await setPersistedDiscogsToken(token);
+      void actLog(req, {
+        kind: "server",
+        action: "config",
+        folder: null,
+        detail: "discogsToken",
+      });
+      return sendOk(res, buildConfigPayload(req));
+    } catch (error) {
+      if (error?.code === "ENV_LOCKED") {
+        return sendError(res, 403, String(error.message || error));
+      }
+      if (error?.code === "DISCOGS_UNAUTHORIZED") {
+        return sendError(res, 400, "Discogs token invalid or expired");
+      }
+      return sendError(res, 500, String(error?.message || error));
+    }
+  });
+
+  app.delete("/api/config/discogs-token", async (req, res) => {
+    try {
+      if (!isServerAdminRequest(req)) {
+        return sendError(
+          res,
+          403,
+          "Discogs token can only be configured from the machine running the server.",
+          { details: { code: "DISCOGS_TOKEN_REMOTE_FORBIDDEN" } },
+        );
+      }
+      await clearPersistedDiscogsToken();
+      void actLog(req, {
+        kind: "server",
+        action: "config",
+        folder: null,
+        detail: "discogsToken:clear",
       });
       return sendOk(res, buildConfigPayload(req));
     } catch (error) {

@@ -49,6 +49,9 @@ describe("library db", () => {
           label: null,
           country: null,
           musicbrainzReleaseId: null,
+          discogsReleaseId: null,
+          discogsUri: null,
+          discogsExtra: null,
           expectedTrackCount: null,
           expectedTracks: null,
           hasCover: false,
@@ -100,7 +103,7 @@ describe("library db", () => {
       musicRoot: tmp,
       artists: [{ id: "Artist", name: "Artist", albumCount: 1, trackCount: 1, releaseDate: null, coverRelPath: null, albums: ["Artist::Album"], albumsWithoutFileMetaCount: 0, tracksWithoutFileMetaCount: 0 }],
       albums: [{
-        id: "Artist::Album", artistId: "Artist", artist: "Artist", name: "Album", relPath: "Artist/Album", trackCount: 0, coverRelPath: null, releaseDate: null, genre: null, label: null, country: null, musicbrainzReleaseId: null, expectedTrackCount: null, expectedTracks: null, hasCover: false, hasAlbumMeta: false, hasTrackMeta: false, tracksWithoutFileMetaCount: 0, loose: false, addedAt: null, updatedAt: null, tracks: [],
+        id: "Artist::Album", artistId: "Artist", artist: "Artist", name: "Album", relPath: "Artist/Album", trackCount: 0, coverRelPath: null, releaseDate: null, genre: null, label: null, country: null, musicbrainzReleaseId: null, discogsReleaseId: null, discogsUri: null, discogsExtra: null, expectedTrackCount: null, expectedTracks: null, hasCover: false, hasAlbumMeta: false, hasTrackMeta: false, tracksWithoutFileMetaCount: 0, loose: false, addedAt: null, updatedAt: null, tracks: [],
       }],
       tracks: [],
       stats: { artistCount: 1, albumCount: 1, trackCount: 0, favoriteCapableCount: 0, albumsWithoutCover: 1, albumsWithoutMeta: 1, tracksWithoutMeta: 0, looseAlbumCount: 0 },
@@ -110,6 +113,37 @@ describe("library db", () => {
     const row = getLibraryDb(tmp).prepare("SELECT title, genre FROM albums WHERE folder_rel_path = ?").get("Artist/Album")
     expect(row?.title).toBe("Renamed")
     expect(row?.genre).toBe("Rock")
+  })
+
+  it("updates track album_name when album title is renamed", async () => {
+    await persistLibraryIndexToDb(tmp, {
+      musicRoot: tmp,
+      artists: [{ id: "Artist", name: "Artist", albumCount: 1, trackCount: 1, releaseDate: null, coverRelPath: null, albums: ["Artist::Album"], albumsWithoutFileMetaCount: 0, tracksWithoutFileMetaCount: 0 }],
+      albums: [{
+        id: "Artist::Album", artistId: "Artist", artist: "Artist", name: "Album", relPath: "Artist/Album", trackCount: 1, coverRelPath: null, releaseDate: null, genre: null, label: null, country: null, musicbrainzReleaseId: null, discogsReleaseId: null, discogsUri: null, discogsExtra: null, expectedTrackCount: null, expectedTracks: null, hasCover: false, hasAlbumMeta: false, hasTrackMeta: false, tracksWithoutFileMetaCount: 0, loose: false, addedAt: null, updatedAt: null, tracks: ["Artist/Album/01.mp3"],
+      }],
+      tracks: [{
+        id: "Artist/Album/01.mp3",
+        relPath: "Artist/Album/01.mp3",
+        filePath: "Artist/Album/01.mp3",
+        title: "Song",
+        artist: "Artist",
+        album: "Album",
+        albumId: "Artist::Album",
+        albumFolderRelPath: "Artist/Album",
+        loose: false,
+        addedAt: null,
+        updatedAt: null,
+        meta: { fileName: "01.mp3", size: 1, mtime: 1, releaseDate: null, genre: null, durationMs: null, trackNumber: null, discNumber: null, source: null, url: null },
+      }],
+      stats: { artistCount: 1, albumCount: 1, trackCount: 1, favoriteCapableCount: 1, albumsWithoutCover: 1, albumsWithoutMeta: 1, tracksWithoutMeta: 1, looseAlbumCount: 0 },
+    })
+
+    saveAlbumMetaToDb(tmp, "Artist/Album", { title: "Renamed" })
+    const track = getLibraryDb(tmp).prepare("SELECT album_name FROM tracks WHERE rel_path = ?").get("Artist/Album/01.mp3")
+    expect(track?.album_name).toBe("Renamed")
+    const fromDb = buildLibraryIndexFromDb(tmp)
+    expect(fromDb.tracks[0]?.album).toBe("Renamed")
   })
 
   it("removes stale albums and artists on full rescan", async () => {
@@ -153,6 +187,9 @@ describe("library db", () => {
           label: null,
           country: null,
           musicbrainzReleaseId: null,
+          discogsReleaseId: null,
+          discogsUri: null,
+          discogsExtra: null,
           expectedTrackCount: null,
           expectedTracks: null,
           hasCover: false,
@@ -177,6 +214,9 @@ describe("library db", () => {
           label: null,
           country: null,
           musicbrainzReleaseId: null,
+          discogsReleaseId: null,
+          discogsUri: null,
+          discogsExtra: null,
           expectedTrackCount: null,
           expectedTracks: null,
           hasCover: false,
@@ -232,7 +272,7 @@ describe("library db", () => {
       musicRoot: tmp,
       artists: [{ id: "Artist", name: "Artist", albumCount: 1, trackCount: 3, releaseDate: null, coverRelPath: null, albums: ["Artist::Album"], albumsWithoutFileMetaCount: 0, tracksWithoutFileMetaCount: 0 }],
       albums: [{
-        id: "Artist::Album", artistId: "Artist", artist: "Artist", name: "Album", relPath: "Artist/Album", trackCount: 3, coverRelPath: null, releaseDate: "2020", genre: null, label: null, country: null, musicbrainzReleaseId: null, expectedTrackCount: null, expectedTracks: null, hasCover: false, hasAlbumMeta: false, hasTrackMeta: false, tracksWithoutFileMetaCount: 0, loose: false, addedAt: null, updatedAt: null,
+        id: "Artist::Album", artistId: "Artist", artist: "Artist", name: "Album", relPath: "Artist/Album", trackCount: 3, coverRelPath: null, releaseDate: "2020", genre: null, label: null, country: null, musicbrainzReleaseId: null, discogsReleaseId: null, discogsUri: null, discogsExtra: null, expectedTrackCount: null, expectedTracks: null, hasCover: false, hasAlbumMeta: false, hasTrackMeta: false, tracksWithoutFileMetaCount: 0, loose: false, addedAt: null, updatedAt: null,
         tracks: ["Artist/Album/03.flac", "Artist/Album/01.flac", "Artist/Album/02.flac"],
       }],
       tracks: [
@@ -257,7 +297,7 @@ describe("library db", () => {
       musicRoot: tmp,
       artists: [{ id: "Artist", name: "Artist", albumCount: 1, trackCount: 1, releaseDate: null, coverRelPath: null, albums: ["Artist::Album"], albumsWithoutFileMetaCount: 0, tracksWithoutFileMetaCount: 0 }],
       albums: [{
-        id: "Artist::Album", artistId: "Artist", artist: "Artist", name: "Album", relPath: "Artist/Album", trackCount: 1, coverRelPath: null, releaseDate: null, genre: null, label: null, country: null, musicbrainzReleaseId: null, expectedTrackCount: null, expectedTracks: null, hasCover: false, hasAlbumMeta: false, hasTrackMeta: false, tracksWithoutFileMetaCount: 0, loose: false, addedAt: null, updatedAt: null, tracks: ["Artist/Album/01.flac"],
+        id: "Artist::Album", artistId: "Artist", artist: "Artist", name: "Album", relPath: "Artist/Album", trackCount: 1, coverRelPath: null, releaseDate: null, genre: null, label: null, country: null, musicbrainzReleaseId: null, discogsReleaseId: null, discogsUri: null, discogsExtra: null, expectedTrackCount: null, expectedTracks: null, hasCover: false, hasAlbumMeta: false, hasTrackMeta: false, tracksWithoutFileMetaCount: 0, loose: false, addedAt: null, updatedAt: null, tracks: ["Artist/Album/01.flac"],
       }],
       tracks: [{
         id: "Artist/Album/01.flac", title: "01.flac", relPath: "Artist/Album/01.flac", artist: "Artist", album: "Album", albumId: "Artist::Album",
@@ -298,7 +338,7 @@ describe("library db", () => {
       musicRoot: tmp,
       artists: [{ id: "Artist", name: "Artist", albumCount: 1, trackCount: 0, releaseDate: null, coverRelPath: null, albums: ["Artist::Album"], albumsWithoutFileMetaCount: 0, tracksWithoutFileMetaCount: 0 }],
       albums: [{
-        id: "Artist::Album", artistId: "Artist", artist: "Artist", name: "Album", relPath: "Artist/Album", trackCount: 0, coverRelPath: null, releaseDate: null, genre: null, label: null, country: null, musicbrainzReleaseId: null, expectedTrackCount: null, expectedTracks: null, hasCover: false, hasAlbumMeta: false, hasTrackMeta: false, tracksWithoutFileMetaCount: 0, loose: false, addedAt: null, updatedAt: null, tracks: [],
+        id: "Artist::Album", artistId: "Artist", artist: "Artist", name: "Album", relPath: "Artist/Album", trackCount: 0, coverRelPath: null, releaseDate: null, genre: null, label: null, country: null, musicbrainzReleaseId: null, discogsReleaseId: null, discogsUri: null, discogsExtra: null, expectedTrackCount: null, expectedTracks: null, hasCover: false, hasAlbumMeta: false, hasTrackMeta: false, tracksWithoutFileMetaCount: 0, loose: false, addedAt: null, updatedAt: null, tracks: [],
       }],
       tracks: [],
       stats: { artistCount: 1, albumCount: 1, trackCount: 0, favoriteCapableCount: 0, albumsWithoutCover: 1, albumsWithoutMeta: 1, tracksWithoutMeta: 0, looseAlbumCount: 0 },

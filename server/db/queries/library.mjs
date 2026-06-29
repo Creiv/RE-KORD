@@ -36,12 +36,12 @@ ON CONFLICT(id) DO UPDATE SET
 const insertAlbum = `
 INSERT INTO albums (
   id, artist_id, folder_rel_path, name, title, release_date, genre, label, country,
-  musicbrainz_release_id, expected_track_count, cover_rel_path, cover_art_id,
+  musicbrainz_release_id, discogs_release_id, discogs_extra_json, expected_track_count, cover_rel_path, cover_art_id,
   has_cover, has_album_meta, has_track_meta, tracks_without_file_meta_count,
   loose, track_count, added_at, updated_at, user_edited
 ) VALUES (
   @id, @artist_id, @folder_rel_path, @name, @title, @release_date, @genre, @label, @country,
-  @musicbrainz_release_id, @expected_track_count, @cover_rel_path, @cover_art_id,
+  @musicbrainz_release_id, @discogs_release_id, @discogs_extra_json, @expected_track_count, @cover_rel_path, @cover_art_id,
   @has_cover, @has_album_meta, @has_track_meta, @tracks_without_file_meta_count,
   @loose, @track_count, @added_at, @updated_at, @user_edited
 )
@@ -55,6 +55,8 @@ ON CONFLICT(id) DO UPDATE SET
   label=excluded.label,
   country=excluded.country,
   musicbrainz_release_id=excluded.musicbrainz_release_id,
+  discogs_release_id=COALESCE(excluded.discogs_release_id, albums.discogs_release_id),
+  discogs_extra_json=COALESCE(excluded.discogs_extra_json, albums.discogs_extra_json),
   expected_track_count=excluded.expected_track_count,
   cover_rel_path=excluded.cover_rel_path,
   cover_art_id=COALESCE(excluded.cover_art_id, albums.cover_art_id),
@@ -166,6 +168,10 @@ function upsertAlbumRow(db, album, statements) {
     label: album.label || null,
     country: album.country || null,
     musicbrainz_release_id: album.musicbrainzReleaseId || null,
+    discogs_release_id: album.discogsReleaseId ?? null,
+    discogs_extra_json: album.discogsExtra
+      ? JSON.stringify(album.discogsExtra).slice(0, 32000)
+      : null,
     expected_track_count: album.expectedTrackCount ?? null,
     cover_rel_path: album.coverRelPath || null,
     cover_art_id: album.coverArtId || null,
@@ -296,6 +302,10 @@ export async function persistLibraryIndexToDb(libraryRoot, index, opts = {}) {
         label: album.label || null,
         country: album.country || null,
         musicbrainz_release_id: album.musicbrainzReleaseId || null,
+        discogs_release_id: album.discogsReleaseId ?? null,
+        discogs_extra_json: album.discogsExtra
+          ? JSON.stringify(album.discogsExtra).slice(0, 32000)
+          : null,
         expected_track_count: album.expectedTrackCount ?? null,
         cover_rel_path: album.coverRelPath || null,
         cover_art_id: album.coverArtId || null,
@@ -497,7 +507,17 @@ export function buildLibraryIndexFromDb(libraryRoot) {
     artistRowToIndex(row, albumsByArtist.get(row.id) || []),
   )
 
-  const tracks = trackRows.map((row) => trackRowToIndex(row))
+  const albumNameById = new Map(albums.map((album) => [album.id, album.name]))
+  const albumHasMetaById = new Map(
+    albums.map((album) => [album.id, album.hasAlbumMeta]),
+  )
+  const tracks = trackRows.map((row) => {
+    const track = trackRowToIndex(row)
+    if (!albumHasMetaById.get(row.album_id)) return track
+    const albumName = albumNameById.get(row.album_id)
+    if (!albumName || albumName === track.album) return track
+    return { ...track, album: albumName }
+  })
 
   const index = {
     musicRoot,

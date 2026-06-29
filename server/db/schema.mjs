@@ -1,4 +1,4 @@
-export const SCHEMA_VERSION = 3
+export const SCHEMA_VERSION = 4
 
 export const MIGRATION_SQL = `
 CREATE TABLE IF NOT EXISTS schema_migrations (
@@ -47,6 +47,8 @@ CREATE TABLE IF NOT EXISTS albums (
   label TEXT,
   country TEXT,
   musicbrainz_release_id TEXT,
+  discogs_release_id INTEGER,
+  discogs_extra_json TEXT,
   expected_track_count INTEGER,
   cover_rel_path TEXT,
   cover_art_id TEXT,

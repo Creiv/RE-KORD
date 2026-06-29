@@ -218,6 +218,32 @@ function AlbumMetaEditorModal({
               autoComplete="off"
             />
           </label>
+          {album.discogsReleaseId || album.discogsUri || album.discogsExtra ? (
+            <div className="meta-edit-discogs subtle sm">
+              <p className="eyebrow">{t("albumMeta.discogsSection")}</p>
+              {album.discogsExtra?.formatSummary ? (
+                <p>
+                  {t("albumMeta.discogsFormat")}: {album.discogsExtra.formatSummary}
+                </p>
+              ) : null}
+              {album.discogsExtra?.catalogNo ? (
+                <p>
+                  {t("albumMeta.discogsCatalog")}: {album.discogsExtra.catalogNo}
+                </p>
+              ) : null}
+              {album.discogsUri ? (
+                <p>
+                  <a
+                    href={album.discogsUri}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                  >
+                    {t("albumMeta.discogsOpen")}
+                  </a>
+                </p>
+              ) : null}
+            </div>
+          ) : null}
           {err ? <p className="subtle sm warnline">{err}</p> : null}
           <div className="meta-edit-actions">
             <button

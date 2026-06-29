@@ -28,6 +28,7 @@ import { MOBILE_LAYOUT_MQ } from "../../lib/breakpoints";
 import {
   openArtistInLibrary,
   openTrackInLibrary,
+  resolveTrackFromLibrary,
 } from "../../lib/libraryNav";
 import { useI18n } from "../../i18n/useI18n";
 import {
@@ -276,7 +277,10 @@ export function AppShell() {
       );
       setIndex((prev) => {
         const next = applyLibraryDeltaToIndex(prev, delta);
-        if (next) syncLibraryAlbumArtworkFromIndex(next);
+        if (next) {
+          syncLibraryAlbumArtworkFromIndex(next);
+          queueMicrotask(() => p.resyncTracksFromIndex(next));
+        }
         return next;
       });
       endActivity();
@@ -627,6 +631,13 @@ export function AppShell() {
     },
     [index, navToLibraryArtist, navToLibraryAlbum],
   );
+  const resolvePlaybackTrack = useCallback(
+    (track: import("../../types").EnrichedTrack) =>
+      index
+        ? resolveTrackFromLibrary(track, index.tracks)
+        : track,
+    [index],
+  );
   const navToPlaylist = useCallback(
     (id: string | null) => navigate({ section: "playlists", playlist: id }),
     [navigate]
@@ -912,6 +923,7 @@ export function AppShell() {
             onOpenLibraryArtist={smartNavToLibraryArtist}
             onOpenLibraryAlbum={navToLibraryAlbum}
             onOpenLibraryForTrack={smartNavToLibraryForTrack}
+            resolvePlaybackTrack={resolvePlaybackTrack}
             onLibraryDelta={applyLibraryDelta}
           />
           {isMobileLayout ? (

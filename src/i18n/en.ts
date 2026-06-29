@@ -174,6 +174,12 @@ export const EN: Record<string, string> = {
   "albumMeta.fieldLabel": "Label",
   "albumMeta.fieldCountry": "Country",
   "albumMeta.deleteAlbum": "Delete album",
+  "albumMeta.discogsSection": "Discogs",
+  "albumMeta.discogsFormat": "Format",
+  "albumMeta.discogsCatalog": "Catalog no.",
+  "albumMeta.discogsPrice": "Lowest price",
+  "albumMeta.discogsCommunity": "Community",
+  "albumMeta.discogsOpen": "Open on Discogs",
   "albumMeta.deleteConfirm":
     "Delete the album folder “{{path}}” from disk, including {{n}} audio file(s) and every file inside it? This cannot be undone.",
   "albumMeta.deleteFailed": "No album was removed.",
@@ -454,6 +460,30 @@ export const EN: Record<string, string> = {
   "settings.saveReload": "Save and reload",
   "settings.saving": "Saving…",
   "settings.youtubeCookiesEyebrow": "Download",
+  "settings.integrationsEyebrow": "Studio",
+  "settings.integrationsHeading": "Integrations",
+  "settings.integrationsReadOnly":
+    "Remote view: manage these integrations only from the server PC (localhost).",
+  "settings.discogsHeading": "Discogs",
+  "settings.discogsLead":
+    "Optional personal access token for richer metadata, artwork, and release details from Discogs.",
+  "settings.discogsActive": "Token configured.",
+  "settings.discogsHintNoToken":
+    "Unauthenticated API: ~25 requests/min, no full artwork.",
+  "settings.discogsHintWithToken":
+    "Authenticated API: higher rate limits and full artwork access.",
+  "settings.discogsMissing": "No Discogs token configured.",
+  "settings.discogsEnvLocked":
+    "Active from REKORD_DISCOGS_TOKEN: remove the environment variable to manage it in-app.",
+  "settings.discogsReadOnly":
+    "Remote view: the Discogs token can only be set on the server machine.",
+  "settings.discogsTokenAria": "Discogs personal access token",
+  "settings.discogsTokenPh": "Discogs token",
+  "settings.discogsSave": "Save token",
+  "settings.discogsClear": "Remove token",
+  "settings.discogsTokenSaved": "Discogs token saved on the server.",
+  "settings.discogsTokenCleared": "Discogs token removed.",
+  "settings.discogsDevLink": "Discogs Developer Settings",
   "settings.youtubeCookiesHeading": "YouTube cookies",
   "settings.youtubeCookiesLead":
     "Optional cookies.txt used only by the server for yt-dlp. It can help with age verification or sign-in-required content.",
@@ -1137,6 +1167,10 @@ export const EN: Record<string, string> = {
     "Skip albums that already have metadata in the database; delay between requests (MusicBrainz rate limit)",
   "tools.tracks": "Tracks",
   "tools.currentTrackMeta": "Playing track metadata",
+  "tools.selectedAlbumTracksMeta": "Selected album track metadata",
+  "tools.metaAlbumTracksStart": "Fetching track metadata for album {{path}}…\n",
+  "tools.metaAlbumTracksDone": "Album tracks: {{ok}} updated, {{err}} failed.\n",
+  "tools.metaAlbumTrackErr": "{{path}}: {{e}}\n",
   "tools.scanAllTracks": "Scan all tracks",
   "tools.scanChoiceAlbumTitle": "Automatic album scan",
   "tools.scanChoiceAlbumHint":
@@ -1158,7 +1192,13 @@ export const EN: Record<string, string> = {
   "tools.applyAlbum": "Apply to album",
   "tools.previewLibrary": "Preview entire library",
   "tools.applyLibrary": "Apply to entire library",
-  "tools.progressAlbumMeta": "Album metadata (MB / TheAudioDB / iTunes)",
+  "tools.progressAlbumMeta": "Album metadata (Discogs / MB / TheAudioDB / iTunes)",
+  "tools.discogsPickerTitle": "Choose Discogs release",
+  "tools.discogsPickerHint":
+    "Multiple editions were found. Pick the one that matches your files.",
+  "tools.discogsPickerCancel": "Cancel",
+  "tools.discogsCommunity": "Collection: {{have}} have · {{want}} want",
+  "tools.metaDiscogsOkLine": "Discogs #{{id}} — {{path}} ({{date}}).\n",
   "tools.progressTrackMeta": "Track metadata",
   "tools.progressTrackMetaPrune": "Library metadata cleanup",
   "tools.trackMetaPruneOrphans": "Library metadata cleanup",

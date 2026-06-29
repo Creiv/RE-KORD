@@ -504,6 +504,55 @@ export async function searchEntityInfoSources({
       for (const c of out) if (!c.thumbnail) c.thumbnail = bestThumb
     }
   }
+
+  try {
+    const { isDiscogsConfigured } = await import("./discogsClient.mjs")
+    const {
+      searchDiscogsReleases,
+      fetchDiscogsRelease,
+      fetchDiscogsArtist,
+    } = await import("./discogsMetadata.mjs")
+    const { discogsFetch } = await import("./discogsClient.mjs")
+    if (isDiscogsConfigured() && out.length < maxCandidates) {
+      if (alb) {
+        const s = await searchDiscogsReleases(art, alb, { limit: 1 })
+        const top = s.ok ? s.candidates?.[0] : null
+        if (top) {
+          const rel = await fetchDiscogsRelease(top.releaseId)
+          const notes = rel.ok ? rel.discogsExtra?.notes : null
+          if (notes) {
+            push({
+              kind: "desc",
+              lang,
+              title: "Discogs",
+              text: String(notes).trim().slice(0, ITEM_TEXT_MAX),
+              thumbnail: top.thumb || null,
+            })
+          }
+        }
+      } else {
+        const data = await discogsFetch("/database/search", {
+          query: { q: art, type: "artist", per_page: "1" },
+        })
+        const id = data?.results?.[0]?.id
+        if (id) {
+          const ar = await fetchDiscogsArtist(id)
+          if (ar.ok && ar.profile) {
+            push({
+              kind: "bio",
+              lang,
+              title: "Discogs",
+              text: capAtSentence(ar.profile, ITEM_TEXT_MAX),
+              thumbnail: ar.images?.[0]?.uri150 || ar.images?.[0]?.uri || null,
+            })
+          }
+        }
+      }
+    }
+  } catch {
+    /* optional */
+  }
+
   return out.slice(0, maxCandidates)
 }
 

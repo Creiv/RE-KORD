@@ -74,6 +74,32 @@ export function openArtistInLibrary(
   onOpenArtist(artistId)
 }
 
+export function resolveTrackAlbumName(
+  index: LibraryIndex,
+  track: Pick<
+    EnrichedTrack,
+    "album" | "albumId" | "albumFolderRelPath" | "relPath"
+  >,
+): string {
+  if (track.albumId) {
+    const byId = index.albums.find((album) => album.id === track.albumId)
+    if (byId?.name) return byId.name
+  }
+  if (track.albumFolderRelPath) {
+    const byFolder = index.albums.find(
+      (album) => album.relPath === track.albumFolderRelPath,
+    )
+    if (byFolder?.name) return byFolder.name
+  }
+  const parts = track.relPath.split("/").filter(Boolean)
+  if (parts.length >= 2) {
+    const albumRel = parts.slice(0, -1).join("/")
+    const byRel = index.albums.find((album) => album.relPath === albumRel)
+    if (byRel?.name) return byRel.name
+  }
+  return track.album
+}
+
 export function openTrackInLibrary(
   index: LibraryIndex,
   track: EnrichedTrack,
@@ -84,13 +110,15 @@ export function openTrackInLibrary(
     (item) => item.id === track.artist || item.name === track.artist,
   )
   const artistId = artist?.id ?? track.artist
+  const albumName = resolveTrackAlbumName(index, track)
   if (isLooseTrack(track) || artistHasOnlyLooseAlbum(index, artistId)) {
-    const albumName =
-      resolveLibraryAlbumRoute(index, artistId, track.album) ?? track.album
-    onOpenAlbum(artistId, albumName)
+    onOpenAlbum(
+      artistId,
+      resolveLibraryAlbumRoute(index, artistId, albumName) ?? albumName,
+    )
     return
   }
-  onOpenAlbum(artistId, track.album)
+  onOpenAlbum(artistId, albumName)
 }
 
 export function formatTrackByline(track: EnrichedTrack): string {

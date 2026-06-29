@@ -4,6 +4,8 @@ import {
   formatTrackByline,
   isLooseTrack,
   openArtistInLibrary,
+  openTrackInLibrary,
+  resolveTrackAlbumName,
   resolveTrackFromLibrary,
 } from "./libraryNav"
 import type { LibraryIndex } from "../types"
@@ -88,5 +90,83 @@ describe("libraryNav", () => {
     )
     expect(full.filePath).toBe("Artist/a.mp3")
     expect(full.relPath).toBe("Artist/Tracks/a.mp3")
+  })
+
+  it("resolveTrackAlbumName uses album index when track album is stale", () => {
+    const index = {
+      ...looseIndex,
+      albums: [
+        {
+          id: "Artist::Album",
+          artistId: "Artist",
+          name: "New Title",
+          relPath: "Artist/Album",
+          trackCount: 1,
+          loose: false,
+          tracks: ["Artist/Album/song.mp3"],
+        },
+      ],
+      tracks: [
+        {
+          id: "Artist/Album/song.mp3",
+          relPath: "Artist/Album/song.mp3",
+          title: "Song",
+          artist: "Artist",
+          album: "Old Title",
+          albumId: "Artist::Album",
+          albumFolderRelPath: "Artist/Album",
+          loose: false,
+        },
+      ],
+    } as unknown as LibraryIndex
+    expect(
+      resolveTrackAlbumName(index, {
+        relPath: "Artist/Album/song.mp3",
+        album: "Old Title",
+        albumId: "Artist::Album",
+        albumFolderRelPath: "Artist/Album",
+      }),
+    ).toBe("New Title")
+  })
+
+  it("openTrackInLibrary opens renamed album", () => {
+    const index = {
+      artists: [{ id: "Artist", name: "Artist", albumCount: 1, trackCount: 1 }],
+      albums: [
+        {
+          id: "Artist::Album",
+          artistId: "Artist",
+          name: "New Title",
+          relPath: "Artist/Album",
+          trackCount: 1,
+          loose: false,
+          tracks: ["Artist/Album/song.mp3"],
+        },
+      ],
+      tracks: [
+        {
+          relPath: "Artist/Album/song.mp3",
+          artist: "Artist",
+          album: "Old Title",
+          albumId: "Artist::Album",
+          albumFolderRelPath: "Artist/Album",
+        },
+      ],
+    } as unknown as LibraryIndex
+    const calls: string[] = []
+    openTrackInLibrary(
+      index,
+      {
+        relPath: "Artist/Album/song.mp3",
+        title: "Song",
+        artist: "Artist",
+        album: "Old Title",
+        albumId: "Artist::Album",
+        albumFolderRelPath: "Artist/Album",
+      },
+      (id) => calls.push(`artist:${id}`),
+      (artist, album) => calls.push(`album:${artist}/${album}`),
+    )
+    expect(calls).toEqual(["album:Artist/New Title"])
   })
 })

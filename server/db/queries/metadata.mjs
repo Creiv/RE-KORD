@@ -52,6 +52,16 @@ export function saveAlbumMetaToDb(libraryRoot, folderRelPath, patch) {
     )
       ? str(patch.musicbrainzReleaseId, 200)
       : prev.musicbrainz_release_id,
+    discogs_release_id: Object.prototype.hasOwnProperty.call(patch, "discogsReleaseId")
+      ? Number.isFinite(Number(patch.discogsReleaseId))
+        ? Number(patch.discogsReleaseId)
+        : null
+      : prev.discogs_release_id,
+    discogs_extra_json: Object.prototype.hasOwnProperty.call(patch, "discogsExtra")
+      ? patch.discogsExtra == null
+        ? null
+        : JSON.stringify(patch.discogsExtra).slice(0, 32000)
+      : prev.discogs_extra_json,
   }
 
   const displayName =
@@ -75,6 +85,8 @@ export function saveAlbumMetaToDb(libraryRoot, folderRelPath, patch) {
         label = @label,
         country = @country,
         musicbrainz_release_id = @musicbrainz_release_id,
+        discogs_release_id = @discogs_release_id,
+        discogs_extra_json = @discogs_extra_json,
         expected_track_count = @expected_track_count,
         has_album_meta = 1,
         user_edited = 1,
@@ -109,6 +121,29 @@ export function saveAlbumMetaToDb(libraryRoot, folderRelPath, patch) {
         "UPDATE albums SET expected_track_count = ? WHERE folder_rel_path = ?",
       ).run(expectedTrackCount, folderRelPath)
     }
+
+    if (displayName && displayName !== prev.name) {
+      const now = Date.now()
+      db.prepare(
+        "UPDATE tracks SET album_name = ?, updated_at = ? WHERE album_id = ?",
+      ).run(displayName, now, prev.id)
+      const trackRows = db
+        .prepare("SELECT rel_path, title, artist_name, genre FROM tracks WHERE album_id = ?")
+        .all(prev.id)
+      const updFts = db.prepare(
+        "INSERT INTO tracks_fts (title, artist_name, album_name, genre, rel_path) VALUES (?, ?, ?, ?, ?)",
+      )
+      for (const track of trackRows) {
+        db.prepare("DELETE FROM tracks_fts WHERE rel_path = ?").run(track.rel_path)
+        updFts.run(
+          track.title,
+          track.artist_name,
+          displayName,
+          track.genre || "",
+          track.rel_path,
+        )
+      }
+    }
   })
 
   bumpLibraryEpoch(libraryRoot)
@@ -132,6 +167,22 @@ export function saveAlbumMetaToDb(libraryRoot, folderRelPath, patch) {
     label: row?.label || null,
     country: row?.country || null,
     musicbrainzReleaseId: row?.musicbrainz_release_id || null,
+    discogsReleaseId: row?.discogs_release_id ?? null,
+    discogsUri: (() => {
+      try {
+        const j = row?.discogs_extra_json ? JSON.parse(row.discogs_extra_json) : null
+        return j?.discogsUri || null
+      } catch {
+        return null
+      }
+    })(),
+    discogsExtra: (() => {
+      try {
+        return row?.discogs_extra_json ? JSON.parse(row.discogs_extra_json) : null
+      } catch {
+        return null
+      }
+    })(),
     expectedTrackCount: row?.expected_track_count ?? null,
     expectedTracks,
     editedAt: new Date().toISOString(),

@@ -36,6 +36,29 @@ export type LibTrack = {
   relPath: string;
   meta?: TrackMeta;
 };
+export type DiscogsAlbumExtra = {
+  masterId?: number | null;
+  discogsUri?: string | null;
+  discogsArtistId?: number | null;
+  styles?: string[];
+  formats?: unknown[];
+  formatSummary?: string | null;
+  catalogNo?: string | null;
+  barcode?: string | null;
+  notes?: string | null;
+  community?: {
+    have?: number | null;
+    want?: number | null;
+    rating?: { average?: number | null; count?: number | null };
+  };
+  marketplace?: {
+    lowestPrice?: number | null;
+    currency?: string | null;
+    numForSale?: number | null;
+    blockedFromSale?: boolean;
+  };
+};
+
 export type AlbumMeta = {
   title?: string | null;
   releaseDate: string | null;
@@ -43,6 +66,9 @@ export type AlbumMeta = {
   label: string | null;
   country: string | null;
   musicbrainzReleaseId: string | null;
+  discogsReleaseId?: number | null;
+  discogsUri?: string | null;
+  discogsExtra?: DiscogsAlbumExtra | null;
   expectedTrackCount?: number | null;
   expectedTracks?: {
     disc?: number;
@@ -258,6 +284,9 @@ export type LibraryAlbumIndex = {
   label: string | null;
   country: string | null;
   musicbrainzReleaseId: string | null;
+  discogsReleaseId: number | null;
+  discogsUri: string | null;
+  discogsExtra: DiscogsAlbumExtra | null;
   expectedTrackCount: number | null;
   expectedTracks:
     | { disc?: number; position?: number | null; title: string }[]

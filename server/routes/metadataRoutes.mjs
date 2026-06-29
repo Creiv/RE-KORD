@@ -12,6 +12,7 @@ import {
   loadTrackJsonMetaMapFromDir,
   prepareTrackTitleForMeta,
   pruneAlbumLibraryMetadataInAlbumDir,
+  resolveDiscogsAlbumTrackContext,
   sanitizeTrackTitlesFullLibrary,
   sanitizeTrackTitlesInAlbumDir,
   saveAlbumFetchedMeta,
@@ -32,7 +33,7 @@ import { getAudioFileDurationMs } from "../audioDuration.mjs";
 import { normalizeStoredGenreString, parseTrackGenres } from "../genres.mjs";
 import { accountIdFromReq, actLog, sendError, sendOk } from "../httpUtils.mjs";
 import { isLibraryDbBootstrapped } from "../db/index.mjs";
-import { patchAlbumCoverInDb } from "../db/queries/metadata.mjs";
+import { patchAlbumCoverInDb, saveTrackMetaToDb } from "../db/queries/metadata.mjs";
 import { registerDownloadedCoverArtwork } from "../artwork/index.mjs";
 import {
   albumDeltaFromMeta,
@@ -42,6 +43,9 @@ import {
 import { isAudioFile } from "../musicLibrary.mjs";
 import { resolveTrackFileRelPath, resolveAlbumFolderRelPath } from "../scanner/engine.mjs";
 import { getMusicRoot } from "../musicRootConfig.mjs";
+import { isDiscogsConfigured } from "../discogsClient.mjs";
+import { searchDiscogsReleases } from "../discogsMetadata.mjs";
+import { applyDiscogsReleaseToAlbum } from "../discogsApply.mjs";
 import {
   albumFolderFromRelPath,
   hostnameBlockedForUpstreamImageFetch,
@@ -51,13 +55,111 @@ import {
 import { rekordApiUserAgent } from "../rekordVersion.mjs";
 import { normalizeTrackMoodsList } from "../trackMoods.mjs";
 import { writeUserTrackMoodsWithCAS } from "../userState.mjs";
-import { existsSync, statSync } from "fs";
+import { existsSync, statSync, readdirSync } from "fs";
 import multer from "multer";
 
 const uploadAlbumCover = multer({
   storage: multer.memoryStorage(),
   limits: { fileSize: 15 * 1024 * 1024 },
 });
+
+function applyFetchedTrackOrdering(root, relPath, fetchedMeta) {
+  if (!isLibraryDbBootstrapped(root)) return;
+  /** @type {Record<string, unknown>} */
+  const patch = {};
+  if (Number.isFinite(Number(fetchedMeta?.trackNumber))) {
+    patch.trackNumber = Number(fetchedMeta.trackNumber);
+  }
+  if (Number.isFinite(Number(fetchedMeta?.discNumber))) {
+    patch.discNumber = Number(fetchedMeta.discNumber);
+  }
+  if (
+    Number.isFinite(Number(fetchedMeta?.durationMs)) &&
+    Number(fetchedMeta.durationMs) > 0
+  ) {
+    patch.durationMs = Number(fetchedMeta.durationMs);
+  }
+  if (Object.keys(patch).length) saveTrackMetaToDb(root, relPath, patch);
+}
+
+/**
+ * @param {string} root
+ * @param {string} relPath
+ * @param {object|null} [discogsContext]
+ */
+async function fetchAndSaveOneTrack(root, relPath, discogsContext = null) {
+  const mediaRel = resolveTrackFileRelPath(root, relPath);
+  const fullTrackPath = path.join(root, mediaRel.replaceAll("/", path.sep));
+  if (
+    !underRoot(fullTrackPath, root) ||
+    !existsSync(fullTrackPath) ||
+    !isAudioFile(fullTrackPath)
+  ) {
+    throw new Error("Track not found");
+  }
+  const parts = relPath.split("/").filter(Boolean);
+  const fileName = parts[parts.length - 1];
+  const artist = parts[0] || "";
+  const album = parts.length >= 3 ? parts[1] : "";
+  const albumRel = resolveAlbumFolderRelPath(root, relPath);
+  if (!albumRel) throw new Error("Invalid track path");
+  const albumDir = path.join(root, albumRel.replaceAll("/", path.sep));
+  if (!underRoot(albumDir, root) || !existsSync(albumDir)) {
+    throw new Error("Album folder not found");
+  }
+  const titleRaw =
+    String(fileName)
+      .replace(/\.(mp3|flac|m4a|ogg|opus|wav|aac|webm)$/i, "")
+      .trim() || fileName;
+  const trackMetaMap = await loadTrackJsonMetaMapFromDir(albumDir);
+  const existingTr = trackMetaMap[fileName];
+  const artistFromTrackInfo =
+    existingTr &&
+    typeof existingTr === "object" &&
+    typeof existingTr.artist === "string"
+      ? String(existingTr.artist).trim()
+      : "";
+  const artistForTitle = artistFromTrackInfo || artist;
+  const title =
+    prepareTrackTitleForMeta(artistForTitle, titleRaw) || titleRaw;
+  const meta = await fetchTrackMetadata(
+    artistForTitle,
+    title,
+    album,
+    titleRaw,
+    { albumDir, discogsContext, fileName },
+  );
+  if (meta.error) throw new Error(meta.error);
+  const row = await saveTrackFetchedMeta(albumDir, fileName, {
+    ...meta,
+    fetchedAt: new Date().toISOString(),
+  });
+  applyFetchedTrackOrdering(root, relPath, meta);
+  const fileMs = await getAudioFileDurationMs(fullTrackPath);
+  const metaOut = {
+    ...row,
+    durationMs:
+      Number.isFinite(Number(meta.durationMs)) && meta.durationMs > 0
+        ? meta.durationMs
+        : Number.isFinite(fileMs)
+          ? fileMs
+          : null,
+    trackNumber:
+      Number.isFinite(Number(meta.trackNumber)) ? meta.trackNumber : row.trackNumber,
+    discNumber:
+      Number.isFinite(Number(meta.discNumber)) ? meta.discNumber : row.discNumber,
+  };
+  const resolvedTitle =
+    metaOut?.title && String(metaOut.title).trim()
+      ? String(metaOut.title).trim()
+      : null;
+  const trackDelta = {
+    relPath,
+    ...(resolvedTitle ? { title: resolvedTitle } : {}),
+    meta: metaOut,
+  };
+  return { relPath, meta: metaOut, track: trackDelta };
+}
 
 export function registerMetadataRoutes(app) {
   app.get("/api/artwork/search", async (req, res) => {
@@ -247,7 +349,9 @@ export function registerMetadataRoutes(app) {
         kind: "library",
         action: "album_metadata_fetch",
         folder: albumPath,
-        detail: "MusicBrainz / release metadata",
+        detail: isDiscogsConfigured()
+          ? "Discogs / MusicBrainz / release metadata"
+          : "MusicBrainz / release metadata",
       });
       const albumDelta = albumDeltaFromMeta(albumPath, savedMeta, albumTitle);
       scheduleLibraryIndexMetaRefresh(root, isLibraryDbBootstrapped(root));
@@ -325,12 +429,23 @@ export function registerMetadataRoutes(app) {
         folder: albumPath,
         detail: Object.keys(safe).join(", "),
       });
+      const albumDisplayName =
+        meta?.title && String(meta.title).trim()
+          ? String(meta.title).trim()
+          : path.basename(albumPath);
+      if (Object.prototype.hasOwnProperty.call(safe, "title")) {
+        const existing = new Set(touchedTracks.map((row) => row.relPath));
+        const entries = await fs.readdir(full, { withFileTypes: true });
+        for (const entry of entries) {
+          if (!entry.isFile() || !isAudioFile(entry.name)) continue;
+          const relPath = `${albumPath}/${entry.name}`.replaceAll(path.sep, "/");
+          if (existing.has(relPath)) continue;
+          touchedTracks.push({ relPath, album: albumDisplayName });
+        }
+      }
       const album = {
         relPath: albumPath,
-        name:
-          meta?.title && String(meta.title).trim()
-            ? String(meta.title).trim()
-            : path.basename(albumPath),
+        name: albumDisplayName,
         title: meta?.title ?? null,
         releaseDate: meta?.releaseDate ?? null,
         genre: meta?.genre ?? null,
@@ -364,72 +479,89 @@ export function registerMetadataRoutes(app) {
     const relPath = safeRelSeg(String(req.body?.relPath || ""));
     if (!relPath) return sendError(res, 400, "relPath is required");
     try {
-      const mediaRel = resolveTrackFileRelPath(root, relPath);
-      const fullTrackPath = path.join(root, mediaRel.replaceAll("/", path.sep));
-      if (
-        !underRoot(fullTrackPath, root) ||
-        !existsSync(fullTrackPath) ||
-        !isAudioFile(fullTrackPath)
-      ) {
-        return sendError(res, 404, "Track not found");
-      }
-      const parts = relPath.split("/").filter(Boolean);
-      const fileName = parts[parts.length - 1];
-      const artist = parts[0] || "";
-      const album = parts.length >= 3 ? parts[1] : "";
       const albumRel = resolveAlbumFolderRelPath(root, relPath);
-      if (!albumRel) return sendError(res, 400, "Invalid track path");
-      const albumDir = path.join(root, albumRel.replaceAll("/", path.sep));
-      if (!underRoot(albumDir, root) || !existsSync(albumDir))
-        return sendError(res, 404, "Album folder not found");
-      const titleRaw =
-        String(fileName)
-          .replace(/\.(mp3|flac|m4a|ogg|opus|wav|aac|webm)$/i, "")
-          .trim() || fileName;
-      const trackMetaMap = await loadTrackJsonMetaMapFromDir(albumDir);
-      const existingTr = trackMetaMap[fileName];
-      const artistFromTrackInfo =
-        existingTr &&
-        typeof existingTr === "object" &&
-        typeof existingTr.artist === "string"
-          ? String(existingTr.artist).trim()
-          : "";
-      const artistForTitle = artistFromTrackInfo || artist;
-      const title =
-        prepareTrackTitleForMeta(artistForTitle, titleRaw) || titleRaw;
-      const meta = await fetchTrackMetadata(
-        artistForTitle,
-        title,
-        album,
-        titleRaw
-      );
-      if (meta.error) return sendError(res, 404, meta.error);
-      const row = await saveTrackFetchedMeta(albumDir, fileName, {
-        ...meta,
-        fetchedAt: new Date().toISOString(),
-      });
+      const result = await fetchAndSaveOneTrack(root, relPath);
       void actLog(req, {
         kind: "library",
         action: "track_metadata_fetch",
         folder: albumRel,
-        detail: fileName,
+        detail: isDiscogsConfigured()
+          ? `Discogs / track: ${relPath.split("/").pop()}`
+          : relPath.split("/").pop(),
       });
-      const fileMs = await getAudioFileDurationMs(fullTrackPath);
-      const metaOut = {
-        ...row,
-        durationMs: Number.isFinite(fileMs) ? fileMs : null,
-      };
-      const resolvedTitle =
-        metaOut?.title && String(metaOut.title).trim()
-          ? String(metaOut.title).trim()
-          : null;
-      const trackDelta = {
-        relPath,
-        ...(resolvedTitle ? { title: resolvedTitle } : {}),
-        meta: metaOut,
-      };
       scheduleLibraryIndexMetaRefresh(root, isLibraryDbBootstrapped(root));
-      return res.json({ ok: true, relPath, meta: metaOut, track: trackDelta });
+      return res.json({ ok: true, ...result });
+    } catch (error) {
+      const msg = String(error?.message || error);
+      if (msg.includes("not found")) return sendError(res, 404, msg);
+      return sendError(res, 500, msg);
+    }
+  });
+
+  app.post("/api/track-info/fetch-album", async (req, res) => {
+    const root = getMusicRoot();
+    const albumPath = safeRelSeg(String(req.body?.albumPath || ""));
+    const artistHint = String(req.body?.artist || "").trim();
+    const albumHint = String(req.body?.album || "").trim();
+    if (!albumPath) return sendError(res, 400, "albumPath is required");
+    try {
+      const albumDir = path.join(root, albumPath.replaceAll("/", path.sep));
+      if (!underRoot(albumDir, root) || !existsSync(albumDir)) {
+        return sendError(res, 404, "Album folder not found");
+      }
+      if (!statSync(albumDir).isDirectory()) {
+        return sendError(res, 400, "Not a directory");
+      }
+      const parts = albumPath.split("/").filter(Boolean);
+      const artist = artistHint || parts[parts.length - 2] || "";
+      const album = albumHint || parts[parts.length - 1] || "";
+      const discogsContext = isDiscogsConfigured()
+        ? await resolveDiscogsAlbumTrackContext(albumDir, artist, album)
+        : null;
+
+      let files = [];
+      try {
+        files = readdirSync(albumDir)
+          .filter((f) => isAudioFile(path.join(albumDir, f)))
+          .sort((a, b) => a.localeCompare(b, undefined, { numeric: true }));
+      } catch {
+        files = [];
+      }
+      if (!files.length) return sendError(res, 404, "No audio files in album");
+
+      /** @type {object[]} */
+      const tracks = [];
+      /** @type {{ relPath: string, error: string }[]} */
+      const errors = [];
+      for (const fileName of files) {
+        const relPath = `${albumPath}/${fileName}`.replace(/\\/g, "/");
+        try {
+          const result = await fetchAndSaveOneTrack(root, relPath, discogsContext);
+          tracks.push(result.track);
+        } catch (error) {
+          errors.push({
+            relPath,
+            error: String(error?.message || error),
+          });
+        }
+      }
+
+      void actLog(req, {
+        kind: "library",
+        action: "track_metadata_fetch_album",
+        folder: albumPath,
+        detail: isDiscogsConfigured()
+          ? `Discogs / ${tracks.length} ok, ${errors.length} err`
+          : `${tracks.length} ok, ${errors.length} err`,
+      });
+      scheduleLibraryIndexMetaRefresh(root, isLibraryDbBootstrapped(root));
+      return sendOk(res, {
+        albumPath,
+        fetched: tracks.length,
+        failed: errors.length,
+        tracks,
+        errors,
+      });
     } catch (error) {
       return sendError(res, 500, String(error?.message || error));
     }
@@ -779,6 +911,80 @@ export function registerMetadataRoutes(app) {
         folder: r.artistSeg,
       });
       return sendOk(res, bundle);
+    } catch (error) {
+      return sendError(res, 500, String(error?.message || error));
+    }
+  });
+
+  app.post("/api/discogs/search-releases", async (req, res) => {
+    if (!isDiscogsConfigured()) {
+      return sendError(res, 400, "Discogs token not configured");
+    }
+    try {
+      const artist = String(req.body?.artist || "").trim();
+      const album = String(req.body?.album || "").trim();
+      if (!artist && !album) {
+        return sendError(res, 400, "artist or album required");
+      }
+      const result = await searchDiscogsReleases(artist, album, { limit: 5 });
+      if (!result.ok) return sendError(res, 404, result.error || "No results");
+      return sendOk(res, { ok: true, candidates: result.candidates });
+    } catch (error) {
+      return sendError(res, 500, String(error?.message || error));
+    }
+  });
+
+  app.post("/api/discogs/apply-release", async (req, res) => {
+    if (!isDiscogsConfigured()) {
+      return sendError(res, 400, "Discogs token not configured");
+    }
+    const root = getMusicRoot();
+    const albumPath = safeRelSeg(String(req.body?.albumPath || ""));
+    const releaseId = Number(req.body?.releaseId);
+    if (!albumPath) return sendError(res, 400, "albumPath is required");
+    if (!Number.isFinite(releaseId) || releaseId < 1) {
+      return sendError(res, 400, "releaseId is required");
+    }
+    try {
+      const full = path.join(root, albumPath.replaceAll("/", path.sep));
+      if (!underRoot(full, root) || !existsSync(full)) {
+        return sendError(res, 400, "Folder does not exist");
+      }
+      if (!statSync(full).isDirectory()) {
+        return sendError(res, 400, "Not a directory");
+      }
+      const { savedMeta, trackDeltas } = await applyDiscogsReleaseToAlbum(
+        full,
+        releaseId,
+      );
+      void actLog(req, {
+        kind: "library",
+        action: "album_metadata_fetch",
+        folder: albumPath,
+        detail: `Discogs release ${releaseId}`,
+      });
+      const albumDelta = albumDeltaFromMeta(
+        albumPath,
+        savedMeta,
+        path.basename(albumPath),
+      );
+      scheduleLibraryIndexMetaRefresh(root, isLibraryDbBootstrapped(root));
+      const tracks = trackDeltas.map((t) => ({
+        relPath: t.relPath,
+        meta: {
+          trackNumber: t.trackNumber ?? null,
+          source: t.source ?? null,
+          url: t.url ?? null,
+          durationMs: t.durationMs ?? null,
+        },
+      }));
+      return res.json({
+        ok: true,
+        albumPath,
+        meta: savedMeta,
+        album: albumDelta,
+        tracks: tracks.length ? tracks : undefined,
+      });
     } catch (error) {
       return sendError(res, 500, String(error?.message || error));
     }

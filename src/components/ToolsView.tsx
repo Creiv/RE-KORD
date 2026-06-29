@@ -20,9 +20,11 @@ import { useI18n } from "../i18n/useI18n";
 import { useLibrarySyncActivity } from "../context/LibrarySyncActivityContext";
 import {
   applyArtwork,
+  applyDiscogsRelease,
   createMusicSubdir,
   fetchConfig,
   fetchAlbumInfo,
+  fetchAlbumTracksInfo,
   fetchLibraryCatalog,
   fetchMyLibrarySelection,
   patchMyLibrarySelection,
@@ -37,12 +39,14 @@ import {
   cancelStudioDownload,
   sanitizeTrackTitles,
   searchArtwork,
+  searchDiscogsReleases,
   searchMusicDirs,
   pruneAlbumLibraryMetadataForAlbum,
   waitForLibraryEpoch,
 } from "../lib/api";
 import type {
   ArtworkHit,
+  DiscogsReleaseCandidate,
   FsDirSearchResult,
   StudioDownloadKind,
   YoutubeExploreResult,
@@ -337,6 +341,11 @@ export function ToolsView({
   const [metaScanChoiceOpen, setMetaScanChoiceOpen] = useState<
     null | "album" | "track"
   >(null);
+  const [discogsConfigured, setDiscogsConfigured] = useState(false);
+  const [discogsPickerOpen, setDiscogsPickerOpen] = useState(false);
+  const [discogsCandidates, setDiscogsCandidates] = useState<
+    DiscogsReleaseCandidate[]
+  >([]);
   const [metaOptionalOpen, setMetaOptionalOpen] = useState(false);
   const [studioPane, setStudioPane] = useState<StudioPane>(() => {
     return readStoredStudioPane() ?? "listen";
@@ -538,6 +547,7 @@ export function ToolsView({
       .then((c) => {
         setCatalogLockedByEnv(c.lockedByEnv);
         setServerLocalAccess(Boolean(c.localAccess) && !isRekordClientEmbed());
+        setDiscogsConfigured(Boolean(c.discogsConfigured));
       })
       .catch(() => {});
   }, []);
@@ -840,6 +850,19 @@ export function ToolsView({
       setMetaLog(t("tools.metaPickAlbum"));
       return;
     }
+    if (discogsConfigured) {
+      setMetaBusy(true);
+      searchDiscogsReleases(metaArt.trim(), metaAlb.trim())
+        .then((r) => {
+          setDiscogsCandidates(r.candidates);
+          setDiscogsPickerOpen(true);
+        })
+        .catch((e) =>
+          setMetaLog((s) => s + t("tools.metaErr", { e: String(e) }))
+        )
+        .finally(() => setMetaBusy(false));
+      return;
+    }
     setMetaBusy(true);
     fetchAlbumInfo(metaAlbumPath.trim(), metaArt.trim(), metaAlb.trim())
       .then((r) => {
@@ -850,6 +873,38 @@ export function ToolsView({
         );
         if (r.album && onLibraryDelta) {
           onLibraryDelta({ album: r.album }, false);
+        } else {
+          void onReconcileLibrary({ mode: "debounced" });
+        }
+      })
+      .catch((e) => setMetaLog((s) => s + t("tools.metaErr", { e })))
+      .finally(() => setMetaBusy(false));
+  };
+
+  const applyDiscogsReleaseChoice = (releaseId: number) => {
+    if (!metaAlbumPath.trim()) return;
+    setDiscogsPickerOpen(false);
+    setMetaBusy(true);
+    applyDiscogsRelease(metaAlbumPath.trim(), releaseId)
+      .then((r) => {
+        const d = r.meta?.date;
+        setMetaLog(
+          (s) =>
+            s +
+            t("tools.metaDiscogsOkLine", {
+              path: r.albumPath,
+              date: fmtDate(d),
+              id: String(releaseId),
+            })
+        );
+        if (onLibraryDelta) {
+          onLibraryDelta(
+            {
+              album: r.album,
+              tracks: r.tracks,
+            },
+            false
+          );
         } else {
           void onReconcileLibrary({ mode: "debounced" });
         }
@@ -944,32 +999,58 @@ export function ToolsView({
     void onReconcileLibrary({ mode: "now" });
   };
 
-  const fetchCurrentTrackMeta = () => {
-    if (!p.current?.relPath) {
-      setMetaLog((s) => s + t("tools.metaNoTrack"));
+  const fetchSelectedAlbumTracksMeta = async () => {
+    if (!metaAlbumPath.trim()) {
+      setMetaLog((s) => s + t("tools.metaPickAlbum"));
       return;
     }
     setTrackMetaBusy(true);
-    fetchTrackInfo(p.current.relPath)
-      .then((r) => {
+    setTrackScanProg({ current: 0, total: 1 });
+    setMetaLog(
+      (s) =>
+        s +
+        t("tools.metaAlbumTracksStart", { path: metaAlbumPath.trim() }),
+    );
+    try {
+      const r = await fetchAlbumTracksInfo(
+        metaAlbumPath.trim(),
+        metaArt.trim(),
+        metaAlb.trim(),
+      );
+      const total = r.fetched + r.failed;
+      if (total > 0) {
+        setTrackScanProg({ current: total, total });
+      }
+      for (const track of r.tracks) {
+        if (track && onLibraryDelta) {
+          onLibraryDelta({ track }, false);
+        }
+      }
+      for (const err of r.errors || []) {
         setMetaLog(
           (s) =>
             s +
-            t("tools.metaTrackOk", {
-              title: p.current?.title ?? "",
-              date: fmtDate(r.meta.releaseDate),
-              genre:
-                formatTrackGenresForDisplay(r.meta.genre) || t("common.emDash"),
-            })
+            t("tools.metaAlbumTrackErr", {
+              path: err.relPath,
+              e: err.error,
+            }),
         );
-        if (r.track && onLibraryDelta) {
-          onLibraryDelta({ track: r.track }, false);
-        } else {
-          void onReconcileLibrary({ mode: "debounced" });
-        }
-      })
-      .catch((e) => setMetaLog((s) => s + t("tools.metaTrackErr", { e })))
-      .finally(() => setTrackMetaBusy(false));
+      }
+      setMetaLog(
+        (s) =>
+          s +
+          t("tools.metaAlbumTracksDone", {
+            ok: r.fetched,
+            err: r.failed,
+          }),
+      );
+      void onReconcileLibrary({ mode: "now" });
+    } catch (e) {
+      setMetaLog((s) => s + t("tools.metaTrackErr", { e: String(e) }));
+    } finally {
+      setTrackMetaBusy(false);
+      setTrackScanProg(null);
+    }
   };
 
   const runTrackScanAll = async (rescanAll: boolean) => {
@@ -2924,10 +3005,12 @@ export function ToolsView({
                           <button
                             type="button"
                             className="ghost-btn"
-                            onClick={fetchCurrentTrackMeta}
-                            disabled={!p.current || studioMetaBusy}
+                            onClick={fetchSelectedAlbumTracksMeta}
+                            disabled={!metaAlbumPath?.trim() || studioMetaBusy}
                           >
-                            {trackMetaBusy ? "…" : t("tools.currentTrackMeta")}
+                            {trackMetaBusy
+                              ? "…"
+                              : t("tools.selectedAlbumTracksMeta")}
                           </button>
                           <button
                             type="button"
@@ -3247,6 +3330,74 @@ export function ToolsView({
                 {t("tools.scanChoiceCancel")}
               </button>
             </div>
+          </div>
+        </div>
+      ) : null}
+      {discogsPickerOpen ? (
+        <div
+          className="meta-edit-backdrop"
+          role="presentation"
+          onMouseDown={(e) => {
+            if (e.target === e.currentTarget) setDiscogsPickerOpen(false);
+          }}
+        >
+          <div
+            className="meta-edit-dialog surface-card studio-discogs-picker"
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="discogs-picker-title"
+            onMouseDown={(e) => e.stopPropagation()}
+          >
+            <div className="section-head">
+              <div>
+                <h2 id="discogs-picker-title">{t("tools.discogsPickerTitle")}</h2>
+                <p className="subtle sm">{t("tools.discogsPickerHint")}</p>
+              </div>
+              <button
+                type="button"
+                className="text-btn"
+                onClick={() => setDiscogsPickerOpen(false)}
+              >
+                {t("tools.discogsPickerCancel")}
+              </button>
+            </div>
+            <ul className="studio-discogs-picker__list">
+              {discogsCandidates.map((c) => (
+                <li key={c.releaseId}>
+                  <button
+                    type="button"
+                    className="studio-discogs-picker__item"
+                    onClick={() => applyDiscogsReleaseChoice(c.releaseId)}
+                  >
+                    {c.thumb ? (
+                      <img
+                        src={c.thumb}
+                        alt=""
+                        className="studio-discogs-picker__thumb"
+                      />
+                    ) : null}
+                    <span className="studio-discogs-picker__body">
+                      <span className="studio-discogs-picker__title">
+                        {c.title}
+                      </span>
+                      <span className="subtle sm">
+                        {[c.year, c.country, c.format, c.label, c.catno]
+                          .filter(Boolean)
+                          .join(" · ")}
+                      </span>
+                      {c.community.have != null || c.community.want != null ? (
+                        <span className="subtle sm">
+                          {t("tools.discogsCommunity", {
+                            have: String(c.community.have ?? "—"),
+                            want: String(c.community.want ?? "—"),
+                          })}
+                        </span>
+                      ) : null}
+                    </span>
+                  </button>
+                </li>
+              ))}
+            </ul>
           </div>
         </div>
       ) : null}

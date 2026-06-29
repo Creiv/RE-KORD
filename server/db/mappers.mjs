@@ -1,5 +1,16 @@
 import { parseTrackGenres } from "../genres.mjs"
 
+/** @param {string | null | undefined} raw */
+function parseDiscogsExtra(raw) {
+  if (!raw || typeof raw !== "string") return null
+  try {
+    const j = JSON.parse(raw)
+    return j && typeof j === "object" ? j : null
+  } catch {
+    return null
+  }
+}
+
 /** @param {Record<string, unknown> | undefined} row */
 export function trackRowToIndex(row) {
   if (!row) return null
@@ -51,6 +62,9 @@ export function albumRowToIndex(row, trackRelPaths = []) {
     label: row.label || null,
     country: row.country || null,
     musicbrainzReleaseId: row.musicbrainz_release_id || null,
+    discogsReleaseId: numOrNull(row.discogs_release_id),
+    discogsUri: parseDiscogsExtra(row.discogs_extra_json)?.discogsUri || null,
+    discogsExtra: parseDiscogsExtra(row.discogs_extra_json),
     expectedTrackCount: numOrNull(row.expected_track_count),
     expectedTracks: null,
     hasCover: Boolean(row.has_cover),
