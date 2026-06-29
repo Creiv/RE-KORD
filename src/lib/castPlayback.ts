@@ -3,6 +3,7 @@ import {
   type CastStreamOptions,
 } from "./castMedia"
 import type { CastTrackPayload } from "./castMedia"
+import { isNativeMediaSessionBridgeAvailable } from "./mediaSession"
 
 const CAST_SDK_URL =
   "https://www.gstatic.com/cv/js/sender/v1/cast_sender.js?loadCastFramework=1"
@@ -248,8 +249,7 @@ export async function toggleWebCastSession(): Promise<boolean> {
 
 export function canUseWebCastSender(): boolean {
   if (typeof window === "undefined") return false
-  const w = window as Window & { RekordMediaNative?: unknown }
-  return !w.RekordMediaNative
+  return !isNativeMediaSessionBridgeAvailable()
 }
 
 export type { CastStreamOptions }

@@ -88,7 +88,6 @@ function defaultSettings(): UserSettings {
     plectrDisableVizBackdrop: false,
     glassSurfaces: false,
     glassOpacity: 62,
-    nativePlayback: false,
   };
 }
 
@@ -206,7 +205,6 @@ function normalizeSettings(raw: Partial<UserSettings> | UserSettingsPatch): User
     plectrDisableVizBackdrop: raw.plectrDisableVizBackdrop === true,
     glassSurfaces: raw.glassSurfaces === true,
     glassOpacity: normalizeGlassOpacity(raw.glassOpacity),
-    nativePlayback: raw.nativePlayback === true,
   };
 }
 

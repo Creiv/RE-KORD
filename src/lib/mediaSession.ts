@@ -103,6 +103,10 @@ function rekordMediaNative(): RekordMediaNative | null {
   }
 }
 
+export function isNativeMediaSessionBridgeAvailable(): boolean {
+  return rekordMediaNative() !== null
+}
+
 function coverUrlForTrack(track: EnrichedTrack): string {
   const { src, version } = trackCoverDisplay(
     track,
@@ -355,7 +359,7 @@ export function registerMediaSessionActions(
     }
   }
 
-  if (rekordMediaNative()) {
+  if (isNativeMediaSessionBridgeAvailable()) {
     const target = window as unknown as {
       __rekordMediaAction?: (action: string, seekTime: number) => void
     }

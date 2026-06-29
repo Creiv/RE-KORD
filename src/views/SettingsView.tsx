@@ -8,7 +8,6 @@ import {
 } from "react";
 import { QrCodeImg } from "../components/QrCodeImg";
 import { useAppConfirm } from "../context/AppConfirmContext";
-import { isNativePlaybackBridgeAvailable } from "../lib/nativePlayback";
 import { useUserState } from "../context/UserStateContext";
 import { useI18n } from "../i18n/useI18n";
 import {
@@ -85,9 +84,6 @@ function SettingsView() {
   );
   const glassOpacitySaveTimer = useRef<ReturnType<typeof setTimeout> | null>(
     null
-  );
-  const [nativePlaybackAvailable] = useState(() =>
-    isNativePlaybackBridgeAvailable(),
   );
 
   useEffect(() => {
@@ -748,23 +744,6 @@ function SettingsView() {
               <option value="5">{t("settings.audioCrossfade5")}</option>
             </select>
           </label>
-          {nativePlaybackAvailable ? (
-            <label className="settings-ui-inline-control settings-ui-inline-control--checkbox-row">
-              <input
-                type="checkbox"
-                className="settings-checkbox"
-                checked={user.state.settings.nativePlayback}
-                onChange={(event) =>
-                  user.updateSettings({
-                    nativePlayback: event.target.checked,
-                  })
-                }
-              />
-              <span title={t("settings.nativePlaybackHint")}>
-                {t("settings.nativePlayback")}
-              </span>
-            </label>
-          ) : null}
         </div>
       </section>
       <section className="surface-card">

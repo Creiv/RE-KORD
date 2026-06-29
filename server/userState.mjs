@@ -318,7 +318,6 @@ function sanitizeSettings(settings) {
     plectrDisableVizBackdrop: src.plectrDisableVizBackdrop === true,
     glassSurfaces: src.glassSurfaces === true,
     glassOpacity: normalizeGlassOpacity(src.glassOpacity),
-    nativePlayback: src.nativePlayback === true,
   }
 }
 

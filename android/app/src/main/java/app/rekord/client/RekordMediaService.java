@@ -16,7 +16,6 @@ import android.os.Build;
 import android.os.Handler;
 import android.os.IBinder;
 import android.os.Looper;
-import android.os.PowerManager;
 import android.support.v4.media.MediaDescriptionCompat;
 import android.support.v4.media.MediaMetadataCompat;
 import android.support.v4.media.session.MediaSessionCompat;
@@ -36,7 +35,7 @@ import org.json.JSONObject;
 
 /**
  * MediaSession nativa per il client RE-KORD: notifica media, lock screen,
- * Cast / Google Home (URI + coda), tasti cuffie/auto/volante.
+ * tasti cuffie/auto. L'audio resta nel WebView; qui solo metadati e controlli.
  */
 public class RekordMediaService extends Service {
 
@@ -72,7 +71,6 @@ public class RekordMediaService extends Service {
     private int queueIndex = 0;
     private List<MediaSessionCompat.QueueItem> playQueue = new ArrayList<>();
     private boolean foreground = false;
-    private PowerManager.WakeLock wakeLock;
 
     public class LocalBinder extends Binder {
         RekordMediaService getService() {
@@ -146,7 +144,6 @@ public class RekordMediaService extends Service {
 
     @Override
     public void onDestroy() {
-        updateWakeLock(false);
         if (session != null) {
             session.setActive(false);
             session.release();
@@ -157,10 +154,6 @@ public class RekordMediaService extends Service {
 
     public void setActionListener(ActionListener l) {
         this.listener = l;
-    }
-
-    public boolean isSessionActive() {
-        return !"none".equals(playbackState);
     }
 
     private void notifyAction(String action, double seekTimeSec) {
@@ -267,26 +260,9 @@ public class RekordMediaService extends Service {
         });
     }
 
-    private void updateWakeLock(boolean playing) {
-        if (playing) {
-            if (wakeLock == null) {
-                PowerManager pm = (PowerManager) getSystemService(POWER_SERVICE);
-                if (pm == null) return;
-                wakeLock = pm.newWakeLock(PowerManager.PARTIAL_WAKE_LOCK, "RekordMedia:Playback");
-                wakeLock.setReferenceCounted(false);
-            }
-            if (!wakeLock.isHeld()) {
-                wakeLock.acquire(6 * 60 * 60 * 1000L);
-            }
-        } else if (wakeLock != null && wakeLock.isHeld()) {
-            wakeLock.release();
-        }
-    }
-
     private void apply() {
         if (session == null) return;
         if ("none".equals(playbackState)) {
-            updateWakeLock(false);
             session.setActive(false);
             session.setQueue(new ArrayList<>());
             stopForegroundCompat();
@@ -335,9 +311,6 @@ public class RekordMediaService extends Service {
             actions |= PlaybackStateCompat.ACTION_SKIP_TO_QUEUE_ITEM;
         }
 
-        // setState a 3 arg: Android usa elapsedRealtime() internamente.
-        // Il 4° arg con System.currentTimeMillis() rompe l'estrapolazione in PLAYING
-        // (barra a 0 in riproduzione, corretta in pausa).
         session.setPlaybackState(
             new PlaybackStateCompat.Builder()
                 .setState(state, positionMs, speed)
@@ -363,14 +336,12 @@ public class RekordMediaService extends Service {
             } else {
                 notifySafely(notification);
             }
-            updateWakeLock(true);
         } else {
             if (foreground) {
                 stopForeground(STOP_FOREGROUND_DETACH);
                 foreground = false;
             }
             notifySafely(notification);
-            updateWakeLock(false);
         }
     }
 

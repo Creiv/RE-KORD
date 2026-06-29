@@ -34,7 +34,6 @@ function baseState(): UserStateV1 {
       plectrDisableVizBackdrop: false,
       glassSurfaces: false,
       glassOpacity: 62,
-    nativePlayback: false,
     },
     shuffleExcludedAlbumIds: [],
     shuffleExcludedTrackRelPaths: [],

@@ -38,7 +38,6 @@ const userStatePayload = {
     audioCrossfadeSec: 3,
     plectrDisableVizBackdrop: false,
     glassSurfaces: false,
-    nativePlayback: false,
   },
   shuffleExcludedAlbumIds: ["Artist::Album"],
   shuffleExcludedTrackRelPaths: [],

@@ -124,7 +124,6 @@ const userState: UserStateV1 = {
     audioCrossfadeSec: 3,
     plectrDisableVizBackdrop: false,
     glassOpacity: 62,
-    nativePlayback: false,
     glassSurfaces: false,
   },
   migratedLegacy: true,

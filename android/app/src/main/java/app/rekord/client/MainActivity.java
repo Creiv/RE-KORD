@@ -22,7 +22,6 @@ public class MainActivity extends BridgeActivity {
     private final Handler mainHandler = new Handler(Looper.getMainLooper());
     private RekordMediaService mediaService;
     private RekordCastManager castManager;
-    private RekordPlaybackEngine playbackEngine;
     private String pendingStateJson;
     private String pendingMediaAction;
     private double pendingMediaSeekSec = -1;
@@ -63,12 +62,7 @@ public class MainActivity extends BridgeActivity {
             android.util.Log.w("RekordClient", "Cast SDK non disponibile: " + e.getMessage());
         }
         WebView webView = this.bridge.getWebView();
-        playbackEngine = new RekordPlaybackEngine(this, mainHandler);
-        playbackEngine.bindWebView(webView);
-        // Ponte media minimale, disponibile su OGNI pagina (anche l'app
-        // caricata dal server): niente runtime Capacitor nelle pagine remote.
         webView.addJavascriptInterface(new MediaJsApi(), "RekordMediaNative");
-        webView.addJavascriptInterface(new NativePlaybackJsApi(), "RekordNativePlayback");
         bindService(
             new Intent(this, RekordMediaService.class),
             mediaConnection,
@@ -84,20 +78,7 @@ public class MainActivity extends BridgeActivity {
     }
 
     @Override
-    public void onPause() {
-        super.onPause();
-        // Capacitor mette in pausa il WebView: con sessione media attiva
-        // riattiviamo i timer così play/pause dalla lock screen funzionano.
-        if (mediaService != null && mediaService.isSessionActive()) {
-            wakeWebViewForMedia();
-        }
-    }
-
-    @Override
     public void onDestroy() {
-        if (playbackEngine != null) {
-            playbackEngine.configure(false);
-        }
         try {
             unbindService(mediaConnection);
         } catch (Exception ignored) {
@@ -106,18 +87,11 @@ public class MainActivity extends BridgeActivity {
         super.onDestroy();
     }
 
-    /** Tasti widget/cuffie/auto → webapp (window.__rekordMediaAction). */
+    /** Tasti widget/cuffie/Cast → webapp (window.__rekordMediaAction). */
     private void dispatchMediaAction(String action, double seekTimeSec) {
         pendingMediaAction = action;
         pendingMediaSeekSec = seekTimeSec;
         deliverPendingMediaAction();
-    }
-
-    private void wakeWebViewForMedia() {
-        WebView webView = this.bridge != null ? this.bridge.getWebView() : null;
-        if (webView == null) return;
-        webView.onResume();
-        webView.resumeTimers();
     }
 
     private void deliverPendingMediaAction() {
@@ -127,7 +101,9 @@ public class MainActivity extends BridgeActivity {
             schedulePendingMediaRetry();
             return;
         }
-        wakeWebViewForMedia();
+        // Solo al comando utente: riattiva brevemente il WebView per play/pause da lock screen.
+        webView.onResume();
+        webView.resumeTimers();
         final String action = pendingMediaAction;
         final double seekTimeSec = pendingMediaSeekSec;
         String js =
@@ -169,7 +145,6 @@ public class MainActivity extends BridgeActivity {
             return;
         }
         try {
-            JSONObject o = new JSONObject(json);
             mediaService.updateStateFromJson(json);
             if (castManager != null) castManager.syncFromJson(json);
         } catch (Exception e) {
@@ -195,71 +170,6 @@ public class MainActivity extends BridgeActivity {
         @JavascriptInterface
         public void update(String json) {
             mainHandler.post(() -> applyMediaState(json));
-        }
-    }
-
-    private class NativePlaybackJsApi {
-
-        @JavascriptInterface
-        public void configure(boolean enabled) {
-            mainHandler.post(() -> {
-                if (playbackEngine != null) playbackEngine.configure(enabled);
-            });
-        }
-
-        @JavascriptInterface
-        public void load(String url, double positionSec, boolean autoplay) {
-            mainHandler.post(() -> {
-                if (playbackEngine != null) playbackEngine.load(url, positionSec, autoplay);
-            });
-        }
-
-        @JavascriptInterface
-        public void play() {
-            mainHandler.post(() -> {
-                if (playbackEngine != null) playbackEngine.play();
-            });
-        }
-
-        @JavascriptInterface
-        public void pause() {
-            mainHandler.post(() -> {
-                if (playbackEngine != null) playbackEngine.pause();
-            });
-        }
-
-        @JavascriptInterface
-        public void seek(double positionSec) {
-            mainHandler.post(() -> {
-                if (playbackEngine != null) playbackEngine.seek(positionSec);
-            });
-        }
-
-        @JavascriptInterface
-        public void stop() {
-            mainHandler.post(() -> {
-                if (playbackEngine != null) playbackEngine.stop();
-            });
-        }
-
-        @JavascriptInterface
-        public void cancelSleepFade() {
-            mainHandler.post(() -> {
-                if (playbackEngine != null) {
-                    playbackEngine.cancelVolumeFade();
-                    playbackEngine.setVolume(1f);
-                }
-            });
-        }
-
-        @JavascriptInterface
-        public void sleepFadeAndPause(double durationSec) {
-            mainHandler.post(() -> {
-                if (playbackEngine != null) {
-                    long ms = (long) Math.max(0, durationSec * 1000.0);
-                    playbackEngine.sleepFadeAndPause(ms);
-                }
-            });
         }
     }
 }
