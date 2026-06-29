@@ -102,10 +102,11 @@
 :root[data-glass-surfaces="1"] .rhythm-dock-panel__head,
 :root[data-glass-surfaces="1"] .rhythm-dock-panel__diff,
 :root[data-glass-surfaces="1"] .view-page__intro > .hero-card,
+:root[data-glass-surfaces="1"] .settings-page > .settings-tutorial-card,
 :root[data-glass-surfaces="1"] .view-page__intro > .achievements-hero,
 :root[data-glass-surfaces="1"] .view-page__toolbar-band > :first-child,
 :root[data-glass-surfaces="1"] .view-page--studio > .surface-card:first-child,
-:root[data-glass-surfaces="1"] .settings-page > .surface-card:first-child,
+:root[data-glass-surfaces="1"] .settings-page > .surface-card:first-child:not(.settings-tutorial-card),
 :root[data-glass-surfaces="1"] .library-page__chrome > :first-child,
 :root[data-glass-surfaces="1"] .library-view > .album-hero:first-child,
 :root[data-glass-surfaces="1"]
@@ -202,9 +203,10 @@
 /* Banda superiore: vetro accent (toolbar, intro, chrome libreria) */
 :root[data-glass-surfaces="1"] .view-page__toolbar-band > :first-child,
 :root[data-glass-surfaces="1"] .view-page__intro > .hero-card,
+:root[data-glass-surfaces="1"] .settings-page > .settings-tutorial-card,
 :root[data-glass-surfaces="1"] .view-page__intro > .achievements-hero,
 :root[data-glass-surfaces="1"] .view-page--studio > .surface-card:first-child,
-:root[data-glass-surfaces="1"] .settings-page > .surface-card:first-child,
+:root[data-glass-surfaces="1"] .settings-page > .surface-card:first-child:not(.settings-tutorial-card),
 :root[data-glass-surfaces="1"] .library-page__chrome > :first-child,
 :root[data-glass-surfaces="1"]
   .library-view
@@ -219,13 +221,14 @@
 
 :root[data-glass-surfaces="1"] .view-page__toolbar-band > :first-child::before,
 :root[data-glass-surfaces="1"] .view-page__intro > .hero-card::before,
+:root[data-glass-surfaces="1"] .settings-page > .settings-tutorial-card::before,
 :root[data-glass-surfaces="1"] .view-page__intro > .achievements-hero::before,
 :root[data-glass-surfaces="1"]
   .view-page--studio
   > .surface-card:first-child::before,
 :root[data-glass-surfaces="1"]
   .settings-page
-  > .surface-card:first-child::before,
+  > .surface-card:first-child:not(.settings-tutorial-card)::before,
 :root[data-glass-surfaces="1"] .library-page__chrome > :first-child::before,
 :root[data-glass-surfaces="1"]
   .library-view

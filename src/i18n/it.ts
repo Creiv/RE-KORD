@@ -575,6 +575,11 @@ export const IT: Record<string, string> = {
     "Lo strumento è pensato per librerie con contenuti leciti/no copyright (o comunque con diritti d'uso disponibili). Ogni utente è l'unico responsabile delle proprie azioni.",
   "settings.colophonLine5":
     "Novità 4.1: indice libreria in SQLite (rekord.db), thumbnail copertine in cache, pulizia metadati da JSON legacy e ordine tracce per nome file.",
+  "settings.tutorialEyebrow": "Aiuto",
+  "settings.tutorialHeading": "Tutorial",
+  "settings.tutorialLead":
+    "Guida passo passo per configurare RE-KORD e scoprire le funzioni principali.",
+  "settings.tutorialLink": "Apri il tutorial",
   "settings.uiEyebrow": "Preferenze interfaccia",
   "settings.uiHeading": "Tema e visualizer",
   "settings.theme": "Tema",

@@ -205,14 +205,13 @@ body,
     min-height: 42px;
   }
 
-  .settings-page .account-row {
-    grid-template-columns: 1fr;
+  .settings-account-section .account-row {
+    grid-template-columns: minmax(0, 1fr);
     gap: 0.55rem;
   }
 
-  .settings-page .account-row .ghost-btn {
+  .settings-account-section .account-row .ghost-btn {
     width: 100%;
-    justify-self: stretch;
     min-height: 44px;
   }
 

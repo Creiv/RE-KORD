@@ -566,7 +566,26 @@ function SettingsView() {
         isRemoteViewer ? " settings-page--remote" : ""
       }`}
     >
-      <section className="surface-card">
+      <section
+        className="hero-card hero-card--compact settings-tutorial-card"
+        aria-label={t("settings.tutorialLink")}
+      >
+        <p className="subtle sm settings-tutorial-card__lead">
+          {t("settings.tutorialLead")}
+        </p>
+        <a
+          href="https://re-kord.com/tutorial"
+          target="_blank"
+          rel="noopener noreferrer"
+          className="settings-tutorial-card__link"
+        >
+          <span>{t("settings.tutorialLink")}</span>
+          <span className="settings-tutorial-card__link-icon" aria-hidden>
+            ↗
+          </span>
+        </a>
+      </section>
+      <section className="surface-card settings-account-section">
         <div className="section-head section-head--page-toolbar">
           <div>
             <p className="eyebrow">{t("accounts.eyebrow")}</p>
@@ -617,18 +636,13 @@ function SettingsView() {
           </div>
         ) : null}
         {!libLocked ? (
-          <div className="settings-merge-block">
-            <div className="section-head section-head--page-toolbar">
-              <div>
-                <p className="eyebrow">{t("accounts.createEyebrow")}</p>
-                <h2>{t("accounts.createHeading")}</h2>
-              </div>
-            </div>
-            <div
-              className="row gap flex-wrap"
-              style={{ alignItems: "flex-end" }}
-            >
-              <label className="flex1" style={{ minWidth: "10rem" }}>
+          <div className="settings-merge-block settings-account-create">
+            <p className="eyebrow">{t("accounts.createEyebrow")}</p>
+            <h3 className="settings-subsection-title">
+              {t("accounts.createHeading")}
+            </h3>
+            <div className="settings-inline-form">
+              <label className="settings-inline-form__field">
                 <span className="sr-only">{t("accounts.newNameAria")}</span>
                 <input
                   type="text"
@@ -641,7 +655,7 @@ function SettingsView() {
               </label>
               <button
                 type="button"
-                className="primary-btn"
+                className="primary-btn settings-inline-form__action"
                 disabled={accountBusy || !newAccountName.trim()}
                 onClick={createNewAccount}
               >
@@ -672,7 +686,35 @@ function SettingsView() {
               ))}
             </select>
           </label>
-          <div className="settings-theme-style-row">
+          <label className="settings-ui-inline-control">
+            <span>{t("settings.visualizer")}</span>
+            <select
+              value={user.state.settings.vizMode}
+              onChange={(event) =>
+                user.updateSettings({
+                  vizMode: event.target.value as
+                    | "bars"
+                    | "mirror"
+                    | "osc"
+                    | "oscSoft"
+                    | "hmb"
+                    | "signals"
+                    | "discowall"
+                    | "karaoke",
+                })
+              }
+            >
+              <option value="bars">{t("settings.vizBars")}</option>
+              <option value="mirror">{t("settings.vizMirror")}</option>
+              <option value="osc">{t("settings.vizOsc")}</option>
+              <option value="oscSoft">{t("settings.vizOscSoft")}</option>
+              <option value="hmb">{t("settings.vizHmb")}</option>
+              <option value="signals">{t("settings.vizSignals")}</option>
+              <option value="discowall">{t("settings.vizDiscowall")}</option>
+              <option value="karaoke">{t("settings.vizKaraoke")}</option>
+            </select>
+          </label>
+          <div className="settings-theme-style-row settings-ui-section__span">
             <div className="settings-ui-inline-control settings-theme-style-row__theme">
               <span>{t("settings.theme")}</span>
               <ThemePicker
@@ -707,7 +749,7 @@ function SettingsView() {
               </button>
             ) : null}
           </div>
-          <div className="settings-glass-control">
+          <div className="settings-glass-control settings-ui-section__span">
             <label className="settings-ui-inline-control settings-ui-inline-control--checkbox-row">
               <input
                 type="checkbox"
@@ -755,35 +797,7 @@ function SettingsView() {
               </span>
             </div>
           </div>
-          <label className="settings-ui-inline-control">
-            <span>{t("settings.visualizer")}</span>
-            <select
-              value={user.state.settings.vizMode}
-              onChange={(event) =>
-                user.updateSettings({
-                  vizMode: event.target.value as
-                    | "bars"
-                    | "mirror"
-                    | "osc"
-                    | "oscSoft"
-                    | "hmb"
-                    | "signals"
-                    | "discowall"
-                    | "karaoke",
-                })
-              }
-            >
-              <option value="bars">{t("settings.vizBars")}</option>
-              <option value="mirror">{t("settings.vizMirror")}</option>
-              <option value="osc">{t("settings.vizOsc")}</option>
-              <option value="oscSoft">{t("settings.vizOscSoft")}</option>
-              <option value="hmb">{t("settings.vizHmb")}</option>
-              <option value="signals">{t("settings.vizSignals")}</option>
-              <option value="discowall">{t("settings.vizDiscowall")}</option>
-              <option value="karaoke">{t("settings.vizKaraoke")}</option>
-            </select>
-          </label>
-          <label className="settings-ui-inline-control settings-ui-inline-control--checkbox-row">
+          <label className="settings-ui-inline-control settings-ui-inline-control--checkbox-row settings-ui-section__span">
             <input
               type="checkbox"
               className="settings-checkbox"
@@ -796,7 +810,7 @@ function SettingsView() {
             />
             <span>{t("settings.plectrDisableVizBackdrop")}</span>
           </label>
-          <label className="settings-ui-inline-control">
+          <label className="settings-ui-inline-control settings-ui-section__span">
             <span>{t("settings.trackTransitions")}</span>
             <select
               className="ghost-input w-full"
@@ -818,18 +832,17 @@ function SettingsView() {
           </label>
         </div>
       </section>
-      <section className="surface-card">
-        <div className="settings-merge-block settings-merge-block--first">
-          <div className="section-head section-head--page-toolbar">
-            <div>
-              <p className="eyebrow">{t("settings.shortcutsEyebrow")}</p>
-              <h2>{t("settings.shortcutsHeading")}</h2>
-            </div>
+      <section className="surface-card settings-shortcuts-section">
+        <div className="section-head section-head--page-toolbar">
+          <div>
+            <p className="eyebrow">{t("settings.shortcutsEyebrow")}</p>
+            <h2>{t("settings.shortcutsHeading")}</h2>
           </div>
-          <div className="shortcut-list">
+        </div>
+        <div className="shortcut-list">
             <div className="shortcut-row">
               <span className="shortcut-keys">
-                <kbd className="shortcut-kbd">/</kbd>
+                <kbd className="shortcut-kbd shortcut-kbd--solo">/</kbd>
                 <span className="shortcut-keys__sep">
                   {t("settings.shortcutOr")}
                 </span>
@@ -843,7 +856,7 @@ function SettingsView() {
               </span>
             </div>
             <div className="shortcut-row">
-              <kbd className="shortcut-kbd">{t("settings.kbdSpace")}</kbd>
+              <kbd className="shortcut-kbd shortcut-kbd--wide">{t("settings.kbdSpace")}</kbd>
               <span className="shortcut-row__dash" aria-hidden>
                 —
               </span>
@@ -852,7 +865,7 @@ function SettingsView() {
               </span>
             </div>
             <div className="shortcut-row">
-              <kbd className="shortcut-kbd">{t("settings.kbdI")}</kbd>
+              <kbd className="shortcut-kbd shortcut-kbd--solo">{t("settings.kbdI")}</kbd>
               <span className="shortcut-row__dash" aria-hidden>
                 —
               </span>
@@ -861,7 +874,7 @@ function SettingsView() {
               </span>
             </div>
             <div className="shortcut-row">
-              <kbd className="shortcut-kbd">{t("settings.kbdP")}</kbd>
+              <kbd className="shortcut-kbd shortcut-kbd--solo">{t("settings.kbdP")}</kbd>
               <span className="shortcut-row__dash" aria-hidden>
                 —
               </span>
@@ -870,9 +883,8 @@ function SettingsView() {
               </span>
             </div>
           </div>
-        </div>
       </section>
-      <section className="surface-card">
+      <section className="surface-card settings-library-section">
           <div className="section-head section-head--page-toolbar">
             <div>
               <p className="eyebrow">{t("settings.libraryEyebrow")}</p>
@@ -918,11 +930,8 @@ function SettingsView() {
                   })}
                 </p>
               ) : (
-                <div
-                  className="row gap flex-wrap"
-                  style={{ alignItems: "flex-end" }}
-                >
-                  <label className="flex1" style={{ minWidth: "12rem" }}>
+                <div className="settings-inline-form">
+                  <label className="settings-inline-form__field">
                     <span className="sr-only">{t("settings.libPathAria")}</span>
                     <input
                       type="text"
@@ -936,7 +945,7 @@ function SettingsView() {
                   </label>
                   <button
                     type="button"
-                    className="primary-btn"
+                    className="primary-btn settings-inline-form__action"
                     disabled={libraryBusy || !libraryPath.trim()}
                     onClick={() => {
                       setLibraryErr(null);
@@ -1115,14 +1124,15 @@ function SettingsView() {
         </div>
       </section>
       <section className="surface-card settings-network-section">
-        <div className="section-head section-head--page-toolbar">
-          <div>
-            <p className="eyebrow">{t("settings.networkEyebrow")}</p>
-            <h2>{t("settings.networkHeading")}</h2>
-          </div>
-        </div>
-        <div className="settings-network-section__body">
-          <div className="settings-network-main">
+        <div className="settings-network-section__layout">
+          <div className="settings-network-section__main">
+            <div className="section-head section-head--page-toolbar">
+              <div>
+                <p className="eyebrow">{t("settings.networkEyebrow")}</p>
+                <h2>{t("settings.networkHeading")}</h2>
+              </div>
+            </div>
+            <div className="settings-network-main">
             {lanAccessUrl ? (
               <p className="subtle sm">
                 {t("settings.networkUrlHint", { url: lanAccessUrl })}
@@ -1133,13 +1143,7 @@ function SettingsView() {
             {isNetworkControlAllowed ? (
               <>
                 <div
-                  className="row gap"
-                  style={{
-                    marginTop: "0.5rem",
-                    flexDirection: "row",
-                    alignItems: "flex-start",
-                    flexWrap: "wrap",
-                  }}
+                  className="settings-network-actions"
                 >
                   <button
                     type="button"
@@ -1204,6 +1208,7 @@ function SettingsView() {
                 {remoteAccessErr || remoteAccess?.error}
               </p>
             ) : null}
+            </div>
           </div>
           {remoteAccess?.publicUrl ? (
             <div className="settings-network-qr-wrap">

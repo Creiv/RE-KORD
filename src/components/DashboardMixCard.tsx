@@ -4,7 +4,7 @@ import { useUserState } from "../context/UserStateContext";
 import { useI18n } from "../i18n/useI18n";
 import { trackBelongsToGenreKey, parseTrackGenres } from "../lib/genres";
 import {
-  isTrackAlbumShuffleExcluded,
+  isTrackShuffleExcluded,
 } from "../lib/randomExclusions";
 import { buildSmartRandomQueue, splitQueueWindow } from "../lib/smartShuffle";
 import {
@@ -61,9 +61,17 @@ export function DashboardMixCard({
     [user.state.shuffleExcludedTrackRelPaths]
   );
 
+  const shufflePool = useMemo(
+    () =>
+      index.tracks.filter(
+        (tr) => !isTrackShuffleExcluded(tr, exTracks, exAlbums)
+      ),
+    [index.tracks, exTracks, exAlbums]
+  );
+
   const genreIndex = useMemo(() => {
     const byLower = new Map<string, { label: string; count: number }>();
-    for (const tr of index.tracks) {
+    for (const tr of shufflePool) {
       const toks = parseTrackGenres(tr.meta?.genre);
       if (toks.length === 0) continue;
       for (const raw of toks) {
@@ -79,13 +87,13 @@ export function DashboardMixCard({
         a.label.localeCompare(b.label, sortLocale, { numeric: true })
       );
     return { list };
-  }, [index.tracks, sortLocale]);
+  }, [shufflePool, sortLocale]);
 
   const topGenresByPlays = useMemo(() => {
     const counts = user.state.trackPlayCounts || {};
     const scoreForKey = (key: string) => {
       let s = 0;
-      for (const tr of index.tracks) {
+      for (const tr of shufflePool) {
         if (!trackBelongsToGenreKey(tr.meta?.genre, key)) continue;
         s += counts[tr.relPath] ?? 0;
       }
@@ -100,50 +108,31 @@ export function DashboardMixCard({
           a.label.localeCompare(b.label, sortLocale, { numeric: true })
       )
       .slice(0, DASHBOARD_MIX_TOP_GENRES);
-  }, [genreIndex.list, index.tracks, sortLocale, user.state.trackPlayCounts]);
+  }, [genreIndex.list, shufflePool, sortLocale, user.state.trackPlayCounts]);
 
   const moodOccurrenceCountById = useMemo(() => {
     const m = new Map<TrackMoodId, number>();
     for (const id of TRACK_MOOD_IDS) m.set(id, 0);
-    for (const tr of index.tracks) {
+    for (const tr of shufflePool) {
       for (const mid of parseTrackMoods(tr.meta ?? undefined)) {
         m.set(mid, (m.get(mid) ?? 0) + 1);
       }
     }
     return m;
-  }, [index.tracks]);
+  }, [shufflePool]);
 
-  const hasFilter =
-    genreKey != null ||
-    moodFilterIds.length > 0;
+  const hasFilter = genreKey != null || moodFilterIds.length > 0;
 
   const shuffleEligible = useMemo(() => {
     if (!hasFilter) return [] as LibraryTrackIndex[];
-    let base: readonly LibraryTrackIndex[] = index.tracks;
+    let base: readonly LibraryTrackIndex[] = shufflePool;
     if (genreKey != null) {
       base = base.filter((tr) =>
         trackBelongsToGenreKey(tr.meta?.genre, genreKey)
       );
     }
-    const moodFiltered = filterTracksByMoodRules(
-      base,
-      moodFilterIds,
-      moodMatchMode
-    );
-    return moodFiltered.filter(
-      (tr) =>
-        !exTracks.has(tr.relPath) &&
-        !isTrackAlbumShuffleExcluded(tr, exAlbums)
-    );
-  }, [
-    genreKey,
-    hasFilter,
-    index.tracks,
-    moodFilterIds,
-    moodMatchMode,
-    exTracks,
-    exAlbums,
-  ]);
+    return filterTracksByMoodRules(base, moodFilterIds, moodMatchMode);
+  }, [genreKey, hasFilter, shufflePool, moodFilterIds, moodMatchMode]);
 
   const playMixShuffle = useCallback(() => {
     if (!shuffleEligible.length) return;
@@ -163,11 +152,6 @@ export function DashboardMixCard({
     });
   }, [shuffleEligible, user.state.recent, p]);
 
-  const selectedGenreLabel =
-    genreKey != null
-      ? (genreIndex.list.find((g) => g.key === genreKey)?.label ?? genreKey)
-      : null;
-
   return (
     <section className="surface-card dashboard-session-card dashboard-mix-card dashboard-page__mix">
       <div className="section-head section-head--page-toolbar">
@@ -186,73 +170,55 @@ export function DashboardMixCard({
           </button>
         </div>
       </div>
-      <div className="dashboard-session-body dashboard-mix-body">
-        <div className="dashboard-mix-scroll">
-          <div className="dashboard-mix-block">
-            <div className="dashboard-mix-block__head">
-              <span className="library-filter-panel__eyebrow">
+      <div className="dashboard-mix-body">
+        <div className="dashboard-mix-panels">
+          <div className="dashboard-mix-panel dashboard-mix-panel--genres">
+            <div className="dashboard-mix-panel__head">
+              <span className="dashboard-mix-panel__eyebrow">
                 {t("dashboard.mixGenresEyebrow")}
               </span>
-              {genreKey != null ? (
-                <button
-                  type="button"
-                  className="text-btn library-mood-clear"
-                  onClick={() => setGenreKey(null)}
-                >
-                  {t("dashboard.mixClearGenre")}
-                </button>
-              ) : null}
             </div>
             {topGenresByPlays.length === 0 ? (
               <p className="panel-empty">{t("dashboard.mixNoGenresHint")}</p>
             ) : (
-              <>
-                <div className="dashboard-mix-genre-chips">
-                  {topGenresByPlays.map((g) => {
-                    const on = genreKey === g.key;
-                    return (
-                      <button
-                        key={g.key}
-                        type="button"
-                        className={`dashboard-mix-genre-chip${on ? " is-on" : ""}`}
-                        aria-pressed={on}
-                        title={g.label}
-                        onClick={() =>
-                          setGenreKey((prev) => (prev === g.key ? null : g.key))
-                        }
-                      >
-                        <UiStyle
-                          className="dashboard-mix-genre-chip__ic"
-                          aria-hidden
-                        />
-                        <span className="dashboard-mix-genre-chip__label">
-                          {g.label}
-                        </span>
-                        <span className="dashboard-mix-genre-chip__count">
-                          {g.count}
-                        </span>
-                      </button>
-                    );
-                  })}
-                </div>
-                {selectedGenreLabel ? (
-                  <p className="subtle sm dashboard-mix-selection-note">
-                    {t("dashboard.mixGenreActive", {
-                      name: selectedGenreLabel,
-                    })}
-                  </p>
-                ) : null}
-              </>
+              <div className="dashboard-mix-genre-chips">
+                {topGenresByPlays.map((g) => {
+                  const on = genreKey === g.key;
+                  return (
+                    <button
+                      key={g.key}
+                      type="button"
+                      className={`dashboard-mix-genre-chip${on ? " is-on" : ""}`}
+                      aria-pressed={on}
+                      title={g.label}
+                      onClick={() =>
+                        setGenreKey((prev) => (prev === g.key ? null : g.key))
+                      }
+                    >
+                      <UiStyle
+                        className="dashboard-mix-genre-chip__ic"
+                        aria-hidden
+                      />
+                      <span className="dashboard-mix-genre-chip__label">
+                        {g.label}
+                      </span>
+                      <span className="dashboard-mix-genre-chip__count">
+                        {g.count}
+                      </span>
+                    </button>
+                  );
+                })}
+              </div>
             )}
           </div>
 
-          <div className="dashboard-mix-block">
-            <div className="library-mood-match-row">
-              <span className="library-filter-panel__eyebrow">
+          <div className="dashboard-mix-panel dashboard-mix-panel--moods">
+            <div className="dashboard-mix-mood-toolbar">
+              <span className="dashboard-mix-panel__eyebrow">
                 {t("library.moodMatchEyebrow")}
               </span>
               <div
-                className="segmented segmented--joined"
+                className="dashboard-mix-match segmented segmented--joined"
                 role="group"
                 aria-label={t("library.moodMatchAria")}
               >
@@ -275,17 +241,8 @@ export function DashboardMixCard({
                   </span>
                 </button>
               </div>
-              {moodFilterIds.length > 0 ? (
-                <button
-                  type="button"
-                  className="text-btn library-mood-clear"
-                  onClick={() => setMoodFilterIds([])}
-                >
-                  {t("library.moodClearFilter")}
-                </button>
-              ) : null}
             </div>
-            <div className="library-mood-filter-grid">
+            <div className="dashboard-mix-mood-grid">
               {TRACK_MOOD_IDS.map((id) => {
                 const count = moodOccurrenceCountById.get(id) ?? 0;
                 const on = moodFilterIds.includes(id);
@@ -323,26 +280,18 @@ export function DashboardMixCard({
               })}
             </div>
           </div>
-
-          {hasFilter && shuffleEligible.length === 0 ? (
-            <p className="panel-empty">{t("library.moodNoTracks")}</p>
-          ) : null}
         </div>
 
         <div className="dashboard-mix-footer">
-          <p
-            className={`subtle sm${
-              hasFilter ? " dashboard-mix-footer__count" : ""
-            }`}
-          >
+          <p className="subtle sm dashboard-mix-footer__hint">
             {hasFilter
               ? t("dashboard.mixNTracks", { n: shuffleEligible.length })
               : t("dashboard.mixFallbackHint")}
           </p>
           <button
             type="button"
-            className="primary-btn"
-            disabled={shuffleEligible.length === 0}
+            className="primary-btn dashboard-mix-footer__listen"
+            disabled={!hasFilter || shuffleEligible.length === 0}
             onClick={playMixShuffle}
           >
             {t("nav.listen")}

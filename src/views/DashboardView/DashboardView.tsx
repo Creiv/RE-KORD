@@ -1,4 +1,4 @@
-import { useMemo } from "react";
+import { useMemo, type ReactNode } from "react";
 import { DashboardMixCard } from "../../components/DashboardMixCard";
 import { usePlayer } from "../../context/PlayerContext";
 import { useUserState } from "../../context/UserStateContext";
@@ -18,7 +18,12 @@ import {
   UiAutorenew,
   UiBuild,
   UiFavorite,
+  UiImage,
+  UiAlbumIcon,
+  UiNote,
+  UiViewModule,
   UiPlayArrow,
+  UiShuffle,
 } from "../../components/RekordUiIcons";
 import { emitStudioPane } from "../../context/StudioNavigationContext";
 import type { AppSection, DashboardPayload, LibraryIndex } from "../../types";
@@ -28,6 +33,13 @@ interface DashboardViewProps {
   onOpenAlbum: (artist: string, album: string) => void;
   onOpenSection: (section: AppSection) => void;
 }
+
+const QUALITY_ALERT_ICONS: Record<string, ReactNode> = {
+  "albums-without-cover": <UiImage className="dashboard-quality-card__ic" />,
+  "albums-without-meta": <UiAlbumIcon className="dashboard-quality-card__ic" />,
+  "tracks-without-meta": <UiNote className="dashboard-quality-card__ic" />,
+  "loose-albums": <UiViewModule className="dashboard-quality-card__ic" />,
+};
 
 export default function DashboardView({
   dashboard,
@@ -66,6 +78,7 @@ export default function DashboardView({
     return <div className="panel-empty">{t("loading.dashboard")}</div>;
 
   const heroListenPaused = Boolean(player.current) && !player.isPlaying;
+  const hasPlaybackQueue = Boolean(player.current);
   const handleHeroListen = () => {
     if (!player.current) {
       const eligible = eligibleTracksForIntelligentRandom(
@@ -77,6 +90,16 @@ export default function DashboardView({
     } else if (!player.isPlaying) {
       player.toggle();
     }
+    emitStudioPane("listen");
+    onOpenSection("studio");
+  };
+  const handleHeroLibraryShuffle = () => {
+    const eligible = eligibleTracksForIntelligentRandom(
+      index,
+      excludedAlbums,
+      excludedTracks
+    );
+    playPoolShuffle(eligible, true);
     emitStudioPane("listen");
     onOpenSection("studio");
   };
@@ -100,6 +123,17 @@ export default function DashboardView({
               ? t("dashboard.resumeListen")
               : t("nav.listen")}
           </button>
+          {hasPlaybackQueue ? (
+            <button
+              type="button"
+              className="ghost-btn ghost-btn--icon-only dashboard-hero-shuffle-btn"
+              onClick={handleHeroLibraryShuffle}
+              title={t("playback.playLibrary")}
+              aria-label={t("playback.playLibrary")}
+            >
+              <UiShuffle className="dashboard-hero-shuffle-btn__ic" />
+            </button>
+          ) : null}
         </div>
       </section>
 
@@ -189,7 +223,7 @@ export default function DashboardView({
           )}
         </section>
 
-        <section className="surface-card dashboard-page__tile">
+        <section className="surface-card dashboard-page__tile dashboard-page__tile--quality">
           <div className="section-head section-head--page-toolbar">
             <SectionHeadLead
               eyebrow={t("dashboard.qualityEyebrow")}
@@ -204,14 +238,21 @@ export default function DashboardView({
               {t("dashboard.goStudio")}
             </button>
           </div>
-          <div className="alert-list">
+          <div className="list-stack dashboard-quality-grid">
             {dashboard.qualityAlerts.map((alert) => (
               <div
                 key={alert.id}
-                className={`alert-card severity-${alert.severity}`}
+                className={`dashboard-quality-card severity-${alert.severity}`}
               >
-                <span>{t(`dashboard.alert.${alert.id}`)}</span>
-                <strong>{alert.count}</strong>
+                <span className="dashboard-quality-card__icon" aria-hidden>
+                  {QUALITY_ALERT_ICONS[alert.id]}
+                </span>
+                <span className="dashboard-quality-card__label">
+                  {t(`dashboard.alert.${alert.id}`)}
+                </span>
+                <strong className="dashboard-quality-card__count">
+                  {alert.count}
+                </strong>
               </div>
             ))}
           </div>

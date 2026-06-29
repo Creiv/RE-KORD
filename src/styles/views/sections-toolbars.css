@@ -57,6 +57,111 @@
   box-shadow: 0 1px 2px color-mix(in srgb, var(--bg) 52%, transparent);
 }
 
+.settings-page .shortcut-list {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  overflow: hidden;
+  background: color-mix(in srgb, var(--surface2) 78%, transparent);
+  width: 100%;
+}
+
+.settings-page .shortcut-row {
+  display: flex;
+  flex-wrap: nowrap;
+  align-items: center;
+  gap: 0.45rem 0.65rem;
+  padding: 0.75rem 0.95rem;
+  border-bottom: none;
+  border-right: 1px solid color-mix(in srgb, var(--border) 82%, transparent);
+  min-height: 100%;
+  box-sizing: border-box;
+  min-width: 0;
+}
+
+.settings-page .shortcut-keys {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  flex: 0 0 auto;
+}
+
+.settings-page .shortcut-kbd {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex: 0 0 auto;
+  width: auto;
+  text-align: center;
+  box-sizing: border-box;
+}
+
+.settings-page .shortcut-kbd--solo {
+  min-width: 2.75rem;
+}
+
+.settings-page .shortcut-kbd--wide {
+  min-width: 4.75rem;
+}
+
+.settings-page .shortcut-row__desc {
+  flex: 1 1 auto;
+  min-width: 0;
+  text-align: center;
+}
+
+@media (min-width: 1100px) {
+  .settings-page .shortcut-list {
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+  }
+
+  .settings-page .shortcut-row {
+    border-right: 1px solid color-mix(in srgb, var(--border) 82%, transparent);
+  }
+
+  .settings-page .shortcut-row:nth-child(4n) {
+    border-right: none;
+  }
+
+  .settings-page .shortcut-row:not(:nth-last-child(-n + 4)) {
+    border-bottom: 1px solid color-mix(in srgb, var(--border) 82%, transparent);
+  }
+}
+
+@media (max-width: 1099px) {
+  .settings-page .shortcut-row:nth-child(2n) {
+    border-right: none;
+  }
+
+  .settings-page .shortcut-row:not(:nth-last-child(-n + 2)) {
+    border-bottom: 1px solid color-mix(in srgb, var(--border) 82%, transparent);
+  }
+}
+
+@media (max-width: 720px) {
+  .settings-page .shortcut-list {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .settings-page .shortcut-row {
+    border-right: none;
+    border-bottom: 1px solid color-mix(in srgb, var(--border) 82%, transparent);
+  }
+
+  .settings-page .shortcut-row:not(:nth-last-child(-n + 2)) {
+    border-bottom: 1px solid color-mix(in srgb, var(--border) 82%, transparent);
+  }
+
+  .settings-page .shortcut-row:last-child {
+    border-bottom: none;
+  }
+}
+
+.settings-page .shortcut-row__dash {
+  display: none;
+}
+
 .sr-only {
   position: absolute;
   width: 1px;

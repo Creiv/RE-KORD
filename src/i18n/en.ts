@@ -567,6 +567,11 @@ export const EN: Record<string, string> = {
     "This tool is designed for legal/no-copyright music libraries (or any content used with proper rights). Each user is solely responsible for their own actions.",
   "settings.colophonLine5":
     "4.1 highlights: SQLite library index (rekord.db), cached artwork thumbnails, library metadata cleanup from legacy JSON, and track order by filename.",
+  "settings.tutorialEyebrow": "Help",
+  "settings.tutorialHeading": "Tutorial",
+  "settings.tutorialLead":
+    "Step-by-step guide to set up RE-KORD and explore the main features.",
+  "settings.tutorialLink": "Open tutorial",
   "settings.uiEyebrow": "Interface preferences",
   "settings.uiHeading": "Theme and visualizer",
   "settings.theme": "Theme",

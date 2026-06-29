@@ -670,38 +670,161 @@
 }
 
 .settings-ui-section__grid {
+  gap: var(--space-4);
   grid-template-columns: minmax(0, 1fr);
+  width: 100%;
 }
 
-@container rekord-page (min-width: 901px) {
-  .settings-page.view-page {
+@media (min-width: 760px) {
+  .settings-ui-section__grid {
     grid-template-columns: repeat(2, minmax(0, 1fr));
-    align-items: stretch;
+    align-items: start;
   }
 
-  .settings-page > .surface-card {
-    align-self: stretch;
-  }
-
-  .settings-page .settings-colophon,
-  .settings-page .settings-activity-section {
+  .settings-ui-section__grid > .settings-ui-section__span {
     grid-column: 1 / -1;
   }
 }
 
-@media (min-width: 901px) {
-  .settings-page.view-page {
-    grid-template-columns: repeat(2, minmax(0, 1fr));
-    align-items: stretch;
+.settings-inline-form {
+  display: grid;
+  gap: var(--space-3);
+  min-width: 0;
+  width: 100%;
+}
+
+@media (min-width: 640px) {
+  .settings-inline-form {
+    grid-template-columns: minmax(0, 1fr) auto;
+    align-items: end;
+  }
+}
+
+.settings-inline-form__field {
+  min-width: 0;
+  display: block;
+  width: 100%;
+}
+
+.settings-inline-form__action {
+  justify-self: stretch;
+  min-width: min(100%, 11rem);
+  white-space: nowrap;
+}
+
+@media (max-width: 639px) {
+  .settings-inline-form {
+    grid-template-columns: minmax(0, 1fr);
   }
 
-  .settings-page > .surface-card {
-    align-self: stretch;
+  .settings-inline-form__action {
+    width: 100%;
+    min-width: 0;
+  }
+}
+
+/* Account: lista a tutta larghezza, form sotto */
+.settings-account-section .account-list {
+  display: grid;
+  gap: 0.55rem;
+  grid-template-columns: minmax(0, 1fr);
+  width: 100%;
+}
+
+.settings-account-section .account-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 0.65rem;
+  align-items: center;
+  padding: 0.65rem 0.75rem;
+}
+
+.settings-account-create {
+  display: grid;
+  gap: 0.15rem;
+  width: 100%;
+}
+
+.settings-subsection-title {
+  margin: 0.2rem 0 0.85rem;
+  font-size: 1.05rem;
+  font-weight: 700;
+  letter-spacing: -0.01em;
+  line-height: 1.25;
+}
+
+.settings-library-section > .subtle.sm:first-of-type,
+.settings-library-section > p.subtle {
+  max-width: 52rem;
+}
+
+.settings-shortcuts-section .shortcut-list {
+  width: 100%;
+}
+
+.settings-tutorial-card {
+  position: relative;
+  overflow: hidden;
+}
+
+.settings-tutorial-card__lead {
+  margin: 0;
+  min-width: 0;
+  line-height: 1.4;
+  align-self: center;
+}
+
+.settings-tutorial-card__link {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.38rem;
+  flex-shrink: 0;
+  justify-self: end;
+  align-self: center;
+  padding: 0.2rem 0;
+  font-size: var(--text-sm);
+  font-weight: 500;
+  color: color-mix(in srgb, var(--accent2) 68%, var(--muted) 32%);
+  text-decoration: none;
+  border-bottom: 1px solid color-mix(in srgb, var(--accent2) 22%, transparent);
+  transition:
+    color 0.15s ease,
+    border-color 0.15s ease;
+}
+
+.settings-tutorial-card__link:hover {
+  color: color-mix(in srgb, var(--accent2) 88%, var(--text) 12%);
+  border-bottom-color: color-mix(in srgb, var(--accent2) 48%, transparent);
+}
+
+.settings-tutorial-card__link:focus-visible {
+  outline: 2px solid var(--accent2);
+  outline-offset: 3px;
+  border-bottom-color: transparent;
+}
+
+.settings-tutorial-card__link-icon {
+  font-size: 0.82em;
+  line-height: 1;
+  opacity: 0.75;
+  transition:
+    opacity 0.15s ease,
+    transform 0.15s ease;
+}
+
+.settings-tutorial-card__link:hover .settings-tutorial-card__link-icon {
+  opacity: 1;
+  transform: translate(1px, -1px);
+}
+
+@media (max-width: 639px) {
+  .settings-tutorial-card {
+    grid-template-columns: minmax(0, 1fr);
+    gap: 0.55rem;
   }
 
-  .settings-page .settings-colophon,
-  .settings-page .settings-activity-section {
-    grid-column: 1 / -1;
+  .settings-tutorial-card__link {
+    justify-self: start;
   }
 }
 
@@ -715,15 +838,6 @@ html:not([data-glass-surfaces="1"]) .settings-page > .surface-card {
   isolation: isolate;
 }
 
-@media (min-width: 901px) {
-  html:not([data-glass-surfaces="1"]) .settings-page.view-page {
-    align-items: start;
-  }
-
-  html:not([data-glass-surfaces="1"]) .settings-page > .surface-card {
-    align-self: start;
-  }
-}
 
 /* —— Playlist (due colonne nel main) —— */
 .playlists-page__main {
