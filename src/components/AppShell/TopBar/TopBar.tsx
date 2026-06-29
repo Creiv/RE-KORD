@@ -1,7 +1,7 @@
 import { memo } from "react";
 import { useI18n } from "../../../i18n/useI18n";
 import { RekordBrandLogo } from "../../RekordBrandLogo";
-import { UiAutorenew, UiInstallMobile, UiSearch } from "../../RekordUiIcons";
+import { UiAutorenew, UiSearch } from "../../RekordUiIcons";
 import { NAV_DEF } from "../../../lib/routing";
 import type { AppSection } from "../../../types";
 import styles from "./TopBar.module.css";
@@ -12,10 +12,8 @@ interface TopBarProps {
   syncStatusTitle: string;
   syncTapAnim: boolean;
   librarySearchBarOpen: boolean;
-  showInstallButton: boolean;
   onSync: () => void;
   onToggleSearch: () => void;
-  onInstall: () => void;
 }
 
 export const TopBar = memo(function TopBar({
@@ -24,10 +22,8 @@ export const TopBar = memo(function TopBar({
   syncStatusTitle,
   syncTapAnim,
   librarySearchBarOpen,
-  showInstallButton,
   onSync,
   onToggleSearch,
-  onInstall,
 }: TopBarProps) {
   const { t } = useI18n();
 
@@ -105,23 +101,6 @@ export const TopBar = memo(function TopBar({
               <UiSearch />
             </span>
           </button>
-
-          {showInstallButton ? (
-            <button
-              type="button"
-              className="ghost-btn ghost-btn--toolbar topbar2__install-btn"
-              onClick={onInstall}
-              title={t("topbar.installApp")}
-              aria-label={t("topbar.installApp")}
-            >
-              <span className="topbar2__install-ic" aria-hidden>
-                <UiInstallMobile />
-              </span>
-              <span className="topbar2__install-label">
-                {t("topbar.installApp")}
-              </span>
-            </button>
-          ) : null}
         </div>
       </div>
     </header>

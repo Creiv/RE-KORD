@@ -391,8 +391,7 @@ body,
     min-height: max(42px, var(--tap-min));
   }
 
-  .ghost-btn--toolbar:not(.topbar2__sync-btn):not(.topbar2__search-btn),
-  .topbar2__install-btn {
+  .ghost-btn--toolbar:not(.topbar2__sync-btn):not(.topbar2__search-btn) {
     min-height: var(--tap-min);
   }
 

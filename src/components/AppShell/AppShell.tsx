@@ -11,7 +11,6 @@ import {
   useState,
 } from "react";
 import type { CSSProperties, RefObject } from "react";
-import { useAppConfirm } from "../../context/AppConfirmContext";
 import { usePlayer } from "../../context/PlayerContext";
 import { useRhythmMode } from "../../context/RhythmModeContext";
 import {
@@ -43,7 +42,7 @@ import {
 import { syncLibraryAlbumArtworkFromIndex } from "../../lib/libraryArtworkStore";
 import type { LibraryReconcileOptions } from "../../lib/libraryReconcile";
 import { parseTrackGenres } from "../../lib/genres";
-import { isStandaloneDisplayMode, useAppRoute } from "../../lib/routing";
+import { useAppRoute } from "../../lib/routing";
 import { RekordSplashLoader } from "../RekordSplashLoader";
 import { RekordViewLoadingFallback } from "../RekordViewLoadingFallback";
 import { PlayerDock } from "../PlayerDock/PlayerDock";
@@ -70,11 +69,6 @@ import type {
   LibraryTrackIndex,
 } from "../../types";
 import styles from "./AppShell.module.css";
-
-type BeforeInstallPromptEvent = Event & {
-  prompt: () => Promise<void>;
-  userChoice: Promise<{ outcome: "accepted" | "dismissed"; platform: string }>;
-};
 
 const LazyDashboardView = lazy(() => import("../../views/DashboardView/DashboardView"));
 const LazyLibraryView = lazy(() => import("../../views/LibraryView/LibraryView"));
@@ -131,7 +125,6 @@ export function AppShell() {
     },
     [t]
   );
-  const { alert: appAlert } = useAppConfirm();
   const toolsActivity = useToolsActivity();
 
   const [index, setIndex] = useState<LibraryIndex | null>(null);
@@ -154,10 +147,6 @@ export function AppShell() {
     typeof globalThis.setTimeout
   > | null>(null);
   const [syncTapAnim, setSyncTapAnim] = useState(false);
-  const [installPrompt, setInstallPrompt] =
-    useState<BeforeInstallPromptEvent | null>(null);
-  const [installDismissed, setInstallDismissed] = useState(false);
-  const [standalone, setStandalone] = useState(() => isStandaloneDisplayMode());
 
   const refreshLibrary = useCallback(
     (mode: "manual" | "background" = "manual", syncUser = false) => {
@@ -372,65 +361,6 @@ export function AppShell() {
     },
     []
   );
-
-  useEffect(() => {
-    const onBeforeInstallPrompt = (event: Event) => {
-      event.preventDefault();
-      setInstallPrompt(event as BeforeInstallPromptEvent);
-      setInstallDismissed(false);
-    };
-    const onInstalled = () => {
-      setInstallPrompt(null);
-      setStandalone(true);
-    };
-    const standaloneQuery = window.matchMedia("(display-mode: standalone)");
-    const fullscreenQuery = window.matchMedia("(display-mode: fullscreen)");
-    const onStandaloneChange = () => {
-      setStandalone(isStandaloneDisplayMode());
-    };
-    window.addEventListener("beforeinstallprompt", onBeforeInstallPrompt);
-    window.addEventListener("appinstalled", onInstalled);
-    standaloneQuery.addEventListener?.("change", onStandaloneChange);
-    fullscreenQuery.addEventListener?.("change", onStandaloneChange);
-    return () => {
-      window.removeEventListener("beforeinstallprompt", onBeforeInstallPrompt);
-      window.removeEventListener("appinstalled", onInstalled);
-      standaloneQuery.removeEventListener?.("change", onStandaloneChange);
-      fullscreenQuery.removeEventListener?.("change", onStandaloneChange);
-    };
-  }, []);
-
-  const isIosBrowser = useMemo(() => {
-    const ua = navigator.userAgent || "";
-    const platform = navigator.platform || "";
-    return (
-      /iPad|iPhone|iPod/.test(ua) ||
-      (platform === "MacIntel" && navigator.maxTouchPoints > 1)
-    );
-  }, []);
-
-  const showInstallAppButton =
-    isMobileLayout &&
-    !standalone &&
-    !installDismissed &&
-    (installPrompt != null || isIosBrowser || !window.isSecureContext);
-
-  const installApp = useCallback(async () => {
-    if (installPrompt) {
-      const prompt = installPrompt;
-      setInstallPrompt(null);
-      await prompt.prompt();
-      const choice = await prompt.userChoice;
-      if (choice.outcome === "dismissed") setInstallDismissed(true);
-      return;
-    }
-    await appAlert({
-      message: isIosBrowser
-        ? t("topbar.installIosHint")
-        : t("topbar.installSecureContextHint"),
-    });
-    setInstallDismissed(true);
-  }, [installPrompt, isIosBrowser, t, appAlert]);
 
   useLayoutEffect(() => {
     document.documentElement.dataset.playerDock =
@@ -893,10 +823,8 @@ export function AppShell() {
                 syncStatusTitle={syncStatusTitle}
                 syncTapAnim={syncTapAnim}
                 librarySearchBarOpen={librarySearchBarOpen}
-                showInstallButton={showInstallAppButton}
                 onSync={onSyncButtonClick}
                 onToggleSearch={toggleLibrarySearchBar}
-                onInstall={() => void installApp()}
               />
 
               {error && index ? (

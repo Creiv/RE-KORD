@@ -265,12 +265,6 @@
     min-width: 0;
   }
 
-  .topbar2__install-btn {
-    flex: 1 1 auto;
-    justify-content: center;
-    min-width: 0;
-  }
-
   .ghost-btn--toolbar:not(.topbar2__sync-btn):not(.topbar2__search-btn) {
     min-height: 30px;
     padding: 0.28rem 0.65rem;
@@ -349,15 +343,6 @@
     min-height: 28px;
     padding: 0.22rem 0.55rem;
     font-size: 0.74rem;
-  }
-
-  .topbar2__install-btn {
-    flex: 0 1 auto;
-    max-width: 9.5rem;
-  }
-
-  .topbar2__install-label {
-    display: none;
   }
 }
 
