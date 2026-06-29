@@ -3,7 +3,10 @@ import { createRoot } from 'react-dom/client'
 import './index.css'
 import App from './App.tsx'
 import { setSelectedAccountId } from "./lib/api"
+import { applyColorMixCompatDataset } from "./lib/cssColorMix"
 import { isStandaloneDisplayMode } from "./lib/routing"
+
+applyColorMixCompatDataset()
 
 const u = new URLSearchParams(window.location.search)
 const electronEmbed = u.get("rekordClient") === "1"

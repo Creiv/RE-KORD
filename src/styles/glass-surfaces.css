@@ -25,14 +25,10 @@
     var(--glass-1) clamp(0%, calc(var(--glass-user-opacity) * 100% - 14%), 100%),
     transparent
   );
-  --glass-shine: light-dark(
-    color-mix(in srgb, white 48%, transparent),
-    color-mix(in srgb, white 22%, transparent)
-  );
-  --glass-shine-soft: light-dark(
-    color-mix(in srgb, white 22%, transparent),
-    color-mix(in srgb, white 9%, transparent)
-  );
+  /* Valori di default; con vetro attivo e color-mix difettoso UserStateContext
+     ricalcola in JS le variabili --glass-* (vedi glassCssVars.ts). */
+  --glass-shine: color-mix(in srgb, white 22%, transparent);
+  --glass-shine-soft: color-mix(in srgb, white 9%, transparent);
   --glass-edge: color-mix(in srgb, var(--border) 78%, transparent);
   --glass-blur: 18px;
   --glass-blur-soft: 12px;
@@ -75,6 +71,8 @@
 :root[data-glass-surfaces="1"][data-theme="tangerine-light"],
 :root[data-glass-surfaces="1"][data-theme="carmine-light"] {
   color-scheme: light;
+  --glass-shine: color-mix(in srgb, white 48%, transparent);
+  --glass-shine-soft: color-mix(in srgb, white 22%, transparent);
 }
 
 /* Fallback senza blur (GPU / accessibilità) — superfici più coprenti */

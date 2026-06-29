@@ -30,6 +30,11 @@ import { touchListeningActivity } from "../lib/achievements";
 import { enrichedTracksNeedPlayerResync } from "../lib/libraryIndex";
 import { isTrackAlbumShuffleExcluded } from "../lib/randomExclusions";
 import { probeGlassBackdrop } from "../lib/glassBackdrop";
+import { isColorMixBroken } from "../lib/cssColorMix";
+import {
+  applyGlassSurfaceCssVars,
+  clearGlassSurfaceCssVars,
+} from "../lib/glassCssVars";
 import {
   applyUserStatePatchFields,
   compactUserStatePatch,
@@ -1001,18 +1006,28 @@ export function UserStateProvider({ children }: { children: React.ReactNode }) {
   ]);
 
   useEffect(() => {
+    const root = document.documentElement;
     if (state.settings.glassSurfaces) {
-      document.documentElement.dataset.glassSurfaces = "1";
-      document.documentElement.style.setProperty(
-        "--glass-user-opacity",
-        String(normalizeGlassOpacity(state.settings.glassOpacity) / 100)
-      );
+      root.dataset.glassSurfaces = "1";
+      const opacity = normalizeGlassOpacity(state.settings.glassOpacity);
+      root.style.setProperty("--glass-user-opacity", String(opacity / 100));
+      if (isColorMixBroken()) {
+        applyGlassSurfaceCssVars(root, opacity);
+      } else {
+        clearGlassSurfaceCssVars(root);
+      }
     } else {
-      delete document.documentElement.dataset.glassSurfaces;
-      delete document.documentElement.dataset.glassBackdrop;
-      document.documentElement.style.removeProperty("--glass-user-opacity");
+      delete root.dataset.glassSurfaces;
+      delete root.dataset.glassBackdrop;
+      root.style.removeProperty("--glass-user-opacity");
+      clearGlassSurfaceCssVars(root);
     }
-  }, [state.settings.glassSurfaces, state.settings.glassOpacity]);
+  }, [
+    state.settings.glassSurfaces,
+    state.settings.glassOpacity,
+    state.settings.theme,
+    state.settings.customTheme,
+  ]);
 
   useEffect(() => {
     if (!state.settings.glassSurfaces) return;
