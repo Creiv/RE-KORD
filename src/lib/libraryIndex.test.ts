@@ -138,6 +138,12 @@ describe("libraryIndex", () => {
     expect(
       enrichedTracksNeedPlayerResync(base, {
         ...base,
+        filePath: "Artist/real.mp3",
+      }),
+    ).toBe(true);
+    expect(
+      enrichedTracksNeedPlayerResync(base, {
+        ...base,
         meta: sampleMeta({ ...meta, lyrics: "[00:01.00] Hello" }),
       })
     ).toBe(true);

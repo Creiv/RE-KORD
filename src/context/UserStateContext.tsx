@@ -27,6 +27,11 @@ import {
 } from "../lib/customThemeBgFit";
 import { DEFAULT_CUSTOM_THEME } from "../lib/themeCatalog";
 import { touchListeningActivity } from "../lib/achievements";
+import {
+  buildLibraryTrackLookup,
+  lookupLibraryTrack,
+  resolveTrackFromLibrary,
+} from "../lib/libraryNav";
 import { enrichedTracksNeedPlayerResync } from "../lib/libraryIndex";
 import { isTrackAlbumShuffleExcluded } from "../lib/randomExclusions";
 import { probeGlassBackdrop } from "../lib/glassBackdrop";
@@ -1225,9 +1230,7 @@ export function UserStateProvider({ children }: { children: React.ReactNode }) {
   const rehydrateTrackListsFromLibrary = useCallback(
     (libraryIndex: LibraryIndex) => {
       if (!hydratedRef.current) return;
-      const byPath = new Map(
-        libraryIndex.tracks.map((t) => [t.relPath, t])
-      );
+      const lookup = buildLibraryTrackLookup(libraryIndex.tracks);
       type PlaylistTrackStub = {
         relPath: string;
         title: string;
@@ -1251,7 +1254,7 @@ export function UserStateProvider({ children }: { children: React.ReactNode }) {
       commit((prev) => {
         let recentChanged = false;
         const recent = prev.recent.map((t) => {
-          const full = byPath.get(t.relPath);
+          const full = lookupLibraryTrack(lookup, t);
           if (!full || !enrichedTracksNeedPlayerResync(t, full)) return t;
           recentChanged = true;
           return full;
@@ -1260,7 +1263,7 @@ export function UserStateProvider({ children }: { children: React.ReactNode }) {
         const playlists = prev.playlists.map((pl) => {
           let plChanged = false;
           const tracks = pl.tracks.map((playlistTrack) => {
-            const full = byPath.get(playlistTrack.relPath);
+            const full = lookupLibraryTrack(lookup, playlistTrack);
             if (!full) return playlistTrack;
             const next = mergePlaylistTrack(playlistTrack, full);
             if (!playlistTrackEqual(playlistTrack, next)) plChanged = true;

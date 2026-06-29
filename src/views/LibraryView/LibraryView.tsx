@@ -66,6 +66,7 @@ import {
   trackBelongsToGenreKey,
 } from "../../lib/genres";
 import { fmtDate } from "../../lib/metaFormat";
+import { artistHasOnlyLooseAlbum } from "../../lib/libraryNav";
 import { buildRandomArtistCoverMap } from "../../lib/artistCover";
 import { buildGenreCoverPreviewMap } from "../../lib/genreCovers";
 import {
@@ -229,11 +230,21 @@ export default function LibraryView({
     user.state.trackPlayCounts,
   ]);
 
-  const album = route.album
-    ? artistAlbums.find(
-        (item) => item.name === route.album || item.id === route.album
+  const album = useMemo(() => {
+    const albumRoute =
+      route.album ||
+      (artist &&
+      artistAlbums.length === 1 &&
+      artistAlbums[0]?.loose
+        ? artistAlbums[0].name
+        : null);
+    if (!albumRoute || !artist) return null;
+    return (
+      artistAlbums.find(
+        (item) => item.name === albumRoute || item.id === albumRoute,
       ) || null
-    : null;
+    );
+  }, [route.album, artist, artistAlbums]);
 
   const onCoverFilePicked = (file: File | null) => {
     if (!file || !album || coverUploadBusy) return;
@@ -905,7 +916,11 @@ export default function LibraryView({
                     <button
                       type="button"
                       className="page-toolbar-back-ic"
-                      onClick={() => onOpenArtist(artist.id)}
+                      onClick={() =>
+                        artistHasOnlyLooseAlbum(index, artist.id)
+                          ? onOpenArtist("")
+                          : onOpenArtist(artist.id)
+                      }
                       aria-label={t("library.backToArtistAria", {
                         name: artist.name,
                       })}
@@ -1124,7 +1139,7 @@ export default function LibraryView({
     );
   }
 
-  if (artist) {
+  if (artist && !album) {
     return (
       <div className="view-page library-page library-view">
         <section className="surface-card surface-card--toolbar-only">

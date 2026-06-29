@@ -25,9 +25,14 @@ import { usePlayerDockCssVars } from "../../hooks/usePlayerDockCssVars";
 import { useViewportHeight } from "../../hooks/useViewportHeight";
 import { useSyncStatusSnackbar } from "../../hooks/useSyncStatusSnackbar";
 import { MOBILE_LAYOUT_MQ } from "../../lib/breakpoints";
+import {
+  openArtistInLibrary,
+  openTrackInLibrary,
+} from "../../lib/libraryNav";
 import { useI18n } from "../../i18n/useI18n";
 import {
   fetchDashboard,
+  fetchLibraryChanges,
   fetchLibraryIndex,
   isBackendUnreachableError,
 } from "../../lib/api";
@@ -143,6 +148,7 @@ export function AppShell() {
   const indexLibrarySigRef = useRef("");
   const backgroundRefreshRef = useRef<Promise<void> | null>(null);
   const libraryRefreshQueuedAfterFlightRef = useRef(false);
+  const indexEpochRef = useRef(0);
   const libraryReconcileDebounceRef = useRef<ReturnType<
     typeof globalThis.setTimeout
   > | null>(null);
@@ -375,6 +381,30 @@ export function AppShell() {
   }, [reconcileLibrary]);
 
   useEffect(() => {
+    if (index?.indexEpoch != null) {
+      indexEpochRef.current = index.indexEpoch;
+    }
+  }, [index?.indexEpoch]);
+
+  useEffect(() => {
+    if (!index) return;
+    const pollMs = 4000;
+    const timer = window.setInterval(() => {
+      void fetchLibraryChanges(indexEpochRef.current)
+        .then((snap) => {
+          indexEpochRef.current = snap.indexEpoch;
+          if (snap.changed && !snap.scanning) {
+            void runCoalescedBackgroundRefresh();
+          }
+        })
+        .catch(() => {
+          /* server offline */
+        });
+    }, pollMs);
+    return () => window.clearInterval(timer);
+  }, [index, runCoalescedBackgroundRefresh]);
+
+  useEffect(() => {
     const w = window as unknown as {
       requestIdleCallback?: (cb: () => void, opts?: { timeout?: number }) => number;
       cancelIdleCallback?: (id: number) => void;
@@ -567,6 +597,36 @@ export function AppShell() {
     },
     [navigate, closeLibrarySearch]
   );
+  const smartNavToLibraryArtist = useCallback(
+    (artistId: string) => {
+      if (!index) {
+        navToLibraryArtist(artistId);
+        return;
+      }
+      openArtistInLibrary(
+        index,
+        artistId,
+        navToLibraryArtist,
+        navToLibraryAlbum,
+      );
+    },
+    [index, navToLibraryArtist, navToLibraryAlbum],
+  );
+  const smartNavToLibraryForTrack = useCallback(
+    (track: import("../../types").EnrichedTrack) => {
+      if (!index) {
+        navToLibraryAlbum(track.artist, track.album);
+        return;
+      }
+      openTrackInLibrary(
+        index,
+        track,
+        navToLibraryArtist,
+        navToLibraryAlbum,
+      );
+    },
+    [index, navToLibraryArtist, navToLibraryAlbum],
+  );
   const navToPlaylist = useCallback(
     (id: string | null) => navigate({ section: "playlists", playlist: id }),
     [navigate]
@@ -697,7 +757,7 @@ export function AppShell() {
               onLibraryDelta={(delta, reconcile) =>
                 applyLibraryDelta(delta, reconcile ?? false)
               }
-              onOpenArtist={navToLibraryArtist}
+              onOpenArtist={smartNavToLibraryArtist}
               onOpenAlbum={navToLibraryAlbum}
             />
           </Suspense>
@@ -766,7 +826,7 @@ export function AppShell() {
           <Suspense fallback={<RekordViewLoadingFallback />}>
             <LazyStatisticsView
               index={index}
-              onOpenArtist={navToLibraryArtist}
+              onOpenArtist={smartNavToLibraryArtist}
               onOpenAlbum={navToLibraryAlbum}
             />
           </Suspense>
@@ -849,8 +909,9 @@ export function AppShell() {
 
           <PlayerDock
             onGoToAscolta={onGoToAscolta}
-            onOpenLibraryArtist={navToLibraryArtist}
+            onOpenLibraryArtist={smartNavToLibraryArtist}
             onOpenLibraryAlbum={navToLibraryAlbum}
+            onOpenLibraryForTrack={smartNavToLibraryForTrack}
             onLibraryDelta={applyLibraryDelta}
           />
           {isMobileLayout ? (

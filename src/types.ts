@@ -275,6 +275,10 @@ export type LibraryAlbumIndex = {
 
 export type LibraryTrackIndex = EnrichedTrack & {
   albumId: string;
+  /** Percorso reale su disco (può differire da relPath per tracce loose). */
+  filePath?: string;
+  /** Cartella album reale (es. `Artist/Album` o `Artist` per loose). */
+  albumFolderRelPath?: string | null;
   loose: boolean;
   addedAt: number | null;
   updatedAt: number | null;

@@ -1,4 +1,5 @@
 import type { EnrichedTrack } from "../types";
+import { resolveTrackFromLibrary } from "./libraryNav";
 import { parseTrackGenres } from "./genres";
 import { isTrackShuffleExcluded } from "./randomExclusions";
 import { parseTrackMoods } from "./trackMoods";
@@ -113,7 +114,7 @@ export function buildShuffleQueueFromSeed(
   pool: readonly EnrichedTrack[],
   opts: SmartShuffleOpts & ShuffleExclusionOpts = {}
 ): EnrichedTrack[] {
-  const seedCanon = pool.find((t) => t.relPath === seed.relPath) ?? seed;
+  const seedCanon = resolveTrackFromLibrary(seed, pool);
   const filtered = filterPoolForExclusions(pool, seedCanon.relPath, opts);
   const rest = filtered.filter((t) => t.relPath !== seedCanon.relPath);
   if (!rest.length) return [seedCanon];
@@ -129,8 +130,7 @@ export function buildCardPlayQueueFromSeed(
   const maxLen =
     opts?.maxLength !== undefined ? opts.maxLength : CARD_QUEUE_CAP;
   const cap = Math.max(1, Math.min(maxLen, CARD_QUEUE_CAP));
-  const seedCanon =
-    libraryTracks.find((t) => t.relPath === seed.relPath) ?? seed;
+  const seedCanon = resolveTrackFromLibrary(seed, libraryTracks);
   const pool = filterPoolForExclusions(
     libraryTracks,
     seedCanon.relPath,

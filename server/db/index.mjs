@@ -35,6 +35,37 @@ function runMigrations(db) {
       }
     }
     db.prepare("INSERT INTO schema_migrations (version) VALUES (?)").run(2)
+    version = 2
+  }
+  if (version < 3) {
+    try {
+      db.exec("ALTER TABLE tracks ADD COLUMN file_path TEXT")
+    } catch {
+      /* colonna già presente */
+    }
+    try {
+      db.exec("UPDATE tracks SET file_path = rel_path WHERE file_path IS NULL OR file_path = ''")
+    } catch {
+      /* ok */
+    }
+    db.prepare("INSERT INTO schema_migrations (version) VALUES (?)").run(3)
+    version = 3
+  }
+  if (version < 4) {
+    try {
+      db.exec(
+        "UPDATE albums SET name = 'Tracks' WHERE loose = 1 AND name IN ('Tracce', 'Tracks')",
+      )
+      db.exec(
+        "UPDATE tracks SET rel_path = REPLACE(rel_path, '/Tracce/', '/Tracks/') WHERE rel_path LIKE '%/Tracce/%'",
+      )
+      db.exec(
+        "UPDATE tracks SET album_name = 'Tracks' WHERE loose = 1 AND album_name = 'Tracce'",
+      )
+    } catch {
+      /* ok */
+    }
+    db.prepare("INSERT INTO schema_migrations (version) VALUES (?)").run(4)
   }
 }
 

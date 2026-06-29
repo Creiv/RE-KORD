@@ -28,6 +28,7 @@ import {
   coverUrlForAlbumRelPath,
 } from "../lib/api";
 import { fmtDate } from "../lib/metaFormat";
+import { formatTrackByline } from "../lib/libraryNav";
 import { formatDurationMs } from "../lib/duration";
 import { versionedUrl } from "../lib/versionedUrl";
 import { initials } from "../lib/initials";
@@ -510,7 +511,7 @@ export const TrackListRow = memo(function TrackListRow({
         </span>
         <span className="track-row__meta">
           <span className="track-row__meta-text">
-            {track.artist} · {track.album}
+            {formatTrackByline(track)}
           </span>
           <span className="track-row__meta-sep" aria-hidden>
             {" "}

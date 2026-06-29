@@ -10,7 +10,8 @@ import {
   useState,
   useSyncExternalStore,
 } from "react";
-import { mediaUrl, fetchConfig } from "../lib/api";
+import { resolveTrackFromLibrary, trackPlaybackKey } from "../lib/libraryNav";
+import { mediaUrl, mediaUrlForTrack, fetchConfig } from "../lib/api";
 import { enrichTrack } from "../lib/enrichTrack";
 import { enrichedTracksNeedPlayerResync } from "../lib/libraryIndex";
 import { isTrackAlbumShuffleExcluded } from "../lib/randomExclusions";
@@ -516,10 +517,10 @@ export function PlayerProvider({ children }: { children: React.ReactNode }) {
     if (!Number.isFinite(d) || d <= 0) return;
     const remain = d - outEl.currentTime;
     if (remain > 12 || remain < 0.25) return;
-    const path = nextTr.relPath;
+    const path = trackPlaybackKey(nextTr);
     if (prefetchedRelPathRef.current === path && audioReadyEnough(inEl)) return;
     prefetchedRelPathRef.current = path;
-    inEl.src = mediaUrl(path);
+    inEl.src = mediaUrlForTrack(nextTr);
     inEl.load();
   }, []);
 
@@ -561,7 +562,7 @@ export function PlayerProvider({ children }: { children: React.ReactNode }) {
     crossfadeInIxRef.current = inIx;
     crossfadeNextIdxRef.current = nextIdx;
 
-    inEl.src = mediaUrl(nextTr.relPath);
+    inEl.src = mediaUrlForTrack(nextTr);
     inEl.load();
 
     try {
@@ -837,18 +838,20 @@ export function PlayerProvider({ children }: { children: React.ReactNode }) {
       trackLoadingRef.current = true;
       syncMediaSessionNowRef.current();
       try {
-        const url = mediaUrl(track.relPath);
+        const url = mediaUrlForTrack(track);
+        const playbackKey = trackPlaybackKey(track);
         const alreadyBuffered =
-          prefetchedRelPathRef.current === track.relPath &&
+          prefetchedRelPathRef.current === playbackKey &&
           audioReadyEnough(inEl);
         if (!alreadyBuffered) {
-          prefetchedRelPathRef.current = track.relPath;
+          prefetchedRelPathRef.current = playbackKey;
           inEl.src = url;
           inEl.load();
           try {
             await waitForAudioReady(inEl);
           } catch {
             if (gen !== trackLoadGenRef.current) return;
+            outEl.pause();
             setIsPlaying(false);
             syncMediaSessionNowRef.current();
             return;
@@ -1064,7 +1067,7 @@ export function PlayerProvider({ children }: { children: React.ReactNode }) {
     for (let i = 1; i <= 2; i++) {
       const tr = queue[currentIndex + i];
       if (!tr) continue;
-      const url = mediaUrl(tr.relPath);
+      const url = mediaUrlForTrack(tr);
       void fetch(url, {
         headers: { Range: `bytes=0-${HEAD_BYTES - 1}` },
         cache: "force-cache",
@@ -1122,7 +1125,7 @@ export function PlayerProvider({ children }: { children: React.ReactNode }) {
       playbackRate: audio?.playbackRate || 1,
       skipPosition: loading,
       mediaUri: baseOrigin
-        ? castStreamUrl(track.relPath, baseOrigin, castOpts)
+        ? castStreamUrl(track.filePath || track.relPath, baseOrigin, castOpts)
         : undefined,
       mediaId: track.relPath,
       queue: queueEntries,
@@ -1483,14 +1486,12 @@ export function PlayerProvider({ children }: { children: React.ReactNode }) {
   }, [abortCrossfade]);
 
   const resyncTracksFromIndex = useCallback((libraryIndex: LibraryIndex) => {
-    const byPath = new Map(
-      libraryIndex.tracks.map((t) => [t.relPath, t as EnrichedTrack]),
-    );
+    const tracks = libraryIndex.tracks as EnrichedTrack[];
     setQueue((prev) => {
       let changed = false;
       const next = prev.map((t) => {
-        const full = byPath.get(t.relPath);
-        if (!full || !enrichedTracksNeedPlayerResync(t, full)) return t;
+        const full = resolveTrackFromLibrary(t, tracks);
+        if (full === t || !enrichedTracksNeedPlayerResync(t, full)) return t;
         changed = true;
         return full;
       });
@@ -1498,8 +1499,8 @@ export function PlayerProvider({ children }: { children: React.ReactNode }) {
     });
     setCurrent((c) => {
       if (!c) return c;
-      const full = byPath.get(c.relPath);
-      if (!full || !enrichedTracksNeedPlayerResync(c, full)) return c;
+      const full = resolveTrackFromLibrary(c, tracks);
+      if (full === c || !enrichedTracksNeedPlayerResync(c, full)) return c;
       return full;
     });
   }, []);

@@ -39,6 +39,7 @@ import {
   searchArtwork,
   searchMusicDirs,
   pruneAlbumLibraryMetadataForAlbum,
+  waitForLibraryEpoch,
 } from "../lib/api";
 import type {
   ArtworkHit,
@@ -48,7 +49,7 @@ import type {
   YoutubeReleasesList,
 } from "../lib/api";
 import { fmtDate } from "../lib/metaFormat";
-import { albumFolderFromTrackRelPath } from "../lib/trackPaths";
+import { albumFolderFromTrack } from "../lib/trackPaths";
 import { partitionYoutubeReleaseEntries } from "../lib/youtubeReleases";
 import type {
   CatalogArtistEntry,
@@ -792,7 +793,7 @@ export function ToolsView({
     if (p.current) {
       setArtQuery([p.current.artist, p.current.album].filter(Boolean).join(" "));
       setCoverPickArtist(p.current.artist);
-      const folder = albumFolderFromTrackRelPath(p.current.relPath);
+      const folder = albumFolderFromTrack(p.current);
       if (folder) {
         setAlbumForCover(folder);
       }
@@ -825,7 +826,7 @@ export function ToolsView({
     setMetaArt(p.current.artist);
     setMetaAlb(p.current.album);
     setMetaArtistName(p.current.artist);
-    const folder = albumFolderFromTrackRelPath(p.current.relPath);
+    const folder = albumFolderFromTrack(p.current);
     if (folder) {
       setMetaAlbumPath(folder);
       setMetaLog(t("tools.metaFromTrackOk"));
@@ -1368,6 +1369,12 @@ export function ToolsView({
               downloadSummaryLine(r)
             );
           });
+          if (r.ok) {
+            const epochBefore = libraryIndex?.indexEpoch ?? 0;
+            if (!(typeof r.indexEpoch === "number" && r.indexEpoch > epochBefore)) {
+              await waitForLibraryEpoch(epochBefore, { timeoutMs: 45_000 });
+            }
+          }
           await onReconcileLibrary({ mode: "now" });
         } catch (e) {
           setLog(

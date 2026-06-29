@@ -283,6 +283,14 @@ export function mediaUrl(relPath: string, baseUrl?: string | null) {
   }
 }
 
+/** URL playback: preferisce il percorso file reale quando noto. */
+export function mediaUrlForTrack(
+  track: { relPath: string; filePath?: string | null },
+  baseUrl?: string | null,
+) {
+  return mediaUrl(track.filePath?.trim() || track.relPath, baseUrl)
+}
+
 export function coverUrlForTrackRelPath(relPath: string) {
   return apiUrl("/api/cover", { path: relPath })
 }
@@ -299,6 +307,59 @@ export async function fetchLibraryIndex(): Promise<LibraryIndex> {
   await ensureSelectedAccountId()
   const response = await apiFetch("/api/library-index", { cache: "no-store" })
   return unwrap<LibraryIndex>(response)
+}
+
+export type LibraryChangesResponse = {
+  changed: boolean
+  indexEpoch: number
+  scanning?: boolean
+  lastScanAt?: string | null
+}
+
+export async function fetchLibraryChanges(
+  sinceEpoch: number,
+): Promise<LibraryChangesResponse> {
+  const response = await apiFetch(
+    "/api/library/changes",
+    { cache: "no-store" },
+    { sinceEpoch: String(sinceEpoch) },
+  )
+  return unwrap<LibraryChangesResponse>(response)
+}
+
+export async function probeLibraryStructure(
+  musicRoot: string,
+  sampleLimit = 200,
+): Promise<{
+  stats: Record<string, number>
+  candidates: { layout: string; confidence: number; reason: string }[]
+  warnings: string[]
+  suggestedLayout: Record<string, unknown>
+}> {
+  const response = await apiFetch("/api/library/probe", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ musicRoot, sampleLimit }),
+  })
+  return unwrap(response)
+}
+
+export async function waitForLibraryEpoch(
+  afterEpoch: number,
+  opts: { timeoutMs?: number; pollMs?: number } = {},
+): Promise<number> {
+  const timeoutMs = opts.timeoutMs ?? 60_000
+  const pollMs = opts.pollMs ?? 400
+  const start = Date.now()
+  let last = afterEpoch
+  while (Date.now() - start < timeoutMs) {
+    const snap = await fetchLibraryChanges(last)
+    if (snap.indexEpoch > afterEpoch && !snap.scanning) return snap.indexEpoch
+    last = snap.indexEpoch
+    await new Promise((r) => setTimeout(r, pollMs))
+  }
+  const final = await fetchLibraryChanges(afterEpoch)
+  return final.indexEpoch
 }
 
 export async function fetchLibraryCatalog(opts: { summary?: boolean; artistId?: string } = {}): Promise<LibraryCatalogResponse> {
@@ -913,6 +974,8 @@ export type DownloadRes = {
   progress?: { current: number; total: number } | null
   musicRoot: string
   command: string
+  indexEpoch?: number
+  outputDir?: string | null
   error?: string
   cancelled?: boolean
   /** true se yt-dlp ha prodotto output più lungo del contenuto incluso nei campi sopra */
@@ -933,6 +996,10 @@ function downloadResFromDoneMsg(msg: Record<string, unknown>): DownloadRes {
     progress: (msg.progress as DownloadRes["progress"]) ?? null,
     musicRoot: String(msg.musicRoot ?? ""),
     command: String(msg.command ?? ""),
+    ...(typeof msg.indexEpoch === "number"
+      ? { indexEpoch: Math.floor(Number(msg.indexEpoch)) }
+      : {}),
+    ...(msg.outputDir != null ? { outputDir: String(msg.outputDir) } : {}),
     ...(msg.cancelled === true ? { cancelled: true } : {}),
     ...(msg.error != null && msg.error !== ""
       ? { error: String(msg.error) }

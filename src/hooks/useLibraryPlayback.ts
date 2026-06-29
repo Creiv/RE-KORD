@@ -1,4 +1,5 @@
 import { useCallback, useMemo } from "react";
+import { resolveTrackFromLibrary } from "../lib/libraryNav";
 import type { EnrichedTrack } from "../types";
 import { usePlayer } from "../context/PlayerContext";
 import { useUserState } from "../context/UserStateContext";
@@ -61,11 +62,15 @@ export function useLibraryPlayback(
 
   const playGlobalRadio = useCallback(
     (seed: EnrichedTrack, respectExclusions = true) => {
+      const resolvedSeed =
+        libraryTracks?.length
+          ? resolveTrackFromLibrary(seed, libraryTracks)
+          : seed;
       if (!libraryTracks?.length) {
-        p.playTrack(seed, [seed], 0);
+        p.playTrack(resolvedSeed, [resolvedSeed], 0);
         return;
       }
-      const q = buildCardPlayQueueFromSeed(seed, libraryTracks, {
+      const q = buildCardPlayQueueFromSeed(resolvedSeed, libraryTracks, {
         respectExclusions,
         excludedAlbums,
         excludedTracks,
@@ -82,7 +87,8 @@ export function useLibraryPlayback(
       respectExclusions = true
     ) => {
       if (!pool.length) return;
-      const q = buildShuffleQueueFromSeed(seed, pool, {
+      const resolvedSeed = resolveTrackFromLibrary(seed, pool);
+      const q = buildShuffleQueueFromSeed(resolvedSeed, pool, {
         ...shuffleOpts(),
         respectExclusions,
       });

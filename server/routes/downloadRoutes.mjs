@@ -4,7 +4,10 @@
  */
 import { parseYtdlpJsonStdout } from "../catalogWebPreview.mjs";
 import { accountIdFromReq, actLog, sendError, sendOk } from "../httpUtils.mjs";
-import { getLibraryIndex, invalidateLibraryIndex } from "../libraryIndexService.mjs";
+import { getLibraryIndex } from "../libraryIndexService.mjs";
+import { runLibraryScan } from "../scanner/index.mjs";
+import { getLibraryEpoch } from "../db/index.mjs";
+import path from "path";
 import {
   readLibrarySelection,
   sanitizeLibrarySelection,
@@ -535,52 +538,61 @@ export function registerDownloadRoutes(app) {
         const oe = trimLogForNdjson(stderrAcc);
         const progress = extractLastItemProgress(combined) ?? lastProgressEmitted;
         const itemSummary = ytdlpItemSummaryFromLog(stdoutAcc.buffer, stderrAcc.buffer);
-        finish(() => {
-          try {
-            if (
-              itemSummary.downloadedItems.length ||
-              itemSummary.skippedItems.length ||
-              itemSummary.failedItems.length
-            ) {
-              res.write(`${JSON.stringify({ type: "items", ...itemSummary })}\n`);
-            }
-            const line = `${JSON.stringify({
-            type: "done",
-            ok: resultCode === 0,
-            cancelled,
-            stdout: ot.text,
-            stderr: oe.text,
-            logTruncated: Boolean(ot.truncated || oe.truncated),
-            stdoutTotalChars: ot.totalChars,
-            stderrTotalChars: oe.totalChars,
-            code: resultCode,
-            progress,
-            postDownloadError: postDownloadError
-              ? String(postDownloadError?.message || postDownloadError)
-              : null,
-            musicRoot: root,
-            command,
-            ...itemSummary,
-          })}\n`;
-            if (!res.writableEnded) res.write(line);
-            if (!res.writableEnded) res.end();
-          } catch {
-            /* client già disconnesso */
-          }
-        });
-        if (shouldPostProcess) {
-          void (async () => {
+        void (async () => {
+          let indexEpoch = getLibraryEpoch(root);
+          if (shouldPostProcess && resultCode === 0) {
             try {
-              await invalidateLibraryIndex(root);
+              const outputAbs =
+                outputDirForLog && String(outputDirForLog).trim()
+                  ? path.join(root, String(outputDirForLog).replace(/\\/g, "/"))
+                  : root;
+              await runLibraryScan(root, { paths: [outputAbs] });
               await attachStudioDownloadToLibrarySelection(req, root, outputDirForLog);
+              indexEpoch = getLibraryEpoch(root);
             } catch (error) {
+              postDownloadError = error;
               console.error(
                 "[rekord] post-download library refresh:",
                 error?.message || error,
               );
             }
-          })();
-        }
+          }
+          finish(() => {
+            try {
+              if (
+                itemSummary.downloadedItems.length ||
+                itemSummary.skippedItems.length ||
+                itemSummary.failedItems.length
+              ) {
+                res.write(`${JSON.stringify({ type: "items", ...itemSummary })}\n`);
+              }
+              const line = `${JSON.stringify({
+                type: "done",
+                ok: resultCode === 0,
+                cancelled,
+                stdout: ot.text,
+                stderr: oe.text,
+                logTruncated: Boolean(ot.truncated || oe.truncated),
+                stdoutTotalChars: ot.totalChars,
+                stderrTotalChars: oe.totalChars,
+                code: resultCode,
+                progress,
+                postDownloadError: postDownloadError
+                  ? String(postDownloadError?.message || postDownloadError)
+                  : null,
+                musicRoot: root,
+                command,
+                indexEpoch,
+                outputDir: outputDirForLog || null,
+                ...itemSummary,
+              })}\n`;
+              if (!res.writableEnded) res.write(line);
+              if (!res.writableEnded) res.end();
+            } catch {
+              /* client già disconnesso */
+            }
+          });
+        })();
       });
       child.on("error", (error) => {
         removeDisconnectListeners();

@@ -8,6 +8,8 @@ export function trackRowToIndex(row) {
     id: row.rel_path,
     title: row.title,
     relPath: row.rel_path,
+    filePath: row.file_path || row.rel_path,
+    albumFolderRelPath: row.album_folder_rel_path || null,
     artist: row.artist_name,
     album: row.album_name,
     albumId: row.album_id,

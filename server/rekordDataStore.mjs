@@ -47,6 +47,10 @@ export function rekordConfigPath(libraryRoot) {
   return path.join(rekordGlobalInfoDir(libraryRoot), "config.json")
 }
 
+export function rekordLibraryLayoutPath(libraryRoot) {
+  return path.join(rekordGlobalInfoDir(libraryRoot), "library-layout.json")
+}
+
 export function rekordAccountDir(libraryRoot, accountId) {
   const id = safeRekordAccountId(accountId)
   if (!id) return null

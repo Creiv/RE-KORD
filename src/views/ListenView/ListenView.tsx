@@ -39,7 +39,8 @@ import {
 import { uploadAlbumCover } from "../../lib/api";
 import { useTrackCoverDisplay } from "../../context/LibraryArtworkContext";
 import { versionedUrl } from "../../lib/versionedUrl";
-import { albumFolderFromTrackRelPath } from "../../lib/trackPaths";
+import { albumFolderFromTrack } from "../../lib/trackPaths";
+import { formatTrackByline } from "../../lib/libraryNav";
 import { isTrackAlbumShuffleExcluded } from "../../lib/randomExclusions";
 import { eligibleTracksForIntelligentRandom } from "../../lib/randomExclusions";
 import { PlayCollectionButton } from "../../components/PlayCollectionButton";
@@ -166,7 +167,7 @@ export default function ListenView({
   const [coverUploadBusy, setCoverUploadBusy] = useState(false);
   const [coverUploadErr, setCoverUploadErr] = useState<string | null>(null);
 
-  const currentAlbumPath = cur ? albumFolderFromTrackRelPath(cur.relPath) : "";
+  const currentAlbumPath = cur ? albumFolderFromTrack(cur) : "";
 
   const onCoverFilePicked = (file: File | null) => {
     if (!file || !currentAlbumPath || coverUploadBusy) return;
@@ -375,7 +376,7 @@ export default function ListenView({
                   <div className="listen-stage__meta-full">
                 <p className="listen-stage__sub listen-stage__sub--with-stats">
                   <span className="listen-stage__sub-lead">
-                    {cur.artist} · {cur.album}
+                    {formatTrackByline(cur)}
                     <span className="track-row__meta-sep" aria-hidden>
                       {" "}
                       ·{" "}

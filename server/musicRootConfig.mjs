@@ -79,7 +79,11 @@ function probeLibraryWritable(libraryRoot) {
     fs.mkdirSync(probeDir, { recursive: true });
     const probeFile = path.join(probeDir, ".write-probe");
     fs.writeFileSync(probeFile, "ok", "utf8");
-    fs.unlinkSync(probeFile);
+    try {
+      fs.unlinkSync(probeFile);
+    } catch {
+      /* ok */
+    }
     state.libraryWriteError = null;
   } catch (err) {
     if (!setLibraryWriteError(err, probeDir)) throw err;

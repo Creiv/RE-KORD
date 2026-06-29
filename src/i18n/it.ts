@@ -449,6 +449,8 @@ export const IT: Record<string, string> = {
   "settings.libraryHeading": "Cartella libreria (root)",
   "settings.libraryRootLead":
     "Percorso assoluto della cartella che contiene la musica e la cartella .kord.",
+  "settings.libraryProbeHint":
+    "Analisi: ~{{tracks}} brani rilevati; layout preferito {{layout}}. I dati .kord esistenti saranno preservati.",
   "settings.libraryReadOnlyLead":
     "La cartella libreria è definita sul server. Da questo browser puoi usare la libreria ma non modificare il percorso.",
   "settings.libraryReadOnlyFolder": "Cartella libreria sul server: {{name}}",

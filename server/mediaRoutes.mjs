@@ -6,6 +6,7 @@ import {
   pathHasParentDirSegment,
   underRoot,
 } from "./pathSafety.mjs"
+import { resolveTrackFileRelPath } from "./scanner/engine.mjs"
 import { serveMediaFileWithRange } from "./mediaStream.mjs"
 
 /**
@@ -40,7 +41,8 @@ export function registerMediaRoutes(app) {
       return
     }
 
-    const filePath = path.join(root, relPath.replaceAll("/", path.sep))
+    const mediaRel = resolveTrackFileRelPath(root, relPath)
+    const filePath = path.join(root, mediaRel.replaceAll("/", path.sep))
     if (!underRoot(filePath, root) || !existsSync(filePath)) {
       res.status(404).end()
       return

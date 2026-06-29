@@ -441,6 +441,8 @@ export const EN: Record<string, string> = {
   "settings.libraryHeading": "Library root folder",
   "settings.libraryRootLead":
     "Absolute path to the folder that contains your audio files and the .kord data directory.",
+  "settings.libraryProbeHint":
+    "Analysis: ~{{tracks}} tracks detected; preferred layout {{layout}}. Existing .kord data will be preserved.",
   "settings.libraryReadOnlyLead":
     "The library folder is defined on the server. This browser can use the library but cannot change its path.",
   "settings.libraryReadOnlyFolder": "Library folder on server: {{name}}",

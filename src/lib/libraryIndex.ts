@@ -34,6 +34,13 @@ export function enrichedTracksNeedPlayerResync(
   ) {
     return true;
   }
+  if ((queueTrack.filePath ?? "") !== (indexTrack.filePath ?? "")) return true;
+  if (
+    (queueTrack.albumFolderRelPath ?? "") !==
+    (indexTrack.albumFolderRelPath ?? "")
+  ) {
+    return true;
+  }
   if (trackUpdatedAtMs(queueTrack) !== trackUpdatedAtMs(indexTrack)) return true;
   const qm = queueTrack.meta;
   const im = indexTrack.meta;

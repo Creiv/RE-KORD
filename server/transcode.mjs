@@ -6,6 +6,7 @@ import { getMusicRoot } from "./musicRootConfig.mjs"
 import { hasReservedPathSegment, pathHasParentDirSegment, underRoot } from "./pathSafety.mjs"
 import { sendError } from "./httpUtils.mjs"
 import { serveMediaFileWithRange } from "./mediaStream.mjs"
+import { resolveTrackFileRelPath } from "./scanner/engine.mjs"
 import { resolveFfmpegPath, isTranscodeAvailable } from "./ffmpegBin.mjs"
 
 export { isTranscodeAvailable } from "./ffmpegBin.mjs"
@@ -132,7 +133,8 @@ export function registerTranscodeRoutes(app) {
       ) {
         return sendError(res, 400, "Invalid path")
       }
-      const sourcePath = path.join(root, relPath.replaceAll("/", path.sep))
+      const mediaRel = resolveTrackFileRelPath(root, relPath)
+      const sourcePath = path.join(root, mediaRel.replaceAll("/", path.sep))
       if (!underRoot(sourcePath, root) || !existsSync(sourcePath)) {
         return sendError(res, 404, "File not found")
       }

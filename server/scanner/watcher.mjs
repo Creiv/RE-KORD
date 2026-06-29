@@ -6,7 +6,7 @@ import { scheduleLibraryScan } from "./index.mjs"
 const watchers = new Map()
 
 /**
- * Avvia watcher filesystem sulla libreria (debounced scan incrementale).
+ * Avvia watcher filesystem sulla libreria (scan incrementale mirato).
  * @param {string} libraryRoot
  */
 export function startLibraryWatcher(libraryRoot) {
@@ -25,8 +25,11 @@ export function startLibraryWatcher(libraryRoot) {
     awaitWriteFinish: { stabilityThreshold: 600, pollInterval: 100 },
   })
 
-  const trigger = () => {
-    scheduleLibraryScan(libraryRoot, { debounceMs: 5000 })
+  const trigger = (eventPath) => {
+    scheduleLibraryScan(libraryRoot, {
+      paths: [String(eventPath || "")],
+      debounceMs: 5000,
+    })
   }
 
   watcher.on("add", trigger)

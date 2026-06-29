@@ -78,4 +78,17 @@ describe("musicLibrary", () => {
     const index = await buildLibraryIndex(musicRoot)
     expect(index.tracks[0]?.meta?.lyrics).toBe("Line one\nLine two")
   })
+
+  it("buildPartialIndex scopes a single album", async () => {
+    const musicRoot = await fs.mkdtemp(path.join(os.tmpdir(), "rekord-partial-"))
+    await fs.mkdir(path.join(musicRoot, "A", "B1"), { recursive: true })
+    await fs.mkdir(path.join(musicRoot, "A", "B2"), { recursive: true })
+    await fs.writeFile(path.join(musicRoot, "A", "B1", "01.mp3"), "")
+    await fs.writeFile(path.join(musicRoot, "A", "B2", "01.mp3"), "")
+
+    const { buildPartialIndex } = await import("./musicLibrary.mjs")
+    const partial = await buildPartialIndex(musicRoot, ["A/B1"], { enrichDuration: false })
+    expect(partial.albums.map((a) => a.relPath)).toEqual(["A/B1"])
+    expect(partial.tracks).toHaveLength(1)
+  })
 })

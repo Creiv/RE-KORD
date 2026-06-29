@@ -70,28 +70,29 @@ ON CONFLICT(id) DO UPDATE SET
 
 const insertTrack = `
 INSERT INTO tracks (
-  id, rel_path, album_id, title, artist_name, album_name, genre, release_date,
+  id, rel_path, file_path, album_id, title, artist_name, album_name, genre, release_date,
   lyrics, moods_json, duration_ms, track_number, disc_number, source, url,
   file_name, size, mtime, loose, added_at, updated_at, user_edited
 ) VALUES (
-  @id, @rel_path, @album_id, @title, @artist_name, @album_name, @genre, @release_date,
+  @id, @rel_path, @file_path, @album_id, @title, @artist_name, @album_name, @genre, @release_date,
   @lyrics, @moods_json, @duration_ms, @track_number, @disc_number, @source, @url,
   @file_name, @size, @mtime, @loose, @added_at, @updated_at, @user_edited
 )
 ON CONFLICT(rel_path) DO UPDATE SET
+  file_path=excluded.file_path,
   album_id=excluded.album_id,
-  title=excluded.title,
-  artist_name=excluded.artist_name,
-  album_name=excluded.album_name,
-  genre=excluded.genre,
-  release_date=excluded.release_date,
-  lyrics=excluded.lyrics,
-  moods_json=excluded.moods_json,
-  duration_ms=excluded.duration_ms,
-  track_number=excluded.track_number,
-  disc_number=excluded.disc_number,
-  source=excluded.source,
-  url=excluded.url,
+  title=CASE WHEN tracks.user_edited = 1 THEN tracks.title ELSE excluded.title END,
+  artist_name=CASE WHEN tracks.user_edited = 1 THEN tracks.artist_name ELSE excluded.artist_name END,
+  album_name=CASE WHEN tracks.user_edited = 1 THEN tracks.album_name ELSE excluded.album_name END,
+  genre=CASE WHEN tracks.user_edited = 1 THEN tracks.genre ELSE excluded.genre END,
+  release_date=CASE WHEN tracks.user_edited = 1 THEN tracks.release_date ELSE excluded.release_date END,
+  lyrics=CASE WHEN tracks.user_edited = 1 THEN tracks.lyrics ELSE excluded.lyrics END,
+  moods_json=CASE WHEN tracks.user_edited = 1 THEN tracks.moods_json ELSE excluded.moods_json END,
+  duration_ms=CASE WHEN tracks.user_edited = 1 AND tracks.duration_ms IS NOT NULL THEN tracks.duration_ms ELSE excluded.duration_ms END,
+  track_number=CASE WHEN tracks.user_edited = 1 THEN tracks.track_number ELSE excluded.track_number END,
+  disc_number=CASE WHEN tracks.user_edited = 1 THEN tracks.disc_number ELSE excluded.disc_number END,
+  source=CASE WHEN tracks.user_edited = 1 THEN tracks.source ELSE excluded.source END,
+  url=CASE WHEN tracks.user_edited = 1 THEN tracks.url ELSE excluded.url END,
   file_name=excluded.file_name,
   size=excluded.size,
   mtime=excluded.mtime,
@@ -100,11 +101,140 @@ ON CONFLICT(rel_path) DO UPDATE SET
   updated_at=excluded.updated_at
 `
 
-function trackHasFileMeta(t) {
-  return Boolean(
-    (t?.meta?.genre && parseTrackGenres(t.meta.genre).length > 0) ||
-      t?.meta?.releaseDate,
+function trackFilePath(track) {
+  return track.filePath || track.relPath
+}
+
+function upsertTrackRow(db, track, musicRoot, statements) {
+  const { insTrack, insFts, insFile } = statements
+  const filePath = trackFilePath(track)
+  const moods = track.meta?.moods
+  insTrack.run({
+    id: track.id || track.relPath,
+    rel_path: track.relPath,
+    file_path: filePath,
+    album_id: track.albumId,
+    title: track.title,
+    artist_name: track.artist,
+    album_name: track.album,
+    genre: track.meta?.genre || null,
+    release_date: track.meta?.releaseDate || null,
+    lyrics: track.meta?.lyrics || null,
+    moods_json: moods?.length ? JSON.stringify(moods) : null,
+    duration_ms: track.meta?.durationMs ?? null,
+    track_number: track.meta?.trackNumber ?? null,
+    disc_number: track.meta?.discNumber ?? null,
+    source: track.meta?.source || null,
+    url: track.meta?.url || null,
+    file_name: track.meta?.fileName || path.basename(filePath),
+    size: track.meta?.size ?? null,
+    mtime: track.meta?.mtime ?? null,
+    loose: track.loose ? 1 : 0,
+    added_at: track.addedAt || null,
+    updated_at: track.updatedAt || Date.now(),
+    user_edited: 0,
+  })
+  db.prepare("DELETE FROM tracks_fts WHERE rel_path = ?").run(track.relPath)
+  insFts.run(
+    track.title,
+    track.artist,
+    track.album,
+    track.meta?.genre || "",
+    track.relPath,
   )
+  try {
+    const full = path.join(musicRoot, filePath.replaceAll("/", path.sep))
+    if (existsSync(full)) {
+      const st = statSync(full)
+      insFile.run(filePath, st.size, Math.round(st.mtimeMs * 1e6))
+    }
+  } catch {
+    /* ok */
+  }
+}
+
+function upsertAlbumRow(db, album, statements) {
+  const { insAlbum, insExpected } = statements
+  insAlbum.run({
+    id: album.id,
+    artist_id: album.artistId,
+    folder_rel_path: album.relPath,
+    name: album.name,
+    title: album.title || null,
+    release_date: album.releaseDate || null,
+    genre: album.genre || null,
+    label: album.label || null,
+    country: album.country || null,
+    musicbrainz_release_id: album.musicbrainzReleaseId || null,
+    expected_track_count: album.expectedTrackCount ?? null,
+    cover_rel_path: album.coverRelPath || null,
+    cover_art_id: album.coverArtId || null,
+    has_cover: album.hasCover ? 1 : 0,
+    has_album_meta: album.hasAlbumMeta ? 1 : 0,
+    has_track_meta: album.hasTrackMeta ? 1 : 0,
+    tracks_without_file_meta_count: album.tracksWithoutFileMetaCount || 0,
+    loose: album.loose ? 1 : 0,
+    track_count: album.trackCount || 0,
+    added_at: album.addedAt || null,
+    updated_at: album.updatedAt || Date.now(),
+    user_edited: 0,
+  })
+  db.prepare("DELETE FROM album_expected_tracks WHERE album_id = ?").run(album.id)
+  if (Array.isArray(album.expectedTracks)) {
+    for (const row of album.expectedTracks) {
+      if (!row?.title) continue
+      insExpected.run(
+        album.id,
+        Number.isFinite(Number(row.disc)) ? Number(row.disc) : 1,
+        Number.isFinite(Number(row.position)) ? Number(row.position) : null,
+        String(row.title).trim(),
+      )
+    }
+  }
+}
+
+function upsertArtistRow(db, artist, insArtist) {
+  insArtist.run({
+    id: artist.id,
+    name: artist.name,
+    release_date: artist.releaseDate || null,
+    cover_rel_path: artist.coverRelPath || null,
+    cover_art_id: artist.coverArtId || null,
+    album_count: artist.albumCount || 0,
+    track_count: artist.trackCount || 0,
+    albums_without_file_meta_count: artist.albumsWithoutFileMetaCount || 0,
+    tracks_without_file_meta_count: artist.tracksWithoutFileMetaCount || 0,
+    added_at: artist.addedAt || null,
+    updated_at: artist.updatedAt || Date.now(),
+  })
+}
+
+function removeTrackByFilePath(db, filePath) {
+  const row = db
+    .prepare("SELECT rel_path FROM tracks WHERE file_path = ? OR rel_path = ? LIMIT 1")
+    .get(filePath, filePath)
+  if (!row) return null
+  db.prepare("DELETE FROM tracks_fts WHERE rel_path = ?").run(row.rel_path)
+  db.prepare("DELETE FROM tracks WHERE rel_path = ?").run(row.rel_path)
+  db.prepare("DELETE FROM files WHERE rel_path = ?").run(filePath)
+  return row.rel_path
+}
+
+function pruneEmptyAlbumsForArtists(db, artistIds) {
+  for (const artistId of artistIds) {
+    const albums = db.prepare("SELECT id FROM albums WHERE artist_id = ?").all(artistId)
+    for (const al of albums) {
+      const count = db.prepare("SELECT COUNT(*) AS c FROM tracks WHERE album_id = ?").get(al.id)
+      if (!count?.c) {
+        db.prepare("DELETE FROM album_expected_tracks WHERE album_id = ?").run(al.id)
+        db.prepare("DELETE FROM albums WHERE id = ?").run(al.id)
+      }
+    }
+    const ac = db.prepare("SELECT COUNT(*) AS c FROM albums WHERE artist_id = ?").get(artistId)
+    if (!ac?.c) {
+      db.prepare("DELETE FROM artists WHERE id = ?").run(artistId)
+    }
+  }
 }
 
 /**
@@ -194,47 +324,7 @@ export async function persistLibraryIndexToDb(libraryRoot, index, opts = {}) {
 
     for (const track of index.tracks || []) {
       seenTracks.add(track.relPath)
-      const moods = track.meta?.moods
-      insTrack.run({
-        id: track.id || track.relPath,
-        rel_path: track.relPath,
-        album_id: track.albumId,
-        title: track.title,
-        artist_name: track.artist,
-        album_name: track.album,
-        genre: track.meta?.genre || null,
-        release_date: track.meta?.releaseDate || null,
-        lyrics: track.meta?.lyrics || null,
-        moods_json: moods?.length ? JSON.stringify(moods) : null,
-        duration_ms: track.meta?.durationMs ?? null,
-        track_number: track.meta?.trackNumber ?? null,
-        disc_number: track.meta?.discNumber ?? null,
-        source: track.meta?.source || null,
-        url: track.meta?.url || null,
-        file_name: track.meta?.fileName || path.basename(track.relPath),
-        size: track.meta?.size ?? null,
-        mtime: track.meta?.mtime ?? null,
-        loose: track.loose ? 1 : 0,
-        added_at: track.addedAt || null,
-        updated_at: track.updatedAt || Date.now(),
-        user_edited: trackHasFileMeta(track) ? 0 : 0,
-      })
-      insFts.run(
-        track.title,
-        track.artist,
-        track.album,
-        track.meta?.genre || "",
-        track.relPath,
-      )
-      try {
-        const full = path.join(musicRoot, track.relPath.replaceAll("/", path.sep))
-        if (existsSync(full)) {
-          const st = statSync(full)
-          insFile.run(track.relPath, st.size, Math.round(st.mtimeMs * 1e6))
-        }
-      } catch {
-        /* ok */
-      }
+      upsertTrackRow(db, track, musicRoot, { insTrack, insFts, insFile })
     }
 
     if (!opts.preserveUserEdited) {
@@ -263,6 +353,7 @@ export async function persistLibraryIndexToDb(libraryRoot, index, opts = {}) {
         bootstrapped_at = @at,
         music_root = @root,
         last_full_scan_at = @at,
+        last_incremental_at = @at,
         epoch = epoch + 1
       WHERE id = 1`,
     ).run({
@@ -278,6 +369,83 @@ export async function persistLibraryIndexToDb(libraryRoot, index, opts = {}) {
   }
 }
 
+/**
+ * Persiste un aggiornamento parziale (scan incrementale).
+ * @param {string} libraryRoot
+ * @param {object} index
+ * @param {{ removedPaths?: string[] }} opts
+ */
+export async function persistIncrementalToDb(libraryRoot, index, opts = {}) {
+  const musicRoot = path.resolve(String(libraryRoot || index.musicRoot || ""))
+  const removedPaths = opts.removedPaths || []
+  const touchedArtistIds = new Set()
+
+  withLibraryDbTransaction(musicRoot, (db) => {
+    const insArtist = db.prepare(insertArtist)
+    const insAlbum = db.prepare(insertAlbum)
+    const insTrack = db.prepare(insertTrack)
+    const insExpected = db.prepare(
+      "INSERT INTO album_expected_tracks (album_id, disc, position, title) VALUES (?, ?, ?, ?)",
+    )
+    const insFts = db.prepare(
+      "INSERT INTO tracks_fts (title, artist_name, album_name, genre, rel_path) VALUES (?, ?, ?, ?, ?)",
+    )
+    const insFile = db.prepare(
+      "INSERT INTO files (rel_path, size, mtime_ns) VALUES (?, ?, ?) ON CONFLICT(rel_path) DO UPDATE SET size=excluded.size, mtime_ns=excluded.mtime_ns",
+    )
+    const stmts = { insAlbum, insExpected, insTrack, insFts, insFile }
+
+    for (const fp of removedPaths) {
+      removeTrackByFilePath(db, fp)
+    }
+
+    for (const artist of index.artists || []) {
+      touchedArtistIds.add(artist.id)
+      upsertArtistRow(db, artist, insArtist)
+    }
+    for (const album of index.albums || []) {
+      touchedArtistIds.add(album.artistId)
+      upsertAlbumRow(db, album, stmts)
+    }
+    for (const track of index.tracks || []) {
+      touchedArtistIds.add(track.artist)
+      upsertTrackRow(db, track, musicRoot, stmts)
+    }
+
+    pruneEmptyAlbumsForArtists(db, [...touchedArtistIds])
+
+    db.prepare(
+      `UPDATE library_state SET
+        bootstrapped_at = COALESCE(bootstrapped_at, @at),
+        music_root = @root,
+        last_incremental_at = @at,
+        epoch = epoch + 1
+      WHERE id = 1`,
+    ).run({
+      at: new Date().toISOString(),
+      root: musicRoot,
+    })
+  })
+
+  for (const album of index.albums || []) {
+    if (album.coverRelPath && album.hasCover) {
+      await registerFolderCoverArtwork(musicRoot, album.id, album.coverRelPath).catch(() => {})
+    }
+  }
+}
+
+export function getLibraryScanState(libraryRoot) {
+  const db = getLibraryDb(libraryRoot)
+  const row = db.prepare(
+    "SELECT epoch, last_incremental_at, last_full_scan_at FROM library_state WHERE id = 1",
+  ).get()
+  return {
+    indexEpoch: Number(row?.epoch) || 0,
+    lastIncrementalAt: row?.last_incremental_at || null,
+    lastFullScanAt: row?.last_full_scan_at || null,
+  }
+}
+
 /** @param {string} libraryRoot */
 export function buildLibraryIndexFromDb(libraryRoot) {
   const db = getLibraryDb(libraryRoot)
@@ -285,7 +453,13 @@ export function buildLibraryIndexFromDb(libraryRoot) {
 
   const artistRows = db.prepare("SELECT * FROM artists ORDER BY name COLLATE NOCASE").all()
   const albumRows = db.prepare("SELECT * FROM albums ORDER BY release_date, name").all()
-  const trackRows = db.prepare("SELECT * FROM tracks").all()
+  const trackRows = db
+    .prepare(
+      `SELECT t.*, a.folder_rel_path AS album_folder_rel_path
+       FROM tracks t
+       JOIN albums a ON a.id = t.album_id`,
+    )
+    .all()
 
   const trackObjsByAlbum = new Map()
   for (const row of trackRows) {

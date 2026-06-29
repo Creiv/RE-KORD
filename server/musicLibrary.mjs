@@ -6,16 +6,26 @@ import { loadAlbumJsonMetaFromDir, loadTrackJsonMetaMapFromDir } from "./albumIn
 import { orderAlbumTrackList } from "./albumExpectedOrder.mjs"
 import { getAudioFileDurationMs } from "./audioDuration.mjs"
 import { parseTrackGenres } from "./genres.mjs"
+import { readAudioTags } from "./audioTags.mjs"
+import {
+  classifyFolderNode,
+  DEFAULT_LAYOUT_CONFIG,
+  layoutAlbumFolderName,
+  LOOSE_ALBUM_FOLDER,
+  loadLibraryLayout,
+  resolveTrackIdentity,
+} from "./libraryLayout.mjs"
 
 const AUDIO = /\.(mp3|flac|m4a|ogg|opus|wav|aac|webm)$/i
-const EXCLUDE = new Set([
+export const LIBRARY_EXCLUDE = new Set([
   "kord",
   "node_modules",
   ".git",
   ".trash",
   ".wpp",
-  ".kord",
+  ".rekord",
 ])
+const EXCLUDE = LIBRARY_EXCLUDE
 const COVER_FILES = [
   "cover.jpg",
   "folder.jpg",
@@ -57,22 +67,22 @@ function hasAudio(name) {
   return AUDIO.test(name)
 }
 
-function trackHasFileMeta(t) {
+export function trackHasFileMeta(t) {
   return Boolean(
     (t?.meta?.genre && parseTrackGenres(t.meta.genre).length > 0) ||
       t?.meta?.releaseDate,
   )
 }
 
-function relify(parts) {
+export function relify(parts) {
   return parts.filter(Boolean).join("/").replaceAll(path.sep, "/")
 }
 
-function albumKey(artistName, albumName) {
+export function albumKey(artistName, albumName) {
   return `${artistName}::${albumName}`
 }
 
-function trackFromFile({
+export function trackFromFile({
   artistName,
   albumFolderName,
   albumDisplayName,
@@ -82,21 +92,45 @@ function trackFromFile({
   fileDurationMs,
   albumMeta,
   loose,
+  enrichDuration = true,
+  existingDurationMs = null,
+  readTags = false,
+  tagData = null,
 }) {
-  const relPath = relify([artistName, albumFolderName, fileName])
+  const filePath = loose
+    ? relify([artistName, fileName])
+    : relify([artistName, albumFolderName, fileName])
+  const relPath = loose
+    ? relify([artistName, layoutAlbumFolderName(LOOSE_ALBUM_FOLDER, true), fileName])
+    : filePath
   const fromFile = fileName.replace(AUDIO, "").trim() || fileName
   const tOverride =
     trackMeta?.title && String(trackMeta.title).trim()
       ? String(trackMeta.title).trim()
       : null
-  const title = tOverride || fromFile
+  let title = tOverride || fromFile
+  if (tagData?.title && !tOverride) title = tagData.title
+
   const st = statSync(fullPath)
   const trackNumberGuess = fromFile.match(/^\d{1,2}/)
+  let durationMs = null
+  if (enrichDuration) {
+    durationMs = numOrNull(tagData?.durationMs ?? fileDurationMs)
+  } else if (existingDurationMs != null) {
+    durationMs = numOrNull(existingDurationMs)
+  } else {
+    durationMs = numOrNull(fileDurationMs)
+  }
+
   return {
     id: relPath,
     title,
     relPath,
-    artist: artistName,
+    filePath,
+    albumFolderRelPath: loose
+      ? relify([artistName])
+      : relify([artistName, albumFolderName]),
+    artist: tagData?.artist || artistName,
     album: albumDisplayName || albumFolderName,
     albumId: albumKey(artistName, albumFolderName),
     meta: {
@@ -104,15 +138,17 @@ function trackFromFile({
       size: numOrNull(st.size),
       mtime: numOrNull(st.mtimeMs),
       releaseDate: trackMeta?.releaseDate || null,
-      genre: trackMeta?.genre || null,
+      genre: trackMeta?.genre || tagData?.genre || null,
       lyrics:
         trackMeta?.lyrics != null && String(trackMeta.lyrics).trim()
           ? String(trackMeta.lyrics).trim()
           : null,
       moods: [],
-      durationMs: numOrNull(fileDurationMs),
+      durationMs,
       trackNumber: numOrNull(
-        trackMeta?.trackNumber || (trackNumberGuess ? Number(trackNumberGuess[0]) : null),
+        trackMeta?.trackNumber ||
+          tagData?.trackNumber ||
+          (trackNumberGuess ? Number(trackNumberGuess[0]) : null),
       ),
       discNumber: numOrNull(trackMeta?.discNumber),
       source: trackMeta?.source || null,
@@ -149,18 +185,39 @@ async function entryIsAudioInDir(entry, dir) {
   return false
 }
 
-async function readAlbumTracks(artistName, albumFolderName, albumDir, albumMeta) {
+async function resolveDuration(fullPath, opts) {
+  if (opts.enrichDuration === false) return null
+  return getAudioFileDurationMs(fullPath)
+}
+
+async function resolveTagData(fullPath, opts) {
+  if (!opts.readTags) return null
+  return readAudioTags(fullPath)
+}
+
+export async function readAlbumTracks(
+  artistName,
+  albumFolderName,
+  albumDir,
+  albumMeta,
+  opts = {},
+) {
   const albumDisplayName =
     albumMeta?.title && String(albumMeta.title).trim()
       ? String(albumMeta.title).trim()
       : albumFolderName
   const trackMetaMap = await loadTrackJsonMetaMapFromDir(albumDir)
   const entries = await fs.readdir(albumDir, { withFileTypes: true })
+  const existingByFile = opts.existingDurations || null
   const tracks = []
   for (const entry of entries) {
     if (!(await entryIsAudioInDir(entry, albumDir))) continue
     const fullPath = path.join(albumDir, entry.name)
-    const fileDurationMs = await getAudioFileDurationMs(fullPath)
+    const filePath = relify([artistName, albumFolderName, entry.name])
+    const [fileDurationMs, tagData] = await Promise.all([
+      resolveDuration(fullPath, opts),
+      resolveTagData(fullPath, opts),
+    ])
     tracks.push(
       trackFromFile({
         artistName,
@@ -170,31 +227,42 @@ async function readAlbumTracks(artistName, albumFolderName, albumDir, albumMeta)
         fullPath,
         trackMeta: trackMetaMap?.[entry.name] || null,
         fileDurationMs,
+        tagData,
         albumMeta,
+        enrichDuration: opts.enrichDuration !== false,
+        existingDurationMs: existingByFile?.get(filePath) ?? null,
       }),
     )
   }
   return orderAlbumTrackList(tracks)
 }
 
-async function readLooseTracks(artistName, artistDir) {
+export async function readLooseTracks(artistName, artistDir, opts = {}) {
   const entries = await fs.readdir(artistDir, { withFileTypes: true })
+  const existingByFile = opts.existingDurations || null
   const tracks = []
   for (const entry of entries) {
     if (!(await entryIsAudioInDir(entry, artistDir))) continue
     const fullPath = path.join(artistDir, entry.name)
-    const fileDurationMs = await getAudioFileDurationMs(fullPath)
+    const filePath = relify([artistName, entry.name])
+    const [fileDurationMs, tagData] = await Promise.all([
+      resolveDuration(fullPath, opts),
+      resolveTagData(fullPath, opts),
+    ])
     tracks.push(
       trackFromFile({
         artistName,
-        albumFolderName: "Tracce",
-        albumDisplayName: "Tracce",
+        albumFolderName: LOOSE_ALBUM_FOLDER,
+        albumDisplayName: LOOSE_ALBUM_FOLDER,
         fileName: entry.name,
         fullPath,
         trackMeta: null,
         fileDurationMs,
+        tagData,
         albumMeta: null,
         loose: true,
+        enrichDuration: opts.enrichDuration !== false,
+        existingDurationMs: existingByFile?.get(filePath) ?? null,
       }),
     )
   }
@@ -202,122 +270,117 @@ async function readLooseTracks(artistName, artistDir) {
   return tracks
 }
 
-export function isAudioFile(name) {
-  return hasAudio(name)
-}
-
-export function coverCandidates() {
-  return [...COVER_FILES]
-}
-
-export async function buildLibraryIndex(musicRoot) {
-  const top = await fs.readdir(musicRoot, { withFileTypes: true })
-  const artists = []
-  const albums = []
-  const tracks = []
-
-  for (const entry of top) {
-    if (!entry.isDirectory() || entry.name.startsWith(".") || EXCLUDE.has(entry.name)) continue
-    const artistDir = path.join(musicRoot, entry.name)
-    const subs = await fs.readdir(artistDir, { withFileTypes: true })
-    const artistAlbums = []
-    const artistLooseTracks = await readLooseTracks(entry.name, artistDir)
-
-    for (const sub of subs) {
-      if (!sub.isDirectory() || sub.name.startsWith(".")) continue
-      const albumDir = path.join(artistDir, sub.name)
-      const albumMeta = await loadAlbumJsonMetaFromDir(albumDir)
-      const albumDisplayName =
-        albumMeta?.title && String(albumMeta.title).trim()
-          ? String(albumMeta.title).trim()
-          : sub.name
-      const albumTracks = await readAlbumTracks(entry.name, sub.name, albumDir, albumMeta)
-      if (!albumTracks.length) continue
-      const albumRelPath = relify([entry.name, sub.name])
-      const st = statSync(albumDir)
-      const coverRelPath = getCoverForAlbumDir(albumDir, albumRelPath)
-      const albumItem = {
-        id: albumKey(entry.name, sub.name),
-        artistId: entry.name,
-        artist: entry.name,
-        name: albumDisplayName,
-        relPath: albumRelPath,
-        trackCount: albumTracks.length,
-        coverRelPath,
-        title: albumMeta?.title || null,
-        releaseDate: albumMeta?.releaseDate || null,
-        genre: albumMeta?.genre || null,
-        label: albumMeta?.label || null,
-        country: albumMeta?.country || null,
-        musicbrainzReleaseId: albumMeta?.musicbrainzReleaseId || null,
-        expectedTrackCount:
-          typeof albumMeta?.expectedTrackCount === "number"
-            ? albumMeta.expectedTrackCount
-            : Array.isArray(albumMeta?.expectedTracks)
-              ? albumMeta.expectedTracks.length
-              : null,
-        expectedTracks: Array.isArray(albumMeta?.expectedTracks)
-          ? albumMeta.expectedTracks
+function buildAlbumItem({
+  artistName,
+  albumFolderName,
+  albumDisplayName,
+  albumDir,
+  albumTracks,
+  albumMeta,
+  loose,
+}) {
+  const albumRelPath = loose
+    ? relify([artistName])
+    : relify([artistName, albumFolderName])
+  const st = statSync(albumDir)
+  const coverRelPath = loose ? null : getCoverForAlbumDir(albumDir, albumRelPath)
+  return {
+    id: albumKey(artistName, loose ? LOOSE_ALBUM_FOLDER : albumFolderName),
+    artistId: artistName,
+    artist: artistName,
+    name: albumDisplayName,
+    relPath: albumRelPath,
+    trackCount: albumTracks.length,
+    coverRelPath,
+    title: albumMeta?.title || null,
+    releaseDate: albumMeta?.releaseDate || null,
+    genre: albumMeta?.genre || null,
+    label: albumMeta?.label || null,
+    country: albumMeta?.country || null,
+    musicbrainzReleaseId: albumMeta?.musicbrainzReleaseId || null,
+    expectedTrackCount:
+      typeof albumMeta?.expectedTrackCount === "number"
+        ? albumMeta.expectedTrackCount
+        : Array.isArray(albumMeta?.expectedTracks)
+          ? albumMeta.expectedTracks.length
           : null,
-        hasCover: Boolean(coverRelPath),
-        hasAlbumMeta: Boolean(albumMeta),
-        hasTrackMeta: albumTracks.some(trackHasFileMeta),
-        tracksWithoutFileMetaCount: albumTracks.filter(
-          (track) => !trackHasFileMeta(track),
-        ).length,
-        loose: false,
-        addedAt: numOrNull(st.birthtimeMs || st.ctimeMs || st.mtimeMs),
-        updatedAt: numOrNull(st.mtimeMs),
-        tracks: albumTracks.map((track) => track.relPath),
-      }
-      artistAlbums.push(albumItem)
-      albums.push(albumItem)
-      tracks.push(...albumTracks)
-    }
+    expectedTracks: Array.isArray(albumMeta?.expectedTracks)
+      ? albumMeta.expectedTracks
+      : null,
+    hasCover: Boolean(coverRelPath),
+    hasAlbumMeta: Boolean(albumMeta),
+    hasTrackMeta: albumTracks.some(trackHasFileMeta),
+    tracksWithoutFileMetaCount: albumTracks.filter((track) => !trackHasFileMeta(track)).length,
+    loose: Boolean(loose),
+    addedAt: numOrNull(st.birthtimeMs || st.ctimeMs || st.mtimeMs),
+    updatedAt: numOrNull(st.mtimeMs),
+    tracks: albumTracks.map((track) => track.relPath),
+  }
+}
 
-    if (artistLooseTracks.length) {
-      const looseAlbum = {
-        id: albumKey(entry.name, "Tracce"),
-        artistId: entry.name,
-        artist: entry.name,
-        name: "Tracce",
-        relPath: relify([entry.name]),
-        trackCount: artistLooseTracks.length,
-        coverRelPath: null,
-        releaseDate: null,
-        label: null,
-        country: null,
-        musicbrainzReleaseId: null,
-        expectedTrackCount: null,
-        expectedTracks: null,
-        hasCover: false,
-        hasAlbumMeta: false,
-        hasTrackMeta: false,
-        tracksWithoutFileMetaCount: artistLooseTracks.filter(
-          (track) => !trackHasFileMeta(track),
-        ).length,
-        loose: true,
-        addedAt: artistLooseTracks[0]?.addedAt || null,
-        updatedAt: artistLooseTracks[0]?.updatedAt || null,
-        tracks: artistLooseTracks.map((track) => track.relPath),
-      }
-      artistAlbums.unshift(looseAlbum)
-      albums.push(looseAlbum)
-      tracks.push(...artistLooseTracks)
-    }
+async function buildArtistBranch(artistName, artistDir, opts = {}) {
+  const subs = await fs.readdir(artistDir, { withFileTypes: true })
+  const artistAlbums = []
+  const allTracks = []
+  const artistLooseTracks = await readLooseTracks(artistName, artistDir, opts)
 
-    artistAlbums.sort((a, b) => cmpByDateThenName(a, b))
-    if (!artistAlbums.length) continue
-    const albumsWithoutFileMetaCount = artistAlbums.filter(
-      (a) => !a.loose && !a.hasAlbumMeta,
-    ).length
-    const tracksWithoutFileMetaCount = artistAlbums.reduce(
-      (sum, a) => sum + (a.tracksWithoutFileMetaCount || 0),
-      0,
+  for (const sub of subs) {
+    if (!sub.isDirectory() || sub.name.startsWith(".")) continue
+    const albumDir = path.join(artistDir, sub.name)
+    const albumMeta = await loadAlbumJsonMetaFromDir(albumDir)
+    const albumDisplayName =
+      albumMeta?.title && String(albumMeta.title).trim()
+        ? String(albumMeta.title).trim()
+        : sub.name
+    const albumTracks = await readAlbumTracks(
+      artistName,
+      sub.name,
+      albumDir,
+      albumMeta,
+      opts,
     )
-    artists.push({
-      id: entry.name,
-      name: entry.name,
+    if (!albumTracks.length) continue
+    const albumItem = buildAlbumItem({
+      artistName,
+      albumFolderName: sub.name,
+      albumDisplayName,
+      albumDir,
+      albumTracks,
+      albumMeta,
+      loose: false,
+    })
+    artistAlbums.push(albumItem)
+    allTracks.push(...albumTracks)
+  }
+
+  if (artistLooseTracks.length) {
+    const looseAlbum = buildAlbumItem({
+      artistName,
+      albumFolderName: LOOSE_ALBUM_FOLDER,
+      albumDisplayName: LOOSE_ALBUM_FOLDER,
+      albumDir: artistDir,
+      albumTracks: artistLooseTracks,
+      albumMeta: null,
+      loose: true,
+    })
+    artistAlbums.unshift(looseAlbum)
+    allTracks.push(...artistLooseTracks)
+  }
+
+  artistAlbums.sort((a, b) => cmpByDateThenName(a, b))
+  if (!artistAlbums.length) return null
+
+  const albumsWithoutFileMetaCount = artistAlbums.filter(
+    (a) => !a.loose && !a.hasAlbumMeta,
+  ).length
+  const tracksWithoutFileMetaCount = artistAlbums.reduce(
+    (sum, a) => sum + (a.tracksWithoutFileMetaCount || 0),
+    0,
+  )
+  return {
+    artist: {
+      id: artistName,
+      name: artistName,
       albumCount: artistAlbums.length,
       trackCount: artistAlbums.reduce((sum, album) => sum + album.trackCount, 0),
       releaseDate: artistAlbums[0]?.releaseDate || null,
@@ -325,14 +388,90 @@ export async function buildLibraryIndex(musicRoot) {
       albums: artistAlbums.map((album) => album.id),
       albumsWithoutFileMetaCount,
       tracksWithoutFileMetaCount,
+    },
+    albums: artistAlbums,
+    tracks: allTracks,
+  }
+}
+
+async function buildFlatTracksAtRoot(musicRoot, layout, opts = {}) {
+  const entries = await fs.readdir(musicRoot, { withFileTypes: true })
+  const byAlbum = new Map()
+  for (const entry of entries) {
+    if (!(await entryIsAudioInDir(entry, musicRoot))) continue
+    const fullPath = path.join(musicRoot, entry.name)
+    const tagData = opts.readTags ? await readAudioTags(fullPath) : null
+    const identity = await resolveTrackIdentity(layout, {
+      fileName: entry.name,
+      filePath: entry.name,
+      parentRel: "",
+      folderArtist: null,
+      folderAlbum: null,
+      tags: tagData,
     })
+    const artistName = identity.artist
+    const albumFolderName = layoutAlbumFolderName(identity.album, false)
+    const key = albumKey(artistName, albumFolderName)
+    const fileDurationMs =
+      opts.enrichDuration === false ? null : await getAudioFileDurationMs(fullPath)
+    const track = trackFromFile({
+      artistName,
+      albumFolderName,
+      albumDisplayName: identity.album,
+      fileName: entry.name,
+      fullPath,
+      trackMeta: null,
+      fileDurationMs,
+      tagData,
+      albumMeta: null,
+      loose: false,
+      enrichDuration: opts.enrichDuration !== false,
+    })
+    const list = byAlbum.get(key) || { artistName, albumFolderName, albumDisplayName: identity.album, tracks: [] }
+    list.tracks.push(track)
+    byAlbum.set(key, list)
   }
 
-  artists.sort((a, b) => cmpByDateThenName(a, b))
-  albums.sort((a, b) => cmpByDateThenName(a, b))
-  tracks.sort((a, b) => cmpByDateThenName(a, b))
+  const artists = []
+  const albums = []
+  const tracks = []
+  for (const group of byAlbum.values()) {
+    const albumDir = musicRoot
+    const albumItem = buildAlbumItem({
+      artistName: group.artistName,
+      albumFolderName: group.albumFolderName,
+      albumDisplayName: group.albumDisplayName,
+      albumDir,
+      albumTracks: group.tracks,
+      albumMeta: null,
+      loose: false,
+    })
+    albums.push(albumItem)
+    tracks.push(...group.tracks)
+    let artist = artists.find((a) => a.id === group.artistName)
+    if (!artist) {
+      artist = {
+        id: group.artistName,
+        name: group.artistName,
+        albumCount: 0,
+        trackCount: 0,
+        releaseDate: null,
+        coverRelPath: null,
+        albums: [],
+        albumsWithoutFileMetaCount: 0,
+        tracksWithoutFileMetaCount: 0,
+      }
+      artists.push(artist)
+    }
+    artist.albums.push(albumItem.id)
+    artist.albumCount += 1
+    artist.trackCount += group.tracks.length
+  }
+  return { artists, albums, tracks }
+}
 
-  const stats = {
+function computeIndexStats(artists, albums, tracks) {
+  return {
     artistCount: artists.length,
     albumCount: albums.length,
     trackCount: tracks.length,
@@ -345,14 +484,139 @@ export async function buildLibraryIndex(musicRoot) {
     ).length,
     looseAlbumCount: albums.filter((album) => album.loose).length,
   }
+}
 
+function mergeIndexParts(parts) {
+  const artistMap = new Map()
+  const albumMap = new Map()
+  const trackMap = new Map()
+  for (const part of parts) {
+    if (part.artist) artistMap.set(part.artist.id, part.artist)
+    for (const a of part.artists || []) artistMap.set(a.id, a)
+    for (const al of part.albums || []) albumMap.set(al.id, al)
+    for (const t of part.tracks || []) trackMap.set(t.relPath, t)
+  }
+  const artists = [...artistMap.values()].sort((a, b) => cmpByDateThenName(a, b))
+  const albums = [...albumMap.values()].sort((a, b) => cmpByDateThenName(a, b))
+  const tracks = [...trackMap.values()].sort((a, b) => cmpByDateThenName(a, b))
   return {
-    musicRoot,
     artists,
     albums,
     tracks,
-    stats,
+    stats: computeIndexStats(artists, albums, tracks),
   }
+}
+
+/**
+ * Indicizza solo gli scope indicati (artist id o album relPath).
+ * @param {string} musicRoot
+ * @param {string[]} scopes es. ["Artist One", "Artist One/Album"]
+ * @param {object} opts
+ */
+export async function buildPartialIndex(musicRoot, scopes, opts = {}) {
+  const root = path.resolve(String(musicRoot || ""))
+  const layout = opts.layout || (await loadLibraryLayout(root))
+  const scanOpts = {
+    enrichDuration: opts.enrichDuration !== false,
+    readTags: Boolean(opts.readTags),
+    existingDurations: opts.existingDurations || null,
+  }
+  const parts = []
+
+  for (const scope of scopes) {
+    const rel = String(scope || "").replace(/\\/g, "/").replace(/^\/+|\/+$/g, "")
+    if (!rel) continue
+    const partsSeg = rel.split("/").filter(Boolean)
+    if (partsSeg.length === 1) {
+      const artistDir = path.join(root, partsSeg[0])
+      if (!existsSync(artistDir)) continue
+      const branch = await buildArtistBranch(partsSeg[0], artistDir, scanOpts)
+      if (branch) parts.push(branch)
+    } else if (partsSeg.length >= 2) {
+      const artistName = partsSeg[0]
+      const albumName = partsSeg[1]
+      const albumDir = path.join(root, artistName, albumName)
+      if (!existsSync(albumDir)) continue
+      const albumMeta = await loadAlbumJsonMetaFromDir(albumDir)
+      const albumDisplayName =
+        albumMeta?.title && String(albumMeta.title).trim()
+          ? String(albumMeta.title).trim()
+          : albumName
+      const albumTracks = await readAlbumTracks(
+        artistName,
+        albumName,
+        albumDir,
+        albumMeta,
+        scanOpts,
+      )
+      if (!albumTracks.length) continue
+      const albumItem = buildAlbumItem({
+        artistName,
+        albumFolderName: albumName,
+        albumDisplayName,
+        albumDir,
+        albumTracks,
+        albumMeta,
+        loose: false,
+      })
+      const branch = await buildArtistBranch(artistName, path.join(root, artistName), scanOpts)
+      parts.push({
+        artist: branch?.artist || {
+          id: artistName,
+          name: artistName,
+          albumCount: 1,
+          trackCount: albumTracks.length,
+          releaseDate: albumItem.releaseDate,
+          coverRelPath: albumItem.coverRelPath,
+          albums: [albumItem.id],
+          albumsWithoutFileMetaCount: albumItem.hasAlbumMeta ? 0 : 1,
+          tracksWithoutFileMetaCount: albumItem.tracksWithoutFileMetaCount,
+        },
+        albums: [albumItem],
+        tracks: albumTracks,
+      })
+    }
+  }
+
+  const merged = mergeIndexParts(parts)
+  return { musicRoot: root, ...merged }
+}
+
+export function isAudioFile(name) {
+  return hasAudio(name)
+}
+
+export function coverCandidates() {
+  return [...COVER_FILES]
+}
+
+export async function buildLibraryIndex(musicRoot, opts = {}) {
+  const root = path.resolve(String(musicRoot || ""))
+  const layout = opts.layout || (await loadLibraryLayout(root))
+  const scanOpts = {
+    enrichDuration: opts.enrichDuration !== false,
+    readTags: Boolean(opts.readTags),
+    existingDurations: opts.existingDurations || null,
+  }
+
+  const top = await fs.readdir(root, { withFileTypes: true })
+  const nodeKind = classifyFolderNode({ entries: top, relPath: "" })
+
+  if (nodeKind === "flat" || layout.preferredLayout === "flat") {
+    const flat = await buildFlatTracksAtRoot(root, layout, scanOpts)
+    return { musicRoot: root, ...flat, stats: computeIndexStats(flat.artists, flat.albums, flat.tracks) }
+  }
+
+  const parts = []
+  for (const entry of top) {
+    if (!entry.isDirectory() || entry.name.startsWith(".") || EXCLUDE.has(entry.name)) continue
+    const artistDir = path.join(root, entry.name)
+    const branch = await buildArtistBranch(entry.name, artistDir, scanOpts)
+    if (branch) parts.push(branch)
+  }
+
+  const merged = mergeIndexParts(parts)
+  return { musicRoot: root, ...merged }
 }
 
 export function toLegacyLibrary(index) {
@@ -438,3 +702,5 @@ export function buildDashboard(index, userState) {
     qualityAlerts,
   }
 }
+
+export { DEFAULT_LAYOUT_CONFIG }

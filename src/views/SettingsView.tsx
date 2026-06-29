@@ -25,6 +25,7 @@ import {
   getSelectedAccountId,
   logoutRemoteAccessLogin,
   saveAppConfig,
+  probeLibraryStructure,
   setSelectedAccountId,
   startRemoteAccess,
   stopRemoteAccess,
@@ -54,6 +55,7 @@ function SettingsView() {
   const [libraryRootLabel, setLibraryRootLabel] = useState<string | null>(null);
   const [libraryPath, setLibraryPath] = useState("");
   const [libraryBusy, setLibraryBusy] = useState(false);
+  const [libraryProbeHint, setLibraryProbeHint] = useState<string | null>(null);
   const [libraryErr, setLibraryErr] = useState<string | null>(null);
   const [serverLocalAccess, setServerLocalAccess] = useState(() => {
     try {
@@ -833,6 +835,9 @@ function SettingsView() {
           ) : (
             <>
               <p className="subtle sm">{t("settings.libraryRootLead")}</p>
+              {libraryProbeHint ? (
+                <p className="subtle sm">{libraryProbeHint}</p>
+              ) : null}
               {libraryErr ? (
                 <p className="subtle sm warnline">{libraryErr}</p>
               ) : null}
@@ -865,8 +870,20 @@ function SettingsView() {
                     disabled={libraryBusy || !libraryPath.trim()}
                     onClick={() => {
                       setLibraryErr(null);
+                      setLibraryProbeHint(null);
                       setLibraryBusy(true);
-                      saveAppConfig({ musicRoot: libraryPath.trim() })
+                      probeLibraryStructure(libraryPath.trim())
+                        .then((probe) => {
+                          setLibraryProbeHint(
+                            t("settings.libraryProbeHint", {
+                              tracks: probe.stats.estimatedTracks ?? 0,
+                              layout:
+                                probe.candidates[0]?.layout ||
+                                "artist/album/track",
+                            }),
+                          );
+                          return saveAppConfig({ musicRoot: libraryPath.trim() });
+                        })
                         .then(() => {
                           window.location.replace(
                             new URL("/", window.location.href).href

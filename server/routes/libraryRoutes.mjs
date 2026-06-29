@@ -18,7 +18,9 @@ import {
   getArtworkRecord,
 } from "../db/queries/library.mjs";
 import { getLibraryEpoch } from "../db/index.mjs";
-import { runLibraryScan } from "../scanner/index.mjs";
+import { runLibraryScan, isLibraryScanning } from "../scanner/index.mjs";
+import { getLibraryScanState } from "../db/queries/library.mjs";
+import { probeLibraryStructure, saveLibraryLayout } from "../libraryLayout.mjs";
 import { resolveArtworkFilePath } from "../artwork/index.mjs";
 import { existsSync } from "fs";
 import path from "path";
@@ -295,10 +297,46 @@ export function registerLibraryRoutes(app) {
     try {
       const root = getMusicRoot();
       const since = Number(req.query.sinceEpoch) || 0;
-      const epoch = getLibraryEpoch(root);
+      const state = getLibraryScanState(root);
+      const epoch = state.indexEpoch;
       res.set("Cache-Control", "no-store, must-revalidate");
-      return sendOk(res, { changed: epoch !== since, indexEpoch: epoch });
+      return sendOk(res, {
+        changed: epoch !== since,
+        indexEpoch: epoch,
+        scanning: isLibraryScanning(root),
+        lastScanAt: state.lastIncrementalAt || state.lastFullScanAt || null,
+      });
     } catch (error) {
+      return sendError(res, 500, String(error?.message || error));
+    }
+  });
+
+  app.post("/api/library/probe", async (req, res) => {
+    try {
+      const root = String(req.body?.musicRoot || getMusicRoot() || "").trim();
+      if (!root) return sendError(res, 400, "musicRoot is required");
+      const report = await probeLibraryStructure(root, {
+        sampleLimit: Number(req.body?.sampleLimit) || 200,
+      });
+      return sendOk(res, report);
+    } catch (error) {
+      console.error(error);
+      return sendError(res, 500, String(error?.message || error));
+    }
+  });
+
+  app.post("/api/library/layout", async (req, res) => {
+    try {
+      const root = getMusicRoot();
+      const layout = req.body?.layout;
+      if (!layout || typeof layout !== "object") {
+        return sendError(res, 400, "layout object is required");
+      }
+      await saveLibraryLayout(root, layout);
+      await runLibraryScan(root, { full: true });
+      return sendOk(res, { ok: true, indexEpoch: getLibraryEpoch(root) });
+    } catch (error) {
+      console.error(error);
       return sendError(res, 500, String(error?.message || error));
     }
   });

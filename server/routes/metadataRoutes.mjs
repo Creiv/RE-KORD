@@ -40,6 +40,7 @@ import {
   scheduleLibraryIndexMetaRefresh,
 } from "../libraryIndexService.mjs";
 import { isAudioFile } from "../musicLibrary.mjs";
+import { resolveTrackFileRelPath, resolveAlbumFolderRelPath } from "../scanner/engine.mjs";
 import { getMusicRoot } from "../musicRootConfig.mjs";
 import {
   albumFolderFromRelPath,
@@ -363,7 +364,8 @@ export function registerMetadataRoutes(app) {
     const relPath = safeRelSeg(String(req.body?.relPath || ""));
     if (!relPath) return sendError(res, 400, "relPath is required");
     try {
-      const fullTrackPath = path.join(root, relPath.replaceAll("/", path.sep));
+      const mediaRel = resolveTrackFileRelPath(root, relPath);
+      const fullTrackPath = path.join(root, mediaRel.replaceAll("/", path.sep));
       if (
         !underRoot(fullTrackPath, root) ||
         !existsSync(fullTrackPath) ||
@@ -375,7 +377,7 @@ export function registerMetadataRoutes(app) {
       const fileName = parts[parts.length - 1];
       const artist = parts[0] || "";
       const album = parts.length >= 3 ? parts[1] : "";
-      const albumRel = albumFolderFromRelPath(relPath);
+      const albumRel = resolveAlbumFolderRelPath(root, relPath);
       if (!albumRel) return sendError(res, 400, "Invalid track path");
       const albumDir = path.join(root, albumRel.replaceAll("/", path.sep));
       if (!underRoot(albumDir, root) || !existsSync(albumDir))
@@ -438,7 +440,8 @@ export function registerMetadataRoutes(app) {
     const relPath = safeRelSeg(String(req.body?.relPath || ""));
     if (!relPath) return sendError(res, 400, "relPath is required");
     try {
-      const fullTrackPath = path.join(root, relPath.replaceAll("/", path.sep));
+      const mediaRel = resolveTrackFileRelPath(root, relPath);
+      const fullTrackPath = path.join(root, mediaRel.replaceAll("/", path.sep));
       if (
         !underRoot(fullTrackPath, root) ||
         !existsSync(fullTrackPath) ||
@@ -450,7 +453,7 @@ export function registerMetadataRoutes(app) {
       const fileName = parts[parts.length - 1];
       const artistFolder = parts[0] || "";
       const albumFolder = parts.length >= 3 ? parts[1] : "";
-      const albumRel = albumFolderFromRelPath(relPath);
+      const albumRel = resolveAlbumFolderRelPath(root, relPath);
       if (!albumRel) return sendError(res, 400, "Invalid track path");
       const albumDir = path.join(root, albumRel.replaceAll("/", path.sep));
       if (!underRoot(albumDir, root) || !existsSync(albumDir))
@@ -504,7 +507,8 @@ export function registerMetadataRoutes(app) {
       return sendError(res, 400, "patch object is required");
     }
     try {
-      const fullTrackPath = path.join(root, relPath.replaceAll("/", path.sep));
+      const mediaRel = resolveTrackFileRelPath(root, relPath);
+      const fullTrackPath = path.join(root, mediaRel.replaceAll("/", path.sep));
       if (
         !underRoot(fullTrackPath, root) ||
         !existsSync(fullTrackPath) ||
@@ -514,7 +518,7 @@ export function registerMetadataRoutes(app) {
       }
       const parts = relPath.split("/").filter(Boolean);
       const fileName = parts[parts.length - 1];
-      const albumRel = albumFolderFromRelPath(relPath);
+      const albumRel = resolveAlbumFolderRelPath(root, relPath);
       if (!albumRel) return sendError(res, 400, "Invalid track path");
       const albumDir = path.join(root, albumRel.replaceAll("/", path.sep));
       if (!underRoot(albumDir, root) || !existsSync(albumDir))

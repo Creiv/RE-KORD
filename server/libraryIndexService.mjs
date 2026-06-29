@@ -55,7 +55,7 @@ export async function getLibraryIndex(root = getMusicRoot()) {
 
 export async function invalidateLibraryIndex(root = getMusicRoot()) {
   libraryIndexFlight.delete(path.resolve(root))
-  scheduleLibraryScan(root, { full: true, debounceMs: 200 })
+  scheduleLibraryScan(root, { debounceMs: 200 })
 }
 
 /** Metadati/copertina: rescan mirato se la patch DB non basta. */

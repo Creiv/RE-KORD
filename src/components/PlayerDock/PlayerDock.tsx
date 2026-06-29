@@ -26,6 +26,7 @@ import {
   UiSkipNext,
   UiSkipPrevious,
 } from "../RekordUiIcons";
+import { isLooseTrack } from "../../lib/libraryNav";
 import { isTrackAlbumShuffleExcluded } from "../../lib/randomExclusions";
 import { formatDuration } from "../../lib/duration";
 import type { LibraryEntityDelta, LibraryTrackIndex } from "../../types";
@@ -34,6 +35,7 @@ interface PlayerDockProps {
   onGoToAscolta: () => void;
   onOpenLibraryArtist: (artist: string) => void;
   onOpenLibraryAlbum: (artist: string, album: string) => void;
+  onOpenLibraryForTrack: (track: import("../../types").EnrichedTrack) => void;
   onLibraryDelta?: (delta: LibraryEntityDelta, reconcile?: boolean) => void;
 }
 
@@ -64,6 +66,7 @@ export const PlayerDock = memo(function PlayerDock({
   onGoToAscolta,
   onOpenLibraryArtist,
   onOpenLibraryAlbum,
+  onOpenLibraryForTrack,
   onLibraryDelta,
 }: PlayerDockProps) {
   const p = usePlayer();
@@ -155,28 +158,41 @@ export const PlayerDock = memo(function PlayerDock({
                   </div>
                   {cur ? (
                     <div className="player-bar2__byline">
-                      <button
-                        type="button"
-                        className="player-bar2__crumb"
-                        title={t("player.openArtistLibTitle")}
-                        onClick={() => onOpenLibraryArtist(cur.artist)}
-                      >
-                        {cur.artist}
-                      </button>
-                      <span className="player-bar2__byline-sep" aria-hidden>
-                        {" "}
-                        ·{" "}
-                      </span>
-                      <button
-                        type="button"
-                        className="player-bar2__crumb"
-                        title={t("player.openAlbumLibTitle")}
-                        onClick={() =>
-                          onOpenLibraryAlbum(cur.artist, cur.album)
-                        }
-                      >
-                        {cur.album}
-                      </button>
+                      {isLooseTrack(cur) ? (
+                        <button
+                          type="button"
+                          className="player-bar2__crumb"
+                          title={t("player.openAlbumLibTitle")}
+                          onClick={() => onOpenLibraryForTrack(cur)}
+                        >
+                          {cur.artist}
+                        </button>
+                      ) : (
+                        <>
+                          <button
+                            type="button"
+                            className="player-bar2__crumb"
+                            title={t("player.openArtistLibTitle")}
+                            onClick={() => onOpenLibraryArtist(cur.artist)}
+                          >
+                            {cur.artist}
+                          </button>
+                          <span className="player-bar2__byline-sep" aria-hidden>
+                            {" "}
+                            ·{" "}
+                          </span>
+                          <button
+                            type="button"
+                            className="player-bar2__crumb"
+                            title={t("player.openAlbumLibTitle")}
+                            onClick={() =>
+                              onOpenLibraryAlbum(cur.artist, cur.album)
+                            }
+                          >
+                            {cur.album}
+                          </button>
+                        </>
+                      )}
                     </div>
                   ) : (
                     <span className="player-bar2__byline player-bar2__byline--idle">
