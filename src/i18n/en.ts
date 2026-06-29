@@ -293,7 +293,7 @@ export const EN: Record<string, string> = {
   "dashboard.mixEyebrow": "Instant playlist",
   "dashboard.mixHeading": "Genres & moods",
   "dashboard.mixOpenLibrary": "Open library",
-  "dashboard.mixGenresEyebrow": "Genre (optional)",
+  "dashboard.mixGenresEyebrow": "Genre",
   "dashboard.mixClearGenre": "Clear genre",
   "dashboard.mixGenreActive": "Genre filter: {{name}}",
   "dashboard.mixPlayRandom": "Shuffle play",

@@ -425,30 +425,46 @@
   gap: 0.55rem;
 }
 
-/* Tema + Personalizza affiancati su schermi larghi. */
-.settings-theme-style-row {
+/* Tema, Personalizza (se custom) e opacità vetro sulla stessa riga in desktop. */
+.settings-theme-glass-block {
+  display: grid;
+  gap: var(--space-3);
+  min-width: 0;
+}
+
+.settings-theme-glass-row {
   display: grid;
   grid-template-columns: minmax(0, 1fr);
   gap: var(--space-3);
   align-items: stretch;
+  min-width: 0;
 }
 
-.settings-theme-style-row__customize {
+.settings-theme-glass-row__theme,
+.settings-theme-glass-row__opacity {
+  min-width: 0;
+}
+
+.settings-theme-glass-row__customize {
   width: 100%;
   min-height: 42px;
   justify-self: stretch;
   box-sizing: border-box;
 }
 
-@media (min-width: 560px) {
-  .settings-theme-style-row {
-    grid-template-columns: minmax(0, 1fr) auto;
+@media (min-width: 760px) {
+  .settings-theme-glass-row {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
     align-items: end;
   }
 
-  .settings-theme-style-row__customize {
-    width: auto;
-    min-width: 9.5rem;
+  .settings-theme-glass-row--custom {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+
+  .settings-theme-glass-row__customize {
+    width: 100%;
+    min-width: 0;
   }
 }
 
@@ -517,7 +533,7 @@
 }
 
 .settings-glass-opacity__label {
-  grid-column: 1;
+  grid-column: 1 / -1;
   grid-row: 1;
   font-size: 0.82rem;
   color: var(--muted-strong);
@@ -525,7 +541,7 @@
 
 .settings-glass-opacity .settings-glass-opacity__slider,
 input.settings-glass-opacity__slider {
-  grid-column: 1 / -1;
+  grid-column: 1;
   grid-row: 2;
   width: 100%;
   max-width: none;
@@ -542,7 +558,7 @@ input.settings-glass-opacity__slider {
 
 .settings-glass-opacity__num {
   grid-column: 2;
-  grid-row: 1;
+  grid-row: 2;
   width: 4.2rem;
   justify-self: end;
   text-align: right;
@@ -559,7 +575,7 @@ input.settings-glass-opacity__slider {
 
 .settings-glass-opacity__unit {
   grid-column: 3;
-  grid-row: 1;
+  grid-row: 2;
   font-size: 0.82rem;
   color: var(--muted);
 }
@@ -607,20 +623,47 @@ input.settings-glass-opacity__slider {
 
 .account-row__text {
   display: grid;
-  gap: 0.15rem;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 0.55rem;
   min-width: 0;
 }
 
-.account-row__text strong,
-.account-row__text span {
+.account-row__name {
+  min-width: 0;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+  font-size: 0.95rem;
+  font-weight: 700;
+  letter-spacing: -0.015em;
+  line-height: 1.3;
+  color: var(--text);
 }
 
-.account-row__text span {
-  color: var(--muted);
-  font-size: 0.84rem;
+.account-row__level-pill {
+  flex: 0 0 auto;
+  font-size: 0.65rem;
+  font-weight: 750;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  line-height: 1;
+  padding: 0.32em 0.62em;
+  border-radius: 999px;
+  border: 1px solid color-mix(in srgb, var(--accent) 30%, var(--border) 70%);
+  background: color-mix(in srgb, var(--accent) 8%, var(--surface3) 92%);
+  color: color-mix(in srgb, var(--accent) 80%, var(--muted-strong) 20%);
+  white-space: nowrap;
+}
+
+.account-row.is-selected .account-row__name {
+  color: color-mix(in srgb, var(--accent) 18%, var(--text) 82%);
+}
+
+.account-row.is-selected .account-row__level-pill {
+  border-color: color-mix(in srgb, var(--accent) 44%, var(--border) 56%);
+  background: color-mix(in srgb, var(--accent) 14%, var(--surface3) 86%);
+  color: color-mix(in srgb, var(--accent) 92%, var(--text) 8%);
 }
 
 .settings-merge-block--first {

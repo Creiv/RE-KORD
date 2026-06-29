@@ -2,9 +2,16 @@
    Split da views.css (Fase 6): ordine di cascata preservato via index.css. */
 
 /* Hero — pulsante unico Ascolta / Riprendi ascolto */
+.dashboard-page__intro .hero-card--compact .hero-card__actions {
+  --dashboard-hero-btn-h: 2.75rem;
+  align-items: center;
+}
+
 .dashboard-hero-listen-btn {
-  padding: 0.65rem 1.4rem;
+  min-height: var(--dashboard-hero-btn-h);
+  padding: 0 1.4rem;
   font-size: 1rem;
+  box-sizing: border-box;
 }
 
 .dashboard-hero-listen-btn__ic {
@@ -13,10 +20,44 @@
   flex-shrink: 0;
 }
 
+.dashboard-page__intro
+  .hero-card--compact
+  .hero-card__actions
+  > .ghost-btn.dashboard-hero-shuffle-btn {
+  width: var(--dashboard-hero-btn-h);
+  height: var(--dashboard-hero-btn-h);
+  min-width: var(--dashboard-hero-btn-h);
+  min-height: var(--dashboard-hero-btn-h);
+  padding: 0;
+  border-radius: var(--radius-md);
+  box-sizing: border-box;
+  flex: 0 0 auto;
+}
+
 .dashboard-hero-shuffle-btn__ic {
-  width: 1.15rem;
-  height: 1.15rem;
+  width: 1.2rem;
+  height: 1.2rem;
   flex-shrink: 0;
+}
+
+@media (max-width: 1000px) {
+  .dashboard-page__intro .hero-card--compact .hero-card__actions {
+    flex-wrap: nowrap;
+    width: 100%;
+  }
+
+  .dashboard-page__intro
+    .hero-card--compact
+    .hero-card__actions
+    > .primary-btn.dashboard-hero-listen-btn {
+    flex: 1 1 auto;
+    width: auto;
+    min-width: 0;
+  }
+
+  .dashboard-page__intro .hero-card--compact .dashboard-hero-shuffle-btn {
+    flex: 0 0 auto;
+  }
 }
 
 .metric-card {
@@ -122,10 +163,6 @@
   flex-direction: column;
   gap: 0.6rem;
   min-width: 0;
-  padding: 0.8rem 0.85rem;
-  border-radius: var(--radius-md);
-  border: 1px solid color-mix(in srgb, var(--border) 58%, transparent);
-  background: color-mix(in srgb, var(--surface2) 42%, transparent);
 }
 
 .dashboard-mix-panel__head,
@@ -272,34 +309,19 @@
 }
 
 .dashboard-mix-genre-chips {
-  display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(min(6.5rem, 100%), 1fr));
+  display: flex;
+  flex-wrap: wrap;
   gap: 0.4rem;
-}
-
-@media (min-width: 900px) {
-  .dashboard-mix-genre-chips {
-    grid-template-columns: repeat(auto-fill, minmax(min(7.5rem, 100%), 1fr));
-  }
-}
-
-.dashboard-mix-genre-chip__ic {
-  width: 0.92rem;
-  height: 0.92rem;
-  flex-shrink: 0;
-  opacity: 0.88;
-}
-
-.dashboard-mix-genre-chip.is-on .dashboard-mix-genre-chip__ic {
-  opacity: 1;
 }
 
 .dashboard-mix-genre-chip {
   display: inline-flex;
   align-items: center;
-  gap: 0.35rem;
-  width: 100%;
-  min-width: 0;
+  justify-content: space-between;
+  gap: 0.65rem;
+  width: auto;
+  max-width: 100%;
+  min-width: min(100%, 5.5rem);
   padding: 0.36rem 0.62rem;
   border-radius: var(--radius-md);
   border: 1px solid color-mix(in srgb, var(--border) 65%, transparent);
@@ -326,14 +348,12 @@
 }
 
 .dashboard-mix-genre-chip__label {
-  min-width: 0;
-  overflow: hidden;
-  text-overflow: ellipsis;
   white-space: nowrap;
 }
 
 .dashboard-mix-genre-chip__count {
   flex-shrink: 0;
+  margin-inline-start: auto;
   font-size: 0.72rem;
   font-variant-numeric: tabular-nums;
   opacity: 0.85;

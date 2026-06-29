@@ -1,7 +1,6 @@
 import type {
   EnrichedTrack,
   LibraryAlbumIndex,
-  LibraryArtistIndex,
   LibraryIndex,
   LibraryTrackIndex,
 } from "../types"
@@ -103,7 +102,7 @@ export function resolveTrackAlbumName(
 export function openTrackInLibrary(
   index: LibraryIndex,
   track: EnrichedTrack,
-  onOpenArtist: (artistId: string) => void,
+  _onOpenArtist: (artistId: string) => void,
   onOpenAlbum: (artistId: string, albumName: string) => void,
 ): void {
   const artist = index.artists.find(

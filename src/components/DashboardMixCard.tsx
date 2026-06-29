@@ -16,7 +16,7 @@ import {
 import type { AppSection, LibraryIndex, LibraryTrackIndex } from "../types";
 import { SectionHeadLead } from "./SectionHeadLead";
 import { TrackMoodGlyph } from "./TrackMoodGlyph";
-import { UiShuffle, UiStyle } from "./RekordUiIcons";
+import { UiShuffle } from "./RekordUiIcons";
 
 const DASHBOARD_MIX_TOP_GENRES = 14;
 
@@ -190,15 +190,10 @@ export function DashboardMixCard({
                       type="button"
                       className={`dashboard-mix-genre-chip${on ? " is-on" : ""}`}
                       aria-pressed={on}
-                      title={g.label}
                       onClick={() =>
                         setGenreKey((prev) => (prev === g.key ? null : g.key))
                       }
                     >
-                      <UiStyle
-                        className="dashboard-mix-genre-chip__ic"
-                        aria-hidden
-                      />
                       <span className="dashboard-mix-genre-chip__label">
                         {g.label}
                       </span>

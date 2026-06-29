@@ -300,7 +300,7 @@ export const IT: Record<string, string> = {
   "dashboard.mixEyebrow": "Playlist al volo",
   "dashboard.mixHeading": "Generi e mood",
   "dashboard.mixOpenLibrary": "Apri libreria",
-  "dashboard.mixGenresEyebrow": "Genere (opzionale)",
+  "dashboard.mixGenresEyebrow": "Genere",
   "dashboard.mixClearGenre": "Togli genere",
   "dashboard.mixGenreActive": "Filtro genere: {{name}}",
   "dashboard.mixPlayRandom": "Riproduci in random",

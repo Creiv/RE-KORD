@@ -11,7 +11,7 @@ import {
   useSyncExternalStore,
 } from "react";
 import { resolveTrackFromLibrary, trackPlaybackKey } from "../lib/libraryNav";
-import { mediaUrl, mediaUrlForTrack, fetchConfig } from "../lib/api";
+import { mediaUrlForTrack, fetchConfig } from "../lib/api";
 import { enrichTrack } from "../lib/enrichTrack";
 import { enrichedTracksNeedPlayerResync } from "../lib/libraryIndex";
 import { isTrackAlbumShuffleExcluded } from "../lib/randomExclusions";

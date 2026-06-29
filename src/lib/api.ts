@@ -220,7 +220,7 @@ function apiUrl(path: string, params: Record<string, string> = {}) {
   const pname = pathnameOnly(base)
   if (pname !== "/api/accounts") {
     const id = getSelectedAccountId()
-    if (id) out.set("accountId", id)
+    if (id && !out.has("accountId")) out.set("accountId", id)
   }
   const query = out.toString()
   return query ? `${base}?${query}` : base
@@ -513,6 +513,19 @@ export async function fetchUserState(): Promise<UserStateV1> {
     }
   })()
   return inflightUserStateFetch
+}
+
+export async function fetchUserStateForAccount(
+  accountId: string,
+): Promise<UserStateV1> {
+  const id = String(accountId || "").trim()
+  if (!id) throw new Error("missing accountId")
+  const response = await apiFetch(
+    "/api/user-state",
+    { cache: "no-store" },
+    { accountId: id },
+  )
+  return unwrap<UserStateV1>(response)
 }
 
 export type CustomThemeBgUploadResult = {

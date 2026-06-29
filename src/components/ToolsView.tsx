@@ -87,6 +87,7 @@ import {
   UiChevronLeft,
   UiChevronRight,
   UiDownload,
+  UiSearch,
   UiTrackChanges,
   UiImage,
   UiNavHeadphones,
@@ -261,6 +262,8 @@ export function ToolsView({
   const [dlDirQuery, setDlDirQuery] = useState("");
   const [dlDirResults, setDlDirResults] = useState<FsDirSearchResult[]>([]);
   const [dlDirSearchBusy, setDlDirSearchBusy] = useState(false);
+  const [dlDirSearchOpen, setDlDirSearchOpen] = useState(false);
+  const dlDirSearchInputRef = useRef<HTMLInputElement>(null);
   const [dlPath, setDlPath] = useState(() => {
     try {
       if (!migrateSessionFlag(REKORD_DL_OK, LEGACY_DL_OK)) return "";
@@ -521,6 +524,20 @@ export function ToolsView({
       window.clearTimeout(timer);
     };
   }, [dlDirQuery, setLog, t]);
+
+  useEffect(() => {
+    if (dlDirQuery.trim()) setDlDirSearchOpen(true);
+  }, [dlDirQuery]);
+
+  const toggleDlDirSearch = () => {
+    setDlDirSearchOpen((open) => {
+      const next = !open;
+      if (next) {
+        window.requestAnimationFrame(() => dlDirSearchInputRef.current?.focus());
+      }
+      return next;
+    });
+  };
 
   useEffect(
     () => () => {
@@ -799,16 +816,56 @@ export function ToolsView({
     [afterCatalogPatch, t],
   );
 
-  const useCurrentForArt = () => {
-    if (p.current) {
-      setArtQuery([p.current.artist, p.current.album].filter(Boolean).join(" "));
-      setCoverPickArtist(p.current.artist);
-      const folder = albumFolderFromTrack(p.current);
-      if (folder) {
-        setAlbumForCover(folder);
+  const fillCoverFromCurrentPlayback = useCallback(() => {
+    const current = p.current;
+    if (!current) return;
+    setArtQuery([current.artist, current.album].filter(Boolean).join(" "));
+    setCoverPickArtist(current.artist);
+    const folder = albumFolderFromTrack(current);
+    if (folder) setAlbumForCover(folder);
+  }, [p]);
+
+  const fillMetaFromCurrentPlayback = useCallback(
+    (options?: { log?: boolean }) => {
+      const logFeedback = options?.log ?? false;
+      const current = p.current;
+      if (!current?.relPath) {
+        if (logFeedback) setMetaLog(t("tools.metaNoTrack"));
+        return;
       }
-    }
+      setMetaArt(current.artist);
+      setMetaAlb(current.album);
+      setMetaArtistName(current.artist);
+      const folder = albumFolderFromTrack(current);
+      if (folder) {
+        setMetaAlbumPath(folder);
+        if (logFeedback) setMetaLog(t("tools.metaFromTrackOk"));
+      } else if (logFeedback) {
+        setMetaLog(t("tools.metaNoFolder"));
+      }
+    },
+    [p, setMetaLog, t],
+  );
+
+  const useCurrentForArt = () => {
+    fillCoverFromCurrentPlayback();
   };
+
+  const setMetaFromCurrent = () => {
+    fillMetaFromCurrentPlayback({ log: true });
+  };
+
+  const prevStudioPaneRef = useRef<StudioPane | null>(null);
+  useEffect(() => {
+    const prev = prevStudioPaneRef.current;
+    prevStudioPaneRef.current = studioPane;
+    if (studioPane === "meta" && prev !== "meta") {
+      fillMetaFromCurrentPlayback();
+    }
+    if (studioPane === "covers" && prev !== "covers") {
+      fillCoverFromCurrentPlayback();
+    }
+  }, [studioPane, fillMetaFromCurrentPlayback, fillCoverFromCurrentPlayback]);
 
   const doCreateFolder = () => {
     const n = newDirName.trim();
@@ -826,23 +883,6 @@ export function ToolsView({
       })
       .catch((e) => setLog((x) => x + t("tools.logFolderErr", { e })))
       .finally(() => setMkBusy(false));
-  };
-
-  const setMetaFromCurrent = () => {
-    if (!p.current?.relPath) {
-      setMetaLog(t("tools.metaNoTrack"));
-      return;
-    }
-    setMetaArt(p.current.artist);
-    setMetaAlb(p.current.album);
-    setMetaArtistName(p.current.artist);
-    const folder = albumFolderFromTrack(p.current);
-    if (folder) {
-      setMetaAlbumPath(folder);
-      setMetaLog(t("tools.metaFromTrackOk"));
-    } else {
-      setMetaLog(t("tools.metaNoFolder"));
-    }
   };
 
   const fetchOneAlbumMeta = () => {
@@ -2191,96 +2231,126 @@ export function ToolsView({
                     >
                       {t("tools.dlPathLabel")}
                     </p>
-                    <div className="tools-dl-dest__pathbar">
-                      <button
-                        type="button"
-                        className="tools-dl-dest__up-icon"
-                        onClick={() => {
-                          if (dlList) loadDlFs(dlList.parent || "");
-                        }}
-                        disabled={!dlList?.path}
-                        title={t("tools.up")}
-                        aria-label={t("tools.upFolderAria")}
-                      >
-                        <DlDestUpIcon />
-                      </button>
-                      <nav
-                        className="breadcrumbs tools-dl-dest__crumbs"
-                        aria-labelledby="tools-dl-dest-where"
+                    <div className="tools-dl-dest__pathrow">
+                      <div className="tools-dl-dest__pathbar">
+                        <button
+                          type="button"
+                          className="tools-dl-dest__up-icon"
+                          onClick={() => {
+                            if (dlList) loadDlFs(dlList.parent || "");
+                          }}
+                          disabled={!dlList?.path}
+                          title={t("tools.up")}
+                          aria-label={t("tools.upFolderAria")}
+                        >
+                          <DlDestUpIcon />
+                        </button>
+                        <nav
+                          className="breadcrumbs tools-dl-dest__crumbs"
+                          aria-labelledby="tools-dl-dest-where"
+                        >
+                          <button
+                            type="button"
+                            className="crumb"
+                            onClick={() => loadDlFs("")}
+                          >
+                            {dlList?.musicRoot?.split("/").pop() ||
+                              t("tools.musicRoot")}
+                          </button>
+                          {(dlList?.path || "")
+                            .split("/")
+                            .filter(Boolean)
+                            .map((seg, i, arr) => {
+                              const pth = arr.slice(0, i + 1).join("/");
+                              return (
+                                <span className="tools-dl-dest__bc" key={pth}>
+                                  <span
+                                    className="tools-dl-dest__bc-sep"
+                                    aria-hidden
+                                  >
+                                    <UiChevronRight className="tools-dl-dest__bc-ic" />
+                                  </span>
+                                  <button
+                                    type="button"
+                                    className="crumb"
+                                    onClick={() => loadDlFs(pth)}
+                                  >
+                                    {seg}
+                                  </button>
+                                </span>
+                              );
+                            })}
+                        </nav>
+                      </div>
+                      <div
+                        className={`tools-dl-dest__search${
+                          dlDirSearchOpen ? " is-open" : ""
+                        }`}
                       >
                         <button
                           type="button"
-                          className="crumb"
-                          onClick={() => loadDlFs("")}
+                          className="tools-dl-dest__search-toggle"
+                          onClick={toggleDlDirSearch}
+                          aria-label={t("tools.dlFolderSearchAria")}
+                          aria-expanded={dlDirSearchOpen}
+                          aria-controls="tools-dl-dest-search-field"
                         >
-                          {dlList?.musicRoot?.split("/").pop() ||
-                            t("tools.musicRoot")}
+                          <UiSearch className="tools-dl-dest__search-toggle-ic" />
                         </button>
-                        {(dlList?.path || "")
-                          .split("/")
-                          .filter(Boolean)
-                          .map((seg, i, arr) => {
-                            const pth = arr.slice(0, i + 1).join("/");
-                            return (
-                              <span className="tools-dl-dest__bc" key={pth}>
-                                <span
-                                  className="tools-dl-dest__bc-sep"
-                                  aria-hidden
-                                >
-                                  <UiChevronRight className="tools-dl-dest__bc-ic" />
-                                </span>
-                                <button
-                                  type="button"
-                                  className="crumb"
-                                  onClick={() => loadDlFs(pth)}
-                                >
-                                  {seg}
-                                </button>
-                              </span>
-                            );
-                          })}
-                      </nav>
-                    </div>
-                  </div>
-
-                  <div className="tools-dl-dest__search">
-                    <input
-                      type="search"
-                      className="w-full"
-                      value={dlDirQuery}
-                      onChange={(e) => setDlDirQuery(e.target.value)}
-                      placeholder={t("tools.dlFolderSearchPh")}
-                      aria-label={t("tools.dlFolderSearchAria")}
-                    />
-                    {dlDirQuery.trim() ? (
-                      <div className="tools-dl-dest__search-results">
-                        {dlDirSearchBusy ? (
-                          <p className="subtle sm">{t("tools.searching")}</p>
-                        ) : dlDirResults.length ? (
-                          <ul className="tools-dl-dest__dirlist">
-                            {dlDirResults.map((d) => (
-                              <li key={d.relPath}>
-                                <button
-                                  type="button"
-                                  className="tools-dl-dest__dirbtn"
-                                  onClick={() => {
-                                    loadDlFs(d.relPath);
-                                    setDlDirQuery("");
-                                  }}
-                                >
-                                  <DlDestFolderGlyph className="tools-dl-dest__dir-ic" />
-                                  <span className="tools-dl-dest__dir-name">
-                                    {d.relPath}
-                                  </span>
-                                </button>
-                              </li>
-                            ))}
-                          </ul>
-                        ) : (
-                          <p className="subtle sm">{t("tools.dlFolderSearchEmpty")}</p>
-                        )}
+                        <div
+                          id="tools-dl-dest-search-field"
+                          className="tools-dl-dest__search-field"
+                        >
+                          <input
+                            ref={dlDirSearchInputRef}
+                            type="search"
+                            className="tools-dl-dest__search-input"
+                            value={dlDirQuery}
+                            onChange={(e) => setDlDirQuery(e.target.value)}
+                            placeholder={t("tools.dlFolderSearchPh")}
+                            aria-label={t("tools.dlFolderSearchAria")}
+                            onKeyDown={(event) => {
+                              if (event.key !== "Escape") return;
+                              setDlDirQuery("");
+                              setDlDirSearchOpen(false);
+                              dlDirSearchInputRef.current?.blur();
+                            }}
+                          />
+                        </div>
+                        {dlDirQuery.trim() ? (
+                          <div className="tools-dl-dest__search-results">
+                            {dlDirSearchBusy ? (
+                              <p className="subtle sm">{t("tools.searching")}</p>
+                            ) : dlDirResults.length ? (
+                              <ul className="tools-dl-dest__dirlist">
+                                {dlDirResults.map((d) => (
+                                  <li key={d.relPath}>
+                                    <button
+                                      type="button"
+                                      className="tools-dl-dest__dirbtn"
+                                      onClick={() => {
+                                        loadDlFs(d.relPath);
+                                        setDlDirQuery("");
+                                        setDlDirSearchOpen(false);
+                                      }}
+                                    >
+                                      <DlDestFolderGlyph className="tools-dl-dest__dir-ic" />
+                                      <span className="tools-dl-dest__dir-name">
+                                        {d.relPath}
+                                      </span>
+                                    </button>
+                                  </li>
+                                ))}
+                              </ul>
+                            ) : (
+                              <p className="subtle sm">
+                                {t("tools.dlFolderSearchEmpty")}
+                              </p>
+                            )}
+                          </div>
+                        ) : null}
                       </div>
-                    ) : null}
+                    </div>
                   </div>
 
                   <div
@@ -2985,7 +3055,7 @@ export function ToolsView({
                         <div className="studio-action-row studio-meta-equal-btns">
                           <button
                             type="button"
-                            className="ghost-btn"
+                            className="primary-btn"
                             onClick={fetchOneAlbumMeta}
                             disabled={!metaAlbumPath?.trim() || studioMetaBusy}
                           >
@@ -2995,7 +3065,7 @@ export function ToolsView({
                           </button>
                           <button
                             type="button"
-                            className="primary-btn"
+                            className="ghost-btn"
                             onClick={() => setMetaScanChoiceOpen("album")}
                             disabled={!library || studioMetaBusy}
                             title={t("tools.scanAlbumsTitle")}
@@ -3016,7 +3086,7 @@ export function ToolsView({
                         <div className="studio-action-row studio-meta-equal-btns">
                           <button
                             type="button"
-                            className="ghost-btn"
+                            className="primary-btn"
                             onClick={fetchSelectedAlbumTracksMeta}
                             disabled={!metaAlbumPath?.trim() || studioMetaBusy}
                           >
@@ -3026,7 +3096,7 @@ export function ToolsView({
                           </button>
                           <button
                             type="button"
-                            className="primary-btn"
+                            className="ghost-btn"
                             onClick={() => setMetaScanChoiceOpen("track")}
                             disabled={!library || studioMetaBusy}
                           >

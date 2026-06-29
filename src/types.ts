@@ -103,6 +103,10 @@ export type EnrichedTrack = LibTrack & {
   albumMeta?: AlbumMeta;
   /** mtime dall'indice: cache-busting copertine (?v=) dopo un cambio cover. */
   updatedAt?: number | null;
+  /** Percorso reale su disco (può differire da relPath per tracce loose). */
+  filePath?: string | null;
+  /** Cartella album reale (es. `Artist/Album` o `Artist` per loose). */
+  albumFolderRelPath?: string | null;
 };
 
 /** Voce info/curiosità: artista in kord-artistinfo.json; album in infoItems (file o sidecar legacy). */

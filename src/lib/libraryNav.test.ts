@@ -11,7 +11,7 @@ import {
   resolveTrackAlbumName,
   resolveTrackFromLibrary,
 } from "./libraryNav"
-import type { LibraryIndex, UserStateV1 } from "../types"
+import type { EnrichedTrack, LibraryIndex, UserStateV1 } from "../types"
 
 const looseIndex = {
   artists: [{ id: "Artist", name: "Artist", albumCount: 1, trackCount: 2 }],
@@ -59,6 +59,7 @@ describe("libraryNav", () => {
   it("formats loose track byline without album label", () => {
     expect(
       formatTrackByline({
+        id: "Artist/Tracks/a.mp3",
         relPath: "Artist/Tracks/a.mp3",
         title: "A",
         artist: "Artist",
@@ -84,11 +85,12 @@ describe("libraryNav", () => {
   it("resolveTrackFromLibrary matches legacy Tracce rel paths", () => {
     const full = resolveTrackFromLibrary(
       {
+        id: "Artist/Tracce/a.mp3",
         relPath: "Artist/Tracce/a.mp3",
         title: "A",
         artist: "Artist",
         album: "Tracce",
-      },
+      } as EnrichedTrack,
       looseIndex.tracks,
     )
     expect(full.filePath).toBe("Artist/a.mp3")
@@ -99,11 +101,12 @@ describe("libraryNav", () => {
     const [enriched] = enrichTracksFromLibrary(
       [
         {
+          id: "Artist/Tracks/a.mp3",
           relPath: "Artist/Tracks/a.mp3",
           title: "Stale",
           artist: "Artist",
           album: "Tracce",
-        },
+        } as EnrichedTrack,
       ],
       looseIndex.tracks,
     )
@@ -177,6 +180,7 @@ describe("libraryNav", () => {
     openTrackInLibrary(
       index,
       {
+        id: "Artist/Album/song.mp3",
         relPath: "Artist/Album/song.mp3",
         title: "Song",
         artist: "Artist",
@@ -202,6 +206,7 @@ describe("libraryNav", () => {
       favorites: ["Artist/Tracce/a.mp3"],
       recent: [
         {
+          id: "Artist/Tracce/a.mp3",
           relPath: "Artist/Tracce/a.mp3",
           title: "A",
           artist: "Artist",
@@ -214,9 +219,16 @@ describe("libraryNav", () => {
       settings: {
         defaultTab: "dashboard",
         vizMode: "bars",
-        theme: "dark",
-        glassSurface: "auto",
-        customTheme: null,
+        theme: "midnight",
+        restoreSession: false,
+        locale: "it",
+        libBrowse: "artists",
+        libOverviewSort: "name",
+        artistAlbumSort: "date",
+        audioCrossfadeSec: 0,
+        plectrDisableVizBackdrop: false,
+        glassSurfaces: false,
+        glassOpacity: 62,
       },
       shuffleExcludedAlbumIds: [],
       shuffleExcludedTrackRelPaths: [],

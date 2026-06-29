@@ -22,6 +22,7 @@ import {
   fetchActivityLog,
   fetchConfig,
   fetchRemoteAccessState,
+  fetchUserStateForAccount,
   getRemoteAccessLoginUrl,
   getSelectedAccountId,
   logoutRemoteAccessLogin,
@@ -43,6 +44,7 @@ import type {
   RemoteAccessState,
 } from "../lib/api";
 import { ThemePicker } from "../components/ThemePicker";
+import { buildAchievementsSnapshot, titleForNumericLevel } from "../lib/achievements";
 import {
   APP_LOCALES,
   type AppLocale,
@@ -81,7 +83,7 @@ function SettingsView() {
   );
   const [youtubeCookiesOk, setYoutubeCookiesOk] = useState<string | null>(null);
   const youtubeCookiesInputRef = useRef<HTMLInputElement | null>(null);
-  const [discogsConfigured, setDiscogsConfigured] = useState(false);
+  const [, setDiscogsConfigured] = useState(false);
   const [discogsTokenConfigured, setDiscogsTokenConfigured] = useState(false);
   const [discogsWritable, setDiscogsWritable] = useState(false);
   const [discogsLockedByEnv, setDiscogsLockedByEnv] = useState(false);
@@ -147,6 +149,9 @@ function SettingsView() {
   const [newAccountName, setNewAccountName] = useState("");
   const [accountBusy, setAccountBusy] = useState(false);
   const [accountErr, setAccountErr] = useState<string | null>(null);
+  const [accountLevels, setAccountLevels] = useState<Map<string, number>>(
+    () => new Map(),
+  );
   const [activityLog, setActivityLog] = useState<ActivityLogEntry[] | null>(
     null
   );
@@ -233,6 +238,56 @@ function SettingsView() {
     if (!accounts?.accounts?.length) return null;
     return new Map(accounts.accounts.map((a) => [a.id, a.name] as const));
   }, [accounts]);
+
+  const selectedAccountLevel = useMemo(() => {
+    if (!user.ready || !selectedAccountId) return null;
+    return buildAchievementsSnapshot(user.state, null).level.level;
+  }, [user.ready, user.state, selectedAccountId]);
+
+  useEffect(() => {
+    const others =
+      accounts?.accounts.filter((account) => account.id !== selectedAccountId) ??
+      [];
+    if (!others.length) {
+      setAccountLevels(new Map());
+      return;
+    }
+    let cancelled = false;
+    void (async () => {
+      const entries = await Promise.all(
+        others.map(async (account) => {
+          try {
+            const state = await fetchUserStateForAccount(account.id);
+            const level = buildAchievementsSnapshot(state, null).level.level;
+            return [account.id, level] as const;
+          } catch {
+            return null;
+          }
+        }),
+      );
+      if (cancelled) return;
+      setAccountLevels(
+        new Map(
+          entries.filter(
+            (entry): entry is readonly [string, number] => entry != null,
+          ),
+        ),
+      );
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [accounts, selectedAccountId]);
+
+  const accountLevelFor = useCallback(
+    (accountId: string) => {
+      if (accountId === selectedAccountId && selectedAccountLevel != null) {
+        return selectedAccountLevel;
+      }
+      return accountLevels.get(accountId);
+    },
+    [accountLevels, selectedAccountId, selectedAccountLevel],
+  );
 
   const createNewAccount = () => {
     setAccountErr(null);
@@ -597,6 +652,7 @@ function SettingsView() {
           <div className="account-list">
             {accounts.accounts.map((account) => {
               const selected = account.id === selectedAccount?.id;
+              const level = accountLevelFor(account.id);
               return (
                 <div
                   key={account.id}
@@ -612,7 +668,15 @@ function SettingsView() {
                       {(account.name.trim()[0] || "?").toUpperCase()}
                     </span>
                     <span className="account-row__text">
-                      <strong>{account.name}</strong>
+                      <span className="account-row__name">{account.name}</span>
+                      {level != null ? (
+                        <span
+                          className="account-row__level-pill"
+                          title={titleForNumericLevel(level)}
+                        >
+                          {t("achievements.levelBadge", { n: level })}
+                        </span>
+                      ) : null}
                     </span>
                   </button>
                   <button
@@ -714,43 +778,85 @@ function SettingsView() {
               <option value="karaoke">{t("settings.vizKaraoke")}</option>
             </select>
           </label>
-          <div className="settings-theme-style-row settings-ui-section__span">
-            <div className="settings-ui-inline-control settings-theme-style-row__theme">
-              <span>{t("settings.theme")}</span>
-              <ThemePicker
-                value={user.state.settings.theme}
-                onChange={(theme) => user.updateSettings({ theme })}
-                customTheme={user.state.settings.customTheme}
-                onCustomThemeChange={(customTheme) =>
-                  user.updateSettings({ theme: "custom", customTheme })
-                }
-                customThemeBgPreviewUrl={
-                  user.state.settings.customTheme?.bgMode === "image" &&
-                  user.state.settings.customTheme?.bgImage
-                    ? customThemeBgImageUrl(
-                        user.state.settings.customTheme.bgImageRev ?? undefined,
-                      )
-                    : null
-                }
-                onCustomThemeBgUpload={uploadCustomThemeBg}
-                onCustomThemeBgClear={clearCustomThemeBg}
-                showCustomizeButton={false}
-                customizeOpen={customThemeDialogOpen}
-                onCustomizeOpenChange={setCustomThemeDialogOpen}
-              />
+          <div className="settings-theme-glass-block settings-ui-section__span">
+            <div
+              className={`settings-theme-glass-row${
+                user.state.settings.theme === "custom"
+                  ? " settings-theme-glass-row--custom"
+                  : ""
+              }`}
+            >
+              <div className="settings-ui-inline-control settings-theme-glass-row__theme">
+                <span>{t("settings.theme")}</span>
+                <ThemePicker
+                  value={user.state.settings.theme}
+                  onChange={(theme) => user.updateSettings({ theme })}
+                  customTheme={user.state.settings.customTheme}
+                  onCustomThemeChange={(customTheme) =>
+                    user.updateSettings({ theme: "custom", customTheme })
+                  }
+                  customThemeBgPreviewUrl={
+                    user.state.settings.customTheme?.bgMode === "image" &&
+                    user.state.settings.customTheme?.bgImage
+                      ? customThemeBgImageUrl(
+                          user.state.settings.customTheme.bgImageRev ??
+                            undefined,
+                        )
+                      : null
+                  }
+                  onCustomThemeBgUpload={uploadCustomThemeBg}
+                  onCustomThemeBgClear={clearCustomThemeBg}
+                  showCustomizeButton={false}
+                  customizeOpen={customThemeDialogOpen}
+                  onCustomizeOpenChange={setCustomThemeDialogOpen}
+                />
+              </div>
+              {user.state.settings.theme === "custom" ? (
+                <button
+                  type="button"
+                  className="ghost-btn settings-theme-glass-row__customize"
+                  onClick={() => setCustomThemeDialogOpen(true)}
+                >
+                  {t("themePicker.customEditBtn")}
+                </button>
+              ) : null}
+              <div className="settings-glass-opacity settings-theme-glass-row__opacity">
+                <span className="settings-glass-opacity__label">
+                  {t("settings.glassOpacity")}
+                </span>
+                <input
+                  type="range"
+                  className="settings-glass-opacity__slider"
+                  min={0}
+                  max={100}
+                  step={1}
+                  disabled={!user.state.settings.glassSurfaces}
+                  value={glassOpacityDraft}
+                  onChange={(event) =>
+                    onGlassOpacityChange(Number(event.target.value))
+                  }
+                  aria-label={t("settings.glassOpacity")}
+                />
+                <input
+                  type="number"
+                  className="ghost-input settings-glass-opacity__num"
+                  min={0}
+                  max={100}
+                  inputMode="numeric"
+                  disabled={!user.state.settings.glassSurfaces}
+                  value={glassOpacityDraft}
+                  onChange={(event) => {
+                    if (event.target.value === "") return;
+                    onGlassOpacityChange(Number(event.target.value));
+                  }}
+                  aria-label={t("settings.glassOpacity")}
+                />
+                <span className="settings-glass-opacity__unit" aria-hidden>
+                  %
+                </span>
+              </div>
             </div>
-            {user.state.settings.theme === "custom" ? (
-              <button
-                type="button"
-                className="ghost-btn settings-theme-style-row__customize"
-                onClick={() => setCustomThemeDialogOpen(true)}
-              >
-                {t("themePicker.customEditBtn")}
-              </button>
-            ) : null}
-          </div>
-          <div className="settings-glass-control settings-ui-section__span">
-            <label className="settings-ui-inline-control settings-ui-inline-control--checkbox-row">
+            <label className="settings-ui-inline-control settings-ui-inline-control--checkbox-row settings-theme-glass-block__checkbox">
               <input
                 type="checkbox"
                 className="settings-checkbox"
@@ -761,41 +867,6 @@ function SettingsView() {
               />
               <span>{t("settings.glassSurfaces")}</span>
             </label>
-            <div className="settings-glass-opacity">
-              <span className="settings-glass-opacity__label">
-                {t("settings.glassOpacity")}
-              </span>
-              <input
-                type="range"
-                className="settings-glass-opacity__slider"
-                min={0}
-                max={100}
-                step={1}
-                disabled={!user.state.settings.glassSurfaces}
-                value={glassOpacityDraft}
-                onChange={(event) =>
-                  onGlassOpacityChange(Number(event.target.value))
-                }
-                aria-label={t("settings.glassOpacity")}
-              />
-              <input
-                type="number"
-                className="ghost-input settings-glass-opacity__num"
-                min={0}
-                max={100}
-                inputMode="numeric"
-                disabled={!user.state.settings.glassSurfaces}
-                value={glassOpacityDraft}
-                onChange={(event) => {
-                  if (event.target.value === "") return;
-                  onGlassOpacityChange(Number(event.target.value));
-                }}
-                aria-label={t("settings.glassOpacity")}
-              />
-              <span className="settings-glass-opacity__unit" aria-hidden>
-                %
-              </span>
-            </div>
           </div>
           <label className="settings-ui-inline-control settings-ui-inline-control--checkbox-row settings-ui-section__span">
             <input

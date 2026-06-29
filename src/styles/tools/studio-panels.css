@@ -135,7 +135,8 @@
   width: 100%;
 }
 
-.studio-meta-equal-btns .primary-btn {
+.studio-meta-equal-btns .primary-btn,
+.studio-meta-equal-btns .ghost-btn {
   min-height: 2.35rem;
 }
 
