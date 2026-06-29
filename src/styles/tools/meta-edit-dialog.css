@@ -270,6 +270,111 @@
   position: relative;
 }
 
+.meta-edit-genre-search {
+  position: relative;
+  margin-bottom: 0.3rem;
+  min-width: 0;
+}
+
+.meta-edit-genre-search__row {
+  display: flex;
+  align-items: stretch;
+  gap: 0.4rem;
+}
+
+.meta-edit-genre-search__input {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+.meta-edit-genre-search__add {
+  flex: 0 0 auto;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 2.75rem;
+  min-height: 2.75rem;
+  padding: 0;
+  border-radius: var(--radius-md);
+  border: 1px solid color-mix(in srgb, var(--accent) 32%, var(--border) 68%);
+  background: color-mix(in srgb, var(--accent) 10%, var(--surface3) 90%);
+  color: var(--accent);
+  cursor: pointer;
+  transition:
+    background 0.14s ease,
+    color 0.14s ease,
+    border-color 0.14s ease;
+}
+
+.meta-edit-genre-search__add:hover:not(:disabled) {
+  background: color-mix(in srgb, var(--accent) 16%, var(--surface3) 84%);
+  border-color: color-mix(in srgb, var(--accent) 44%, var(--border) 56%);
+  color: color-mix(in srgb, var(--accent2, var(--accent)) 88%, var(--text) 12%);
+}
+
+.meta-edit-genre-search__add:focus-visible {
+  outline: 2px solid var(--focus-ring);
+  outline-offset: 2px;
+}
+
+.meta-edit-genre-search__add:disabled {
+  opacity: 0.42;
+  cursor: not-allowed;
+}
+
+.meta-edit-genre-search__add-ic {
+  width: 1.05rem;
+  height: 1.05rem;
+  display: block;
+}
+
+.meta-edit-genre-search__list {
+  position: absolute;
+  z-index: 4;
+  left: 0;
+  right: 0;
+  top: calc(100% + 0.35rem);
+  max-height: 10rem;
+  overflow: auto;
+  margin: 0;
+  padding: 0.25rem 0;
+  list-style: none;
+  border-radius: var(--radius-md);
+  border: 1px solid var(--border);
+  background: var(--surface2);
+  box-shadow: 0 10px 28px color-mix(in srgb, var(--bg) 55%, transparent);
+}
+
+.meta-edit-genre-search__option {
+  display: block;
+  width: 100%;
+  text-align: left;
+  padding: 0.45rem 0.65rem;
+  border: none;
+  background: transparent;
+  color: var(--text);
+  font-size: 0.84rem;
+  cursor: pointer;
+}
+
+.meta-edit-genre-search__option:hover {
+  background: color-mix(in srgb, var(--accent) 10%, var(--surface3) 90%);
+  color: var(--text);
+}
+
+.meta-edit-genre-search__empty {
+  position: absolute;
+  z-index: 4;
+  left: 0;
+  right: 0;
+  top: calc(100% + 0.35rem);
+  margin: 0;
+  padding: 0.55rem 0.65rem;
+  border-radius: var(--radius-md);
+  border: 1px solid var(--border);
+  background: var(--surface2);
+}
+
 .meta-edit-genre-chip--add {
   padding: 0.2rem 0.5rem;
   cursor: pointer;

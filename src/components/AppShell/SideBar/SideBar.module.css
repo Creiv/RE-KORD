@@ -145,6 +145,14 @@
   border-width: 0;
 }
 
+.footer {
+  padding: 0.5rem 0 max(0.85rem, env(safe-area-inset-bottom, 0px));
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  flex-shrink: 0;
+}
+
 @media (max-width: 1000px) {
   .sidebar {
     display: none;

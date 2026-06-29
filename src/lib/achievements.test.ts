@@ -9,6 +9,7 @@ import {
   computeTotalXp,
   LEVEL_XP_SCALE,
   levelForXp,
+  levelRingTierIndex,
   numericLevelForXp,
   titleForNumericLevel,
   xpProgressInLevel,
@@ -99,6 +100,13 @@ describe("achievements", () => {
     expect(titleForNumericLevel(28)).toBe("KING OF RE-KORD");
     expect(titleForNumericLevel(30)).toBe("KING OF RE-KORD");
     expect(titleForNumericLevel(50)).toBe("KING OF RE-KORD");
+  });
+
+  it("levelRingTierIndex groups levels by rank title", () => {
+    expect(levelRingTierIndex(1)).toBe(0);
+    expect(levelRingTierIndex(3)).toBe(0);
+    expect(levelRingTierIndex(4)).toBe(1);
+    expect(levelRingTierIndex(28)).toBe(9);
   });
 
   it("numericLevelForXp grows without cap", () => {

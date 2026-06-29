@@ -882,6 +882,7 @@ export function AppShell() {
                 activeSection={route.section}
                 onNavigate={navToSection}
                 onLibraryHome={onLibraryHome}
+                index={index}
               />
             ) : null}
 

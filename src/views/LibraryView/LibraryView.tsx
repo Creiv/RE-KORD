@@ -1163,14 +1163,11 @@ export default function LibraryView({
             </div>
             <div className="section-head__tools">
               <div className="hero-card__actions">
-                <button
-                  type="button"
-                  className="primary-btn"
+                <PlayCollectionButton
+                  label={t("playback.playArtist")}
                   disabled={artistShuffleEligible.length === 0}
                   onClick={playArtistShuffle}
-                >
-                  {t("playback.playArtist")}
-                </button>
+                />
                 <EntityInfoAction artistDir={artist.id} title={artist.name} />
               </div>
             </div>

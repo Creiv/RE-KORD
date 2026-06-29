@@ -1,25 +1,31 @@
-import { memo, useCallback } from "react";
+import { memo, useCallback, useMemo } from "react";
 import { useRhythmMode } from "../../../context/RhythmModeContext";
 import { usePlayer } from "../../../context/PlayerContext";
+import { useUserState } from "../../../context/UserStateContext";
 import { useI18n } from "../../../i18n/useI18n";
+import { buildAchievementsSnapshot, titleForNumericLevel } from "../../../lib/achievements";
+import { LevelProgressRing } from "../../LevelProgressRing";
 import { RekordNavIcon } from "../../RekordUiIcons";
 import { RekordBrandLogo } from "../../RekordBrandLogo";
 import { NAV_DEF } from "../../../lib/routing";
-import type { AppSection } from "../../../types";
+import type { AppSection, LibraryIndex } from "../../../types";
 import styles from "./SideBar.module.css";
 
 interface SideBarProps {
   activeSection: AppSection;
   onNavigate: (section: AppSection) => void;
   onLibraryHome: () => void;
+  index: LibraryIndex | null;
 }
 
 export const SideBar = memo(function SideBar({
   activeSection,
   onNavigate,
   onLibraryHome,
+  index,
 }: SideBarProps) {
   const { t } = useI18n();
+  const user = useUserState();
   const { open: rhythmOpen, toggle: toggleRhythm } = useRhythmMode();
   const player = usePlayer();
 
@@ -41,6 +47,16 @@ export const SideBar = memo(function SideBar({
 
   const coreItems = NAV_DEF.filter((item) => item.group === "core");
   const secondaryItems = NAV_DEF.filter((item) => item.group === "secondary");
+
+  const levelSnapshot = useMemo(
+    () =>
+      user.ready ? buildAchievementsSnapshot(user.state, index) : null,
+    [user.ready, user.state, index],
+  );
+
+  const openAchievements = useCallback(() => {
+    onNavigate("achievements");
+  }, [onNavigate]);
 
   return (
     <aside className={`${styles.sidebar} rekord-icon-rail`} aria-label={t("topbar.navAria")}>
@@ -95,6 +111,26 @@ export const SideBar = memo(function SideBar({
           ))}
         </div>
       </nav>
+
+      <div className={styles.footer}>
+        <LevelProgressRing
+          level={levelSnapshot?.level.level ?? 1}
+          pct={levelSnapshot?.progress.pct ?? 0}
+          loading={!user.ready || levelSnapshot == null}
+          active={activeSection === "achievements"}
+          title={
+            levelSnapshot
+              ? `${titleForNumericLevel(levelSnapshot.level.level)} · ${t("achievements.xpProgressAria", { pct: levelSnapshot.progress.pct })}`
+              : t("achievements.xpLoadingAria")
+          }
+          ariaLabel={
+            levelSnapshot
+              ? `${t("achievements.levelBadge", { n: levelSnapshot.level.level })} · ${t("achievements.xpProgressAria", { pct: levelSnapshot.progress.pct })}`
+              : t("achievements.xpLoadingAria")
+          }
+          onClick={openAchievements}
+        />
+      </div>
     </aside>
   );
 });

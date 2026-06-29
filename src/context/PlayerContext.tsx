@@ -30,6 +30,7 @@ import {
 import {
   canUseWebCastSender,
   registerCastPlaybackCallbacks,
+  bootstrapWebCastPlayback,
   syncWebCastNow,
 } from "../lib/castPlayback";
 import { prefetchQueueCovers } from "../lib/coverPrefetch";
@@ -1153,6 +1154,7 @@ export function PlayerProvider({ children }: { children: React.ReactNode }) {
 
   useEffect(() => {
     if (!canUseWebCastSender()) return;
+    void bootstrapWebCastPlayback();
     return registerCastPlaybackCallbacks({
       onSessionStart: () => applyMediaMute(true),
       onSessionEnd: () => applyMediaMute(false),

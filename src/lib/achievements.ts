@@ -77,6 +77,14 @@ export function titleForNumericLevel(level: number): string {
   return ACHIEVEMENT_TITLES[idx];
 }
 
+/** Peso accent nel gradiente anello (0–9, per grado). */
+export function levelRingTierIndex(level: number): number {
+  return Math.min(
+    ACHIEVEMENT_TITLES.length - 1,
+    Math.floor((Math.max(1, Math.floor(level)) - 1) / 3),
+  );
+}
+
 export function numericLevelForXp(xp: number): number {
   const kingMin = scaledLevelXp(NUMERIC_LEVEL_XP_MINS[18]);
   const postKingMin = scaledLevelXp(NUMERIC_LEVEL_XP_MINS[19]);

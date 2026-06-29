@@ -79,6 +79,7 @@ export default function DashboardView({
 
   const heroListenPaused = Boolean(player.current) && !player.isPlaying;
   const hasPlaybackQueue = Boolean(player.current);
+  const heroStartsShuffle = !player.current;
   const handleHeroListen = () => {
     if (!player.current) {
       const eligible = eligibleTracksForIntelligentRandom(
@@ -118,7 +119,11 @@ export default function DashboardView({
             className="primary-btn dashboard-hero-listen-btn"
             onClick={handleHeroListen}
           >
-            <UiPlayArrow className="dashboard-hero-listen-btn__ic" />
+            {heroStartsShuffle ? (
+              <UiShuffle className="dashboard-hero-listen-btn__ic" />
+            ) : (
+              <UiPlayArrow className="dashboard-hero-listen-btn__ic" />
+            )}
             {heroListenPaused
               ? t("dashboard.resumeListen")
               : t("nav.listen")}

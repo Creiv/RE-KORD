@@ -1,0 +1,86 @@
+.btn {
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 2.75rem;
+  height: 2.75rem;
+  padding: 0;
+  border: none;
+  border-radius: var(--radius-md, 0.5rem);
+  background: transparent;
+  color: var(--muted-strong);
+  cursor: pointer;
+  flex-shrink: 0;
+}
+
+.btn:focus-visible {
+  outline: 2px solid var(--focus-ring);
+  outline-offset: 2px;
+}
+
+.root {
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 2.75rem;
+  height: 2.75rem;
+  flex-shrink: 0;
+}
+
+.ring {
+  position: absolute;
+  inset: 0;
+  border-radius: 50%;
+  background: conic-gradient(
+    from -90deg,
+    var(--accent) 0deg,
+    color-mix(
+        in srgb,
+        var(--accent) calc(78% - var(--level-ring-tier, 0) * 2.5%),
+        var(--accent2, var(--accent)) calc(22% + var(--level-ring-tier, 0) * 2.5%)
+      )
+      calc(var(--level-ring-pct) * 3.6deg),
+    color-mix(in srgb, var(--border) 82%, transparent)
+      calc(var(--level-ring-pct) * 3.6deg),
+    color-mix(in srgb, var(--border) 82%, transparent) 360deg
+  );
+}
+
+.ringLoading {
+  opacity: 0.42;
+  animation: levelRingPulse 1.25s ease-in-out infinite;
+}
+
+.hole {
+  position: absolute;
+  inset: 4px;
+  border-radius: 50%;
+  background: var(
+    --level-ring-hole,
+    var(--sidebar-bg, color-mix(in srgb, var(--surface2) 96%, var(--bg) 4%))
+  );
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--border) 55%, transparent);
+}
+
+.level {
+  position: relative;
+  z-index: 1;
+  font-size: 0.8125rem;
+  font-weight: 800;
+  line-height: 1;
+  letter-spacing: -0.02em;
+  font-variant-numeric: tabular-nums;
+  color: var(--accent);
+}
+
+@keyframes levelRingPulse {
+  0%,
+  100% {
+    opacity: 0.3;
+  }
+  50% {
+    opacity: 0.62;
+  }
+}

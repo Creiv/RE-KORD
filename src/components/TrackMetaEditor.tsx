@@ -6,6 +6,7 @@ import {
   useContext,
   useEffect,
   useId,
+  useMemo,
   useRef,
   useState,
   type CSSProperties,
@@ -35,7 +36,7 @@ import {
 } from "../lib/trackMoods";
 import { TrackMoodGlyph } from "./TrackMoodGlyph";
 import type { EnrichedTrack, LibraryEntityDelta } from "../types";
-import { UiClose } from "./RekordUiIcons";
+import { UiAdd, UiClose } from "./RekordUiIcons";
 
 const TrackMetaEditContext = createContext<(track: EnrichedTrack) => void>(
   () => {}
@@ -84,6 +85,146 @@ function addGenreToken(current: string[], token: string): string[] {
   return [...current, t];
 }
 
+function TrackMetaGenreSearch({
+  genreOptions,
+  genres,
+  onAdd,
+  t,
+}: {
+  genreOptions: readonly string[];
+  genres: string[];
+  onAdd: (genre: string) => void;
+  t: ReturnType<typeof useI18n>["t"];
+}) {
+  const inputId = useId();
+  const listId = useId();
+  const rootRef = useRef<HTMLDivElement | null>(null);
+  const [query, setQuery] = useState("");
+  const [open, setOpen] = useState(false);
+
+  const available = useMemo(
+    () =>
+      genreOptions.filter(
+        (g) => !genres.some((s) => s.toLowerCase() === g.toLowerCase()),
+      ),
+    [genreOptions, genres],
+  );
+
+  const filtered = useMemo(() => {
+    const q = query.trim().toLowerCase();
+    if (!q) return available;
+    return available.filter((g) => g.toLowerCase().includes(q));
+  }, [available, query]);
+
+  const trimmedQuery = query.trim();
+  const canAdd =
+    trimmedQuery.length > 0 &&
+    !genres.some((s) => s.toLowerCase() === trimmedQuery.toLowerCase());
+
+  const commitQuery = useCallback(() => {
+    if (!canAdd) return;
+    onAdd(trimmedQuery);
+    setQuery("");
+    setOpen(true);
+  }, [canAdd, onAdd, trimmedQuery]);
+
+  useEffect(() => {
+    if (!open) return;
+    const onDocMouseDown = (event: MouseEvent) => {
+      if (rootRef.current?.contains(event.target as Node)) return;
+      setOpen(false);
+    };
+    const onDocKeyDown = (event: KeyboardEvent) => {
+      if (event.key === "Escape") setOpen(false);
+    };
+    document.addEventListener("mousedown", onDocMouseDown);
+    document.addEventListener("keydown", onDocKeyDown);
+    return () => {
+      document.removeEventListener("mousedown", onDocMouseDown);
+      document.removeEventListener("keydown", onDocKeyDown);
+    };
+  }, [open]);
+
+  const showList =
+    open &&
+    (filtered.length > 0 ||
+      (trimmedQuery.length > 0 && canAdd) ||
+      (available.length === 0 && !trimmedQuery));
+
+  return (
+    <div className="meta-edit-genre-search" ref={rootRef}>
+      <div className="meta-edit-genre-search__row">
+        <input
+          id={inputId}
+          className="ghost-input meta-edit-genre-search__input"
+          value={query}
+          onChange={(event) => {
+            setQuery(event.target.value);
+            setOpen(true);
+          }}
+          onFocus={() => setOpen(true)}
+          onKeyDown={(event) => {
+            if (event.key === "Enter") {
+              event.preventDefault();
+              commitQuery();
+            }
+          }}
+          placeholder={t("trackMeta.fieldGenreSearchPlaceholder")}
+          autoComplete="off"
+          role="combobox"
+          aria-expanded={open}
+          aria-controls={listId}
+          aria-autocomplete="list"
+        />
+        <button
+          type="button"
+          className="meta-edit-genre-search__add"
+          onClick={commitQuery}
+          disabled={!canAdd}
+          aria-label={t("trackMeta.fieldGenreAdd")}
+          title={t("trackMeta.fieldGenreAdd")}
+        >
+          <UiAdd className="meta-edit-genre-search__add-ic" aria-hidden />
+        </button>
+      </div>
+      {showList ? (
+        filtered.length > 0 ? (
+          <ul
+            id={listId}
+            className="meta-edit-genre-search__list"
+            role="listbox"
+            aria-label={t("trackMeta.fieldGenrePick")}
+          >
+            {filtered.map((g) => (
+              <li key={g} role="presentation">
+                <button
+                  type="button"
+                  role="option"
+                  className="meta-edit-genre-search__option"
+                  onMouseDown={(event) => event.preventDefault()}
+                  onClick={() => {
+                    onAdd(g);
+                    setQuery("");
+                    setOpen(true);
+                  }}
+                >
+                  {g}
+                </button>
+              </li>
+            ))}
+          </ul>
+        ) : (
+          <p className="subtle sm meta-edit-genre-search__empty" id={listId}>
+            {trimmedQuery
+              ? t("trackMeta.fieldGenreNoMatch")
+              : t("trackMeta.fieldGenreListEmpty")}
+          </p>
+        )
+      ) : null}
+    </div>
+  );
+}
+
 function trackMoodsSignature(ids: TrackMoodId[]): string {
   return [...ids].slice().sort().join("\u0001");
 }
@@ -102,12 +243,11 @@ function TrackMetaEditorModal({
   const { t } = useI18n();
   const { confirm: appConfirm } = useAppConfirm();
   const librarySync = useLibrarySyncActivity();
-  const pickId = useId();
   const [title, setTitle] = useState("");
   const [releaseDate, setReleaseDate] = useState("");
   const [genres, setGenres] = useState<string[]>([]);
   const [moods, setMoods] = useState<TrackMoodId[]>([]);
-  const [newGenre, setNewGenre] = useState("");
+  const [genreSearchReset, setGenreSearchReset] = useState(0);
   const [lyricsOpen, setLyricsOpen] = useState(false);
   const [lyricsValue, setLyricsValue] = useState("");
   const [lyricsFetchBusy, setLyricsFetchBusy] = useState(false);
@@ -137,7 +277,7 @@ function TrackMetaEditorModal({
       setLyricsOpen(false);
       initialMoodsSigRef.current = trackMoodsSignature(im);
       initialLyricsRef.current = lyr;
-      setNewGenre("");
+      setGenreSearchReset((n) => n + 1);
       setErr(null);
       setLyricsErr(null);
       setLyricsAutoStatus("idle");
@@ -145,18 +285,13 @@ function TrackMetaEditorModal({
     return () => window.clearTimeout(timer);
   }, [track]);
 
-  const availableFromLibrary = genreOptions.filter(
-    (g) => !genres.some((s) => s.toLowerCase() === g.toLowerCase())
-  );
-
   const removeGenre = useCallback((i: number) => {
     setGenres((prev) => prev.filter((_, j) => j !== i));
   }, []);
 
-  const addNewGenre = useCallback(() => {
-    setGenres((prev) => addGenreToken(prev, newGenre));
-    setNewGenre("");
-  }, [newGenre]);
+  const addGenre = useCallback((genre: string) => {
+    setGenres((prev) => addGenreToken(prev, genre));
+  }, []);
 
   const toggleMood = useCallback((id: TrackMoodId) => {
     setMoods((prev) => {
@@ -519,53 +654,13 @@ function TrackMetaEditorModal({
                   </span>
                 ))}
               </div>
-              <div className="meta-edit-genre-add">
-                <label className="sr-only" htmlFor={pickId}>
-                  {t("trackMeta.fieldGenrePick")}
-                </label>
-                <select
-                  key={`${genres.length}-${availableFromLibrary.length}`}
-                  id={pickId}
-                  className="ghost-input w-full meta-edit-genre-select"
-                  defaultValue=""
-                  onChange={(ev) => {
-                    const v = ev.target.value;
-                    if (v) setGenres((prev) => addGenreToken(prev, v));
-                  }}
-                >
-                  <option value="">
-                    {t("trackMeta.fieldGenrePickPlaceholder")}
-                  </option>
-                  {availableFromLibrary.map((g) => (
-                    <option key={g} value={g}>
-                      {g}
-                    </option>
-                  ))}
-                </select>
-              </div>
-              <div className="meta-edit-genre-custom">
-                <input
-                  className="ghost-input"
-                  value={newGenre}
-                  onChange={(ev) => setNewGenre(ev.target.value)}
-                  onKeyDown={(ev) => {
-                    if (ev.key === "Enter") {
-                      ev.preventDefault();
-                      addNewGenre();
-                    }
-                  }}
-                  placeholder={t("trackMeta.fieldGenreNewPlaceholder")}
-                  autoComplete="off"
-                />
-                <button
-                  type="button"
-                  className="ghost-btn"
-                  onClick={addNewGenre}
-                  disabled={!newGenre.trim()}
-                >
-                  {t("trackMeta.fieldGenreAdd")}
-                </button>
-              </div>
+              <TrackMetaGenreSearch
+                key={genreSearchReset}
+                genreOptions={genreOptions}
+                genres={genres}
+                onAdd={addGenre}
+                t={t}
+              />
             </div>
             <div className="meta-edit-field">
               <span>{t("trackMeta.fieldMood")}</span>

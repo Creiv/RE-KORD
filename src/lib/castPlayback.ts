@@ -247,6 +247,13 @@ export async function toggleWebCastSession(): Promise<boolean> {
   return requestWebCastSession()
 }
 
+/** Precarica SDK e contesto Cast senza UI (sync sessione da browser/dispositivo). */
+export async function bootstrapWebCastPlayback(): Promise<void> {
+  if (!canUseWebCastSender()) return
+  const loaded = await ensureCastSdkLoaded()
+  if (loaded) initCastContextIfNeeded()
+}
+
 export function canUseWebCastSender(): boolean {
   if (typeof window === "undefined") return false
   return !isNativeMediaSessionBridgeAvailable()

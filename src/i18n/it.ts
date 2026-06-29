@@ -121,8 +121,11 @@ export const IT: Record<string, string> = {
   "trackMeta.fieldGenre": "Generi",
   "trackMeta.fieldGenrePick": "Aggiungi da libreria",
   "trackMeta.fieldGenrePickPlaceholder": "Scegli un genere già usato…",
+  "trackMeta.fieldGenreSearchPlaceholder": "Cerca o scrivi un genere…",
   "trackMeta.fieldGenreNewPlaceholder": "Genere nuovo…",
-  "trackMeta.fieldGenreAdd": "Aggiungi",
+  "trackMeta.fieldGenreAdd": "Aggiungi genere",
+  "trackMeta.fieldGenreNoMatch": "Nessun genere in libreria corrisponde — usa + per aggiungerne uno nuovo",
+  "trackMeta.fieldGenreListEmpty": "Nessun altro genere in libreria da aggiungere",
   "trackMeta.fieldGenreRemoveAria": "Rimuovi {{g}}",
   "trackMeta.deleteFile": "Elimina file",
   "trackMeta.deleteConfirm":

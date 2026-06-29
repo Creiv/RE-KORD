@@ -181,7 +181,9 @@ export function MobileBottomNav({ active, onSelect }: MobileBottomNavProps) {
                         section={item.id}
                         className={styles.sheetLinkIc}
                       />
-                      {t(item.labelKey)}
+                      <span className={styles.sheetLinkLabel}>
+                        {t(item.labelKey)}
+                      </span>
                     </button>
                   </li>
                 );

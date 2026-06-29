@@ -12,7 +12,6 @@ import { MOBILE_LAYOUT_MQ } from "../../lib/breakpoints";
 import { prefetchPlectrStyles } from "../../lib/ensurePlectrStyles";
 import { RhythmDockPanel } from "./RhythmDockPanel";
 import { PlayerBarMobileMenu } from "./PlayerBarMobileMenu";
-import { CastControl } from "./CastControl";
 import { PlayerBarTrackArt } from "../AppSharedUi";
 import { PlayerProgressTrack } from "../PlayerProgressTrack";
 import { ExcludeShuffleIcon } from "../ExcludeShuffleIcon";
@@ -231,7 +230,6 @@ export const PlayerDock = memo(function PlayerDock({
                 </button>
               ) : null}
               <div className="player-bar2__controls">
-                <CastControl />
                 <button
                   type="button"
                   className={`player-bar2__ic player-bar2__ic--repeat ${
