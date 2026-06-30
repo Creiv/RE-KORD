@@ -50,7 +50,9 @@ export const SideBar = memo(function SideBar({
 
   const levelSnapshot = useMemo(
     () =>
-      user.ready ? buildAchievementsSnapshot(user.state, index) : null,
+      user.ready && index
+        ? buildAchievementsSnapshot(user.state, index)
+        : null,
     [user.ready, user.state, index],
   );
 

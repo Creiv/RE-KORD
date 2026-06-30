@@ -48,9 +48,14 @@ import { buildAchievementsSnapshot, titleForNumericLevel } from "../lib/achievem
 import {
   APP_LOCALES,
   type AppLocale,
+  type LibraryIndex,
 } from "../types";
 
-function SettingsView() {
+type SettingsViewProps = {
+  index: LibraryIndex | null;
+};
+
+function SettingsView({ index }: SettingsViewProps) {
   const user = useUserState();
   const { t, locale, setLocale } = useI18n();
   const { confirm: appConfirm, alert: appAlert } = useAppConfirm();
@@ -240,11 +245,15 @@ function SettingsView() {
   }, [accounts]);
 
   const selectedAccountLevel = useMemo(() => {
-    if (!user.ready || !selectedAccountId) return null;
-    return buildAchievementsSnapshot(user.state, null).level.level;
-  }, [user.ready, user.state, selectedAccountId]);
+    if (!user.ready || !selectedAccountId || !index) return null;
+    return buildAchievementsSnapshot(user.state, index).level.level;
+  }, [user.ready, user.state, selectedAccountId, index]);
 
   useEffect(() => {
+    if (!index) {
+      setAccountLevels(new Map());
+      return;
+    }
     const others =
       accounts?.accounts.filter((account) => account.id !== selectedAccountId) ??
       [];
@@ -258,7 +267,7 @@ function SettingsView() {
         others.map(async (account) => {
           try {
             const state = await fetchUserStateForAccount(account.id);
-            const level = buildAchievementsSnapshot(state, null).level.level;
+            const level = buildAchievementsSnapshot(state, index).level.level;
             return [account.id, level] as const;
           } catch {
             return null;
@@ -277,7 +286,7 @@ function SettingsView() {
     return () => {
       cancelled = true;
     };
-  }, [accounts, selectedAccountId]);
+  }, [accounts, selectedAccountId, index]);
 
   const accountLevelFor = useCallback(
     (accountId: string) => {

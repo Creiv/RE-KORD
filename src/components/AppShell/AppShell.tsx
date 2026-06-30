@@ -729,7 +729,7 @@ export function AppShell() {
     if (route.section === "settings") {
       return (
         <Suspense fallback={<RekordViewLoadingFallback />}>
-          <LazySettingsView />
+          <LazySettingsView index={index} />
         </Suspense>
       );
     }
