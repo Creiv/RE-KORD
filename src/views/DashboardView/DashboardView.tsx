@@ -1,5 +1,6 @@
 import { useMemo, type ReactNode } from "react";
 import { DashboardMixCard } from "../../components/DashboardMixCard";
+import { DashboardNebulaCard } from "../../components/DashboardNebulaCard";
 import { DashboardSmartRadioCard } from "../../components/DashboardSmartRadioCard";
 import { usePlayer } from "../../context/PlayerContext";
 import { useUserState } from "../../context/UserStateContext";
@@ -172,6 +173,7 @@ export default function DashboardView({
           onOpenSection={onOpenSection}
         />
         <DashboardMixCard index={index} onOpenSection={onOpenSection} />
+        <DashboardNebulaCard index={index} onOpenSection={onOpenSection} />
 
         <section className="surface-card dashboard-page__tile dashboard-page__tile--full">
           <div className="section-head section-head--page-toolbar">

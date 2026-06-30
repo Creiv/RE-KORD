@@ -284,7 +284,9 @@ function sanitizeSettings(settings) {
       ? "genres"
       : src.libBrowse === "moods"
         ? "moods"
-        : "artists"
+        : src.libBrowse === "nebula"
+          ? "nebula"
+          : "artists"
   const libOverviewSort = src.libOverviewSort === "plays" ? "plays" : "name"
   const sas = src.artistAlbumSort
   const artistAlbumSort =

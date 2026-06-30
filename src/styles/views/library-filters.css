@@ -671,3 +671,11 @@ input.settings-glass-opacity__slider {
   padding-top: 0;
   border-top: 0;
 }
+
+.library-nebula-embed {
+  position: relative;
+  height: clamp(380px, 62vh, 720px);
+  min-height: 360px;
+  overflow: hidden;
+  border-radius: var(--radius-md, 12px);
+}

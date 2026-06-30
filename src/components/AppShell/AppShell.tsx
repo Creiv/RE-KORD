@@ -909,7 +909,9 @@ export function AppShell() {
                 </div>
               ) : null}
 
-              <main className={`content-shell ${styles.content}`}>
+              <main
+                className={`content-shell ${styles.content}`}
+              >
                 <div className="content-shell__inner" key={route.section}>
                   {currentView}
                 </div>

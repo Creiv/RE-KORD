@@ -171,7 +171,9 @@ function normalizeSettings(raw: Partial<UserSettings> | UserSettingsPatch): User
       ? "genres"
       : raw.libBrowse === "moods"
         ? "moods"
-        : "artists";
+        : raw.libBrowse === "nebula"
+          ? "nebula"
+          : "artists";
   const libOverviewSort: UserSettings["libOverviewSort"] =
     raw.libOverviewSort === "plays" ? "plays" : "name";
   const rawAlbumSort = raw.artistAlbumSort;

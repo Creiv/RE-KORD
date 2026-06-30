@@ -42,6 +42,7 @@ import { TrackMoodGlyph } from "../../components/TrackMoodGlyph";
 import {
   UiAdd,
   UiAlbumIcon,
+  UiAutoAwesome,
   UiBarChart,
   UiChevronLeft,
   UiClose,
@@ -83,6 +84,7 @@ import type {
   LibraryTrackIndex,
 } from "../../types";
 import type { RouteState } from "../../lib/routing";
+import SonicNebulaView from "../SonicNebulaView/SonicNebulaView";
 
 /** Stima `min-width` lista generi (16rem + margine) per il flip orizzontale sotto il +. */
 const ALBUM_GENRE_POPOVER_PLACEMENT_OPTS: PopoverLayerOptions = {
@@ -166,6 +168,13 @@ export default function LibraryView({
       setMode("all");
     });
   }, [libraryHomeTick]);
+
+  useEffect(() => {
+    const raw = window.location.pathname.replace(/^\/+/, "").split("/")[0];
+    if (raw !== "nebula") return;
+    user.updateSettings({ libBrowse: "nebula" });
+    window.history.replaceState({}, "", "/libreria");
+  }, [user]);
 
   useLayoutEffect(() => {
     if (!showSearchBar) return;
@@ -1279,6 +1288,8 @@ export default function LibraryView({
                   <UiPerson className="section-head__ic" />
                 ) : libBrowse === "genres" ? (
                   <UiStyle className="section-head__ic" />
+                ) : libBrowse === "nebula" ? (
+                  <UiAutoAwesome className="section-head__ic" />
                 ) : (
                   <UiPalette className="section-head__ic" />
                 )}
@@ -1288,7 +1299,7 @@ export default function LibraryView({
                 <div
                   className="section-nav-tabs"
                   role="group"
-                  aria-label={t("library.browseByArtistGenreMoodAria")}
+                  aria-label={t("library.browseLibrarySectionsAria")}
                 >
                   <button
                     type="button"
@@ -1330,6 +1341,20 @@ export default function LibraryView({
                     }}
                   >
                     {t("library.tabMoods")}
+                  </button>
+                  <button
+                    type="button"
+                    className={`section-nav-tab${
+                      user.state.settings.libBrowse === "nebula" ? " is-on" : ""
+                    }`}
+                    onClick={() => {
+                      endSearchForBrowse();
+                      user.updateSettings({ libBrowse: "nebula" });
+                      setSelectedGenreKey(null);
+                      setMoodFilterIds([]);
+                    }}
+                  >
+                    {t("library.tabNebula")}
                   </button>
                 </div>
               </div>
@@ -1565,6 +1590,10 @@ export default function LibraryView({
               )}
             />
           </>
+        ) : libBrowse === "nebula" ? (
+          <div className="library-nebula-embed">
+            <SonicNebulaView index={index} embedded />
+          </div>
         ) : libBrowse === "moods" ? (
           <div className="library-mood-browse">
             <div className="library-mood-match-row">

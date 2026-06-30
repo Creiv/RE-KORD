@@ -32,7 +32,9 @@ export function parseRoute(): RouteState {
   const normalized =
     raw === "resonance"
       ? "achievements"
-      : raw === "ascolta" || raw === "discowall"
+      : raw === "nebula"
+        ? "libreria"
+        : raw === "ascolta" || raw === "discowall"
         ? "studio"
         : raw;
   const section = normalized as AppSection;

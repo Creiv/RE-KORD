@@ -127,6 +127,26 @@ describe("userState", () => {
     expect(saved.revision).toBe(3)
   })
 
+  it("conserva libBrowse nebula in sanitizeSettings", async () => {
+    const musicRoot = await fs.mkdtemp(path.join(os.tmpdir(), "rekord-user-state-nebula-"))
+    await writeUserState(
+      musicRoot,
+      {
+        ...defaultUserState(),
+        settings: { ...defaultUserState().settings, libBrowse: "nebula" },
+      },
+      "nebulaacct",
+    )
+
+    const saved = await mergeAndWriteUserStatePatch(musicRoot, "nebulaacct", {
+      settings: { libBrowse: "nebula" },
+    })
+
+    expect(saved.settings.libBrowse).toBe("nebula")
+    const reloaded = await readUserState(musicRoot, "nebulaacct")
+    expect(reloaded.settings.libBrowse).toBe("nebula")
+  })
+
   it("serializza PATCH concorrenti senza perdere campi indipendenti", async () => {
     const musicRoot = await fs.mkdtemp(path.join(os.tmpdir(), "rekord-user-state-race-"))
     await writeUserState(musicRoot, defaultUserState(), "raceacct")

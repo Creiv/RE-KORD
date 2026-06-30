@@ -173,7 +173,7 @@ export type VizMode =
 export const APP_LOCALES = ["en", "it"] as const;
 export type AppLocale = (typeof APP_LOCALES)[number];
 
-type LibraryBrowseMode = "artists" | "genres" | "moods";
+type LibraryBrowseMode = "artists" | "genres" | "moods" | "nebula";
 type LibraryOverviewSortMode = "name" | "plays";
 type ArtistAlbumSortMode = "date" | "name" | "plays";
 
