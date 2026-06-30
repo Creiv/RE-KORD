@@ -17,6 +17,7 @@ import { PlayerProgressTrack } from "../PlayerProgressTrack";
 import { ExcludeShuffleIcon } from "../ExcludeShuffleIcon";
 import {
   UiFavorite,
+  UiRadioOutlined,
   UiMusicNote,
   UiPause,
   UiPlayArrow,
@@ -26,6 +27,7 @@ import {
   UiSkipPrevious,
 } from "../RekordUiIcons";
 import { isLooseTrack } from "../../lib/libraryNav";
+import { useLibraryPlayback } from "../../hooks/useLibraryPlayback";
 import { isTrackAlbumShuffleExcluded } from "../../lib/randomExclusions";
 import { formatDuration } from "../../lib/duration";
 import type { LibraryEntityDelta, LibraryTrackIndex } from "../../types";
@@ -38,6 +40,7 @@ interface PlayerDockProps {
   resolvePlaybackTrack?: (
     track: import("../../types").EnrichedTrack,
   ) => import("../../types").EnrichedTrack;
+  libraryTracks?: readonly import("../../types").EnrichedTrack[];
   onLibraryDelta?: (delta: LibraryEntityDelta, reconcile?: boolean) => void;
 }
 
@@ -70,9 +73,11 @@ export const PlayerDock = memo(function PlayerDock({
   onOpenLibraryAlbum: _onOpenLibraryAlbum,
   onOpenLibraryForTrack,
   resolvePlaybackTrack,
+  libraryTracks,
   onLibraryDelta,
 }: PlayerDockProps) {
   const p = usePlayer();
+  const { playRadioFromCurrent } = useLibraryPlayback(libraryTracks);
   const { open: rhythmOpen, stylesReady, setOpen: setRhythmOpen } = useRhythmMode();
   const user = useUserState();
   const { t } = useI18n();
@@ -205,6 +210,7 @@ export const PlayerDock = memo(function PlayerDock({
               </div>
             </div>
             {!isMobileLayout ? (
+            <>
             <div
               className="player-bar2__transport player-bar2__transport--desktop"
               role="group"
@@ -368,6 +374,25 @@ export const PlayerDock = memo(function PlayerDock({
                 </button>
               ) : null}
             </div>
+            <div className="player-bar2__rail-end">
+              {cur ? (
+                <button
+                  type="button"
+                  className="player-bar2__ic player-bar2__ic--radio"
+                  onClick={() => playRadioFromCurrent(true)}
+                  title={t("player.radioFromTrackTitle")}
+                  aria-label={t("player.radioFromTrackAria")}
+                >
+                  <span
+                    className="player-bar2__ic-glyph player-bar2__ic-glyph--svg"
+                    aria-hidden
+                  >
+                    <UiRadioOutlined />
+                  </span>
+                </button>
+              ) : null}
+            </div>
+            </>
             ) : (
             <div
               className="player-bar2__transport player-bar2__transport--mobile"
@@ -381,6 +406,9 @@ export const PlayerDock = memo(function PlayerDock({
                 shuffleExcluded={shuffleExcluded}
                 albumShuffleExcluded={albumShuffleExcluded}
                 onGoToAscolta={onGoToAscolta}
+                onRadioFromTrack={
+                  cur ? () => playRadioFromCurrent(true) : undefined
+                }
               />
               <button
                 type="button"

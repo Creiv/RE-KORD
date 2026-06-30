@@ -16,7 +16,7 @@ import {
 import type { AppSection, LibraryIndex, LibraryTrackIndex } from "../types";
 import { SectionHeadLead } from "./SectionHeadLead";
 import { TrackMoodGlyph } from "./TrackMoodGlyph";
-import { UiShuffle } from "./RekordUiIcons";
+import { UiMusicNote } from "./RekordUiIcons";
 
 const DASHBOARD_MIX_TOP_GENRES = 14;
 
@@ -89,26 +89,17 @@ export function DashboardMixCard({
     return { list };
   }, [shufflePool, sortLocale]);
 
-  const topGenresByPlays = useMemo(() => {
-    const counts = user.state.trackPlayCounts || {};
-    const scoreForKey = (key: string) => {
-      let s = 0;
-      for (const tr of shufflePool) {
-        if (!trackBelongsToGenreKey(tr.meta?.genre, key)) continue;
-        s += counts[tr.relPath] ?? 0;
-      }
-      return s;
-    };
-    return [...genreIndex.list]
-      .map((g) => ({ ...g, playsScore: scoreForKey(g.key) }))
-      .sort(
-        (a, b) =>
-          b.playsScore - a.playsScore ||
-          b.count - a.count ||
-          a.label.localeCompare(b.label, sortLocale, { numeric: true })
-      )
-      .slice(0, DASHBOARD_MIX_TOP_GENRES);
-  }, [genreIndex.list, shufflePool, sortLocale, user.state.trackPlayCounts]);
+  const topGenresByCount = useMemo(
+    () =>
+      [...genreIndex.list]
+        .sort(
+          (a, b) =>
+            b.count - a.count ||
+            a.label.localeCompare(b.label, sortLocale, { numeric: true }),
+        )
+        .slice(0, DASHBOARD_MIX_TOP_GENRES),
+    [genreIndex.list, sortLocale],
+  );
 
   const moodOccurrenceCountById = useMemo(() => {
     const m = new Map<TrackMoodId, number>();
@@ -158,7 +149,7 @@ export function DashboardMixCard({
         <SectionHeadLead
           eyebrow={t("dashboard.mixEyebrow")}
           title={t("dashboard.mixHeading")}
-          icon={<UiShuffle className="section-head__ic" />}
+          icon={<UiMusicNote className="section-head__ic" />}
         />
         <div className="section-head__tools">
           <button
@@ -178,11 +169,11 @@ export function DashboardMixCard({
                 {t("dashboard.mixGenresEyebrow")}
               </span>
             </div>
-            {topGenresByPlays.length === 0 ? (
+            {topGenresByCount.length === 0 ? (
               <p className="panel-empty">{t("dashboard.mixNoGenresHint")}</p>
             ) : (
               <div className="dashboard-mix-genre-chips">
-                {topGenresByPlays.map((g) => {
+                {topGenresByCount.map((g) => {
                   const on = genreKey === g.key;
                   return (
                     <button

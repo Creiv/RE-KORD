@@ -924,6 +924,7 @@ export function AppShell() {
             onOpenLibraryAlbum={navToLibraryAlbum}
             onOpenLibraryForTrack={smartNavToLibraryForTrack}
             resolvePlaybackTrack={resolvePlaybackTrack}
+            libraryTracks={index?.tracks}
             onLibraryDelta={applyLibraryDelta}
           />
           {isMobileLayout ? (

@@ -367,6 +367,176 @@
   flex-shrink: 0;
 }
 
+/* —— Smart Radio (dashboard) —— */
+.dashboard-smart-radio-card .section-head.section-head--page-toolbar {
+  margin-bottom: 0.65rem;
+}
+
+.dashboard-smart-radio-grid {
+  display: grid;
+  grid-template-columns: repeat(var(--smart-radio-cols, 6), minmax(0, 1fr));
+  gap: 0.85rem 0.65rem;
+  width: 100%;
+  min-width: 0;
+}
+
+.dashboard-smart-radio-tile {
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  gap: 0.42rem;
+  min-width: 0;
+}
+
+.dashboard-smart-radio-tile__media {
+  position: relative;
+  display: block;
+  width: 100%;
+  aspect-ratio: 1;
+  border-radius: 8px;
+  overflow: hidden;
+  background: color-mix(in srgb, var(--surface3) 78%, transparent);
+  isolation: isolate;
+}
+
+.dashboard-smart-radio-tile__media::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  background: rgba(0, 0, 0, 0);
+  transition: background 0.14s ease;
+  pointer-events: none;
+  z-index: 1;
+}
+
+.dashboard-smart-radio-tile:hover .dashboard-smart-radio-tile__media::after,
+.dashboard-smart-radio-tile--active .dashboard-smart-radio-tile__media::after {
+  background: rgba(0, 0, 0, 0.38);
+}
+
+.dashboard-smart-radio-tile__art {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+}
+
+.dashboard-smart-radio-tile__art--fallback {
+  display: grid;
+  place-items: center;
+  background: linear-gradient(
+    145deg,
+    color-mix(in srgb, var(--accent2) 18%, var(--surface3)),
+    color-mix(in srgb, var(--accent) 12%, var(--surface2))
+  );
+}
+
+.dashboard-smart-radio-tile__art-ic {
+  width: 1.65rem;
+  height: 1.65rem;
+  opacity: 0.55;
+}
+
+.dashboard-smart-radio-tile__overlay {
+  position: absolute;
+  inset: 0;
+  z-index: 2;
+  border: none;
+  background: transparent;
+  color: #fff;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+}
+
+.dashboard-smart-radio-tile__overlay svg {
+  width: 2rem;
+  height: 2rem;
+  filter: drop-shadow(0 2px 6px rgba(0, 0, 0, 0.45));
+}
+
+.dashboard-smart-radio-tile__play {
+  opacity: 0;
+  transition: opacity 0.16s ease;
+}
+
+.dashboard-smart-radio-tile:hover .dashboard-smart-radio-tile__play,
+.dashboard-smart-radio-tile:focus-within .dashboard-smart-radio-tile__play {
+  opacity: 1;
+}
+
+.dashboard-smart-radio-tile__studio {
+  opacity: 1;
+}
+
+.dashboard-smart-radio-tile__meta {
+  display: flex;
+  flex-direction: column;
+  gap: 0.14rem;
+  min-width: 0;
+  padding: 0;
+  border: none;
+  background: transparent;
+  text-align: left;
+  cursor: pointer;
+  color: inherit;
+  border-radius: 0;
+}
+
+.dashboard-smart-radio-tile__meta:focus-visible {
+  outline: 2px solid color-mix(in srgb, var(--accent) 72%, transparent);
+  outline-offset: 3px;
+  border-radius: var(--radius-sm);
+}
+
+.dashboard-smart-radio-tile__title {
+  font-size: 0.8rem;
+  font-weight: 650;
+  line-height: 1.28;
+  letter-spacing: -0.015em;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  color: color-mix(in srgb, var(--text) 94%, var(--muted) 6%);
+}
+
+.dashboard-smart-radio-tile__moods {
+  margin-top: 0.02rem;
+}
+
+.dashboard-smart-radio-tile--random .dashboard-smart-radio-tile__media--random {
+  display: grid;
+  place-items: center;
+  background: linear-gradient(
+    135deg,
+    color-mix(in srgb, var(--accent) 22%, var(--surface3)),
+    color-mix(in srgb, var(--accent2) 18%, var(--surface2))
+  );
+  border: 1px solid color-mix(in srgb, var(--accent) 24%, var(--border) 76%);
+}
+
+.dashboard-smart-radio-tile--random .dashboard-smart-radio-tile__media--random svg {
+  width: 1.75rem;
+  height: 1.75rem;
+  color: color-mix(in srgb, var(--accent) 82%, var(--text) 18%);
+}
+
+.dashboard-smart-radio-tile--random .dashboard-smart-radio-tile__title {
+  color: color-mix(in srgb, var(--text) 82%, var(--muted) 18%);
+}
+
+@media (max-width: 719px) {
+  .dashboard-smart-radio-grid {
+    gap: 0.72rem 0.5rem;
+  }
+
+  .dashboard-smart-radio-tile__title {
+    font-size: 0.76rem;
+  }
+}
+
 @media (max-width: 900px) {
   .dashboard-mix-footer {
     flex-direction: column;

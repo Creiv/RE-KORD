@@ -3,7 +3,6 @@ import { useLayoutEffect, useRef, useState, type RefObject } from "react";
 /** Limite massimo album nella sezione «Ultimi movimenti» della dashboard. */
 const DASHBOARD_UPDATED_ALBUMS_MAX = 20;
 
-const MOBILE_MAX_ALBUMS = 5;
 /** Da ~8 tile con ~2 colonne (16:9, card affiancate) salendo fino a 20 quando la griglia è larga. */
 const DESKTOP_IDEAL_BASE = 8;
 const DESKTOP_IDEAL_SLOPE_PER_COL = 2;
@@ -23,15 +22,15 @@ function readColumnGapPx(grid: HTMLElement, rootFontPx: number): number {
 }
 
 /** Stima delle colonne `repeat(auto-fill, minmax(min(17.5rem, 100%), 1fr))`. */
-function estimateDashboardAlbumGridColumns(grid: HTMLElement): number {
+export function estimateDashboardAlbumGridColumns(grid: HTMLElement): number {
   const width = grid.clientWidth;
   if (width <= 8) return 1;
   const rootFontPx = parseFloat(
-    getComputedStyle(document.documentElement).fontSize || "16"
+    getComputedStyle(document.documentElement).fontSize || "16",
   );
   const minTrackPx = Math.min(
     MIN_TRACK_REM * (Number.isFinite(rootFontPx) ? rootFontPx : 16),
-    width
+    width,
   );
   const gap = readColumnGapPx(grid, rootFontPx);
   return Math.max(1, Math.floor((width + gap) / (minTrackPx + gap)));
@@ -43,7 +42,7 @@ function dashboardUpdatedAlbumSlotsForDesktop(cols: number): number {
     DESKTOP_IDEAL_BASE + DESKTOP_IDEAL_SLOPE_PER_COL * Math.max(0, c - 2);
   const ideal = Math.min(
     DASHBOARD_UPDATED_ALBUMS_MAX,
-    Math.round(idealUncapped)
+    Math.round(idealUncapped),
   );
   const baseRows = Math.ceil(ideal / c);
   const minRowsWide = c >= 7 ? ULTRAWIDE_MIN_ROWS : 2;
@@ -51,33 +50,53 @@ function dashboardUpdatedAlbumSlotsForDesktop(cols: number): number {
   return Math.min(DASHBOARD_UPDATED_ALBUMS_MAX, c * rows);
 }
 
+function dashboardUpdatedAlbumSlotsForMobile(cols: number): number {
+  const c = Math.max(1, cols);
+  const maxRows = Math.min(
+    DESKTOP_ROWS_CAP,
+    Math.floor(DASHBOARD_UPDATED_ALBUMS_MAX / c),
+  );
+  return Math.min(DASHBOARD_UPDATED_ALBUMS_MAX, c * Math.max(1, maxRows));
+}
+
+export function dashboardUpdatedAlbumSlots(
+  cols: number,
+  isMobile: boolean,
+): number {
+  return isMobile
+    ? dashboardUpdatedAlbumSlotsForMobile(cols)
+    : dashboardUpdatedAlbumSlotsForDesktop(cols);
+}
+
+/** Mostra solo album che riempiono righe intere (niente ultima riga spezzata). */
 export function dashboardUpdatedAlbumsVisibleCount(
   albumCount: number,
   maxSlots: number | undefined,
-  columns?: number | undefined
+  columns: number,
 ): number {
-  void columns;
-  const cap = Math.max(0, maxSlots ?? DASHBOARD_UPDATED_ALBUMS_MAX);
-  return Math.min(Math.max(0, albumCount), cap);
+  const cap = Math.min(
+    Math.max(0, albumCount),
+    Math.max(0, maxSlots ?? DASHBOARD_UPDATED_ALBUMS_MAX),
+  );
+  const cols = Math.max(1, columns);
+  if (cap === 0 || cols === 1) return cap;
+  const complete = Math.floor(cap / cols) * cols;
+  return complete > 0 ? complete : Math.min(cap, cols);
 }
 
 export function useDashboardUpdatedAlbumsGrid(isMobile: boolean) {
   const ref: RefObject<HTMLDivElement | null> = useRef(null);
-  const [desktopSlots, setDesktopSlots] = useState(8);
+  const [slots, setSlots] = useState(8);
   const [columns, setColumns] = useState(1);
 
   useLayoutEffect(() => {
-    if (isMobile) {
-      const timer = window.setTimeout(() => setColumns(1), 0);
-      return () => window.clearTimeout(timer);
-    }
     const el = ref.current;
     if (!el) return;
 
     const compute = () => {
       const cols = estimateDashboardAlbumGridColumns(el);
       setColumns(cols);
-      setDesktopSlots(dashboardUpdatedAlbumSlotsForDesktop(cols));
+      setSlots(dashboardUpdatedAlbumSlots(cols, isMobile));
     };
 
     const ro = new ResizeObserver(compute);
@@ -91,15 +110,11 @@ export function useDashboardUpdatedAlbumsGrid(isMobile: boolean) {
     };
   }, [isMobile]);
 
-  const maxSlots = isMobile
-    ? MOBILE_MAX_ALBUMS
-    : Math.min(DASHBOARD_UPDATED_ALBUMS_MAX, desktopSlots);
-
   return {
     ref,
-    maxSlots,
-    columns: isMobile ? 1 : columns,
+    maxSlots: Math.min(DASHBOARD_UPDATED_ALBUMS_MAX, slots),
+    columns,
     /** @deprecated Usa {@link maxSlots}. */
-    maxItems: maxSlots,
+    maxItems: Math.min(DASHBOARD_UPDATED_ALBUMS_MAX, slots),
   };
 }

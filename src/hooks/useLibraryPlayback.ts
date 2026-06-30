@@ -115,9 +115,31 @@ export function useLibraryPlayback(
     [playWindowed, shuffleOpts, excludedTracks, excludedAlbums]
   );
 
+  const playRadioFromCurrent = useCallback(
+    (respectExclusions = true) => {
+      const current = p.current;
+      if (!current || !libraryTracks?.length) return;
+      const curIdx = p.currentIndex;
+      const resolved = resolveTrackFromLibrary(current, libraryTracks);
+      const generated = buildCardPlayQueueFromSeed(resolved, libraryTracks, {
+        respectExclusions,
+        excludedAlbums,
+        excludedTracks,
+      });
+      const prefix = p.queue.slice(0, curIdx + 1);
+      const prefixPaths = new Set(prefix.map((t) => t.relPath));
+      const newTail = generated.slice(1).filter((t) => !prefixPaths.has(t.relPath));
+      const newFull = [...prefix, ...newTail];
+      const { window, remainder } = splitQueueWindow(newFull);
+      p.replaceQueueKeepingPlayback(window, { refillRemainder: remainder });
+    },
+    [libraryTracks, p, excludedAlbums, excludedTracks],
+  );
+
   return {
     playSequence,
     playGlobalRadio,
+    playRadioFromCurrent,
     playCollectionShuffle,
     playPoolShuffle,
     excludedAlbums,

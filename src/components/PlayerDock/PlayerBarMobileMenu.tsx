@@ -10,6 +10,7 @@ import {
 import { ExcludeShuffleIcon } from "../ExcludeShuffleIcon";
 import {
   UiFavorite,
+  UiRadioOutlined,
   UiMoreVert,
   UiRepeat,
   UiShuffle,
@@ -28,6 +29,7 @@ interface PlayerBarMobileMenuProps {
   shuffleExcluded: boolean;
   albumShuffleExcluded: boolean;
   onGoToAscolta: () => void;
+  onRadioFromTrack?: () => void;
 }
 
 export const PlayerBarMobileMenu = memo(function PlayerBarMobileMenu({
@@ -37,6 +39,7 @@ export const PlayerBarMobileMenu = memo(function PlayerBarMobileMenu({
   shuffleExcluded,
   albumShuffleExcluded,
   onGoToAscolta,
+  onRadioFromTrack,
 }: PlayerBarMobileMenuProps) {
   const { t } = useI18n();
   const menuId = useId();
@@ -110,6 +113,16 @@ export const PlayerBarMobileMenu = memo(function PlayerBarMobileMenu({
         ),
       pressed: p.repeat !== "off",
     },
+    ...(cur && onRadioFromTrack
+      ? [
+          {
+            key: "radio",
+            label: t("player.radioFromTrackTitle"),
+            icon: <UiRadioOutlined />,
+            onClick: () => run(onRadioFromTrack),
+          },
+        ]
+      : []),
     ...(cur
       ? [
           {

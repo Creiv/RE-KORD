@@ -1,5 +1,6 @@
 import { useMemo, type ReactNode } from "react";
 import { DashboardMixCard } from "../../components/DashboardMixCard";
+import { DashboardSmartRadioCard } from "../../components/DashboardSmartRadioCard";
 import { usePlayer } from "../../context/PlayerContext";
 import { useUserState } from "../../context/UserStateContext";
 import { useLibraryPlayback } from "../../hooks/useLibraryPlayback";
@@ -165,6 +166,11 @@ export default function DashboardView({
       </header>
 
       <div className="dashboard-page__main">
+        <DashboardSmartRadioCard
+          index={index}
+          dashboard={dashboard}
+          onOpenSection={onOpenSection}
+        />
         <DashboardMixCard index={index} onOpenSection={onOpenSection} />
 
         <section className="surface-card dashboard-page__tile dashboard-page__tile--full">

@@ -86,6 +86,11 @@ type Ctx = {
     at?: number,
     opts?: { preserveQueueOrder?: boolean; refillRemainder?: EnrichedTrack[] }
   ) => void;
+  /** Sostituisce la coda senza interrompere il brano in corso. */
+  replaceQueueKeepingPlayback: (
+    fullQueue: EnrichedTrack[],
+    opts?: { refillRemainder?: EnrichedTrack[] }
+  ) => void;
   playAlbum: (artist: string, al: LibAlbum) => void;
   addToQueue: (t: EnrichedTrack | EnrichedTrack[]) => void;
   removeFromQueue: (index: number) => void;
@@ -1355,6 +1360,37 @@ export function PlayerProvider({ children }: { children: React.ReactNode }) {
     [shuffle],
   );
 
+  const replaceQueueKeepingPlayback = useCallback(
+    (
+      fullQueue: EnrichedTrack[],
+      opts?: { refillRemainder?: EnrichedTrack[] },
+    ) => {
+      if (!fullQueue.length) return;
+      const curIdx = indexRef.current;
+      const currentPath = queueRef.current[curIdx]?.relPath;
+      if (!currentPath) return;
+
+      let focusIdx = fullQueue.findIndex((t) => t.relPath === currentPath);
+      if (focusIdx < 0) focusIdx = Math.min(curIdx, fullQueue.length - 1);
+
+      const { items, index } = capQueueAroundFocus(fullQueue, focusIdx);
+      manualQueuedRef.current.clear();
+      if (opts?.refillRemainder !== undefined) {
+        queueRemainderRef.current = opts.refillRemainder.length
+          ? [...opts.refillRemainder]
+          : null;
+      } else {
+        queueRemainderRef.current = null;
+      }
+      preShuffleRelPathsRef.current = shuffleRef.current
+        ? items.map((t) => t.relPath)
+        : null;
+      setQueue(items);
+      setCurrentIndex(index);
+    },
+    [],
+  );
+
   const playAlbum = useCallback(
     (artist: string, album: LibAlbum) => {
       const tracks = album.tracks.map((track) =>
@@ -1746,6 +1782,7 @@ export function PlayerProvider({ children }: { children: React.ReactNode }) {
       seek,
       seekRatio,
       playTrack,
+      replaceQueueKeepingPlayback,
       playAlbum,
       addToQueue,
       removeFromQueue,
@@ -1781,6 +1818,7 @@ export function PlayerProvider({ children }: { children: React.ReactNode }) {
       play,
       playAlbum,
       playTrack,
+      replaceQueueKeepingPlayback,
       prev,
       queue,
       removeFromQueue,

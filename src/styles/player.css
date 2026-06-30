@@ -69,6 +69,21 @@
   flex-direction: column;
 }
 
+.player-bar2__rail-end {
+  display: none;
+}
+
+@media (min-width: 1001px) {
+  .player-bar2__rail-end {
+    display: inline-flex;
+    grid-column: 3;
+    justify-self: end;
+    align-items: center;
+    gap: 0.42rem;
+    min-width: 0;
+  }
+}
+
 .player-bar2__identity {
   display: flex;
   align-items: center;
@@ -336,6 +351,22 @@
 
 .player-bar2__ic.is-dim {
   opacity: 0.38;
+}
+
+.player-bar2__ic.player-bar2__ic--radio {
+  color: color-mix(in srgb, var(--accent2) 72%, var(--muted) 28%);
+}
+
+.player-bar2__ic.player-bar2__ic--radio:hover {
+  color: var(--accent2);
+  background: color-mix(in srgb, var(--accent2) 12%, transparent);
+}
+
+@media (min-width: 1001px) {
+  .player-bar2__ic--radio .player-bar2__ic-glyph--svg svg {
+    width: 1.2rem;
+    height: 1.2rem;
+  }
 }
 
 .player-bar2__ic.player-bar2__ic--exclude:not(.is-on) {
