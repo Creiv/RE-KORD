@@ -18,7 +18,7 @@ import {
   type RefObject,
 } from "react";
 import { createPortal } from "react-dom";
-import { useTrackRowPlayer } from "../context/PlayerContext";
+import { usePlayer, useTrackRowPlayer } from "../context/PlayerContext";
 import { useTrackCoverDisplay } from "../context/LibraryArtworkContext";
 import { useStudioNavigation } from "../context/StudioNavigationContext";
 import { useTrackRowUserState, useUserState } from "../context/UserStateContext";
@@ -144,6 +144,7 @@ function TrackRowArtPlay({
   isNowPlaying?: boolean;
 }) {
   const { t } = useI18n();
+  const { isPlaying } = usePlayer();
   const studioNav = useStudioNavigation();
   const showStudio = isNowPlaying && studioNav?.openStudioListen;
 
@@ -161,7 +162,7 @@ function TrackRowArtPlay({
           title={t("trackRow.openStudioListenTitle")}
           aria-label={t("trackRow.openStudioListenAria")}
         >
-          <UiGraphicEq />
+          <UiGraphicEq animated={isPlaying} />
         </button>
       ) : (
         <button

@@ -1,6 +1,6 @@
 import { useCallback, useLayoutEffect, useMemo, useState, type CSSProperties } from "react";
 import { useTrackCoverDisplay } from "../context/LibraryArtworkContext";
-import { useTrackRowPlayer } from "../context/PlayerContext";
+import { usePlayer, useTrackRowPlayer } from "../context/PlayerContext";
 import {
   emitStudioPane,
   useStudioNavigation,
@@ -60,6 +60,7 @@ function SmartRadioTrackTile({
   onPlay: () => void;
 }) {
   const { t } = useI18n();
+  const { isPlaying } = usePlayer();
   const { isCurrent } = useTrackRowPlayer(track.relPath);
   const studioNav = useStudioNavigation();
   const showStudio = isCurrent && studioNav?.openStudioListen;
@@ -95,7 +96,7 @@ function SmartRadioTrackTile({
             title={t("trackRow.openStudioListenTitle")}
             aria-label={t("trackRow.openStudioListenAria")}
           >
-            <UiGraphicEq />
+            <UiGraphicEq animated={isPlaying} />
           </button>
         ) : (
           <button

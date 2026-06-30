@@ -1,4 +1,6 @@
 /** Icone SVG inline (stile Material / MUI), colore da `currentColor`. */
+import { usePlayer } from "../context/PlayerContext";
+import { useMatchMedia } from "../hooks/useMatchMedia";
 import type { AppSection } from "../types";
 
 export function UiMusicNote({ className }: { className?: string }) {
@@ -260,13 +262,130 @@ export function UiMoreVert({ className }: { className?: string }) {
   );
 }
 
-export function UiGraphicEq({ className }: { className?: string }) {
+/** Barre GraphicEq (Material) — stessa geometria del path originale. */
+const GRAPHIC_EQ_CENTER_Y = 12;
+
+const GRAPHIC_EQ_BARS = [
+  { cx: 8, bottom: 18, h: 12 },
+  { cx: 12, bottom: 22, h: 20 },
+  { cx: 4, bottom: 14, h: 4 },
+  { cx: 16, bottom: 18, h: 12 },
+  { cx: 20, bottom: 14, h: 4 },
+] as const;
+
+const GRAPHIC_EQ_PULSE = [
+  { min: 0.4, dur: 0.68, delay: 0 },
+  { min: 0.55, dur: 0.52, delay: 80 },
+  { min: 0.35, dur: 0.88, delay: 160 },
+  { min: 0.45, dur: 0.62, delay: 40 },
+  { min: 0.3, dur: 0.76, delay: 200 },
+] as const;
+
+const GRAPHIC_EQ_SPLINE =
+  "0.42 0 0.58 1;0.42 0 0.58 1";
+
+function graphicEqBarSegments(bar: (typeof GRAPHIC_EQ_BARS)[number]) {
+  const top = bar.bottom - bar.h;
+  const upperH = Math.max(0, GRAPHIC_EQ_CENTER_Y - top);
+  const lowerH = Math.max(0, bar.bottom - GRAPHIC_EQ_CENTER_Y);
+  return { top, upperH, lowerH };
+}
+
+function GraphicEqPulseAnimate({
+  attributeName,
+  values,
+  dur,
+  delay,
+}: {
+  attributeName: "height" | "y";
+  values: string;
+  dur: number;
+  delay: number;
+}) {
+  return (
+    <animate
+      attributeName={attributeName}
+      values={values}
+      dur={`${dur}s`}
+      begin={`${delay}ms`}
+      repeatCount="indefinite"
+      calcMode="spline"
+      keySplines={GRAPHIC_EQ_SPLINE}
+      keyTimes="0;0.5;1"
+    />
+  );
+}
+
+export function UiGraphicEq({
+  className,
+  animated = false,
+}: {
+  className?: string;
+  /** Barre animate come visualizer (es. brano in riproduzione). */
+  animated?: boolean;
+}) {
+  const reduceMotion = useMatchMedia("(prefers-reduced-motion: reduce)");
+  const pulse = animated && !reduceMotion;
+
   return (
     <svg className={className} viewBox="0 0 24 24" aria-hidden="true">
-      <path
-        fill="currentColor"
-        d="M7 18h2V6H7zm4 4h2V2h-2zm-8-8h2v-4H3zm12 4h2V6h-2zm4-8v4h2v-4z"
-      />
+      {GRAPHIC_EQ_BARS.map((bar, i) => {
+        const anim = GRAPHIC_EQ_PULSE[i];
+        const { top, upperH, lowerH } = graphicEqBarSegments(bar);
+
+        if (!pulse) {
+          return (
+            <rect
+              key={i}
+              x={bar.cx - 1}
+              y={top}
+              width={2}
+              height={bar.h}
+              fill="currentColor"
+            />
+          );
+        }
+
+        const minUpperH = upperH * anim.min;
+        const minLowerH = lowerH * anim.min;
+
+        return (
+          <g key={i}>
+            {upperH > 0 ? (
+              <rect x={bar.cx - 1} y={top} width={2} height={upperH} fill="currentColor">
+                <GraphicEqPulseAnimate
+                  attributeName="height"
+                  values={`${minUpperH};${upperH};${minUpperH}`}
+                  dur={anim.dur}
+                  delay={anim.delay}
+                />
+                <GraphicEqPulseAnimate
+                  attributeName="y"
+                  values={`${GRAPHIC_EQ_CENTER_Y - minUpperH};${top};${GRAPHIC_EQ_CENTER_Y - minUpperH}`}
+                  dur={anim.dur}
+                  delay={anim.delay}
+                />
+              </rect>
+            ) : null}
+            {lowerH > 0 ? (
+              <rect
+                x={bar.cx - 1}
+                y={GRAPHIC_EQ_CENTER_Y}
+                width={2}
+                height={lowerH}
+                fill="currentColor"
+              >
+                <GraphicEqPulseAnimate
+                  attributeName="height"
+                  values={`${minLowerH};${lowerH};${minLowerH}`}
+                  dur={anim.dur}
+                  delay={anim.delay}
+                />
+              </rect>
+            ) : null}
+          </g>
+        );
+      })}
     </svg>
   );
 }
@@ -536,6 +655,7 @@ export function RekordNavIcon({
   section: AppSection | "more";
   className?: string;
 }) {
+  const { isPlaying } = usePlayer();
   const p = { className };
   switch (section) {
     case "dashboard":
@@ -545,7 +665,7 @@ export function RekordNavIcon({
     case "libreria":
       return <UiNavDisc {...p} />;
     case "studio":
-      return <UiGraphicEq {...p} />;
+      return <UiGraphicEq {...p} animated={isPlaying} />;
     case "queue":
       return <UiNavList {...p} />;
     case "playlists":
