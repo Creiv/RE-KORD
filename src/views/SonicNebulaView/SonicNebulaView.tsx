@@ -172,7 +172,6 @@ export default function SonicNebulaView({
   const [camera, setCamera] = useState<NebulaCamera>(() => defaultNebulaCamera());
   const [hovered, setHovered] = useState<NebulaStar | null>(null);
   const [selected, setSelected] = useState<NebulaStar | null>(null);
-  const [beatPhase, setBeatPhase] = useState(0);
   const [expanded, setExpanded] = useState(false);
 
   const wrapRef = useRef<HTMLDivElement>(null);
@@ -212,20 +211,6 @@ export default function SonicNebulaView({
       zoom: clamp(Math.max(prev.zoom, 0.95), 0.35, 2.6),
     }));
   }, []);
-
-  useEffect(() => {
-    if (!player.isPlaying || !currentStar) return;
-    const hz = currentStar.bpm / 60;
-    const start = performance.now();
-    let raf = 0;
-    const tick = () => {
-      const elapsed = (performance.now() - start) / 1000;
-      setBeatPhase((elapsed * hz) % 1);
-      raf = requestAnimationFrame(tick);
-    };
-    raf = requestAnimationFrame(tick);
-    return () => cancelAnimationFrame(raf);
-  }, [player.isPlaying, currentStar]);
 
   const playStar = useCallback(
     (star: NebulaStar) => {
@@ -535,7 +520,7 @@ export default function SonicNebulaView({
         selectedId={selected?.id ?? null}
         currentId={currentId}
         playing={player.isPlaying}
-        beatPhase={beatPhase}
+        currentBpm={currentStar?.bpm ?? 0}
       />
 
       <header

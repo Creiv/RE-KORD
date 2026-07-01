@@ -727,12 +727,6 @@ input.settings-glass-opacity__slider {
     gap: 0;
   }
 
-  .library-page--nebula .section-head__tools > .primary-btn,
-  .library-page--nebula .section-head__tools > button.primary-btn,
-  .library-page--nebula .section-head__tools .play-collection-btn {
-    display: none;
-  }
-
   .library-nebula-embed {
     flex: 1 1 auto;
     width: 100%;

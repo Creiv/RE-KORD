@@ -12,7 +12,8 @@ export type NebulaCanvasProps = {
   selectedId?: string | null;
   currentId: string | null;
   playing: boolean;
-  beatPhase?: number;
+  /** BPM del brano in riproduzione (0 se nessuno). */
+  currentBpm?: number;
   interactive?: boolean;
   /** Anteprima compatta (dashboard): stelle più visibili, glow leggero. */
   preview?: boolean;
@@ -88,8 +89,7 @@ function drawStar(
     !opts.hovered &&
     !opts.current &&
     !star.favorite &&
-    screenR < 5.5 &&
-    !opts.playing;
+    screenR < 5.5;
 
   if (simple) {
     ctx.fillStyle = `rgba(${r},${g},${b},${alpha * 0.88})`;
@@ -226,7 +226,8 @@ type DrawProps = {
   selectedId?: string | null;
   currentId: string | null;
   playing: boolean;
-  beatPhase: number;
+  currentBpm: number;
+  beatEpoch: number;
   interactive: boolean;
   preview: boolean;
 };
@@ -332,14 +333,19 @@ function paintNebulaFrame(
   const isFocused = (id: string) =>
     id === p.hoveredId || id === p.selectedId;
   const hasFocus = Boolean(p.selectedId);
+  const beatPhase =
+    p.playing && p.currentId && p.currentBpm > 0
+      ? (((animT - p.beatEpoch) / 1000) * (p.currentBpm / 60)) % 1
+      : 0;
   for (const star of p.sortedStars) {
     if (!isStarInBounds(star, bounds) && star.id !== p.currentId) continue;
     const dimmed = hasFocus && !isFocused(star.id) && star.id !== p.currentId;
+    const isCurrent = star.id === p.currentId;
     drawStar(ctx, star, animT, {
       hovered: isFocused(star.id),
-      current: star.id === p.currentId,
+      current: isCurrent,
       playing: p.playing,
-      beatPhase: p.beatPhase,
+      beatPhase: isCurrent ? beatPhase : 0,
       dimmed,
       zoom,
       preview: p.preview,
@@ -357,7 +363,7 @@ export function NebulaCanvas({
   selectedId = null,
   currentId,
   playing,
-  beatPhase = 0,
+  currentBpm = 0,
   interactive = true,
   preview = false,
   animated = true,
@@ -371,6 +377,7 @@ export function NebulaCanvas({
   const lastDrawRef = useRef(0);
   const sizeRef = useRef({ w: 0, h: 0, dpr: 1 });
   const redrawRef = useRef<((t: number) => void) | null>(null);
+  const beatEpochRef = useRef(performance.now());
   const sortedStars = useMemo(
     () => [...visibleStars].sort((a, b) => a.radius - b.radius),
     [visibleStars]
@@ -385,12 +392,14 @@ export function NebulaCanvas({
     selectedId,
     currentId,
     playing,
-    beatPhase,
+    currentBpm,
+    beatEpoch: beatEpochRef.current,
     interactive,
     preview,
   });
 
   useEffect(() => {
+    beatEpochRef.current = performance.now();
     propsRef.current = {
       model,
       visibleStars,
@@ -400,7 +409,8 @@ export function NebulaCanvas({
       selectedId,
       currentId,
       playing,
-      beatPhase,
+      currentBpm,
+      beatEpoch: beatEpochRef.current,
       interactive,
       preview,
     };
@@ -414,7 +424,7 @@ export function NebulaCanvas({
     selectedId,
     currentId,
     playing,
-    beatPhase,
+    currentBpm,
     interactive,
     preview,
   ]);
