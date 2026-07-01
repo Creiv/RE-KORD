@@ -35,6 +35,31 @@ function markApiUnreachable() {
   apiUnreachableUntil = Date.now() + API_UNREACHABLE_BACKOFF_MS
 }
 
+/** Clears API/account bootstrap backoffs so resume/online handlers can retry immediately. */
+export function resetBackendConnectivityState() {
+  apiUnreachableUntil = 0
+  accountBootstrapBackoffUntil = 0
+  accountBootstrapPromise = null
+}
+
+/** Lightweight reachability check; bypasses assertApiReachable backoff. */
+export async function probeBackendHealth(timeoutMs = 6000): Promise<boolean> {
+  const controller = new AbortController()
+  const timer = window.setTimeout(() => controller.abort(), timeoutMs)
+  try {
+    const response = await fetch(apiUrl("/api/health"), {
+      cache: "no-store",
+      signal: controller.signal,
+      headers: { Accept: "application/json" },
+    })
+    return response.ok
+  } catch {
+    return false
+  } finally {
+    window.clearTimeout(timer)
+  }
+}
+
 function assertApiReachable() {
   if (Date.now() < apiUnreachableUntil) {
     throw new BackendUnreachableError()

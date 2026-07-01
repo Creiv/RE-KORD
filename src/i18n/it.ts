@@ -101,10 +101,17 @@ export const IT: Record<string, string> = {
   "gate.libraryNotWritableLead":
     "RE-KORD deve poter creare la cartella .kord/ dentro la libreria musicale (account, database, impostazioni). Il percorso {{path}} non è scrivibile da questo utente. Su dischi esterni montati in sola lettura: sudo chown -R $USER:$USER \"percorso\" oppure rimonta il volume con permessi di scrittura, poi riavvia RE-KORD.",
   "gate.openSettings": "Apri Impostazioni",
+  "gate.backendUnreachableTitle": "Server non raggiungibile",
+  "gate.backendUnreachableLead":
+    "Impossibile contattare il server RE-KORD. Verifica la connessione di rete e che il server sia attivo.",
+  "gate.retryConnection": "Riprova connessione",
+  "gate.retryingConnection": "Riprovo…",
   "loading.dashboard": "Sto preparando la dashboard della collezione…",
   "empty.noData": "Nessun dato disponibile.",
   "errors.backendUnreachable":
     "Impossibile raggiungere il server RE-KORD. Avvialo con npm run dev (oppure npm run dev:server in un secondo terminale) e ricarica la pagina.",
+  "errors.backendUnreachableClient":
+    "Impossibile raggiungere il server RE-KORD. Verifica Wi‑Fi e che il server sia attivo — l'app riproverà automaticamente.",
   "errors.backendUnreachableElectron":
     "Il server interno di RE-KORD non risponde. Controlla ~/.config/rekord/rekord-server.log e rekord-launch.log, poi riavvia l'app.",
   "persist.banner": "Persistenza utente:",

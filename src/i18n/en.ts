@@ -100,10 +100,17 @@ export const EN: Record<string, string> = {
   "gate.libraryNotWritableLead":
     "RE-KORD must be able to create a .kord/ folder inside your music library (accounts, database, settings). The path {{path}} is not writable for this user. On read-only external drives: sudo chown -R $USER:$USER \"path\" or remount the volume with write access, then restart RE-KORD.",
   "gate.openSettings": "Open Settings",
+  "gate.backendUnreachableTitle": "Server unreachable",
+  "gate.backendUnreachableLead":
+    "Cannot reach the RE-KORD server. Check your network connection and that the server is running.",
+  "gate.retryConnection": "Retry connection",
+  "gate.retryingConnection": "Retrying…",
   "loading.dashboard": "Preparing your collection dashboard…",
   "empty.noData": "No data available.",
   "errors.backendUnreachable":
     "Cannot reach the RE-KORD server. Start it with npm run dev (or npm run dev:server in a second terminal) and reload the page.",
+  "errors.backendUnreachableClient":
+    "Cannot reach the RE-KORD server. Check Wi‑Fi and that the server is running — the app will retry automatically.",
   "errors.backendUnreachableElectron":
     "RE-KORD's embedded server is not responding. Check ~/.config/rekord/rekord-server.log and rekord-launch.log, then restart the app.",
   "persist.banner": "User persistence:",

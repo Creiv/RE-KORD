@@ -15,6 +15,7 @@ import {
   isBackendUnreachableError,
   patchUserState,
 } from "../lib/api";
+import { onBackendRecovery } from "../lib/backendRecovery";
 import { useLibrarySyncActivity } from "./LibrarySyncActivityContext";
 import { readLegacyLocalShuffleMigrated, clearLegacyLocalShuffle } from "../lib/legacyShuffleLocal";
 import { fmtDate } from "../lib/metaFormat";
@@ -819,11 +820,13 @@ export function UserStateProvider({ children }: { children: React.ReactNode }) {
       }
     };
 
-    const scheduleRetry = () => {
+    const scheduleRetry = (opts?: { unreachable?: boolean }) => {
       if (!active) return;
-      if (retryAttempts >= 6) return;
+      const maxAttempts = opts?.unreachable ? 10 : 6;
+      if (retryAttempts >= maxAttempts) return;
       clearRetry();
-      const delay = Math.min(2500, 600 * Math.pow(1.6, retryAttempts));
+      const baseDelay = opts?.unreachable ? 900 : 600;
+      const delay = Math.min(4000, baseDelay * Math.pow(1.55, retryAttempts));
       retryAttempts += 1;
       retryTimer = window.setTimeout(() => {
         retryTimer = null;
@@ -831,7 +834,11 @@ export function UserStateProvider({ children }: { children: React.ReactNode }) {
           .then((remote) => applyRemote(remote))
           .catch((err: unknown) => {
             if (!active) return;
-            if (isLibraryRequiredError(err) || isBackendUnreachableError(err)) return;
+            if (isLibraryRequiredError(err)) return;
+            if (isBackendUnreachableError(err)) {
+              scheduleRetry({ unreachable: true });
+              return;
+            }
             scheduleRetry();
           });
       }, delay);
@@ -862,7 +869,9 @@ export function UserStateProvider({ children }: { children: React.ReactNode }) {
         pendingPatchRef.current = {};
         inFlightPatchRef.current = {};
 
-        if (!isLibraryRequiredError(err) && !isBackendUnreachableError(err)) {
+        if (!isLibraryRequiredError(err) && isBackendUnreachableError(err)) {
+          scheduleRetry({ unreachable: true });
+        } else if (!isLibraryRequiredError(err) && !isBackendUnreachableError(err)) {
           scheduleRetry();
         }
       })
@@ -1109,6 +1118,18 @@ export function UserStateProvider({ children }: { children: React.ReactNode }) {
         endActivity();
       });
   }, [beginLibrarySyncActivity]);
+
+  const syncUserStateFromServerRef = useRef(syncUserStateFromServer);
+  useEffect(() => {
+    syncUserStateFromServerRef.current = syncUserStateFromServer;
+  }, [syncUserStateFromServer]);
+
+  useEffect(() => {
+    return onBackendRecovery(() => {
+      void syncUserStateFromServerRef.current();
+      if (dirtyRef.current) schedulePendingFlushRef.current?.();
+    });
+  }, []);
 
   const schedulePendingFlush = useCallback(() => {
     // `ready` può essere ancora false nello stesso tick di applyRemote (setState async).

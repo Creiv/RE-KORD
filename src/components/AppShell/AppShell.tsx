@@ -39,6 +39,8 @@ import {
   fetchLibraryIndex,
   isBackendUnreachableError,
 } from "../../lib/api";
+import { onBackendRecovery, scheduleBackendRecovery } from "../../lib/backendRecovery";
+import { isRekordClientEmbed } from "../toolsViewShared";
 import { clientLegacyLibrary } from "../../lib/libraryIndex";
 import {
   applyLibraryDeltaToIndex,
@@ -115,18 +117,24 @@ export function AppShell() {
       const electronClient =
         typeof document !== "undefined" &&
         document.documentElement.dataset.rekordClient === "1";
+      const mobileClient =
+        electronClient || isRekordClientEmbed();
       if (message === "errors.backendUnreachable") {
         return t(
-          electronClient
-            ? "errors.backendUnreachableElectron"
-            : "errors.backendUnreachable",
+          mobileClient
+            ? "errors.backendUnreachableClient"
+            : electronClient
+              ? "errors.backendUnreachableElectron"
+              : "errors.backendUnreachable",
         );
       }
       if (isBackendUnreachableError(message)) {
         return t(
-          electronClient
-            ? "errors.backendUnreachableElectron"
-            : "errors.backendUnreachable",
+          mobileClient
+            ? "errors.backendUnreachableClient"
+            : electronClient
+              ? "errors.backendUnreachableElectron"
+              : "errors.backendUnreachable",
         );
       }
       return message;
@@ -156,6 +164,7 @@ export function AppShell() {
     typeof globalThis.setTimeout
   > | null>(null);
   const [syncTapAnim, setSyncTapAnim] = useState(false);
+  const libraryPollFailuresRef = useRef(0);
 
   const refreshLibrary = useCallback(
     (mode: "manual" | "background" = "manual", syncUser = false) => {
@@ -380,6 +389,16 @@ export function AppShell() {
   }, [p.queue.length]);
 
   useEffect(() => {
+    return onBackendRecovery(() => {
+      if (indexRef.current) {
+        void reconcileLibrary({ mode: "now", syncUser: true });
+      } else {
+        void reconcileLibrary({ mode: "manual", syncUser: true });
+      }
+    });
+  }, [reconcileLibrary]);
+
+  useEffect(() => {
     const timer = window.setTimeout(() => {
       void reconcileLibrary({ mode: "manual" });
     }, 0);
@@ -398,13 +417,18 @@ export function AppShell() {
     const timer = window.setInterval(() => {
       void fetchLibraryChanges(indexEpochRef.current)
         .then((snap) => {
+          libraryPollFailuresRef.current = 0;
           indexEpochRef.current = snap.indexEpoch;
           if (snap.changed && !snap.scanning) {
             void runCoalescedBackgroundRefresh();
           }
         })
         .catch(() => {
-          /* server offline */
+          libraryPollFailuresRef.current += 1;
+          if (libraryPollFailuresRef.current >= 2) {
+            libraryPollFailuresRef.current = 0;
+            scheduleBackendRecovery("poll");
+          }
         });
     }, pollMs);
     return () => window.clearInterval(timer);

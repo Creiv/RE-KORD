@@ -108,3 +108,24 @@ describe("isBackendUnreachableError", () => {
     ).toBe(true)
   })
 })
+
+describe("resetBackendConnectivityState", () => {
+  beforeEach(() => {
+    vi.resetModules()
+  })
+
+  it("clears API backoff so health probe can succeed after a failure", async () => {
+    const fetchMock = vi
+      .fn()
+      .mockRejectedValueOnce(new TypeError("Failed to fetch"))
+      .mockResolvedValueOnce(new Response("{}", { status: 200 }))
+    globalThis.fetch = fetchMock as typeof fetch
+
+    const { probeBackendHealth, resetBackendConnectivityState } = await import("./api")
+
+    await expect(probeBackendHealth()).resolves.toBe(false)
+    resetBackendConnectivityState()
+    await expect(probeBackendHealth()).resolves.toBe(true)
+    expect(fetchMock).toHaveBeenCalledTimes(2)
+  })
+})
