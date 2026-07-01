@@ -1,12 +1,15 @@
 import {
   useCallback,
   useEffect,
+  useLayoutEffect,
   useMemo,
   useRef,
   useState,
+  type RefObject,
   type PointerEvent as ReactPointerEvent,
   type WheelEvent as ReactWheelEvent,
 } from "react";
+import { createPortal } from "react-dom";
 import { usePlayer } from "../../context/PlayerContext";
 import { useUserState } from "../../context/UserStateContext";
 import { resolveTrackFromLibrary } from "../../lib/libraryNav";
@@ -16,20 +19,17 @@ import {
   defaultNebulaCamera,
   filterNebulaStars,
   pickNebulaStarAt,
+  sampleNebulaStarsForPreview,
   type NebulaCamera,
   type NebulaStar,
 } from "../../lib/sonicNebula";
-import {
-  TRACK_MOOD_COLORS,
-  type TrackMoodId,
-} from "../../lib/trackMoods";
 import { useI18n } from "../../i18n/useI18n";
 import type { LibraryIndex } from "../../types";
 import {
   UiAutoAwesome,
-  UiGraphicEq,
+  UiCloseFullscreen,
+  UiOpenInFull,
   UiPlayArrow,
-  UiShuffle,
 } from "../../components/RekordUiIcons";
 import { NebulaCanvas } from "./NebulaCanvas";
 import styles from "./SonicNebulaView.module.css";
@@ -91,6 +91,51 @@ function isNebulaChrome(target: EventTarget | null) {
   return target instanceof Element && Boolean(target.closest("[data-nebula-chrome]"));
 }
 
+type StarCalloutLayout = {
+  anchorX: number;
+  anchorY: number;
+  left: number;
+  top: number;
+};
+
+function useStarCalloutLayout(
+  star: NebulaStar | null,
+  camera: NebulaCamera,
+  stageRef: RefObject<HTMLDivElement | null>
+): StarCalloutLayout | null {
+  const [layout, setLayout] = useState<StarCalloutLayout | null>(null);
+
+  useLayoutEffect(() => {
+    const stage = stageRef.current;
+    if (!star || !stage) {
+      setLayout(null);
+      return;
+    }
+
+    const update = () => {
+      const rect = stage.getBoundingClientRect();
+      const anchorX = (star.x - camera.x) * camera.zoom + rect.width / 2;
+      const anchorY = (star.y - camera.y) * camera.zoom + rect.height / 2;
+      const cardW = 252;
+      const cardH = 74;
+      let left = anchorX + 24;
+      let top = anchorY - cardH / 2;
+      if (left + cardW > rect.width - 10) left = anchorX - cardW - 24;
+      if (top < 10) top = 10;
+      if (top + cardH > rect.height - 10) top = rect.height - cardH - 10;
+      left = clamp(left, 10, Math.max(10, rect.width - cardW - 10));
+      setLayout({ anchorX, anchorY, left, top });
+    };
+
+    update();
+    const ro = new ResizeObserver(update);
+    ro.observe(stage);
+    return () => ro.disconnect();
+  }, [star, camera, stageRef]);
+
+  return layout;
+}
+
 export default function SonicNebulaView({
   index,
   embedded = false,
@@ -113,12 +158,10 @@ export default function SonicNebulaView({
     [index.tracks, user.state.trackPlayCounts, favorites]
   );
 
-  const [moodFilter, setMoodFilter] = useState<TrackMoodId | null>(null);
   const [query, setQuery] = useState("");
-  const [filtersOpen, setFiltersOpen] = useState(false);
   const visibleStars = useMemo(
-    () => filterNebulaStars(model.stars, moodFilter, query),
-    [model.stars, moodFilter, query]
+    () => filterNebulaStars(model.stars, query),
+    [model.stars, query]
   );
 
   const spatial = useMemo(
@@ -130,6 +173,7 @@ export default function SonicNebulaView({
   const [hovered, setHovered] = useState<NebulaStar | null>(null);
   const [selected, setSelected] = useState<NebulaStar | null>(null);
   const [beatPhase, setBeatPhase] = useState(0);
+  const [expanded, setExpanded] = useState(false);
 
   const wrapRef = useRef<HTMLDivElement>(null);
   const pointersRef = useRef(new Map<number, { x: number; y: number }>());
@@ -158,19 +202,6 @@ export default function SonicNebulaView({
     () => model.stars.find((s) => s.id === currentId) ?? null,
     [model.stars, currentId]
   );
-
-  const moodOptions = useMemo(() => {
-    const counts = new Map<TrackMoodId, number>();
-    for (const star of model.stars) {
-      for (const mood of star.moods) {
-        counts.set(mood, (counts.get(mood) ?? 0) + 1);
-      }
-    }
-    return [...counts.entries()].sort((a, b) => b[1] - a[1]);
-  }, [model.stars]);
-
-  const activeFilters =
-    (moodFilter ? 1 : 0) + (query.trim() ? 1 : 0);
 
   const selectStar = useCallback((star: NebulaStar) => {
     setSelected(star);
@@ -231,7 +262,6 @@ export default function SonicNebulaView({
   const onPointerDown = useCallback((event: ReactPointerEvent) => {
     if (event.button !== 0) return;
     if (isNebulaChrome(event.target)) return;
-    setFiltersOpen(false);
     const target = event.currentTarget;
     target.setPointerCapture(event.pointerId);
 
@@ -430,211 +460,179 @@ export default function SonicNebulaView({
     setCamera(defaultNebulaCamera());
     setSelected(null);
     setHovered(null);
-    setMoodFilter(null);
     setQuery("");
-    setFiltersOpen(false);
   }, []);
 
-  const activeStar = hovered ?? selected ?? currentStar;
-  const isDockTrackPlaying = Boolean(
-    activeStar &&
+  const toggleExpanded = useCallback(() => {
+    setExpanded((value) => !value);
+  }, []);
+
+  useEffect(() => {
+    if (!expanded) return;
+    const onKey = (event: KeyboardEvent) => {
+      if (event.key === "Escape") setExpanded(false);
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [expanded]);
+
+  useEffect(() => {
+    if (!expanded || typeof document === "undefined") return;
+    const prev = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+    return () => {
+      document.body.style.overflow = prev;
+    };
+  }, [expanded]);
+
+  const calloutLayout = useStarCalloutLayout(selected, camera, wrapRef);
+  const isSelectedPlaying = Boolean(
+    selected &&
       player.isPlaying &&
       currentId &&
-      activeStar.id === currentId
+      selected.id === currentId
   );
 
   if (!model.stars.length) {
     return <div className={styles.empty}>{t("nebula.empty")}</div>;
   }
 
-  return (
-    <div
-      className={`${styles.root}${embedded ? ` ${styles.rootEmbedded}` : ""}`}
+  const expandBtn = (
+    <button
+      type="button"
+      className={styles.toolBtn}
+      data-active={expanded}
+      onClick={toggleExpanded}
+      title={expanded ? t("nebula.collapse") : t("nebula.expand")}
+      aria-label={expanded ? t("nebula.collapse") : t("nebula.expand")}
     >
-      <div
-        ref={wrapRef}
-        className={styles.stage}
-        onWheel={onWheel}
-        onPointerDown={onPointerDown}
-        onPointerMove={onPointerMove}
-        onPointerUp={onPointerUp}
-        onPointerLeave={onPointerLeave}
-        onPointerCancel={onPointerCancel}
+      {expanded ? (
+        <UiCloseFullscreen className={styles.toolBtnIc} aria-hidden />
+      ) : (
+        <UiOpenInFull className={styles.toolBtnIc} aria-hidden />
+      )}
+    </button>
+  );
+
+  const stage = (
+    <div
+      ref={wrapRef}
+      className={`${styles.stage}${expanded ? ` ${styles.stageExpanded}` : ""}`}
+      onWheel={onWheel}
+      onPointerDown={onPointerDown}
+      onPointerMove={onPointerMove}
+      onPointerUp={onPointerUp}
+      onPointerLeave={onPointerLeave}
+      onPointerCancel={onPointerCancel}
+    >
+      <NebulaCanvas
+        className={styles.canvas}
+        frameClassName={styles.canvasFrame}
+        model={model}
+        visibleStars={visibleStars}
+        camera={camera}
+        hoveredId={hovered?.id ?? null}
+        selectedId={selected?.id ?? null}
+        currentId={currentId}
+        playing={player.isPlaying}
+        beatPhase={beatPhase}
+      />
+
+      <header
+        className={`${styles.topBar}${
+          embedded ? ` ${styles.topBarEmbedded}` : ""
+        }${expanded ? ` ${styles.topBarExpanded}` : ""}`}
+        data-nebula-chrome
+        onPointerDown={stopChromePointer}
       >
-        <NebulaCanvas
-          className={styles.canvas}
-          frameClassName={styles.canvasFrame}
-          model={model}
-          visibleStars={visibleStars}
-          camera={camera}
-          hoveredId={hovered?.id ?? null}
-          selectedId={selected?.id ?? null}
-          currentId={currentId}
-          playing={player.isPlaying}
-          beatPhase={beatPhase}
-        />
-
-        <div className={styles.legend}>
-          <span>{t("nebula.legendCenter")}</span>
-          <span>{t("nebula.legendEdge")}</span>
-          <span>{t("nebula.legendAngle")}</span>
-        </div>
-
-        <header
-          className={`${styles.topBar}${
-            embedded ? ` ${styles.topBarEmbedded}` : ""
-          }`}
-          data-nebula-chrome
-          onPointerDown={stopChromePointer}
-        >
-          {!embedded ? (
-            <div className={styles.brand}>
-              <UiAutoAwesome className={styles.brandIc} />
-              <span className={styles.brandText}>
-                {t("nebula.title")}{" "}
-                <span className={styles.brandCount}>· {model.stars.length}</span>
-              </span>
-            </div>
-          ) : null}
-          <div className={styles.topTools}>
-            <input
-              className={styles.search}
-              value={query}
-              onChange={(e) => setQuery(e.target.value)}
-              placeholder={t("nebula.searchPlaceholder")}
-              aria-label={t("nebula.searchPlaceholder")}
-            />
-            <button
-              type="button"
-              className={styles.toolBtn}
-              data-active={filtersOpen || activeFilters > 0}
-              onClick={() => setFiltersOpen((v) => !v)}
-            >
-              {t("nebula.filters")}
-              {activeFilters > 0 ? (
-                <span className={styles.toolBtnBadge}>{activeFilters}</span>
-              ) : null}
-            </button>
-            <button
-              type="button"
-              className={styles.toolBtn}
-              onClick={resetView}
-              title={t("nebula.resetView")}
-              aria-label={t("nebula.resetView")}
-            >
-              ↺
-            </button>
-          </div>
-        </header>
-
-        {filtersOpen ? (
-          <div className={styles.filterPanel} data-nebula-chrome onPointerDown={stopChromePointer}>
-            <div className={styles.filterGrid}>
-              <button
-                type="button"
-                className={styles.chip}
-                data-active={moodFilter === null}
-                onClick={() => setMoodFilter(null)}
-              >
-                {t("nebula.allMoods")}
-              </button>
-              {moodOptions.map(([mood, count]) => (
-                <button
-                  key={mood}
-                  type="button"
-                  className={styles.chip}
-                  data-active={moodFilter === mood}
-                  style={{
-                    borderColor:
-                      moodFilter === mood ? TRACK_MOOD_COLORS[mood] : undefined,
-                  }}
-                  onClick={() =>
-                    setMoodFilter((prev) => (prev === mood ? null : mood))
-                  }
-                >
-                  {t(`trackMeta.mood.${mood}`)} ({count})
-                </button>
-              ))}
-            </div>
+        {!embedded || expanded ? (
+          <div className={styles.brand}>
+            <UiAutoAwesome className={styles.brandIc} />
+            <span className={styles.brandText}>
+              {t("nebula.title")}{" "}
+              <span className={styles.brandCount}>· {model.stars.length}</span>
+            </span>
           </div>
         ) : null}
+        <div className={styles.topTools}>
+          <input
+            className={styles.search}
+            value={query}
+            onChange={(e) => setQuery(e.target.value)}
+            placeholder={t("nebula.searchPlaceholder")}
+            aria-label={t("nebula.searchPlaceholder")}
+          />
+          <button
+            type="button"
+            className={styles.toolBtn}
+            onClick={resetView}
+            title={t("nebula.resetView")}
+            aria-label={t("nebula.resetView")}
+          >
+            ↺
+          </button>
+          {expandBtn}
+        </div>
+      </header>
 
-        <footer
-          className={styles.dock}
-          data-nebula-chrome
-          onPointerDown={stopChromePointer}
-        >
-          {activeStar ? (
-            <>
-              <div className={styles.dockText}>
-                <p className={styles.dockTitle}>{activeStar.track.title}</p>
-                <p className={styles.dockSub}>
-                  {activeStar.track.artist} · {activeStar.track.album}
-                  {" · "}
-                  {Math.round(activeStar.bpm)} BPM ·{" "}
-                  {Math.round(activeStar.energy * 100)}% {t("nebula.energy")}
-                </p>
-              </div>
-              <div className={styles.dockActions}>
-                {isDockTrackPlaying ? (
-                  <span
-                    className={`player-bar2__ic ${styles.dockStudioIndicator}`}
-                    aria-hidden
-                  >
-                    <span
-                      className="player-bar2__ic-glyph player-bar2__ic-glyph--svg"
-                    >
-                      <UiGraphicEq animated />
-                    </span>
-                  </span>
-                ) : (
-                  <button
-                    type="button"
-                    className="player-bar2__ic player-bar2__ic--play"
-                    onClick={() => playStar(activeStar)}
-                    title={t("nebula.play")}
-                    aria-label={t("nebula.play")}
-                  >
-                    <span
-                      className="player-bar2__ic-glyph player-bar2__ic-glyph--svg"
-                      aria-hidden
-                    >
-                      <UiPlayArrow />
-                    </span>
-                  </button>
-                )}
-              </div>
-            </>
-          ) : (
-            <>
-              <div className={styles.dockText}>
-                <p className={styles.dockSub}>{t("nebula.hintShort")}</p>
-              </div>
-              <div className={styles.dockActions}>
-                <button
-                  type="button"
-                  className="player-bar2__ic"
-                  onClick={() => {
-                    const seed =
-                      model.stars[Math.floor(Math.random() * model.stars.length)];
-                    if (!seed) return;
-                    selectStar(seed);
-                  }}
-                  title={t("nebula.surprise")}
-                  aria-label={t("nebula.surprise")}
-                >
-                  <span
-                    className="player-bar2__ic-glyph player-bar2__ic-glyph--svg"
-                    aria-hidden
-                  >
-                    <UiShuffle />
-                  </span>
-                </button>
-              </div>
-            </>
-          )}
-        </footer>
-      </div>
+      {selected && calloutLayout ? (
+        <>
+          <div
+            className={styles.starVignette}
+            style={{
+              left: calloutLayout.anchorX,
+              top: calloutLayout.anchorY,
+              color: selected.color,
+            }}
+            aria-hidden
+          />
+          <div
+            className={styles.starCallout}
+            style={{
+              left: calloutLayout.left,
+              top: calloutLayout.top,
+              borderColor: `color-mix(in srgb, ${selected.color} 55%, var(--border, #334155))`,
+            }}
+            data-nebula-chrome
+            onPointerDown={stopChromePointer}
+          >
+            <div className={styles.starCalloutText}>
+              <p className={styles.starCalloutTitle}>{selected.track.title}</p>
+              <p className={styles.starCalloutMeta}>
+                {selected.track.artist} · {selected.track.album}
+              </p>
+            </div>
+            <button
+              type="button"
+              className={`player-bar2__ic player-bar2__ic--play ${styles.starCalloutPlay}`}
+              onClick={() => playStar(selected)}
+              title={t("nebula.play")}
+              aria-label={t("nebula.play")}
+              data-playing={isSelectedPlaying}
+            >
+              <span
+                className="player-bar2__ic-glyph player-bar2__ic-glyph--svg"
+                aria-hidden
+              >
+                <UiPlayArrow />
+              </span>
+            </button>
+          </div>
+        </>
+      ) : null}
+    </div>
+  );
+
+  return (
+    <div
+      className={`${styles.root}${embedded ? ` ${styles.rootEmbedded}` : ""}${
+        expanded ? ` ${styles.rootExpanded}` : ""
+      }`}
+    >
+      {expanded ? <div className={styles.stagePlaceholder} aria-hidden /> : null}
+      {expanded && typeof document !== "undefined"
+        ? createPortal(stage, document.body)
+        : stage}
     </div>
   );
 }
@@ -659,11 +657,10 @@ export function SonicNebulaMiniPreview({
       }),
     [index.tracks, user.state.trackPlayCounts, favorites]
   );
-  const sample = useMemo(() => {
-    if (model.stars.length <= 140) return model.stars;
-    const step = Math.ceil(model.stars.length / 140);
-    return model.stars.filter((_, i) => i % step === 0);
-  }, [model.stars]);
+  const sample = useMemo(
+    () => sampleNebulaStarsForPreview(model.stars, 300),
+    [model.stars]
+  );
 
   return (
     <button
@@ -677,12 +674,13 @@ export function SonicNebulaMiniPreview({
         frameClassName="dashboard-nebula-card__frame"
         model={model}
         visibleStars={sample}
-        camera={defaultNebulaCamera(0.46)}
+        camera={defaultNebulaCamera(0.36)}
         hoveredId={null}
         currentId={null}
         playing={false}
         interactive={false}
-        animated={false}
+        preview
+        animated
       />
     </button>
   );

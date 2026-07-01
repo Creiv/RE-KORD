@@ -1255,7 +1255,11 @@ export default function LibraryView({
   }
 
   return (
-    <div className="view-page library-page">
+    <div
+      className={`view-page library-page${
+        libBrowse === "nebula" && !selectedGenreKey ? " library-page--nebula" : ""
+      }`}
+    >
       <div className="library-page__chrome">
       {showSearchBar ? renderLibrarySearchHero() : null}
       <section className="surface-card surface-card--toolbar-only">
@@ -1427,7 +1431,13 @@ export default function LibraryView({
       </section>
       </div>
       <div className="library-page__body view-page__body">
-      <section className="surface-card">
+      <section
+        className={`surface-card${
+          libBrowse === "nebula" && !selectedGenreKey
+            ? " surface-card--nebula"
+            : ""
+        }`}
+      >
         {selectedGenreKey ? (
           <div className="library-filter-panel library-filter-panel--tight library-sort-panel library-genre-tracklist-toolbar">
             <div className="section-head section-head--page-toolbar">

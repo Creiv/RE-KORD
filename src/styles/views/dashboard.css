@@ -805,20 +805,31 @@
 }
 
 /* Nebula dashboard card */
+.dashboard-nebula.surface-card {
+  padding: var(--space-4) 0 0;
+  overflow: hidden;
+}
+
+.dashboard-nebula .section-head.section-head--page-toolbar {
+  padding-inline: var(--space-4);
+  margin-bottom: var(--space-3);
+}
+
 .dashboard-nebula .dashboard-nebula-card {
   width: 100%;
-  height: 200px;
+  height: 260px;
+  border-radius: 0;
+  border: none;
+  border-top: 1px solid color-mix(in srgb, var(--border) 70%, transparent);
 }
 
 .dashboard-nebula-card {
   position: relative;
   display: block;
   width: 100%;
-  height: 220px;
+  height: 260px;
   min-height: 0;
   padding: 0;
-  border: 1px solid color-mix(in srgb, var(--border) 70%, transparent);
-  border-radius: var(--radius-lg, 16px);
   overflow: hidden;
   background: #05060f;
   cursor: pointer;

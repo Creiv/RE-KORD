@@ -1,4 +1,4 @@
-import { useEffect, useRef } from "react";
+import { useEffect, useMemo, useRef } from "react";
 import type { NebulaFog, NebulaModel, NebulaStar, NebulaCamera } from "../../lib/sonicNebula";
 import { NEBULA_CENTER, NEBULA_GALAXY_RADIUS } from "../../lib/sonicNebula";
 
@@ -14,7 +14,9 @@ export type NebulaCanvasProps = {
   playing: boolean;
   beatPhase?: number;
   interactive?: boolean;
-  /** Preview statica (dashboard): un solo frame, niente rAF continuo. */
+  /** Anteprima compatta (dashboard): stelle più visibili, glow leggero. */
+  preview?: boolean;
+  /** Preview statica (dashboard): un solo frame se false. */
   animated?: boolean;
   className?: string;
   frameClassName?: string;
@@ -60,12 +62,14 @@ function drawStar(
     playing: boolean;
     beatPhase: number;
     dimmed: boolean;
+    zoom: number;
+    preview: boolean;
   }
 ) {
   const [r, g, b] = parseHex(star.color);
   const twinkle = 0.84 + Math.sin(t * 0.0028 + star.x * 0.04 + star.y * 0.03) * 0.16;
-  let radius = star.radius * twinkle;
-  let alpha = opts.dimmed ? 0.22 : 0.9;
+  let radius = star.radius * twinkle * (opts.preview ? 1.65 : 1);
+  let alpha = opts.dimmed ? 0.52 : opts.preview ? 0.96 : 0.9;
 
   if (opts.current && opts.playing) {
     const beat = 0.5 + 0.5 * Math.sin(opts.beatPhase * Math.PI * 2);
@@ -77,6 +81,23 @@ function drawStar(
     alpha = 1;
   }
   if (star.favorite && !opts.dimmed) alpha = Math.min(1, alpha + 0.1);
+
+  const screenR = radius * opts.zoom;
+  const simple =
+    !opts.preview &&
+    !opts.hovered &&
+    !opts.current &&
+    !star.favorite &&
+    screenR < 5.5 &&
+    !opts.playing;
+
+  if (simple) {
+    ctx.fillStyle = `rgba(${r},${g},${b},${alpha * 0.88})`;
+    ctx.beginPath();
+    ctx.arc(star.x, star.y, radius, 0, Math.PI * 2);
+    ctx.fill();
+    return;
+  }
 
   const glowR = radius * (opts.current ? 4.2 : 3.4);
   const glow = ctx.createRadialGradient(star.x, star.y, 0, star.x, star.y, glowR);
@@ -112,6 +133,24 @@ function drawStar(
     ctx.arc(star.x, star.y, radius * 2, 0, Math.PI * 2);
     ctx.stroke();
   }
+}
+
+function drawSelectionVignette(
+  ctx: CanvasRenderingContext2D,
+  star: NebulaStar,
+  t: number
+) {
+  const [r, g, b] = parseHex(star.color);
+  const pulse = 1 + Math.sin(t * 0.0022 + star.x * 0.03) * 0.07;
+  const rad = (108 + star.radius * 10) * pulse;
+  const glow = ctx.createRadialGradient(star.x, star.y, 0, star.x, star.y, rad);
+  glow.addColorStop(0, `rgba(${r},${g},${b},0.5)`);
+  glow.addColorStop(0.38, `rgba(${r},${g},${b},0.16)`);
+  glow.addColorStop(1, `rgba(${r},${g},${b},0)`);
+  ctx.fillStyle = glow;
+  ctx.beginPath();
+  ctx.arc(star.x, star.y, rad, 0, Math.PI * 2);
+  ctx.fill();
 }
 
 function drawGalaxyGuides(
@@ -181,6 +220,7 @@ function drawAlbumThreads(
 type DrawProps = {
   model: NebulaModel;
   visibleStars: readonly NebulaStar[];
+  sortedStars: readonly NebulaStar[];
   camera: NebulaCamera;
   hoveredId: string | null;
   selectedId?: string | null;
@@ -188,7 +228,37 @@ type DrawProps = {
   playing: boolean;
   beatPhase: number;
   interactive: boolean;
+  preview: boolean;
 };
+
+function nebulaWorldBounds(
+  w: number,
+  h: number,
+  camera: NebulaCamera,
+  pad = 48
+) {
+  const halfW = w / 2 / camera.zoom;
+  const halfH = h / 2 / camera.zoom;
+  return {
+    minX: camera.x - halfW - pad,
+    maxX: camera.x + halfW + pad,
+    minY: camera.y - halfH - pad,
+    maxY: camera.y + halfH + pad,
+  };
+}
+
+function isStarInBounds(
+  star: NebulaStar,
+  bounds: ReturnType<typeof nebulaWorldBounds>
+) {
+  const hit = star.radius + 12;
+  return (
+    star.x + hit >= bounds.minX &&
+    star.x - hit <= bounds.maxX &&
+    star.y + hit >= bounds.minY &&
+    star.y - hit <= bounds.maxY
+  );
+}
 
 function paintNebulaFrame(
   ctx: CanvasRenderingContext2D,
@@ -198,6 +268,10 @@ function paintNebulaFrame(
   p: DrawProps
 ) {
   const zoom = p.camera.zoom;
+  const reducedMotion =
+    typeof matchMedia !== "undefined" &&
+    matchMedia("(prefers-reduced-motion: reduce)").matches;
+  const animT = reducedMotion ? 0 : t;
 
   const bg = ctx.createRadialGradient(
     w / 2,
@@ -218,8 +292,10 @@ function paintNebulaFrame(
   ctx.scale(zoom, zoom);
   ctx.translate(-p.camera.x, -p.camera.y);
 
-  const parallax = (t * 0.00002) % 1;
-  for (let i = 0; i < 4; i += 1) {
+  const parallax = (animT * 0.00002) % 1;
+  const parallaxLayers =
+    p.preview || w < 520 || p.visibleStars.length > 900 ? 3 : 4;
+  for (let i = 0; i < parallaxLayers; i += 1) {
     const gx = NEBULA_CENTER + Math.cos(parallax * Math.PI * 2 + i) * 180;
     const gy = NEBULA_CENTER + Math.sin(parallax * Math.PI * 2 + i * 1.4) * 140;
     const rad = 240 + i * 90;
@@ -235,23 +311,38 @@ function paintNebulaFrame(
   drawGalaxyGuides(ctx, zoom);
 
   for (const fog of p.model.fogs) {
-    drawNebulaFog(ctx, fog, t, clamp(zoom, 0.35, 1.5));
+    const fogAlpha = clamp(zoom, 0.35, 1.5) * (p.preview ? 1.35 : 1);
+    drawNebulaFog(ctx, fog, animT, fogAlpha);
   }
 
-  drawAlbumThreads(ctx, p.visibleStars, zoom);
+  if (!p.preview) {
+    drawAlbumThreads(ctx, p.visibleStars, zoom);
+  }
 
+  const selectedStar = p.selectedId
+    ? p.sortedStars.find((s) => s.id === p.selectedId) ??
+      p.visibleStars.find((s) => s.id === p.selectedId) ??
+      null
+    : null;
+  if (selectedStar) {
+    drawSelectionVignette(ctx, selectedStar, animT);
+  }
+
+  const bounds = nebulaWorldBounds(w, h, p.camera);
   const isFocused = (id: string) =>
     id === p.hoveredId || id === p.selectedId;
-  const hasFocus = Boolean(p.hoveredId || p.selectedId);
-  const sorted = [...p.visibleStars].sort((a, b) => a.radius - b.radius);
-  for (const star of sorted) {
+  const hasFocus = Boolean(p.selectedId);
+  for (const star of p.sortedStars) {
+    if (!isStarInBounds(star, bounds) && star.id !== p.currentId) continue;
     const dimmed = hasFocus && !isFocused(star.id) && star.id !== p.currentId;
-    drawStar(ctx, star, t, {
+    drawStar(ctx, star, animT, {
       hovered: isFocused(star.id),
       current: star.id === p.currentId,
       playing: p.playing,
       beatPhase: p.beatPhase,
       dimmed,
+      zoom,
+      preview: p.preview,
     });
   }
 
@@ -268,6 +359,7 @@ export function NebulaCanvas({
   playing,
   beatPhase = 0,
   interactive = true,
+  preview = false,
   animated = true,
   className,
   frameClassName,
@@ -276,11 +368,18 @@ export function NebulaCanvas({
   const frameRef = useRef<HTMLDivElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const rafRef = useRef(0);
+  const lastDrawRef = useRef(0);
   const sizeRef = useRef({ w: 0, h: 0, dpr: 1 });
   const redrawRef = useRef<((t: number) => void) | null>(null);
+  const sortedStars = useMemo(
+    () => [...visibleStars].sort((a, b) => a.radius - b.radius),
+    [visibleStars]
+  );
+
   const propsRef = useRef<DrawProps>({
     model,
     visibleStars,
+    sortedStars,
     camera,
     hoveredId,
     selectedId,
@@ -288,12 +387,14 @@ export function NebulaCanvas({
     playing,
     beatPhase,
     interactive,
+    preview,
   });
 
   useEffect(() => {
     propsRef.current = {
       model,
       visibleStars,
+      sortedStars,
       camera,
       hoveredId,
       selectedId,
@@ -301,11 +402,13 @@ export function NebulaCanvas({
       playing,
       beatPhase,
       interactive,
+      preview,
     };
     redrawRef.current?.(performance.now());
   }, [
     model,
     visibleStars,
+    sortedStars,
     camera,
     hoveredId,
     selectedId,
@@ -313,6 +416,7 @@ export function NebulaCanvas({
     playing,
     beatPhase,
     interactive,
+    preview,
   ]);
 
   useEffect(() => {
@@ -331,7 +435,8 @@ export function NebulaCanvas({
       const rect = frame.getBoundingClientRect();
       const w = Math.max(1, Math.floor(rect.width));
       const h = Math.max(1, Math.floor(rect.height));
-      const dpr = Math.min(window.devicePixelRatio || 1, 2);
+      const cap = w < 520 ? 1.5 : 2;
+      const dpr = Math.min(window.devicePixelRatio || 1, cap);
       const prev = sizeRef.current;
       if (prev.w === w && prev.h === h && prev.dpr === dpr) return;
       sizeRef.current = { w, h, dpr };
@@ -363,7 +468,13 @@ export function NebulaCanvas({
     }
 
     const loop = (t: number) => {
-      drawFrame(t);
+      const p = propsRef.current;
+      const active = p.playing || Boolean(p.hoveredId || p.selectedId);
+      const minInterval = active ? 0 : 40;
+      if (t - lastDrawRef.current >= minInterval) {
+        drawFrame(t);
+        lastDrawRef.current = t;
+      }
       rafRef.current = requestAnimationFrame(loop);
     };
     rafRef.current = requestAnimationFrame(loop);

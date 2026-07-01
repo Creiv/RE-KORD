@@ -679,3 +679,67 @@ input.settings-glass-opacity__slider {
   overflow: hidden;
   border-radius: var(--radius-md, 12px);
 }
+
+.library-page__body > .surface-card.surface-card--nebula,
+.surface-card.surface-card--nebula {
+  padding: 0;
+  margin: 0;
+  overflow: hidden;
+  border: none;
+  background: transparent;
+  box-shadow: none;
+  border-radius: 0;
+}
+
+:root[data-glass-surfaces="1"] .library-page__body > .surface-card.surface-card--nebula,
+:root[data-glass-surfaces="1"] .surface-card.surface-card--nebula {
+  background: transparent;
+  border: none;
+  box-shadow: none;
+}
+
+:root[data-glass-surfaces="1"]
+  .library-page__body
+  > .surface-card.surface-card--nebula::before,
+:root[data-glass-surfaces="1"] .surface-card.surface-card--nebula::before {
+  content: none;
+}
+
+.library-page--nebula .library-page__body {
+  gap: 0;
+}
+
+@media (max-width: 720px) {
+  .library-page--nebula {
+    display: flex;
+    flex-direction: column;
+    min-height: 0;
+    overflow: hidden;
+  }
+
+  .library-page--nebula .library-page__chrome {
+    flex-shrink: 0;
+  }
+
+  .library-page--nebula .library-page__body {
+    flex: 1 1 auto;
+    min-height: 0;
+    gap: 0;
+  }
+
+  .library-page--nebula .section-head__tools > .primary-btn,
+  .library-page--nebula .section-head__tools > button.primary-btn,
+  .library-page--nebula .section-head__tools .play-collection-btn {
+    display: none;
+  }
+
+  .library-nebula-embed {
+    flex: 1 1 auto;
+    width: 100%;
+    height: auto;
+    min-height: min(72vw, calc(100dvh - 12.5rem));
+    max-height: calc(100dvh - 12.5rem);
+    aspect-ratio: 1;
+    border-radius: var(--radius-sm, 10px);
+  }
+}
