@@ -1,3 +1,4 @@
+import { lookupByRelPathAliases } from "../../lib/libraryNav";
 import { savePlectrBestScore } from "../../lib/api";
 import type {
   LibraryEntityDelta,
@@ -34,7 +35,7 @@ export function plectrBestFromUserState(
   relPath: string
 ): GameResult | null {
   if (!plectrBests) return null;
-  return plectrBestFromRaw(plectrBests[relPath]);
+  return plectrBestFromRaw(lookupByRelPathAliases(plectrBests, relPath));
 }
 
 export function gameResultToPlectrBest(result: GameResult): PlectrBestScore {

@@ -87,11 +87,11 @@ function filterPoolForExclusions(
   );
 }
 
-function moodOverlaps(seed: EnrichedTrack, t: EnrichedTrack): boolean {
+function countMoodOverlaps(seed: EnrichedTrack, t: EnrichedTrack): number {
   const s = parseTrackMoods(seed.meta);
-  if (s.length === 0) return false;
+  if (s.length === 0) return 0;
   const set = new Set(s);
-  return parseTrackMoods(t.meta).some((m) => set.has(m));
+  return parseTrackMoods(t.meta).filter((m) => set.has(m)).length;
 }
 
 function genreOverlaps(seed: EnrichedTrack, t: EnrichedTrack): boolean {
@@ -137,14 +137,21 @@ export function buildCardPlayQueueFromSeed(
     opts
   ).filter((t) => t.relPath !== seedCanon.relPath);
 
-  const mood: EnrichedTrack[] = [];
+  const seedMoodCount = parseTrackMoods(seedCanon.meta).length;
+  const moodStrong: EnrichedTrack[] = [];
+  const moodWeak: EnrichedTrack[] = [];
   const genre: EnrichedTrack[] = [];
   const artistTier: EnrichedTrack[] = [];
   const rest: EnrichedTrack[] = [];
 
   for (const t of pool) {
-    if (moodOverlaps(seedCanon, t)) {
-      mood.push(t);
+    const moodOverlap = countMoodOverlaps(seedCanon, t);
+    if (moodOverlap >= 2 && seedMoodCount >= 2) {
+      moodStrong.push(t);
+      continue;
+    }
+    if (moodOverlap >= 1) {
+      moodWeak.push(t);
       continue;
     }
     if (genreOverlaps(seedCanon, t)) {
@@ -159,7 +166,8 @@ export function buildCardPlayQueueFromSeed(
   }
 
   const tail = [
-    ...fisherYatesShuffle(mood),
+    ...fisherYatesShuffle(moodStrong),
+    ...fisherYatesShuffle(moodWeak),
     ...fisherYatesShuffle(genre),
     ...fisherYatesShuffle(artistTier),
     ...fisherYatesShuffle(rest),

@@ -9,11 +9,6 @@ function isDifficultyId(raw: string): raw is DifficultyId {
   return (VALID_DIFF as readonly string[]).includes(raw);
 }
 
-/** @deprecated use migratePlectrPlayMode */
-export function migratePlectrDifficulty(raw: string | null): DifficultyId {
-  return migratePlectrPlayMode(raw);
-}
-
 export function migratePlectrPlayMode(raw: string | null): PlectrPlayMode {
   if (raw === "extreme") return "hard";
   if (raw && isDifficultyId(raw)) return raw;
@@ -34,9 +29,4 @@ export function savePlectrPlayMode(id: PlectrPlayMode): void {
   } catch {
     /* ignore quota / private mode */
   }
-}
-
-/** @deprecated use loadPlectrPlayMode */
-export function loadPlectrDifficulty(): DifficultyId {
-  return loadPlectrPlayMode();
 }

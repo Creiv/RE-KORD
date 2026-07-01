@@ -11,9 +11,9 @@ import { useMatchMedia } from "../hooks/useMatchMedia";
 import { useDashboardSmartRadioGrid } from "../hooks/useDashboardSmartRadioGrid";
 import { MOBILE_LAYOUT_MQ } from "../lib/breakpoints";
 import { enrichTracksFromLibrary } from "../lib/libraryNav";
+import { eligibleTracksForIntelligentRandom } from "../lib/randomExclusions";
 import {
   buildSmartRadioCandidatePool,
-  pickRandomFromPool,
   pickSmartRadioDisplayTracks,
   SMART_RADIO_MAX_DISPLAY_TRACKS,
 } from "../lib/smartRadioTiles";
@@ -160,7 +160,8 @@ export function DashboardSmartRadioCard({
   const user = useUserState();
   const isMobile = useMatchMedia(MOBILE_LAYOUT_MQ);
   const { ref, columns, slotCount } = useDashboardSmartRadioGrid(isMobile);
-  const { playGlobalRadio } = useLibraryPlayback(index.tracks);
+  const { playGlobalRadio, playPoolShuffle, excludedAlbums, excludedTracks } =
+    useLibraryPlayback(index.tracks);
 
   const candidatePool = useMemo(() => {
     const recent = enrichTracksFromLibrary(
@@ -219,13 +220,15 @@ export function DashboardSmartRadioCard({
   );
 
   const playRandom = useCallback(() => {
-    const pick =
-      pickRandomFromPool(candidatePool) ?? pickRandomFromPool(index.tracks);
-    if (pick) {
-      playGlobalRadio(pick, true);
-      goListen();
-    }
-  }, [candidatePool, index.tracks, playGlobalRadio, goListen]);
+    const eligible = eligibleTracksForIntelligentRandom(
+      index,
+      excludedAlbums,
+      excludedTracks,
+    );
+    if (!eligible.length) return;
+    playPoolShuffle(eligible, true);
+    goListen();
+  }, [index, excludedAlbums, excludedTracks, playPoolShuffle, goListen]);
 
   const canShowGrid =
     candidatePool.length > 0 || displayTracks.length > 0 || index.tracks.length > 0;

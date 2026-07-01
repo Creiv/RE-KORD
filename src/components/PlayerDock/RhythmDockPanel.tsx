@@ -202,7 +202,7 @@ export const RhythmDockPanel = memo(function RhythmDockPanel({
     setBestRevision((n) => n + 1);
   }, [track.relPath, user.state.plectrBests, flushPendingRun]);
 
-  const trackRelRef = useRef(track.relPath);
+  const trackRef = useRef(track);
   const playerBridgeRef = useRef({
     audioRef: p.audioRef,
     seek: p.seek,
@@ -211,7 +211,7 @@ export const RhythmDockPanel = memo(function RhythmDockPanel({
     isPlaying: p.isPlaying,
   });
   useLayoutEffect(() => {
-    trackRelRef.current = track.relPath;
+    trackRef.current = track;
     playerBridgeRef.current = {
       audioRef: p.audioRef,
       seek: p.seek,
@@ -225,14 +225,14 @@ export const RhythmDockPanel = memo(function RhythmDockPanel({
     () => ({
       getCurrentTime: () => {
         const audio = playerBridgeRef.current.audioRef.current;
-        if (!audio || !audioElementMatchesTrack(audio, trackRelRef.current)) {
+        if (!audio || !audioElementMatchesTrack(audio, trackRef.current)) {
           return 0;
         }
         return audio.currentTime;
       },
       getAudio: () => {
         const audio = playerBridgeRef.current.audioRef.current;
-        if (!audio || !audioElementMatchesTrack(audio, trackRelRef.current)) {
+        if (!audio || !audioElementMatchesTrack(audio, trackRef.current)) {
           return null;
         }
         return audio;

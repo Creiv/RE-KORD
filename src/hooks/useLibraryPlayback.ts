@@ -9,7 +9,10 @@ import {
   buildSmartRandomQueue,
   splitQueueWindow,
 } from "../lib/smartShuffle";
-import { filterTracksForShuffleExclusions } from "../lib/randomExclusions";
+import {
+  filterTracksForShuffleExclusions,
+  isTrackShuffleExcluded,
+} from "../lib/randomExclusions";
 
 export function useLibraryPlayback(
   libraryTracks: readonly EnrichedTrack[] | undefined
@@ -60,6 +63,14 @@ export function useLibraryPlayback(
     [p]
   );
 
+  const radioRespectsExclusions = useCallback(
+    (seed: EnrichedTrack, respectExclusions: boolean) => {
+      if (!respectExclusions) return false;
+      return !isTrackShuffleExcluded(seed, excludedTracks, excludedAlbums);
+    },
+    [excludedAlbums, excludedTracks]
+  );
+
   const playGlobalRadio = useCallback(
     (seed: EnrichedTrack, respectExclusions = true) => {
       const resolvedSeed =
@@ -71,13 +82,23 @@ export function useLibraryPlayback(
         return;
       }
       const q = buildCardPlayQueueFromSeed(resolvedSeed, libraryTracks, {
-        respectExclusions,
+        respectExclusions: radioRespectsExclusions(
+          resolvedSeed,
+          respectExclusions
+        ),
         excludedAlbums,
         excludedTracks,
       });
       playWindowed(q);
     },
-    [libraryTracks, p, excludedAlbums, excludedTracks, playWindowed]
+    [
+      libraryTracks,
+      p,
+      excludedAlbums,
+      excludedTracks,
+      playWindowed,
+      radioRespectsExclusions,
+    ]
   );
 
   const playCollectionShuffle = useCallback(
@@ -122,7 +143,10 @@ export function useLibraryPlayback(
       const curIdx = p.currentIndex;
       const resolved = resolveTrackFromLibrary(current, libraryTracks);
       const generated = buildCardPlayQueueFromSeed(resolved, libraryTracks, {
-        respectExclusions,
+        respectExclusions: radioRespectsExclusions(
+          resolved,
+          respectExclusions
+        ),
         excludedAlbums,
         excludedTracks,
       });
@@ -133,7 +157,7 @@ export function useLibraryPlayback(
       const { window, remainder } = splitQueueWindow(newFull);
       p.replaceQueueKeepingPlayback(window, { refillRemainder: remainder });
     },
-    [libraryTracks, p, excludedAlbums, excludedTracks],
+    [libraryTracks, p, excludedAlbums, excludedTracks, radioRespectsExclusions],
   );
 
   return {

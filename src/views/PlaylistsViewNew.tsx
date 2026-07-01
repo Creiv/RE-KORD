@@ -131,6 +131,8 @@ function PlaylistsViewNew({
                     <button
                       type="button"
                       className="chip-btn"
+                      disabled={!p.current}
+                      aria-disabled={!p.current}
                       onClick={() =>
                         p.current &&
                         user.addTrackToPlaylist(playlist.id, p.current)

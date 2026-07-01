@@ -1,4 +1,5 @@
 import type { EnrichedTrack, LibraryIndex, LibraryTrackIndex } from "../types";
+import { relPathSetHas } from "./libraryNav";
 
 export function isTrackShuffleExcluded(
   track: { relPath: string; albumId?: string; artist: string; album: string },
@@ -6,7 +7,7 @@ export function isTrackShuffleExcluded(
   excludedAlbums: Set<string>
 ): boolean {
   return (
-    excludedTracks.has(track.relPath) ||
+    relPathSetHas(excludedTracks, track.relPath) ||
     isTrackAlbumShuffleExcluded(track, excludedAlbums)
   );
 }
@@ -36,7 +37,7 @@ export function eligibleTracksForIntelligentRandom(
 ): LibraryTrackIndex[] {
   return index.tracks.filter(
     (track) =>
-      !excludedTracks.has(track.relPath) &&
+      !relPathSetHas(excludedTracks, track.relPath) &&
       !isTrackAlbumShuffleExcluded(track, excludedAlbums)
   );
 }

@@ -75,6 +75,17 @@ describe("castMedia", () => {
     expect(url).toContain("format=mp3")
   })
 
+  it("buildCastTrackPayload uses filePath for loose tracks", () => {
+    const loose = {
+      ...track,
+      relPath: "Artist/Tracks/song.mp3",
+      filePath: "Artist/song.mp3",
+    } as EnrichedTrack
+    const payload = buildCastTrackPayload(loose, "http://192.168.0.10:3001", 0)
+    expect(payload.streamUrl).toContain("/media/Artist/song.mp3")
+    expect(payload.coverUrl).toContain("/api/cover?")
+  })
+
   it("buildCastTrackPayload include stream e copertina", () => {
     const payload = buildCastTrackPayload(track, "http://192.168.0.10:3001", 12)
     expect(payload.streamUrl).toContain("/media/Artist/Album/song.mp3")

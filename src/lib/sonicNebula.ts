@@ -1,4 +1,5 @@
 import { getCachedChart } from "../game/lib/chartCache";
+import { lookupByRelPathAliases, relPathSetHas } from "./libraryNav";
 import { stableHash } from "../game/lib/math";
 import { parseTrackGenres } from "./genres";
 import {
@@ -320,8 +321,8 @@ export function buildNebulaModel(
       layoutRank((bpms[i]! - bpmMin) / bpmSpan, bpmRanks[i]!),
       layoutRank(energy, energyRanks[i]!)
     );
-    const playCount = opts.playCounts[track.relPath] ?? 0;
-    const favorite = opts.favorites.has(track.relPath);
+    const playCount = lookupByRelPathAliases(opts.playCounts, track.relPath) ?? 0;
+    const favorite = relPathSetHas(opts.favorites, track.relPath);
     return {
       id: track.relPath,
       track,

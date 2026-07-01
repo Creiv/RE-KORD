@@ -26,6 +26,8 @@ import { useViewportHeight } from "../../hooks/useViewportHeight";
 import { useSyncStatusSnackbar } from "../../hooks/useSyncStatusSnackbar";
 import { MOBILE_LAYOUT_MQ } from "../../lib/breakpoints";
 import {
+  findLibraryTrackByRelPath,
+  lookupByRelPathAliases,
   openArtistInLibrary,
   openTrackInLibrary,
   resolveTrackFromLibrary,
@@ -524,12 +526,13 @@ export function AppShell() {
   const favoriteTracks = useMemo(() => {
     if (!index || route.section !== "favorites") return [];
     return user.state.favorites
-      .map((relPath) => index.tracks.find((track) => track.relPath === relPath))
+      .map((relPath) => findLibraryTrackByRelPath(index.tracks, relPath))
       .filter((track): track is LibraryTrackIndex => Boolean(track))
       .sort(
         (a, b) =>
-          (user.state.trackPlayCounts?.[b.relPath] ?? 0) -
-            (user.state.trackPlayCounts?.[a.relPath] ?? 0) ||
+          (lookupByRelPathAliases(user.state.trackPlayCounts, b.relPath) ?? 0) -
+            (lookupByRelPathAliases(user.state.trackPlayCounts, a.relPath) ??
+              0) ||
           a.title.localeCompare(b.title, undefined, { numeric: true })
       );
   }, [index, route.section, user.state.favorites, user.state.trackPlayCounts]);

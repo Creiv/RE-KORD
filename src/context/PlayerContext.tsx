@@ -11,6 +11,12 @@ import {
   useSyncExternalStore,
 } from "react";
 import { resolveTrackFromLibrary, trackPlaybackKey } from "../lib/libraryNav";
+import {
+  mediaSessionHasNext,
+  mediaSessionHasPrevious,
+  resolveNextIndex,
+  resolvePrevIndex,
+} from "../lib/playerQueueAdvance";
 import { mediaUrlForTrack, fetchConfig } from "../lib/api";
 import { enrichTrack } from "../lib/enrichTrack";
 import { enrichedTracksNeedPlayerResync } from "../lib/libraryIndex";
@@ -41,6 +47,10 @@ import {
   QUEUE_REFILL_BATCH,
   QUEUE_REFILL_THRESHOLD,
 } from "../lib/smartShuffle";
+import {
+  computeQueueInsertIndex,
+  insertTracksInQueue,
+} from "../lib/queueInsert";
 import {
   resetPlayerProgressTime,
   setPlayerProgressTime,
@@ -125,29 +135,6 @@ type TrackRowPlayerStore = {
 };
 
 const TrackRowPlayerContext = createContext<TrackRowPlayerStore | null>(null);
-
-function pickNextIndex(
-  len: number,
-  cur: number,
-  repeat: RepeatMode,
-): number | null {
-  if (len <= 0) return null;
-  if (repeat === "one") return cur;
-  if (cur < len - 1) return cur + 1;
-  if (repeat === "all") return 0;
-  return null;
-}
-
-function pickPrevIndex(
-  len: number,
-  cur: number,
-  repeat: RepeatMode
-): number | null {
-  if (len <= 0) return null;
-  if (cur > 0) return cur - 1;
-  if (repeat === "all") return len - 1;
-  return null;
-}
 
 const MAX_QUEUE_LENGTH = 500;
 
@@ -504,15 +491,63 @@ export function PlayerProvider({ children }: { children: React.ReactNode }) {
     return { wasActive, incomingIdx, incomingDeckIx, outgoingDeckIx };
   }, [snapGainsToSolo]);
 
+  const spliceRemainderBatch = useCallback((): EnrichedTrack[] => {
+    const remainder = queueRemainderRef.current;
+    if (!remainder?.length) return [];
+    const q = queueRef.current;
+    const space = MAX_QUEUE_LENGTH - q.length;
+    if (space <= 0) return [];
+    const batch = remainder.splice(
+      0,
+      Math.min(QUEUE_REFILL_BATCH, Math.max(0, space)),
+    );
+    if (!remainder.length) queueRemainderRef.current = null;
+    if (batch.length && shuffleRef.current && preShuffleRelPathsRef.current) {
+      preShuffleRelPathsRef.current = [
+        ...preShuffleRelPathsRef.current,
+        ...batch.map((t) => t.relPath),
+      ];
+    }
+    if (batch.length) {
+      const nextQ = [...q, ...batch];
+      queueRef.current = nextQ;
+      setQueue(nextQ);
+    }
+    return batch;
+  }, []);
+
+  const resolveNextPlaybackIndex = useCallback(
+    (baseIndex: number): number | null => {
+      const cur = baseIndex;
+      let len = queueRef.current.length;
+      const hasRemainder = !!queueRemainderRef.current?.length;
+      let nextIdx = resolveNextIndex(len, cur, repeatRef.current, hasRemainder);
+      if (nextIdx == null) return null;
+      if (nextIdx >= len && hasRemainder) {
+        spliceRemainderBatch();
+        len = queueRef.current.length;
+        if (nextIdx >= len) {
+          nextIdx = resolveNextIndex(
+            len,
+            cur,
+            repeatRef.current,
+            !!queueRemainderRef.current?.length,
+          );
+        }
+      }
+      return nextIdx;
+    },
+    [spliceRemainderBatch],
+  );
+
   const prefetchNextOnInactiveDeck = useCallback(() => {
     if (crossfadeBusyRef.current) return;
     if (audioCrossfadeSecRef.current > 0) return;
     if (repeatRef.current === "one") return;
-    const q = queueRef.current;
     const idx = indexRef.current;
-    const nextIdx = pickNextIndex(q.length, idx, repeatRef.current);
+    const nextIdx = resolveNextPlaybackIndex(idx);
     if (nextIdx == null) return;
-    const nextTr = q[nextIdx];
+    const nextTr = queueRef.current[nextIdx];
     if (!nextTr) return;
     const outIx = activeDeckRef.current;
     const inIx: DeckIx = outIx === 0 ? 1 : 0;
@@ -528,7 +563,7 @@ export function PlayerProvider({ children }: { children: React.ReactNode }) {
     prefetchedRelPathRef.current = path;
     inEl.src = mediaUrlForTrack(nextTr);
     inEl.load();
-  }, []);
+  }, [resolveNextPlaybackIndex]);
 
   const startCrossfade = useCallback(async () => {
     const sec = audioCrossfadeSecRef.current;
@@ -536,9 +571,8 @@ export function PlayerProvider({ children }: { children: React.ReactNode }) {
     if (crossfadeBusyRef.current) return;
     if (repeatRef.current === "one") return;
 
-    const q = queueRef.current;
     const idx = indexRef.current;
-    const nextIdx = pickNextIndex(q.length, idx, repeatRef.current);
+    const nextIdx = resolveNextPlaybackIndex(idx);
     if (nextIdx == null) return;
 
     const outIx = activeDeckRef.current;
@@ -555,7 +589,7 @@ export function PlayerProvider({ children }: { children: React.ReactNode }) {
     const remain = d - ct;
     if (remain < 0.08) return;
 
-    const nextTr = q[nextIdx];
+    const nextTr = queueRef.current[nextIdx];
     if (!nextTr) return;
 
     const ctx = audioCtxRef.current;
@@ -605,7 +639,7 @@ export function PlayerProvider({ children }: { children: React.ReactNode }) {
       if (token !== crossfadeGenRef.current) return;
       finalizeCrossfade();
     }, fadeLen * 1000 + 40);
-  }, [finalizeCrossfade, snapGainsToSolo]);
+  }, [finalizeCrossfade, resolveNextPlaybackIndex, snapGainsToSolo]);
 
   /** Fine brano: su mobile con schermo spento `ended` / `timeupdate` possono arrivare tardi o mancare. */
   const advanceAfterTrackCompleted = useCallback(() => {
@@ -631,11 +665,7 @@ export function PlayerProvider({ children }: { children: React.ReactNode }) {
       return;
     }
 
-    const nextIndex = pickNextIndex(
-      queueRef.current.length,
-      indexRef.current,
-      repeatRef.current,
-    );
+    const nextIndex = resolveNextPlaybackIndex(indexRef.current);
     if (nextIndex == null) {
       keepPlayingRef.current = false;
       setIsPlaying(false);
@@ -644,7 +674,7 @@ export function PlayerProvider({ children }: { children: React.ReactNode }) {
     setCurrentIndex(nextIndex);
     setCurrent(queueRef.current[nextIndex] || null);
     keepPlayingRef.current = true;
-  }, []);
+  }, [resolveNextPlaybackIndex]);
 
   useLayoutEffect(() => {
     const a0 = audioDeck0Ref.current;
@@ -1136,8 +1166,17 @@ export function PlayerProvider({ children }: { children: React.ReactNode }) {
       mediaId: track.relPath,
       queue: queueEntries,
       queueIndex: activeIndex,
-      hasPrevious: qIndex > 0,
-      hasNext: qIndex < q.length - 1,
+      hasPrevious: mediaSessionHasPrevious(
+        qIndex,
+        q.length,
+        repeatRef.current,
+      ),
+      hasNext: mediaSessionHasNext(
+        qIndex,
+        q.length,
+        repeatRef.current,
+        !!queueRemainderRef.current?.length,
+      ),
     });
   }, [duration]);
 
@@ -1409,35 +1448,35 @@ export function PlayerProvider({ children }: { children: React.ReactNode }) {
       const space = Math.max(0, MAX_QUEUE_LENGTH - prev.length);
       const toAdd = items.slice(0, space);
       if (!toAdd.length) return;
-      if (!current && toAdd[0]) setCurrent(toAdd[0]);
-      setQueue((p) => {
-        const sp = Math.max(0, MAX_QUEUE_LENGTH - p.length);
-        const add = items.slice(0, sp);
-        if (shuffleRef.current) {
-          preShuffleRelPathsRef.current = [
-            ...(preShuffleRelPathsRef.current ?? p.map((t) => t.relPath)),
-            ...add.map((t) => t.relPath),
-          ];
-        }
-        if (!add.length) return p;
-        // Inserimento subito dopo il corrente, dietro alle aggiunte manuali
-        // già in attesa: il brano parte "prossimo", mai in fondo né dopo i
-        // lotti rigenerati dalla finestra scorrevole. Con un crossfade in
-        // corso si parte dopo il brano già in dissolvenza, per non spostare
-        // l'indice che i deck stanno usando.
-        const base =
-          crossfadeBusyRef.current && crossfadeNextIdxRef.current != null
-            ? crossfadeNextIdxRef.current + 1
-            : indexRef.current + 1;
-        let at = Math.min(base, p.length);
-        while (at < p.length && manualQueuedRef.current.has(p[at]!.relPath)) {
-          at += 1;
-        }
-        for (const t of add) manualQueuedRef.current.add(t.relPath);
-        return [...p.slice(0, at), ...add, ...p.slice(at)];
+      if (!currentRef.current && toAdd[0]) {
+        setCurrent(toAdd[0]);
+        keepPlayingRef.current = true;
+      }
+      const at = computeQueueInsertIndex(prev, {
+        currentRelPath: currentRef.current?.relPath ?? null,
+        currentIndex: indexRef.current,
+        crossfadeBusy: crossfadeBusyRef.current,
+        crossfadeNextIndex: crossfadeNextIdxRef.current,
+        manualQueuedPaths: manualQueuedRef.current,
       });
+      const sp = Math.max(0, MAX_QUEUE_LENGTH - prev.length);
+      const add = items.slice(0, sp);
+      if (!add.length) return;
+      if (shuffleRef.current) {
+        const paths =
+          preShuffleRelPathsRef.current ?? prev.map((t) => t.relPath);
+        preShuffleRelPathsRef.current = insertTracksInQueue(
+          paths.map((relPath) => ({ relPath })),
+          add.map((t) => ({ relPath: t.relPath })),
+          at,
+        ).map((entry) => entry.relPath);
+      }
+      for (const t of add) manualQueuedRef.current.add(t.relPath);
+      const next = insertTracksInQueue(prev, add, at);
+      queueRef.current = next;
+      setQueue(next);
     },
-    [current]
+    [],
   );
 
   const removeFromQueue = useCallback((index: number) => {
@@ -1550,17 +1589,17 @@ export function PlayerProvider({ children }: { children: React.ReactNode }) {
       crossfade.wasActive && crossfade.incomingIdx != null
         ? crossfade.incomingIdx
         : currentIndex;
-    const nextIndex = pickNextIndex(queue.length, baseIndex, repeat);
+    const nextIndex = resolveNextPlaybackIndex(baseIndex);
     if (nextIndex == null) {
       keepPlayingRef.current = false;
       setIsPlaying(false);
       return;
     }
     setCurrentIndex(nextIndex);
-    setCurrent(queue[nextIndex] || null);
+    setCurrent(queueRef.current[nextIndex] || null);
     keepPlayingRef.current = true;
     syncMediaSessionNowRef.current();
-  }, [abortCrossfade, currentIndex, queue, repeat]);
+  }, [abortCrossfade, currentIndex, queue.length, repeat, resolveNextPlaybackIndex]);
 
   const setShuffle = useCallback((enable: boolean) => {
     if (!enable) {
@@ -1626,7 +1665,7 @@ export function PlayerProvider({ children }: { children: React.ReactNode }) {
         return;
       }
     }
-    const prevIndex = pickPrevIndex(queue.length, currentIndex, repeat);
+    const prevIndex = resolvePrevIndex(queue.length, currentIndex, repeat);
     if (prevIndex == null) return;
     setCurrentIndex(prevIndex);
     setCurrent(queue[prevIndex] || null);

@@ -3,6 +3,7 @@ import type {
   LibraryAlbumIndex,
   LibraryIndex,
   LibraryTrackIndex,
+  PlectrBestScore,
 } from "../types"
 
 export const LOOSE_ALBUM_ID = "__loose__"
@@ -129,23 +130,92 @@ export function legacyLooseRelPath(relPath: string): string {
   return relPath.replace("/Tracce/", "/Tracks/")
 }
 
-/** @deprecated alias for legacyLooseRelPath */
-export const normalizeLooseRelPath = legacyLooseRelPath
+export function legacyLooseRelPathReverse(relPath: string): string {
+  return relPath.replace("/Tracks/", "/Tracce/")
+}
+
+/** Varianti uniche di un relPath loose (originale, Tracce→Tracks, Tracks→Tracce). */
+export function looseRelPathAliases(relPath: string): string[] {
+  const migrated = legacyLooseRelPath(relPath)
+  const legacy = legacyLooseRelPathReverse(relPath)
+  return [...new Set([relPath, migrated, legacy].filter(Boolean))]
+}
+
+export function relPathSetHas(
+  set: ReadonlySet<string>,
+  relPath: string,
+): boolean {
+  for (const alias of looseRelPathAliases(relPath)) {
+    if (set.has(alias)) return true
+  }
+  return false
+}
+
+export function lookupByRelPathAliases<T>(
+  record: Record<string, T> | undefined,
+  relPath: string,
+): T | undefined {
+  if (!record) return undefined
+  for (const alias of looseRelPathAliases(relPath)) {
+    if (alias in record) return record[alias]
+  }
+  return undefined
+}
+
+export function findLibraryTrackByRelPath(
+  tracks: readonly LibraryTrackIndex[],
+  relPath: string,
+): LibraryTrackIndex | undefined {
+  const lookup = buildLibraryTrackLookup(tracks)
+  for (const alias of looseRelPathAliases(relPath)) {
+    const hit = lookup.byRelPath.get(alias)
+    if (hit) return hit
+  }
+  return undefined
+}
 
 export function isFavoriteRelPath(
   favorites: ReadonlySet<string>,
   relPath: string,
 ): boolean {
-  if (favorites.has(relPath)) return true
-  const migrated = legacyLooseRelPath(relPath)
-  if (migrated !== relPath && favorites.has(migrated)) return true
-  const legacy = relPath.replace("/Tracks/", "/Tracce/")
-  if (legacy !== relPath && favorites.has(legacy)) return true
-  return false
+  return relPathSetHas(favorites, relPath)
 }
 
 function uniqRelPaths(paths: string[]): string[] {
   return [...new Set(paths.filter(Boolean))]
+}
+
+function pickBetterPlectrBest(
+  a: PlectrBestScore,
+  b: PlectrBestScore,
+): PlectrBestScore {
+  if (a.score !== b.score) return a.score > b.score ? a : b
+  return (a.accuracy ?? 0) >= (b.accuracy ?? 0) ? a : b
+}
+
+function migrateTrackPlayCounts(
+  counts: Record<string, number> | undefined,
+): Record<string, number> {
+  const out: Record<string, number> = {}
+  for (const [key, count] of Object.entries(counts || {})) {
+    if (!key || !Number.isFinite(count) || count <= 0) continue
+    const migrated = legacyLooseRelPath(key)
+    out[migrated] = (out[migrated] ?? 0) + count
+  }
+  return out
+}
+
+function migratePlectrBestsRecord(
+  bests: Record<string, PlectrBestScore> | undefined,
+): Record<string, PlectrBestScore> {
+  const out: Record<string, PlectrBestScore> = {}
+  for (const [key, best] of Object.entries(bests || {})) {
+    if (!key || !best) continue
+    const migrated = legacyLooseRelPath(key)
+    const prev = out[migrated]
+    out[migrated] = prev ? pickBetterPlectrBest(prev, best) : best
+  }
+  return out
 }
 
 /** Migra path loose Tracce → Tracks in user state (una tantum). */
@@ -179,6 +249,8 @@ export function migrateLooseTrackPathsInUserState<T extends import("../types").U
     shuffleExcludedTrackRelPaths: uniqRelPaths(
       (state.shuffleExcludedTrackRelPaths || []).map(mapRel),
     ),
+    trackPlayCounts: migrateTrackPlayCounts(state.trackPlayCounts),
+    plectrBests: migratePlectrBestsRecord(state.plectrBests),
     loosePathsMigrated: true,
   }
 }

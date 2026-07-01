@@ -1711,9 +1711,6 @@ export async function pruneAlbumLibraryMetadataForAlbum(
   }>(response)
 }
 
-/** @deprecated Usa {@link pruneAlbumLibraryMetadataForAlbum}. */
-export const pruneOrphanTrackMetaForAlbum = pruneAlbumLibraryMetadataForAlbum
-
 export type SanitizeTrackTitlesOneAlbum = {
   changes: { fileName: string; from: string; to: string }[]
   written: boolean

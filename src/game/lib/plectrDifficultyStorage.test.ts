@@ -1,8 +1,6 @@
 import { beforeEach, describe, expect, it } from "vitest";
 import {
-  loadPlectrDifficulty,
   loadPlectrPlayMode,
-  migratePlectrDifficulty,
   migratePlectrPlayMode,
   PLECTR_DIFFICULTY_KEY,
   savePlectrPlayMode,
@@ -27,18 +25,11 @@ describe("plectrDifficultyStorage", () => {
     });
   });
 
-  describe("migratePlectrDifficulty (legacy)", () => {
-    it("maps extreme to hard for score difficulty", () => {
-      expect(migratePlectrDifficulty("extreme")).toBe("hard");
-    });
-  });
-
   describe("load/save", () => {
     it("persists play mode in localStorage", () => {
       savePlectrPlayMode("hard");
       expect(localStorage.getItem(PLECTR_DIFFICULTY_KEY)).toBe("hard");
       expect(loadPlectrPlayMode()).toBe("hard");
-      expect(loadPlectrDifficulty()).toBe("hard");
     });
   });
 });

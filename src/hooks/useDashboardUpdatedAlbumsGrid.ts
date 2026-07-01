@@ -114,7 +114,5 @@ export function useDashboardUpdatedAlbumsGrid(isMobile: boolean) {
     ref,
     maxSlots: Math.min(DASHBOARD_UPDATED_ALBUMS_MAX, slots),
     columns,
-    /** @deprecated Usa {@link maxSlots}. */
-    maxItems: Math.min(DASHBOARD_UPDATED_ALBUMS_MAX, slots),
   };
 }

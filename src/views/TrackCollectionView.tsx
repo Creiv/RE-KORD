@@ -46,7 +46,7 @@ function TrackCollectionView({
       playGlobalRadio(track, true);
       return;
     }
-    playCollectionShuffle(track, tracks, true);
+    playCollectionShuffle(track, displayTracks, true);
   };
 
   return (

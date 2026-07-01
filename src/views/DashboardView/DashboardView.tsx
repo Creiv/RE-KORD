@@ -5,6 +5,7 @@ import { DashboardSmartRadioCard } from "../../components/DashboardSmartRadioCar
 import { usePlayer } from "../../context/PlayerContext";
 import { useUserState } from "../../context/UserStateContext";
 import { useLibraryPlayback } from "../../hooks/useLibraryPlayback";
+import { lookupByRelPathAliases } from "../../lib/libraryNav";
 import { eligibleTracksForIntelligentRandom } from "../../lib/randomExclusions";
 import { useMatchMedia } from "../../hooks/useMatchMedia";
 import { MOBILE_LAYOUT_MQ } from "../../lib/breakpoints";
@@ -69,8 +70,9 @@ export default function DashboardView({
     () =>
       [...(dashboard?.favoriteTracks || [])].sort(
         (a, b) =>
-          (user.state.trackPlayCounts?.[b.relPath] ?? 0) -
-            (user.state.trackPlayCounts?.[a.relPath] ?? 0) ||
+          (lookupByRelPathAliases(user.state.trackPlayCounts, b.relPath) ?? 0) -
+            (lookupByRelPathAliases(user.state.trackPlayCounts, a.relPath) ??
+              0) ||
           a.title.localeCompare(b.title, undefined, { numeric: true })
       ),
     [dashboard?.favoriteTracks, user.state.trackPlayCounts]

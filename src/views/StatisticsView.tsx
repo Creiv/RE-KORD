@@ -3,6 +3,11 @@ import { useUserState } from "../context/UserStateContext";
 import { useI18n } from "../i18n/useI18n";
 import type { LibraryIndex, LibraryTrackIndex } from "../types";
 import { parseTrackGenres } from "../lib/genres";
+import {
+  lookupByRelPathAliases,
+  openTrackInLibrary,
+  relPathSetHas,
+} from "../lib/libraryNav";
 import { countPlectrTracksPlayed } from "../game/lib/plectrStorage";
 import { buildRandomArtistCoverMap } from "../lib/artistCover";
 import { albumCoverVersion } from "../lib/libraryIndex";
@@ -130,7 +135,10 @@ function StatisticsView({
 }) {
   const user = useUserState();
   const { t, sortLocale } = useI18n();
-  const counts = user.state.trackPlayCounts || {};
+  const counts = useMemo(
+    () => user.state.trackPlayCounts || {},
+    [user.state.trackPlayCounts],
+  );
   const [metricMode, setMetricMode] = useState<StatisticsMetricMode>("plays");
   const favoritesSet = useMemo(
     () => new Set(user.state.favorites ?? []),
@@ -148,19 +156,22 @@ function StatisticsView({
     const scoreMap: Record<string, number> = {};
     for (const tr of index.tracks) {
       if (metricMode === "plays") {
-        scoreMap[tr.relPath] = counts[tr.relPath] ?? 0;
+        scoreMap[tr.relPath] = lookupByRelPathAliases(counts, tr.relPath) ?? 0;
         continue;
       }
       if (metricMode === "favorites") {
-        scoreMap[tr.relPath] = favoritesSet.has(tr.relPath) ? 1 : 0;
+        scoreMap[tr.relPath] = relPathSetHas(favoritesSet, tr.relPath) ? 1 : 0;
         continue;
       }
       if (metricMode === "plectr") {
-        scoreMap[tr.relPath] = user.state.plectrBests?.[tr.relPath]?.score ?? 0;
+        scoreMap[tr.relPath] =
+          lookupByRelPathAliases(user.state.plectrBests, tr.relPath)?.score ??
+          0;
         continue;
       }
       scoreMap[tr.relPath] =
-        blockedTrackSet.has(tr.relPath) || blockedAlbumSet.has(tr.albumId)
+        relPathSetHas(blockedTrackSet, tr.relPath) ||
+        blockedAlbumSet.has(tr.albumId)
           ? 1
           : 0;
     }
@@ -185,9 +196,17 @@ function StatisticsView({
       ),
     [index, scoreByTrackRelPath, sortLocale, metricMode, blockedAlbumSet]
   );
+  const overviewScoreMap = useMemo(() => {
+    const scoreMap: Record<string, number> = {};
+    for (const tr of index.tracks) {
+      scoreMap[tr.relPath] = lookupByRelPathAliases(counts, tr.relPath) ?? 0;
+    }
+    return scoreMap;
+  }, [index.tracks, counts]);
   const overviewData = useMemo(
-    () => computeStatisticsRankings(index, counts, sortLocale).overview,
-    [index, counts, sortLocale]
+    () =>
+      computeStatisticsRankings(index, overviewScoreMap, sortLocale).overview,
+    [index, overviewScoreMap, sortLocale]
   );
   const artistCoverById = useMemo(
     () => buildRandomArtistCoverMap(index),
@@ -197,7 +216,8 @@ function StatisticsView({
   const totalShuffleBlocks = useMemo(() => {
     return index.tracks.filter(
       (tr) =>
-        blockedTrackSet.has(tr.relPath) || blockedAlbumSet.has(tr.albumId)
+        relPathSetHas(blockedTrackSet, tr.relPath) ||
+        blockedAlbumSet.has(tr.albumId)
     ).length;
   }, [index.tracks, blockedTrackSet, blockedAlbumSet]);
   const totalPlectrTracks = useMemo(
@@ -205,10 +225,8 @@ function StatisticsView({
     [user.state.plectrBests]
   );
 
-  const openTrackInLibrary = (tr: LibraryTrackIndex) => {
-    const arId =
-      index.artists.find((a) => a.name === tr.artist)?.id ?? tr.artist;
-    onOpenAlbum(arId, tr.album);
+  const handleOpenTrackInLibrary = (tr: LibraryTrackIndex) => {
+    openTrackInLibrary(index, tr, onOpenArtist, onOpenAlbum);
   };
   const modeLabel =
     metricMode === "plays"
@@ -233,7 +251,7 @@ function StatisticsView({
       return t("statistics.favoriteCount", { n: fmtN(n) });
     if (metricMode === "plectr") {
       const grade = relPath
-        ? user.state.plectrBests?.[relPath]?.grade
+        ? lookupByRelPathAliases(user.state.plectrBests, relPath)?.grade
         : undefined;
       return grade
         ? t("statistics.plectrScoreWithGrade", { n: fmtN(n), grade })
@@ -306,7 +324,7 @@ function StatisticsView({
                       aria-label={t("statistics.openInLibraryAria", {
                         label: row.tr.title,
                       })}
-                      onClick={() => openTrackInLibrary(row.tr)}
+                      onClick={() => handleOpenTrackInLibrary(row.tr)}
                     >
                       <span className="statistics-rank-row__pos">{i + 1}</span>
                       <CoverImg

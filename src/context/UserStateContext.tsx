@@ -30,6 +30,7 @@ import { touchListeningActivity } from "../lib/achievements";
 import {
   buildLibraryTrackLookup,
   isFavoriteRelPath,
+  lookupByRelPathAliases,
   lookupLibraryTrack,
   migrateLooseTrackPathsInUserState,
 } from "../lib/libraryNav";
@@ -1465,7 +1466,7 @@ export function UserStateProvider({ children }: { children: React.ReactNode }) {
   );
 
   const getTrackPlayCount = useCallback(
-    (relPath: string) => state.trackPlayCounts?.[relPath] ?? 0,
+    (relPath: string) => lookupByRelPathAliases(state.trackPlayCounts, relPath) ?? 0,
     [state.trackPlayCounts]
   );
 

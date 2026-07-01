@@ -1,4 +1,5 @@
 import { mediaUrl } from "./api"
+import { trackPlaybackKey } from "./libraryNav"
 import type { EnrichedTrack } from "../types"
 
 /** Estensioni audio servite da /media con MIME tipico per Google Cast. */
@@ -123,13 +124,14 @@ export function buildCastTrackPayload(
   positionSec = 0,
   opts: CastStreamOptions = {},
 ): CastTrackPayload {
-  const streamUrl = castStreamUrl(track.relPath, baseOrigin, opts)
+  const playbackKey = trackPlaybackKey(track)
+  const streamUrl = castStreamUrl(playbackKey, baseOrigin, opts)
   return {
     track,
     streamUrl,
     coverUrl: castCoverUrl(track.relPath, baseOrigin),
     mimeType: castMimeTypeForRelPath(
-      streamUrl.includes("/media/transcode/") ? "x.mp3" : track.relPath,
+      streamUrl.includes("/media/transcode/") ? "x.mp3" : playbackKey,
     ),
     positionSec: Math.max(0, positionSec),
   }

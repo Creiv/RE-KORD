@@ -93,4 +93,66 @@ describe("buildCardPlayQueueFromSeed", () => {
     expect(iGenre).toBeLessThan(iArtist);
     expect(iArtist).toBeLessThan(iRest);
   });
+
+  it("con seed a 2+ mood mette prima i match forti (2+) poi quelli con 1 solo", () => {
+    const seed = tr("seed", "Alpha", {
+      moods: ["energy_boost", "party_dance"],
+      genre: "Rock",
+    });
+    const moodStrong = tr("strong", "Other", {
+      moods: ["energy_boost", "party_dance"],
+      genre: "Jazz",
+    });
+    const moodWeak = tr("weak", "Other", {
+      moods: ["energy_boost"],
+      genre: "Jazz",
+    });
+    const genreOnly = tr("genre1", "Other", {
+      moods: [],
+      genre: "Rock",
+    });
+    const lib = [seed, moodWeak, moodStrong, genreOnly];
+    const q = buildCardPlayQueueFromSeed(seed, lib);
+    const iStrong = q.findIndex((t) => t.relPath === "strong");
+    const iWeak = q.findIndex((t) => t.relPath === "weak");
+    const iGenre = q.findIndex((t) => t.relPath === "genre1");
+    expect(iStrong).toBeLessThan(iWeak);
+    expect(iWeak).toBeLessThan(iGenre);
+  });
+
+  it("radio con respectExclusions false include brani bloccati", () => {
+    const seed = tr("seed", "Alpha", {
+      moods: ["energy_boost"],
+      genre: "Rock",
+    });
+    const blocked = tr("blocked", "Other", {
+      moods: ["energy_boost"],
+      genre: "Jazz",
+    });
+    const lib = [seed, blocked];
+    const q = buildCardPlayQueueFromSeed(seed, lib, {
+      respectExclusions: false,
+      excludedTracks: new Set(["blocked"]),
+      excludedAlbums: new Set(),
+    });
+    expect(q.map((t) => t.relPath)).toContain("blocked");
+  });
+
+  it("radio con respectExclusions true esclude brani bloccati", () => {
+    const seed = tr("seed", "Alpha", {
+      moods: ["energy_boost"],
+      genre: "Rock",
+    });
+    const blocked = tr("blocked", "Other", {
+      moods: ["energy_boost"],
+      genre: "Jazz",
+    });
+    const lib = [seed, blocked];
+    const q = buildCardPlayQueueFromSeed(seed, lib, {
+      respectExclusions: true,
+      excludedTracks: new Set(["blocked"]),
+      excludedAlbums: new Set(),
+    });
+    expect(q.map((t) => t.relPath)).not.toContain("blocked");
+  });
 });
