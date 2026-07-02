@@ -86,11 +86,19 @@ export function TrackMetaEditGlyph() {
   );
 }
 
+/**
+ * Chiave di confronto generi: case-insensitive e indifferente ai separatori
+ * ("Hip-Hop" ≡ "hip hop" ≡ "HIP_HOP"), così non nascono duplicati-varianti.
+ */
+function genreMatchKey(raw: string): string {
+  return raw.trim().toLowerCase().replace(/[\s_-]+/g, " ");
+}
+
 function addGenreToken(current: string[], token: string): string[] {
   const t = token.trim();
   if (!t) return current;
-  const k = t.toLowerCase();
-  if (current.some((g) => g.toLowerCase() === k)) return current;
+  const k = genreMatchKey(t);
+  if (current.some((g) => genreMatchKey(g) === k)) return current;
   return [...current, t];
 }
 
@@ -114,28 +122,32 @@ function TrackMetaGenreSearch({
   const available = useMemo(
     () =>
       genreOptions.filter(
-        (g) => !genres.some((s) => s.toLowerCase() === g.toLowerCase()),
+        (g) => !genres.some((s) => genreMatchKey(s) === genreMatchKey(g)),
       ),
     [genreOptions, genres],
   );
 
   const filtered = useMemo(() => {
-    const q = query.trim().toLowerCase();
+    const q = genreMatchKey(query);
     if (!q) return available;
-    return available.filter((g) => g.toLowerCase().includes(q));
+    return available.filter((g) => genreMatchKey(g).includes(q));
   }, [available, query]);
 
   const trimmedQuery = query.trim();
   const canAdd =
     trimmedQuery.length > 0 &&
-    !genres.some((s) => s.toLowerCase() === trimmedQuery.toLowerCase());
+    !genres.some((s) => genreMatchKey(s) === genreMatchKey(trimmedQuery));
 
   const commitQuery = useCallback(() => {
     if (!canAdd) return;
-    onAdd(trimmedQuery);
+    // Se esiste già un genere equivalente in lista (es. "Rap" per "rap",
+    // "Hip-Hop" per "hip hop"), seleziona quello invece di crearne una variante.
+    const queryKey = genreMatchKey(trimmedQuery);
+    const existing = genreOptions.find((g) => genreMatchKey(g) === queryKey);
+    onAdd(existing ?? trimmedQuery);
     setQuery("");
     setOpen(true);
-  }, [canAdd, onAdd, trimmedQuery]);
+  }, [canAdd, genreOptions, onAdd, trimmedQuery]);
 
   useEffect(() => {
     if (!open) return;

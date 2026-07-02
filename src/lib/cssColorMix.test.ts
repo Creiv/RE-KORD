@@ -23,6 +23,26 @@ describe("parseCssColor", () => {
       a: 1,
     });
   });
+
+  it("parses color(srgb …) risolto da Chromium per color-mix", () => {
+    expect(
+      parseCssColor("color(srgb 0.0705882 0.117647 0.180392 / 0.559216)")
+    ).toEqual({
+      r: 18,
+      g: 30,
+      b: 46,
+      a: 0.559216,
+    });
+  });
+
+  it("parses color(srgb …) senza alpha", () => {
+    expect(parseCssColor("color(srgb 0 0 0)")).toEqual({
+      r: 0,
+      g: 0,
+      b: 0,
+      a: 1,
+    });
+  });
 });
 
 describe("mixSrgbWithTransparent", () => {

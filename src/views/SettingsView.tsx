@@ -981,6 +981,23 @@ function SettingsView({ index }: SettingsViewProps) {
               </span>
             </div>
             <div className="shortcut-row">
+              <span className="shortcut-keys">
+                <kbd className="shortcut-kbd shortcut-kbd--solo">
+                  {t("settings.kbdArrowLeft")}
+                </kbd>
+                <span className="shortcut-keys__sep">/</span>
+                <kbd className="shortcut-kbd shortcut-kbd--solo">
+                  {t("settings.kbdArrowRight")}
+                </kbd>
+              </span>
+              <span className="shortcut-row__dash" aria-hidden>
+                —
+              </span>
+              <span className="shortcut-row__desc">
+                {t("settings.shortcutSeekDesc")}
+              </span>
+            </div>
+            <div className="shortcut-row">
               <kbd className="shortcut-kbd shortcut-kbd--solo">{t("settings.kbdI")}</kbd>
               <span className="shortcut-row__dash" aria-hidden>
                 —
@@ -996,6 +1013,15 @@ function SettingsView({ index }: SettingsViewProps) {
               </span>
               <span className="shortcut-row__desc">
                 {t("settings.shortcutPlectrDesc")}
+              </span>
+            </div>
+            <div className="shortcut-row">
+              <kbd className="shortcut-kbd shortcut-kbd--solo">{t("settings.kbdN")}</kbd>
+              <span className="shortcut-row__dash" aria-hidden>
+                —
+              </span>
+              <span className="shortcut-row__desc">
+                {t("settings.shortcutNebulaDesc")}
               </span>
             </div>
           </div>

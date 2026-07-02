@@ -32,6 +32,9 @@
     padding: var(--space-5) max(1.25rem, env(safe-area-inset-right))
       var(--content-pad-bottom) max(1.25rem, env(safe-area-inset-left));
     scroll-padding-top: calc(var(--pro-header-h, 56px) + var(--space-2));
+    /* Gutter scrollbar simmetrico: il contenuto resta centrato come la
+       player bar (fixed, senza scrollbar) anche quando la pagina scorre. */
+    scrollbar-gutter: stable both-edges;
   }
 
   .content-shell__inner {

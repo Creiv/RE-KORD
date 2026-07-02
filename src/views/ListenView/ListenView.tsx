@@ -32,7 +32,8 @@ import {
   UiFavorite,
   UiHistory,
   UiImage,
-  UiMicrophone,
+  UiKaraoke,
+  UiLyrics,
   UiMusicNote,
   UiNavList,
   UiNote,
@@ -206,42 +207,31 @@ export default function ListenView({
     })();
   };
 
-  type LyricsBadge = "busy" | "error" | "lrc" | "plain" | "missing" | "idle";
-  const lyricsBadge: LyricsBadge = lyricsFetchBusy
+  /** Stato pallino LRC: stessi codici colore del dialog di modifica brano. */
+  type LyricsDot = "busy" | "error" | "okLrc" | "okPlain" | "missing" | "idle";
+  const lyricsDot: LyricsDot = lyricsFetchBusy
     ? "busy"
     : lyricsAutoStatus === "error"
       ? "error"
       : hasLrcLyrics
-        ? "lrc"
+        ? "okLrc"
         : hasLyrics
-          ? "plain"
+          ? "okPlain"
           : cur?.meta?.lyricsAutoChecked || lyricsAutoStatus === "missing"
             ? "missing"
             : "idle";
-  const lyricsBadgeLabel =
-    lyricsBadge === "busy"
+  const lyricsDotLabel =
+    lyricsDot === "busy"
       ? t("trackMeta.fetchLrcBusy")
-      : lyricsBadge === "error"
+      : lyricsDot === "error"
         ? t("trackMeta.lyricsAutoStatus.error")
-        : lyricsBadge === "lrc"
+        : lyricsDot === "okLrc"
           ? t("trackRow.lyricsLrc")
-          : lyricsBadge === "plain"
+          : lyricsDot === "okPlain"
             ? t("trackRow.lyricsPlain")
-            : lyricsBadge === "missing"
+            : lyricsDot === "missing"
               ? t("trackMeta.lyricsAutoStatus.missing")
               : t("trackRow.lyricsMissing");
-  const lyricsBadgeText =
-    lyricsBadge === "busy"
-      ? "… LRC"
-      : lyricsBadge === "error"
-        ? "! LRC"
-        : lyricsBadge === "lrc"
-          ? "✓ LRC"
-          : lyricsBadge === "plain"
-            ? "✓ TXT"
-            : lyricsBadge === "missing"
-              ? "✕ LRC"
-              : "– LRC";
 
   const trackChangeTransitionsOn =
     user.state.settings.audioCrossfadeSec > 0;
@@ -517,25 +507,6 @@ export default function ListenView({
             ) : (
               <Visualizer mode={user.state.settings.vizMode} />
             )}
-            <button
-              type="button"
-              className="listen-stage__karaoke-btn"
-              title={t("listen.karaokeOpenTitle")}
-              aria-label={t("listen.karaokeOpenTitle")}
-              onClick={(event) => {
-                event.stopPropagation();
-                setKaraokeOpen(true);
-              }}
-            >
-              <UiMicrophone className="listen-stage__karaoke-btn-ic" />
-            </button>
-            {karaokeOpen ? (
-              <Visualizer
-                mode="karaoke"
-                fullscreenOnly
-                onExitFullscreen={() => setKaraokeOpen(false)}
-              />
-            ) : null}
           </div>
           <ListenSleepTimer />
         </section>
@@ -646,17 +617,33 @@ export default function ListenView({
                   {t("listen.recentSeeAll")}
                 </button>
               ) : (
-                <span
-                  className={`listen-recent-panel__lrc-state ${
-                    lyricsBadge === "lrc" || lyricsBadge === "plain"
-                      ? "is-on"
-                      : "is-off"
-                  } listen-recent-panel__lrc-state--${lyricsBadge}`}
-                  aria-label={lyricsBadgeLabel}
-                  title={lyricsBadgeLabel}
-                >
-                  {lyricsBadgeText}
-                </span>
+                <div className="listen-recent-panel__lyrics-tools">
+                  {hasLrcLyrics ? (
+                    <button
+                      type="button"
+                      className="listen-recent-panel__karaoke-btn"
+                      title={t("listen.karaokeOpenTitle")}
+                      aria-label={t("listen.karaokeOpenTitle")}
+                      onClick={() => setKaraokeOpen(true)}
+                    >
+                      <UiKaraoke className="listen-recent-panel__karaoke-ic" />
+                      <span className="listen-recent-panel__karaoke-label">
+                        KARAOKE
+                      </span>
+                    </button>
+                  ) : null}
+                  <span
+                    className="listen-recent-panel__lrc-state is-on"
+                    aria-label={lyricsDotLabel}
+                    title={lyricsDotLabel}
+                  >
+                    <span
+                      className={`meta-edit-lyrics-status-dot meta-edit-lyrics-status-dot--${lyricsDot}`}
+                      aria-hidden
+                    />
+                    LRC
+                  </span>
+                </div>
               )}
             </div>
             <div className="listen-recent-panel__body">
@@ -720,8 +707,14 @@ export default function ListenView({
                 </div>
               ) : (
                 <div className="panel-empty panel-empty--actions listen-recent-lyrics__empty">
+                  <span
+                    className="listen-recent-lyrics__empty-ic"
+                    aria-hidden
+                  >
+                    <UiLyrics />
+                  </span>
                   <p className="subtle sm">
-                    {lyricsBadge === "missing"
+                    {lyricsDot === "missing"
                       ? t("trackMeta.lyricsAutoStatus.missing")
                       : t("listen.recentLyricsNone")}
                   </p>
@@ -732,7 +725,7 @@ export default function ListenView({
                     <div className="listen-recent-lyrics__empty-actions">
                       <button
                         type="button"
-                        className="ghost-btn meta-edit-lyrics-btn"
+                        className="ghost-btn"
                         disabled={lyricsFetchBusy}
                         onClick={() =>
                           openTrackMetaEdit(cur, { openLyrics: true })
@@ -742,7 +735,7 @@ export default function ListenView({
                       </button>
                       <button
                         type="button"
-                        className="ghost-btn meta-edit-lyrics-btn"
+                        className="primary-btn"
                         disabled={lyricsFetchBusy}
                         onClick={runListenAutoLrc}
                       >
@@ -755,6 +748,13 @@ export default function ListenView({
                 </div>
               )}
             </div>
+            {karaokeOpen ? (
+              <Visualizer
+                mode="karaoke"
+                fullscreenOnly
+                onExitFullscreen={() => setKaraokeOpen(false)}
+              />
+            ) : null}
           </section>
         </div>
       </div>

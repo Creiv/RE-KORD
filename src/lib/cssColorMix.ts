@@ -39,6 +39,27 @@ export function parseCssColor(raw: string): Rgba | null {
     };
   }
 
+  /* Chromium recenti risolvono color-mix() in "color(srgb r g b / a)"
+     (canali 0–1, alpha opzionale anche in percentuale). */
+  const colorFn = s.match(
+    /^color\(\s*srgb\s+([\d.]+)\s+([\d.]+)\s+([\d.]+)(?:\s*\/\s*([\d.]+)(%)?)?\s*\)$/i,
+  );
+  if (colorFn) {
+    const alphaRaw = colorFn[4];
+    const alpha =
+      alphaRaw == null
+        ? 1
+        : colorFn[5] === "%"
+          ? Number(alphaRaw) / 100
+          : Number(alphaRaw);
+    return {
+      r: Math.round(Number(colorFn[1]) * 255),
+      g: Math.round(Number(colorFn[2]) * 255),
+      b: Math.round(Number(colorFn[3]) * 255),
+      a: alpha,
+    };
+  }
+
   return null;
 }
 

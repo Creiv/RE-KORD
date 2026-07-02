@@ -25,6 +25,7 @@ import { usePlayerDockCssVars } from "../../hooks/usePlayerDockCssVars";
 import { useViewportHeight } from "../../hooks/useViewportHeight";
 import { useSyncStatusSnackbar } from "../../hooks/useSyncStatusSnackbar";
 import { MOBILE_LAYOUT_MQ } from "../../lib/breakpoints";
+import { requestNebulaFullscreen } from "../../lib/nebulaFullscreen";
 import {
   findLibraryTrackByRelPath,
   lookupByRelPathAliases,
@@ -740,9 +741,28 @@ export function AppShell() {
       if (event.code === "Space") {
         event.preventDefault();
         p.toggle();
+      } else if (event.code === "ArrowLeft" || event.code === "ArrowRight") {
+        if (!p.current) return;
+        event.preventDefault();
+        /* Legge il tempo dall'elemento audio (lo stato React è throttlato);
+           il seek non cambia lo stato play/pausa. */
+        const audio = p.audioRef.current;
+        const at = audio ? audio.currentTime : p.currentTime;
+        const dur =
+          audio && Number.isFinite(audio.duration) && audio.duration > 0
+            ? audio.duration
+            : p.duration;
+        const delta = event.code === "ArrowLeft" ? -15 : 15;
+        const max = dur > 0 ? Math.max(0, dur - 0.5) : Number.POSITIVE_INFINITY;
+        p.seek(Math.min(max, Math.max(0, at + delta)));
       } else if (event.code === "KeyI") {
         event.preventDefault();
         openStudioListen();
+      } else if (event.code === "KeyN") {
+        event.preventDefault();
+        requestNebulaFullscreen();
+        user.updateSettings({ libBrowse: "nebula" });
+        goAppSection("libreria");
       } else if (event.code === "KeyP") {
         event.preventDefault();
         if (p.queue.length > 0) setRhythmOpen(true);
@@ -750,7 +770,7 @@ export function AppShell() {
     };
     window.addEventListener("keydown", handler);
     return () => window.removeEventListener("keydown", handler);
-  }, [openLibrarySearch, openStudioListen, p, setRhythmOpen]);
+  }, [goAppSection, openLibrarySearch, openStudioListen, p, setRhythmOpen, user]);
 
   const onLibraryHome = useCallback(() => {
     closeLibrarySearch();

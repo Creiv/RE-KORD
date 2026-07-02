@@ -161,6 +161,22 @@
   border-color: var(--danger-strong);
 }
 
+.meta-edit-lyrics-status-dot--busy {
+  background: color-mix(in srgb, var(--accent2) 65%, transparent);
+  border-color: color-mix(in srgb, var(--accent2) 80%, transparent);
+  animation: meta-edit-lyrics-dot-pulse 1s ease-in-out infinite;
+}
+
+@keyframes meta-edit-lyrics-dot-pulse {
+  0%,
+  100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.35;
+  }
+}
+
 .meta-edit-lyrics-dialog {
   width: min(42rem, calc(100vw - 2rem));
 }

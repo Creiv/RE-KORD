@@ -113,18 +113,18 @@
 
 @media (min-width: 1100px) {
   .settings-page .shortcut-list {
-    grid-template-columns: repeat(4, minmax(0, 1fr));
+    grid-template-columns: repeat(3, minmax(0, 1fr));
   }
 
   .settings-page .shortcut-row {
     border-right: 1px solid color-mix(in srgb, var(--border) 82%, transparent);
   }
 
-  .settings-page .shortcut-row:nth-child(4n) {
+  .settings-page .shortcut-row:nth-child(3n) {
     border-right: none;
   }
 
-  .settings-page .shortcut-row:not(:nth-last-child(-n + 4)) {
+  .settings-page .shortcut-row:not(:nth-last-child(-n + 3)) {
     border-bottom: 1px solid color-mix(in srgb, var(--border) 82%, transparent);
   }
 }

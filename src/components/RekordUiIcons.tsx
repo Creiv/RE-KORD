@@ -592,13 +592,34 @@ export function UiNote({ className }: { className?: string }) {
   );
 }
 
-export function UiMicrophone({ className }: { className?: string }) {
+export function UiKaraoke({ className }: { className?: string }) {
   return (
     <svg className={className} viewBox="0 0 24 24" aria-hidden="true">
+      {/* Microfono da karaoke inclinato (testa in alto a dx, cavo in basso a sx) */}
+      <g fill="currentColor" transform="rotate(45 12 12)">
+        <circle cx="12" cy="4.7" r="3.3" />
+        <path d="M9.55 8.7h4.9l-.95 8.1a1.5 1.5 0 0 1-2.98 0z" />
+        <path
+          fill="none"
+          stroke="currentColor"
+          strokeWidth="1.2"
+          strokeLinecap="round"
+          d="M12 17.9c0 1.3-1.7 1.3-1.7 2.55S11.9 21.6 11.9 23"
+        />
+      </g>
+      {/* Doppia nota in alto a sx */}
       <path
         fill="currentColor"
-        d="M12 14c1.66 0 3-1.34 3-3V5c0-1.66-1.34-3-3-3S9 3.34 9 5v6c0 1.66 1.34 3 3 3m5.91-3c-.49 0-.9.36-.98.85C16.52 14.2 14.47 16 12 16s-4.52-1.8-4.93-4.15c-.08-.49-.49-.85-.98-.85-.61 0-1.09.54-1 1.14.49 3 2.89 5.35 5.91 5.78V20H8.5c-.55 0-1 .45-1 1s.45 1 1 1h7c.55 0 1-.45 1-1s-.45-1-1-1H13v-2.08c3.02-.43 5.42-2.78 5.91-5.78.1-.6-.39-1.14-1-1.14"
+        d="M4.15 3.3 9.9 1.7v1.5L4.15 4.8zM4.15 3.9H5v5.2h-.85zM9.05 2.4h.85v5.3h-.85z"
       />
+      <circle fill="currentColor" cx="3.75" cy="9.2" r="1.4" />
+      <circle fill="currentColor" cx="8.65" cy="7.8" r="1.4" />
+      {/* Nota singola in basso a dx */}
+      <path
+        fill="currentColor"
+        d="M18.6 13.1h.9v6.9h-.9zM19.5 13.1c1.35.45 2.15 1.3 2.3 2.7-.7-.6-1.5-.85-2.3-.9z"
+      />
+      <circle fill="currentColor" cx="17.85" cy="20" r="1.4" />
     </svg>
   );
 }

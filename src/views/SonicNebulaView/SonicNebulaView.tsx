@@ -25,6 +25,10 @@ import {
   type NebulaCamera,
   type NebulaStar,
 } from "../../lib/sonicNebula";
+import {
+  consumeNebulaFullscreenRequest,
+  onNebulaFullscreenRequest,
+} from "../../lib/nebulaFullscreen";
 import { useI18n } from "../../i18n/useI18n";
 import type { LibraryIndex } from "../../types";
 import {
@@ -176,7 +180,9 @@ export default function SonicNebulaView({
   const [camera, setCamera] = useState<NebulaCamera>(() => defaultNebulaCamera());
   const [hovered, setHovered] = useState<NebulaStar | null>(null);
   const [selected, setSelected] = useState<NebulaStar | null>(null);
-  const [expanded, setExpanded] = useState(false);
+  const [expanded, setExpanded] = useState(() =>
+    consumeNebulaFullscreenRequest()
+  );
   const [hintDismissed, setHintDismissed] = useState(false);
   const coarsePointer = useMemo(
     () =>
@@ -486,6 +492,11 @@ export default function SonicNebulaView({
 
   const toggleExpanded = useCallback(() => {
     setExpanded((value) => !value);
+  }, []);
+
+  useEffect(() => {
+    /* Tasto N (AppShell): se la vista è già montata passa al fullscreen. */
+    return onNebulaFullscreenRequest(() => setExpanded(true));
   }, []);
 
   useEffect(() => {

@@ -200,7 +200,16 @@
   }
 }
 
+.listen-recent-panel__lyrics-tools {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.55rem;
+}
+
 .listen-recent-panel__lrc-state {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
   font-size: 0.72rem;
   font-weight: 700;
   letter-spacing: 0.04em;
@@ -217,13 +226,37 @@
   opacity: 0.28;
 }
 
-.listen-recent-panel__lrc-state--error {
-  color: var(--warning);
-  opacity: 0.9;
+/* Pulsante karaoke nella scheda lyrics: visibile solo con LRC,
+   nei colori accent del tema (niente bagliori). */
+.listen-recent-panel__karaoke-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  padding: 0.3rem 0.65rem;
+  border: 1px solid color-mix(in srgb, var(--accent2) 45%, transparent);
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--accent2) 12%, transparent);
+  color: var(--accent2);
+  cursor: pointer;
+  transition: background 0.14s ease, border-color 0.14s ease;
 }
 
-.listen-recent-panel__lrc-state--busy {
-  opacity: 0.6;
+.listen-recent-panel__karaoke-btn:hover,
+.listen-recent-panel__karaoke-btn:focus-visible {
+  background: color-mix(in srgb, var(--accent2) 22%, transparent);
+  border-color: color-mix(in srgb, var(--accent2) 70%, transparent);
+}
+
+.listen-recent-panel__karaoke-ic {
+  width: 1.05rem;
+  height: 1.05rem;
+}
+
+.listen-recent-panel__karaoke-label {
+  font-size: 0.68rem;
+  font-weight: 800;
+  letter-spacing: 0.12em;
+  user-select: none;
 }
 
 .listen-recent-lyrics {
@@ -270,16 +303,32 @@
 }
 
 .listen-recent-lyrics__empty {
-  display: flex;
-  flex-direction: column;
-  gap: 0.6rem;
-  align-items: flex-start;
+  justify-content: center;
+  gap: 0.65rem;
+  padding-block: var(--space-6, 2rem);
+}
+
+.listen-recent-lyrics__empty-ic {
+  display: grid;
+  place-items: center;
+  width: 2.6rem;
+  height: 2.6rem;
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--muted) 12%, transparent);
+  color: var(--muted);
+}
+
+.listen-recent-lyrics__empty-ic svg {
+  width: 1.3rem;
+  height: 1.3rem;
 }
 
 .listen-recent-lyrics__empty-actions {
   display: flex;
-  gap: 0.5rem;
+  gap: 0.6rem;
   flex-wrap: wrap;
+  justify-content: center;
+  margin-top: 0.2rem;
 }
 
 .listen-recent-lyrics__line.is-current {
