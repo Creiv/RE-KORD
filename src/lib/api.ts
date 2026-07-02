@@ -679,6 +679,14 @@ export async function fetchConfig(): Promise<AppConfig> {
   return data
 }
 
+export async function fetchServerPublicIp(): Promise<{
+  ip: string | null
+  cached?: boolean
+}> {
+  const response = await apiFetch("/api/network/public-ip", { cache: "no-store" })
+  return unwrap<{ ip: string | null; cached?: boolean }>(response)
+}
+
 export async function fetchRemoteAccessState(): Promise<RemoteAccessState> {
   const response = await apiFetch("/api/remote-access", { cache: "no-store" })
   return unwrap<RemoteAccessState>(response)

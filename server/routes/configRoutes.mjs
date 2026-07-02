@@ -33,6 +33,7 @@ import {
   isCloudflareTunnelRequest,
   isServerAdminRequest,
 } from "../requestAccess.mjs";
+import { resolveServerPublicIp } from "../publicIp.mjs";
 
 const uploadYoutubeCookies = multer({
   storage: multer.memoryStorage(),
@@ -84,6 +85,15 @@ function buildConfigPayload(req) {
 export function registerConfigRoutes(app) {
   app.get("/api/config", (req, res) => {
     return sendOk(res, buildConfigPayload(req));
+  });
+
+  app.get("/api/network/public-ip", async (req, res) => {
+    try {
+      const result = await resolveServerPublicIp();
+      return sendOk(res, result);
+    } catch (error) {
+      return sendError(res, 500, String(error?.message || error));
+    }
   });
 
   app.get("/api/remote-access", (req, res) => {

@@ -21,6 +21,7 @@ import {
   fetchAccounts,
   fetchActivityLog,
   fetchConfig,
+  fetchServerPublicIp,
   fetchRemoteAccessState,
   fetchUserStateForAccount,
   getRemoteAccessLoginUrl,
@@ -159,6 +160,8 @@ function SettingsView({ index }: SettingsViewProps) {
     [user]
   );
   const [lanAccessUrl, setLanAccessUrl] = useState<string | null>(null);
+  const [publicIp, setPublicIp] = useState<string | null>(null);
+  const [publicIpLoading, setPublicIpLoading] = useState(true);
   const [remoteAccess, setRemoteAccess] = useState<RemoteAccessState | null>(
     null
   );
@@ -238,6 +241,12 @@ function SettingsView({ index }: SettingsViewProps) {
       .catch((e: unknown) =>
         setAccountErr(e instanceof Error ? e.message : String(e))
       );
+
+    setPublicIpLoading(true);
+    fetchServerPublicIp()
+      .then((result) => setPublicIp(result.ip))
+      .catch(() => setPublicIp(null))
+      .finally(() => setPublicIpLoading(false));
   }, []);
 
   const loadActivityLog = useCallback(() => {
@@ -1254,13 +1263,22 @@ function SettingsView({ index }: SettingsViewProps) {
               </div>
             </div>
             <div className="settings-network-main">
-            {lanAccessUrl ? (
-              <p className="subtle sm">
-                {t("settings.networkUrlHint", { url: lanAccessUrl })}
-              </p>
-            ) : (
-              <p className="subtle sm">{t("settings.networkNoUrl")}</p>
-            )}
+              {lanAccessUrl ? (
+                <p className="subtle sm">
+                  {t("settings.networkUrlHint", { url: lanAccessUrl })}
+                </p>
+              ) : (
+                <p className="subtle sm">{t("settings.networkNoUrl")}</p>
+              )}
+              {publicIpLoading ? (
+                <p className="subtle sm">{t("settings.networkPublicIpLoading")}</p>
+              ) : publicIp ? (
+                <p className="subtle sm">
+                  {t("settings.networkPublicIpHint", { ip: publicIp })}
+                </p>
+              ) : (
+                <p className="subtle sm">{t("settings.networkPublicIpUnavailable")}</p>
+              )}
             {isNetworkControlAllowed ? (
               <>
                 <div

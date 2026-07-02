@@ -552,6 +552,10 @@ export const IT: Record<string, string> = {
     "Su Windows: se l'URL pubblico Cloudflare funziona ma l'IP LAN no, apri «Consenti app…» nel firewall e abilita RE-KORD (o Node) sulle reti private. Dopo un aggiornamento potrebbe servire di nuovo.",
   "settings.networkNoUrl":
     "Nessun IPv4 LAN rilevato: controlla l'indirizzo del computer manualmente.",
+  "settings.networkPublicIpHint": "IP pubblico del server: {{ip}}",
+  "settings.networkPublicIpLoading": "Ricerca IP pubblico del server…",
+  "settings.networkPublicIpUnavailable":
+    "IP pubblico del server non disponibile (nessuna uscita verso internet o timeout).",
   "settings.remoteLogin": "Login Cloudflare",
   "settings.remoteLoginDone": "Login effettuato",
   "settings.remoteLogout": "Logout",
