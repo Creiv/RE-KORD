@@ -6,7 +6,6 @@ import {
   formatTrackByline,
   isFavoriteRelPath,
   isLooseTrack,
-  legacyLooseRelPath,
   lookupByRelPathAliases,
   looseRelPathAliases,
   migrateLooseTrackPathsInUserState,

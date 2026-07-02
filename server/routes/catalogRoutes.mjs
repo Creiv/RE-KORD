@@ -251,7 +251,13 @@ export function registerCatalogRoutes(app) {
         return;
       }
       const { Readable } = await import("node:stream");
-      Readable.fromWeb(upstream.body).pipe(res);
+      const body = Readable.fromWeb(upstream.body);
+      body.on("error", () => {
+        body.destroy();
+        res.end();
+      });
+      res.on("close", () => body.destroy());
+      body.pipe(res);
     } catch (error) {
       console.error(error);
       if (!res.headersSent) {

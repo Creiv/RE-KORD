@@ -1,17 +1,9 @@
 import { publicYoutubeDiscoverUrl } from "./catalogWebPreview.mjs"
-
-const YTM_INNERTUBE_KEY = "AIzaSyC9XL3QWnjsQplBUbSJY1cffBoVwD0aN1U"
-const YTM_BROWSE_URL = `https://music.youtube.com/youtubei/v1/browse?key=${YTM_INNERTUBE_KEY}`
+import { YTM_BROWSE_URL, innertubeClientVersion } from "./youtubeInnertube.mjs"
 
 /** Pagine https://music.youtube.com/new_releases/… (ytmusicapi). */
 const NEW_RELEASES_ALBUMS_BROWSE_ID = "FEmusic_new_releases_albums"
 const NEW_RELEASES_SINGLES_BROWSE_ID = "FEmusic_new_releases_singles"
-
-function innertubeClientVersion() {
-  return String(
-    process.env.REKORD_YTM_INNERTUBE_CLIENT_VERSION || "1.20241127.01.00",
-  ).trim()
-}
 
 function extractRunsText(node) {
   if (!node) return ""

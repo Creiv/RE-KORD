@@ -27,35 +27,37 @@ export function LibraryRootGate({ children }: LibraryRootGateProps) {
 
   useBackendRecoveryOnResume();
 
-  const loadConfig = useCallback(async (opts?: { silent?: boolean }) => {
-    if (!opts?.silent) setPhase("load");
-    try {
-      const c = await fetchConfig();
-      setLibraryRootWritable(c.libraryRootWritable !== false);
-      if (c.libraryRootConfigured && c.libraryDataWritable === false) {
-        setLibraryWritePath(c.libraryWriteError?.path || c.musicRoot || null);
-        setPhase("readonly");
-        return;
-      }
-      if (c.lockedByEnv || c.libraryRootConfigured) setPhase("ok");
-      else setPhase("need");
-    } catch (err: unknown) {
-      if (isBackendUnreachableError(err)) {
-        setPhase("unreachable");
-        return;
-      }
-      setLibraryRootWritable(true);
-      setPhase("need");
-    }
+  // Non imposta mai la fase "load" in modo sincrono: al mount lo stato
+  // parte già da "load" e nei retry silenziosi va mantenuta la fase corrente.
+  const loadConfig = useCallback(() => {
+    fetchConfig()
+      .then((c) => {
+        setLibraryRootWritable(c.libraryRootWritable !== false);
+        if (c.libraryRootConfigured && c.libraryDataWritable === false) {
+          setLibraryWritePath(c.libraryWriteError?.path || c.musicRoot || null);
+          setPhase("readonly");
+          return;
+        }
+        if (c.lockedByEnv || c.libraryRootConfigured) setPhase("ok");
+        else setPhase("need");
+      })
+      .catch((err: unknown) => {
+        if (isBackendUnreachableError(err)) {
+          setPhase("unreachable");
+          return;
+        }
+        setLibraryRootWritable(true);
+        setPhase("need");
+      });
   }, []);
 
   useEffect(() => {
-    void loadConfig();
+    loadConfig();
   }, [loadConfig]);
 
   useEffect(() => {
     return onBackendRecovery(() => {
-      void loadConfig({ silent: true });
+      loadConfig();
     });
   }, [loadConfig]);
 

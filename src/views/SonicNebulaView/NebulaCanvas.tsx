@@ -28,10 +28,48 @@ function clamp(v: number, lo: number, hi: number) {
   return Math.max(lo, Math.min(hi, v));
 }
 
+/** MediaQueryList condivisa: `.matches` è live, evita matchMedia() per frame. */
+const reducedMotionMq =
+  typeof matchMedia !== "undefined"
+    ? matchMedia("(prefers-reduced-motion: reduce)")
+    : null;
+
 function parseHex(hex: string): [number, number, number] {
   const raw = hex.replace("#", "");
   const n = parseInt(raw.length === 3 ? raw.replace(/./g, "$&$&") : raw, 16);
   return [(n >> 16) & 255, (n >> 8) & 255, n & 255];
+}
+
+/**
+ * Sprite di glow pre-renderizzati per colore: creare un radial gradient
+ * per ogni stella a ogni frame è il collo di bottiglia principale del
+ * canvas su librerie grandi. Uno sprite scalato con drawImage è ~10x
+ * più economico e visivamente identico.
+ */
+const GLOW_SPRITE_SIZE = 64;
+const glowSpriteCache = new Map<string, HTMLCanvasElement>();
+
+function glowSpriteFor(color: string): HTMLCanvasElement | null {
+  const cached = glowSpriteCache.get(color);
+  if (cached) return cached;
+  if (typeof document === "undefined") return null;
+  const sprite = document.createElement("canvas");
+  sprite.width = GLOW_SPRITE_SIZE;
+  sprite.height = GLOW_SPRITE_SIZE;
+  const sctx = sprite.getContext("2d");
+  if (!sctx) return null;
+  const [r, g, b] = parseHex(color);
+  const half = GLOW_SPRITE_SIZE / 2;
+  const grad = sctx.createRadialGradient(half, half, 0, half, half, half);
+  grad.addColorStop(0, `rgba(${r},${g},${b},0.95)`);
+  grad.addColorStop(0.4, `rgba(${r},${g},${b},0.35)`);
+  grad.addColorStop(1, `rgba(${r},${g},${b},0)`);
+  sctx.fillStyle = grad;
+  sctx.fillRect(0, 0, GLOW_SPRITE_SIZE, GLOW_SPRITE_SIZE);
+  // I colori derivano da mood (14), generi e artisti: cap difensivo.
+  if (glowSpriteCache.size > 512) glowSpriteCache.clear();
+  glowSpriteCache.set(color, sprite);
+  return sprite;
 }
 
 function drawNebulaFog(
@@ -100,14 +138,22 @@ function drawStar(
   }
 
   const glowR = radius * (opts.current ? 4.2 : 3.4);
-  const glow = ctx.createRadialGradient(star.x, star.y, 0, star.x, star.y, glowR);
-  glow.addColorStop(0, `rgba(${r},${g},${b},${alpha * 0.95})`);
-  glow.addColorStop(0.4, `rgba(${r},${g},${b},${alpha * 0.35})`);
-  glow.addColorStop(1, `rgba(${r},${g},${b},0)`);
-  ctx.fillStyle = glow;
-  ctx.beginPath();
-  ctx.arc(star.x, star.y, glowR, 0, Math.PI * 2);
-  ctx.fill();
+  const sprite = glowSpriteFor(star.color);
+  if (sprite) {
+    const prevAlpha = ctx.globalAlpha;
+    ctx.globalAlpha = alpha;
+    ctx.drawImage(sprite, star.x - glowR, star.y - glowR, glowR * 2, glowR * 2);
+    ctx.globalAlpha = prevAlpha;
+  } else {
+    const glow = ctx.createRadialGradient(star.x, star.y, 0, star.x, star.y, glowR);
+    glow.addColorStop(0, `rgba(${r},${g},${b},${alpha * 0.95})`);
+    glow.addColorStop(0.4, `rgba(${r},${g},${b},${alpha * 0.35})`);
+    glow.addColorStop(1, `rgba(${r},${g},${b},0)`);
+    ctx.fillStyle = glow;
+    ctx.beginPath();
+    ctx.arc(star.x, star.y, glowR, 0, Math.PI * 2);
+    ctx.fill();
+  }
 
   if (star.favorite || opts.current) {
     ctx.strokeStyle = `rgba(${r},${g},${b},${alpha * 0.75})`;
@@ -269,10 +315,7 @@ function paintNebulaFrame(
   p: DrawProps
 ) {
   const zoom = p.camera.zoom;
-  const reducedMotion =
-    typeof matchMedia !== "undefined" &&
-    matchMedia("(prefers-reduced-motion: reduce)").matches;
-  const animT = reducedMotion ? 0 : t;
+  const animT = reducedMotionMq?.matches ? 0 : t;
 
   const bg = ctx.createRadialGradient(
     w / 2,
@@ -377,7 +420,6 @@ export function NebulaCanvas({
   const lastDrawRef = useRef(0);
   const sizeRef = useRef({ w: 0, h: 0, dpr: 1 });
   const redrawRef = useRef<((t: number) => void) | null>(null);
-  const beatEpochRef = useRef(performance.now());
   const sortedStars = useMemo(
     () => [...visibleStars].sort((a, b) => a.radius - b.radius),
     [visibleStars]
@@ -393,13 +435,19 @@ export function NebulaCanvas({
     currentId,
     playing,
     currentBpm,
-    beatEpoch: beatEpochRef.current,
+    beatEpoch: 0,
     interactive,
     preview,
   });
 
+  // Fase del beat ancorata al brano: si resetta solo al cambio traccia/BPM,
+  // non a ogni pan/zoom/hover (altrimenti la pulsazione "salta").
+  const beatEpochRef = useRef(0);
   useEffect(() => {
     beatEpochRef.current = performance.now();
+  }, [currentId, currentBpm]);
+
+  useEffect(() => {
     propsRef.current = {
       model,
       visibleStars,

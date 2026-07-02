@@ -1,6 +1,6 @@
 /**
- * Esempio: node scripts/pack-android.mjs 3.5.0
- * Da npm:   npm run pack:android:client -- 3.5.0
+ * Esempio: node scripts/pack-android.mjs 4.3.0
+ * Da npm:   npm run pack:android:client -- 4.3.0
  * Sincronizza la shell Capacitor, builda l'APK (debug) e lo copia in
  * release/RE-KORD-Client-<versione>-android.apk come gli altri pacchetti.
  */

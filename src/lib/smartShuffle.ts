@@ -87,26 +87,78 @@ function filterPoolForExclusions(
   );
 }
 
-function countMoodOverlaps(seed: EnrichedTrack, t: EnrichedTrack): number {
-  const s = parseTrackMoods(seed.meta);
-  if (s.length === 0) return 0;
-  const set = new Set(s);
-  return parseTrackMoods(t.meta).filter((m) => set.has(m)).length;
-}
-
-function genreOverlaps(seed: EnrichedTrack, t: EnrichedTrack): boolean {
-  const sg = parseTrackGenres(seed.meta?.genre).map((g) => g.toLowerCase());
-  if (sg.length === 0) return false;
-  const tgSet = new Set(
-    parseTrackGenres(t.meta?.genre).map((g) => g.toLowerCase())
+/** Generi traccia con fallback su albumMeta (come Nebula). */
+function trackGenresForScoring(track: EnrichedTrack): string[] {
+  return parseTrackGenres(track.meta?.genre ?? track.albumMeta?.genre).map(
+    (g) => g.toLowerCase(),
   );
-  return sg.some((g) => tgSet.has(g));
 }
 
 function artistMatches(seed: EnrichedTrack, t: EnrichedTrack): boolean {
   return (
     seed.artist.trim().toLowerCase() === t.artist.trim().toLowerCase()
   );
+}
+
+/** Punteggio similarità seed → candidato (lessicografico: mood → generi → artista). */
+export function seedSimilarityScore(
+  seed: EnrichedTrack,
+  candidate: EnrichedTrack,
+): number {
+  const seedMoods = parseTrackMoods(seed.meta);
+  let moodTier = 0;
+  if (seedMoods.length > 0) {
+    const moodSet = new Set(seedMoods);
+    const overlap = parseTrackMoods(candidate.meta).filter((m) =>
+      moodSet.has(m),
+    ).length;
+    moodTier = overlap / seedMoods.length;
+  }
+
+  const seedGenres = trackGenresForScoring(seed);
+  let genreTier = 0;
+  if (seedGenres.length > 0) {
+    const seedGenreSet = new Set(seedGenres);
+    const candidateGenres = trackGenresForScoring(candidate);
+    const overlap = candidateGenres.filter((g) => seedGenreSet.has(g)).length;
+    genreTier = overlap / seedGenres.length;
+  }
+
+  const artistTier = artistMatches(seed, candidate) ? 1 : 0;
+
+  // Codifica lessicografica: mood domina sempre genere, genere domina artista.
+  return moodTier * 1_000_000 + genreTier * 1_000 + artistTier;
+}
+
+function sortPoolBySeedSimilarity(
+  seed: EnrichedTrack,
+  pool: readonly EnrichedTrack[],
+): EnrichedTrack[] {
+  const scored = pool.map((track) => ({
+    track,
+    score: seedSimilarityScore(seed, track),
+    jitter: Math.random(),
+  }));
+  scored.sort((a, b) => {
+    if (b.score !== a.score) return b.score - a.score;
+    return a.jitter - b.jitter;
+  });
+
+  // Spread artista consecutivi solo dentro la stessa fascia di score,
+  // così non si inverte l'ordine mood → genere → artista.
+  const byScore = new Map<number, EnrichedTrack[]>();
+  for (const { track, score } of scored) {
+    const band = byScore.get(score);
+    if (band) band.push(track);
+    else byScore.set(score, [track]);
+  }
+  const ordered: EnrichedTrack[] = [];
+  for (const score of [...byScore.keys()].sort((a, b) => b - a)) {
+    const band = byScore.get(score)!;
+    spreadConsecutiveArtists(band);
+    ordered.push(...band);
+  }
+  return ordered;
 }
 
 export function buildShuffleQueueFromSeed(
@@ -137,41 +189,7 @@ export function buildCardPlayQueueFromSeed(
     opts
   ).filter((t) => t.relPath !== seedCanon.relPath);
 
-  const seedMoodCount = parseTrackMoods(seedCanon.meta).length;
-  const moodStrong: EnrichedTrack[] = [];
-  const moodWeak: EnrichedTrack[] = [];
-  const genre: EnrichedTrack[] = [];
-  const artistTier: EnrichedTrack[] = [];
-  const rest: EnrichedTrack[] = [];
-
-  for (const t of pool) {
-    const moodOverlap = countMoodOverlaps(seedCanon, t);
-    if (moodOverlap >= 2 && seedMoodCount >= 2) {
-      moodStrong.push(t);
-      continue;
-    }
-    if (moodOverlap >= 1) {
-      moodWeak.push(t);
-      continue;
-    }
-    if (genreOverlaps(seedCanon, t)) {
-      genre.push(t);
-      continue;
-    }
-    if (artistMatches(seedCanon, t)) {
-      artistTier.push(t);
-      continue;
-    }
-    rest.push(t);
-  }
-
-  const tail = [
-    ...fisherYatesShuffle(moodStrong),
-    ...fisherYatesShuffle(moodWeak),
-    ...fisherYatesShuffle(genre),
-    ...fisherYatesShuffle(artistTier),
-    ...fisherYatesShuffle(rest),
-  ];
+  const tail = sortPoolBySeedSimilarity(seedCanon, pool);
   const full = [seedCanon, ...tail];
   return full.slice(0, cap);
 }

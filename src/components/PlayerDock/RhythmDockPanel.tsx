@@ -106,6 +106,9 @@ export const RhythmDockPanel = memo(function RhythmDockPanel({
 
   const displayBest = useMemo(
     () => resolveDisplayBest(track.relPath, user.state.plectrBests),
+    // bestRevision invalida il memo: getSessionTrackBest legge uno store di
+    // sessione esterno mutabile, non tracciato dalle altre dipendenze.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
     [track.relPath, user.state.plectrBests, bestRevision]
   );
 

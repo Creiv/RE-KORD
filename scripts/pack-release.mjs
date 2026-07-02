@@ -1,6 +1,7 @@
 /**
- * Esempio: node scripts/pack-release.mjs server linux 3.5.0
- * Da npm:   npm run pack:linux:server -- 3.5.0
+ * Esempio: node scripts/pack-release.mjs server linux 4.3.0
+ * Da npm:   npm run pack:linux:server -- 4.3.0
+ * (senza versione esplicita usa quella di package.json)
  */
 import { execSync } from "node:child_process"
 import fs from "node:fs"
@@ -17,7 +18,7 @@ const flavors = new Set(["server", "client"])
 if (!flavors.has(flavor) || !platforms.has(platform)) {
   console.error(
     "Uso: node scripts/pack-release.mjs <server|client> <linux|win|mac> [versione]\n" +
-      "Esempio: npm run pack:linux:server -- 3.5.0",
+      "Esempio: npm run pack:linux:server -- 4.3.0",
   )
   process.exit(1)
 }

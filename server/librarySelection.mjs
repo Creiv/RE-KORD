@@ -110,6 +110,9 @@ export function filterLibraryIndexBySelection(index, selection, accountId) {
     return {
       ...index,
       musicRoot: "",
+      // Flag per il client: la libreria è vuota per selezione account,
+      // non perché l'indice server sia vuoto.
+      selectionEmpty: true,
       artists: [],
       albums: [],
       tracks: [],

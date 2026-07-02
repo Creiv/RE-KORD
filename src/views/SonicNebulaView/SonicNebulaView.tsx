@@ -6,6 +6,7 @@ import {
   useRef,
   useState,
   type RefObject,
+  type CSSProperties,
   type PointerEvent as ReactPointerEvent,
   type WheelEvent as ReactWheelEvent,
 } from "react";
@@ -18,6 +19,7 @@ import {
   buildNebulaSpatialGrid,
   defaultNebulaCamera,
   filterNebulaStars,
+  nebulaStarsNear,
   pickNebulaStarAt,
   sampleNebulaStarsForPreview,
   type NebulaCamera,
@@ -30,6 +32,8 @@ import {
   UiCloseFullscreen,
   UiOpenInFull,
   UiPlayArrow,
+  UiRadioOutlined,
+  UiShuffle,
 } from "../../components/RekordUiIcons";
 import { NebulaCanvas } from "./NebulaCanvas";
 import styles from "./SonicNebulaView.module.css";
@@ -173,6 +177,13 @@ export default function SonicNebulaView({
   const [hovered, setHovered] = useState<NebulaStar | null>(null);
   const [selected, setSelected] = useState<NebulaStar | null>(null);
   const [expanded, setExpanded] = useState(false);
+  const [hintDismissed, setHintDismissed] = useState(false);
+  const coarsePointer = useMemo(
+    () =>
+      typeof matchMedia !== "undefined" &&
+      matchMedia("(pointer: coarse)").matches,
+    []
+  );
 
   const wrapRef = useRef<HTMLDivElement>(null);
   const pointersRef = useRef(new Map<number, { x: number; y: number }>());
@@ -192,9 +203,11 @@ export default function SonicNebulaView({
     camera: defaultNebulaCamera(),
   });
   const cameraRef = useRef(camera);
-  cameraRef.current = camera;
   const selectedRef = useRef(selected);
-  selectedRef.current = selected;
+  useEffect(() => {
+    cameraRef.current = camera;
+    selectedRef.current = selected;
+  }, [camera, selected]);
 
   const currentId = player.current?.relPath ?? null;
   const currentStar = useMemo(
@@ -221,6 +234,27 @@ export default function SonicNebulaView({
     [player, index.tracks]
   );
 
+  // "Radio da qui": coda con la stella scelta più le vicine (stesso
+  // quartiere sonoro: tempo/energia simili per costruzione della mappa).
+  const playStarRadio = useCallback(
+    (star: NebulaStar) => {
+      const neighbors = nebulaStarsNear(visibleStars, star, 320, 24);
+      const tracks = [star, ...neighbors].map((s) =>
+        resolveTrackFromLibrary(s.track, index.tracks)
+      );
+      player.playTrack(tracks[0]!, tracks, 0);
+      setSelected({ ...star, track: tracks[0]! });
+    },
+    [player, index.tracks, visibleStars]
+  );
+
+  const surpriseMe = useCallback(() => {
+    const pool = visibleStars.length ? visibleStars : model.stars;
+    if (!pool.length) return;
+    const star = pool[Math.floor(Math.random() * pool.length)]!;
+    selectStar(star);
+  }, [visibleStars, model.stars, selectStar]);
+
   const stopChromePointer = useCallback((event: ReactPointerEvent) => {
     event.stopPropagation();
   }, []);
@@ -228,6 +262,7 @@ export default function SonicNebulaView({
   const onWheel = useCallback((event: ReactWheelEvent) => {
     if (isNebulaChrome(event.target)) return;
     event.preventDefault();
+    setHintDismissed(true);
     const rect = wrapRef.current?.getBoundingClientRect();
     if (!rect) return;
     const factor = event.deltaY < 0 ? 1.07 : 0.93;
@@ -247,6 +282,7 @@ export default function SonicNebulaView({
   const onPointerDown = useCallback((event: ReactPointerEvent) => {
     if (event.button !== 0) return;
     if (isNebulaChrome(event.target)) return;
+    setHintDismissed(true);
     const target = event.currentTarget;
     target.setPointerCapture(event.pointerId);
 
@@ -531,7 +567,12 @@ export default function SonicNebulaView({
         onPointerDown={stopChromePointer}
       >
         {!embedded || expanded ? (
-          <div className={styles.brand}>
+          <div
+            className={styles.brand}
+            title={`${t("nebula.legendCenter")}\n${t("nebula.legendEdge")}\n${t(
+              "nebula.legendAngle"
+            )}`}
+          >
             <UiAutoAwesome className={styles.brandIc} />
             <span className={styles.brandText}>
               {t("nebula.title")}{" "}
@@ -550,6 +591,15 @@ export default function SonicNebulaView({
           <button
             type="button"
             className={styles.toolBtn}
+            onClick={surpriseMe}
+            title={t("nebula.surprise")}
+            aria-label={t("nebula.surprise")}
+          >
+            <UiShuffle className={styles.toolBtnIc} aria-hidden />
+          </button>
+          <button
+            type="button"
+            className={styles.toolBtn}
             onClick={resetView}
             title={t("nebula.resetView")}
             aria-label={t("nebula.resetView")}
@@ -559,6 +609,12 @@ export default function SonicNebulaView({
           {expandBtn}
         </div>
       </header>
+
+      {!hintDismissed && !selected ? (
+        <div className={styles.hint} aria-hidden>
+          {coarsePointer ? t("nebula.hintShort") : t("nebula.hint")}
+        </div>
+      ) : null}
 
       {selected && calloutLayout ? (
         <>
@@ -589,7 +645,26 @@ export default function SonicNebulaView({
             </div>
             <button
               type="button"
+              className={`player-bar2__ic ${styles.starCalloutRadio}`}
+              onClick={() => playStarRadio(selected)}
+              title={t("nebula.radioHere")}
+              aria-label={t("nebula.radioHere")}
+            >
+              <span
+                className="player-bar2__ic-glyph player-bar2__ic-glyph--svg"
+                aria-hidden
+              >
+                <UiRadioOutlined />
+              </span>
+            </button>
+            <button
+              type="button"
               className={`player-bar2__ic player-bar2__ic--play ${styles.starCalloutPlay}`}
+              style={
+                {
+                  ["--nebula-play-c" as string]: selected.color,
+                } as CSSProperties
+              }
               onClick={() => playStar(selected)}
               title={t("nebula.play")}
               aria-label={t("nebula.play")}

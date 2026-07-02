@@ -12,6 +12,7 @@ import {
 import {
   customThemeBgImageUrl,
   fetchUserState,
+  getSelectedAccountId,
   isBackendUnreachableError,
   patchUserState,
 } from "../lib/api";
@@ -730,6 +731,7 @@ export function UserStateProvider({ children }: { children: React.ReactNode }) {
   const flushPendingPatchRef = useRef<
     ((opts?: { silent?: boolean }) => void) | null
   >(null);
+  const hydratedAccountIdRef = useRef<string | null>(null);
   const schedulePendingFlushRef = useRef<(() => void) | null>(null);
   const flushingRef = useRef(false);
 
@@ -748,6 +750,10 @@ export function UserStateProvider({ children }: { children: React.ReactNode }) {
     const applyRemote = (remote: UserStateV1) => {
       if (!active) return;
       clearRetry();
+      // Pin dell'account che ha idratato questo stato: le patch generate
+      // da qui devono sempre finire su questo account, anche se localStorage
+      // cambia prima del flush (switch account + pagehide).
+      hydratedAccountIdRef.current = getSelectedAccountId();
 
       let merged = normalizeUserState(mergeLegacy(remote));
       if (
@@ -910,7 +916,7 @@ export function UserStateProvider({ children }: { children: React.ReactNode }) {
       ? () => {}
       : beginLibrarySyncActivity("sync.activity.savingUserState");
     if (!silent) setSaving(true);
-    patchUserState(patch)
+    patchUserState(patch, { accountId: hydratedAccountIdRef.current })
       .then((saved) => {
         if (seq !== saveSeqRef.current) return;
         const normalized = normalizeUserState(saved);
@@ -1016,13 +1022,7 @@ export function UserStateProvider({ children }: { children: React.ReactNode }) {
     root.style.removeProperty("--page-bg-image");
     clearCustomThemeBgImageCssVars(root);
     delete root.dataset.customBgImage;
-  }, [
-    state.settings.customTheme?.bgImage,
-    state.settings.customTheme?.bgImageRev,
-    state.settings.customTheme?.bgMode,
-    state.settings.customTheme?.bgImageFit,
-    state.settings.theme,
-  ]);
+  }, [state.settings.customTheme, state.settings.theme]);
 
   useEffect(() => {
     const root = document.documentElement;
@@ -1188,7 +1188,7 @@ export function UserStateProvider({ children }: { children: React.ReactNode }) {
         return next;
       });
     },
-    [flushPendingPatch, schedulePendingFlush]
+    [schedulePendingFlush]
   );
 
   const toggleFavorite = useCallback(

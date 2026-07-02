@@ -1,0 +1,104 @@
+/**
+ * Fallback globali quando il probe runtime rileva color-mix() rotto
+ * (WebView Android datate: espongono l'API ma renderizzano trasparente).
+ * Attivato da applyColorMixCompatDataset() → html[data-color-mix="0"].
+ */
+
+:root[data-color-mix="0"] {
+  --focus-ring: rgba(56, 189, 248, 0.72);
+  --sidebar-bg: #161d28;
+}
+
+:root[data-color-mix="0"] .surface-card,
+:root[data-color-mix="0"] .hero-card,
+:root[data-color-mix="0"] .listen-stage {
+  background: var(--surface-elev-a, rgba(16, 28, 43, 0.92));
+  border-color: var(--border);
+}
+
+:root[data-color-mix="0"] .track-row {
+  border-color: var(--border);
+  background: var(--surface2, rgba(22, 29, 40, 0.95));
+}
+
+:root[data-color-mix="0"] .track-row.is-active {
+  border-color: rgba(249, 115, 22, 0.35);
+  background: rgba(249, 115, 22, 0.08);
+}
+
+:root[data-color-mix="0"] .ghost-btn,
+:root[data-color-mix="0"] .segmented button {
+  background: var(--ghost-input-bg, rgba(255, 255, 255, 0.06));
+  border-color: var(--border);
+  color: var(--text);
+}
+
+:root[data-color-mix="0"] .primary-btn {
+  background: var(--accent);
+  color: var(--text-on-accent, #07101b);
+}
+
+:root[data-color-mix="0"] .player-bar2__ic--play {
+  background: linear-gradient(135deg, var(--accent), var(--accent2));
+}
+
+:root[data-color-mix="0"] .player-bar2__ic--play:hover {
+  background: linear-gradient(135deg, var(--accent), var(--accent2));
+  filter: brightness(1.04);
+}
+
+:root[data-color-mix="0"] .player-bar2__ic.player-bar2__ic--radio:hover {
+  background: rgba(56, 189, 248, 0.12);
+}
+
+:root[data-color-mix="0"] .lib-meta-chip,
+:root[data-color-mix="0"] .meta-chip {
+  background: rgba(255, 255, 255, 0.06);
+  border-color: var(--border);
+}
+
+:root[data-color-mix="0"] .metric-card {
+  background: var(--surface-elev-a, rgba(16, 28, 43, 0.92));
+  border-color: var(--border);
+}
+
+:root[data-color-mix="0"] .dashboard-smart-radio-tile {
+  background: var(--surface2, rgba(22, 29, 40, 0.95));
+  border-color: var(--border);
+}
+
+/* TopBar (classe modulo: .topbar scoped) — copertura via attributo globale */
+:root[data-color-mix="0"] [class*="topbar"] {
+  background: var(--topbar-bg, rgba(6, 13, 22, 0.95));
+}
+
+:root[data-glass-backdrop="0"] [class*="topbar"] {
+  backdrop-filter: none;
+  -webkit-backdrop-filter: none;
+  background: var(--topbar-bg, rgba(6, 13, 22, 0.97));
+}
+
+/* Dialog overlay e Nebula */
+:root[data-glass-backdrop="0"] .meta-edit-dialog__backdrop,
+:root[data-glass-backdrop="0"] [class*="nebulaHint"],
+:root[data-glass-backdrop="0"] [class*="starCallout"] {
+  backdrop-filter: none;
+  -webkit-backdrop-filter: none;
+}
+
+:root[data-color-mix="0"] [class*="nebulaHint"],
+:root[data-color-mix="0"] [class*="starCallout"],
+:root[data-color-mix="0"] [class*="nebulaToolbar"] {
+  background: rgba(15, 23, 42, 0.92);
+  border-color: rgba(148, 163, 184, 0.28);
+}
+
+:root[data-color-mix="0"] .meta-edit-backdrop:not(.custom-theme-dialog-backdrop) {
+  background: rgba(0, 0, 0, 0.68);
+}
+
+:root[data-color-mix="0"] .connect-lang .segmented,
+:root[data-color-mix="0"] .surface-card {
+  background: var(--surface2, #161d28);
+  border-color: var(--border);
+}

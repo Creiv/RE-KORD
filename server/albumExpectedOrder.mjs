@@ -11,7 +11,7 @@ function trackFileName(track) {
  * Ordine di visualizzazione: solo nome file su disco (ordine tipico del download).
  * Non usa trackNumber, releaseDate né expectedTracks da metadati scaricati.
  */
-export function compareAlbumTracksByFileName(a, b) {
+function compareAlbumTracksByFileName(a, b) {
   const cmp = trackFileName(a).localeCompare(trackFileName(b), undefined, {
     numeric: true,
     sensitivity: "base",

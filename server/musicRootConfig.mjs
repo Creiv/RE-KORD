@@ -16,6 +16,7 @@ import {
   rekordGlobalInfoDir,
 } from "./rekordDataStore.mjs";
 import { runRekordLayoutMigration } from "./migrateRekordV2.mjs";
+import { PORT } from "./serverPort.mjs";
 
 let layoutMigrationChain = Promise.resolve()
 
@@ -458,7 +459,7 @@ export function getListenHost() {
 }
 
 export function getConfigSnapshot(includeMusicRoot) {
-  const serverPort = Number(process.env.PORT) || 3001;
+  const serverPort = PORT;
   const lanAccessUrls = buildLanAccessUrls(serverPort);
   const lanAccessUrl = lanAccessUrls[0] ?? buildLanAccessUrl(guessLanIPv4(), serverPort);
   const snap = {
@@ -695,10 +696,23 @@ export async function setPersistedMusicRoot(absolute) {
     err.code = "NOT_DIR";
     throw err;
   }
+  const previousRoot = state.path;
   state.path = resolved;
   state.fromEnv = false;
   state.accounts = loadOrCreateAccountsInLibrarySync(resolved, rawBootstrap);
   await writeMergedConfigBootstrap();
+  // Rilascia watcher e handle SQLite del root precedente: altrimenti
+  // restano attivi per tutta la vita del processo. Import dinamici per
+  // evitare il ciclo statico musicRootConfig → scanner → musicLibrary →
+  // albumInfo → musicRootConfig.
+  if (previousRoot && previousRoot !== resolved) {
+    const [{ stopLibraryWatcher }, { closeLibraryDb }] = await Promise.all([
+      import("./scanner/watcher.mjs"),
+      import("./db/index.mjs"),
+    ]);
+    stopLibraryWatcher(previousRoot);
+    closeLibraryDb(previousRoot);
+  }
   const cfgDir = path.dirname(CONFIG_FILE);
   enqueueLayoutMigration({
     libraryRoot: state.path,

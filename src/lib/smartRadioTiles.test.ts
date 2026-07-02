@@ -40,17 +40,33 @@ describe("pickSmartRadioDisplayTracks", () => {
     expect(out.length).toBe(2);
   });
 
-  it("non mostra due brani dello stesso album", () => {
+  it("preferisce album diversi quando gli slot bastano", () => {
     const pool = [
       tr("a1", "album-1"),
       tr("a2", "album-1"),
       tr("b1", "album-2"),
       tr("c1", "album-3"),
     ];
-    const out = pickSmartRadioDisplayTracks(pool, 8);
+    // 3 slot brano e 3 album unici: nessun doppione dello stesso album.
+    const out = pickSmartRadioDisplayTracks(pool, 4);
     const albums = out.map(smartRadioAlbumKey);
     expect(new Set(albums).size).toBe(albums.length);
     expect(out.length).toBe(3);
+  });
+
+  it("riempie gli slot residui se gli album unici non bastano", () => {
+    const pool = [
+      tr("a1", "album-1"),
+      tr("a2", "album-1"),
+      tr("b1", "album-2"),
+      tr("c1", "album-3"),
+    ];
+    // 7 slot brano ma solo 3 album: il vincolo si rilassa, niente slot vuoti.
+    const out = pickSmartRadioDisplayTracks(pool, 8);
+    expect(out.length).toBe(4);
+    expect(new Set(out.map((t) => t.relPath)).size).toBe(4);
+    const albums = new Set(out.map(smartRadioAlbumKey));
+    expect(albums.size).toBe(3);
   });
 
   it("riempie dalla libreria se il pool non basta", () => {

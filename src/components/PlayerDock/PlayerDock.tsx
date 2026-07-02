@@ -35,7 +35,6 @@ import type { LibraryEntityDelta, LibraryTrackIndex } from "../../types";
 interface PlayerDockProps {
   onGoToAscolta: () => void;
   onOpenLibraryArtist: (artist: string) => void;
-  onOpenLibraryAlbum: (artist: string, album: string) => void;
   onOpenLibraryForTrack: (track: import("../../types").EnrichedTrack) => void;
   resolvePlaybackTrack?: (
     track: import("../../types").EnrichedTrack,
@@ -70,7 +69,6 @@ function DockTimeline({
 export const PlayerDock = memo(function PlayerDock({
   onGoToAscolta,
   onOpenLibraryArtist,
-  onOpenLibraryAlbum: _onOpenLibraryAlbum,
   onOpenLibraryForTrack,
   resolvePlaybackTrack,
   libraryTracks,

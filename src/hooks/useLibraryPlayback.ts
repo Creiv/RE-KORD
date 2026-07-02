@@ -28,26 +28,30 @@ export function useLibraryPlayback(
     [user.state.shuffleExcludedTrackRelPaths]
   );
 
+  const currentRelPath = p.current?.relPath;
+  const currentArtist = p.current?.artist;
+  // Dipendenza granulare: p cambia a ogni tick del player, playTrack no.
+  const playTrack = p.playTrack;
   const shuffleOpts = useCallback(
     () => ({
-      currentRelPath: p.current?.relPath,
-      currentArtist: p.current?.artist,
+      currentRelPath,
+      currentArtist,
       recentRelPaths: new Set(
         user.state.recent.slice(0, 48).map((tr) => tr.relPath)
       ),
       excludedAlbums,
       excludedTracks,
     }),
-    [p.current?.relPath, p.current?.artist, user.state.recent, excludedAlbums, excludedTracks]
+    [currentRelPath, currentArtist, user.state.recent, excludedAlbums, excludedTracks]
   );
 
   const playSequence = useCallback(
     (tracks: readonly EnrichedTrack[], startIndex: number) => {
       if (!tracks.length) return;
       const idx = Math.max(0, Math.min(startIndex, tracks.length - 1));
-      p.playTrack(tracks[idx]!, [...tracks], idx, { preserveQueueOrder: true });
+      playTrack(tracks[idx]!, [...tracks], idx, { preserveQueueOrder: true });
     },
-    [p]
+    [playTrack]
   );
 
   /** Coda generata → finestra subito in player, resto travasato a lotti. */
@@ -55,12 +59,12 @@ export function useLibraryPlayback(
     (full: readonly EnrichedTrack[]) => {
       if (!full.length) return;
       const { window, remainder } = splitQueueWindow(full);
-      p.playTrack(window[0]!, window, 0, {
+      playTrack(window[0]!, window, 0, {
         preserveQueueOrder: true,
         refillRemainder: remainder,
       });
     },
-    [p]
+    [playTrack]
   );
 
   const radioRespectsExclusions = useCallback(
@@ -78,7 +82,7 @@ export function useLibraryPlayback(
           ? resolveTrackFromLibrary(seed, libraryTracks)
           : seed;
       if (!libraryTracks?.length) {
-        p.playTrack(resolvedSeed, [resolvedSeed], 0);
+        playTrack(resolvedSeed, [resolvedSeed], 0);
         return;
       }
       const q = buildCardPlayQueueFromSeed(resolvedSeed, libraryTracks, {
@@ -93,7 +97,7 @@ export function useLibraryPlayback(
     },
     [
       libraryTracks,
-      p,
+      playTrack,
       excludedAlbums,
       excludedTracks,
       playWindowed,

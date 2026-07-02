@@ -51,6 +51,20 @@ function pickUniqueAlbumTracks(
   }
 }
 
+function pickAnyTracks(
+  source: readonly EnrichedTrack[],
+  trackSlots: number,
+  seenPaths: Set<string>,
+  picked: EnrichedTrack[],
+): void {
+  for (const track of fisherYatesShuffle(source)) {
+    if (picked.length >= trackSlots) break;
+    if (seenPaths.has(track.relPath)) continue;
+    seenPaths.add(track.relPath);
+    picked.push(track);
+  }
+}
+
 export function pickSmartRadioDisplayTracks(
   pool: readonly EnrichedTrack[],
   totalSlots: number,
@@ -72,6 +86,15 @@ export function pickSmartRadioDisplayTracks(
       seenPaths,
       picked,
     );
+  }
+
+  // Librerie piccole: con meno album che slot il vincolo "un brano per album"
+  // lascerebbe la griglia quasi vuota. Riempi gli slot residui senza vincolo.
+  if (picked.length < trackSlots) {
+    pickAnyTracks(pool, trackSlots, seenPaths, picked);
+    if (picked.length < trackSlots && libraryFallback?.length) {
+      pickAnyTracks(libraryFallback, trackSlots, seenPaths, picked);
+    }
   }
 
   return picked;

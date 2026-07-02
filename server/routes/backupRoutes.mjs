@@ -142,6 +142,13 @@ export function registerBackupRoutes(app) {
       res.setHeader("Content-Disposition", `attachment; filename="${name}"`);
       res.setHeader("Cache-Control", "no-store, must-revalidate");
       const zip = archiver("zip", { zlib: { level: 9 } });
+      zip.on("error", () => {
+        try {
+          res.end();
+        } catch {
+          /* ignore */
+        }
+      });
       zip.pipe(res);
       zip.append(JSON.stringify(payload, null, 2), {
         name: `rekord-theme/${THEME_EXPORT_JSON}`,

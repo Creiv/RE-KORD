@@ -15,8 +15,3 @@ export function existingAlbumTrackInfoPath(albumDir) {
   }
   return null
 }
-
-/** Percorso per scrittura trackinfo (nome storico). */
-export function preferredAlbumTrackInfoPath(albumDir) {
-  return path.join(albumDir, "kord-trackinfo.json")
-}

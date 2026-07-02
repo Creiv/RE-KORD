@@ -1,5 +1,4 @@
-const YTM_INNERTUBE_KEY = "AIzaSyC9XL3QWnjsQplBUbSJY1cffBoVwD0aN1U"
-const YTM_SEARCH_URL = `https://music.youtube.com/youtubei/v1/search?key=${YTM_INNERTUBE_KEY}`
+import { YTM_SEARCH_URL, innertubeClientVersion } from "./youtubeInnertube.mjs"
 
 /** @type {Record<string, string | null>} */
 const SEARCH_FILTER_PARAMS = {
@@ -7,12 +6,6 @@ const SEARCH_FILTER_PARAMS = {
   songs: "EgWKAQIIAWoKEAMQBBAJEAoQBQ%3D%3D",
   albums: "EgWKAQIYAWoKEAMQBBAJEAoQBQ%3D%3D",
   artists: "EgWKAQIgAWoKEAMQBBAJEAoQBQ%3D%3D",
-}
-
-function innertubeClientVersion() {
-  return String(
-    process.env.REKORD_YTM_INNERTUBE_CLIENT_VERSION || "1.20241127.01.00",
-  ).trim()
 }
 
 function extractRunsText(node) {

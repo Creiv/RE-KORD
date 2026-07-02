@@ -402,7 +402,7 @@ export function ToolsView({
         if (d.exampleUrl) setUrl(d.exampleUrl);
       })
       .catch((e) => setLog((x) => x + t("tools.logCmdErr", { e })));
-  }, [t]);
+  }, [t, setLog]);
 
   useEffect(() => {
     loadPreset();
@@ -463,7 +463,7 @@ export function ToolsView({
         })
         .catch((e) => setLog((x) => x + t("tools.logFolderErr", { e })));
     },
-    [t, commitDlDest],
+    [t, commitDlDest, setLog],
   );
 
   const prevMetaAlbumPathRef = useRef(metaAlbumPath);
@@ -1413,7 +1413,7 @@ export function ToolsView({
         onLog: setLog,
       });
     },
-    [hasValidDownloadDest, dlPath, exploreSingleBlockedArtistFolder, appConfirm, t],
+    [hasValidDownloadDest, dlPath, exploreSingleBlockedArtistFolder, appConfirm, t, setLog],
   );
 
   const runDl = () => {

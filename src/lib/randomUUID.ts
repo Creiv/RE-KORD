@@ -1,6 +1,12 @@
 export function randomUUID(): string {
   const c = globalThis.crypto;
-  if (c && typeof c.randomUUID === "function") return c.randomUUID();
+  if (c && typeof c.randomUUID === "function") {
+    try {
+      return c.randomUUID();
+    } catch {
+      // SecurityError su contesti non sicuri (http://IP:porta): fallback sotto.
+    }
+  }
   if (c && typeof c.getRandomValues === "function") {
     const bytes = new Uint8Array(16);
     c.getRandomValues(bytes);

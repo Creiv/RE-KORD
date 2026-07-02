@@ -42,7 +42,9 @@ export function registerFsRoutes(app) {
         path: relPath,
         parent: relPath.split("/").filter(Boolean).slice(0, -1).join("/") || "",
         dirs,
-        musicRoot: root,
+        // Solo il nome della cartella: il path assoluto del server non
+        // va esposto ai client (la UI mostra solo il basename).
+        musicRoot: path.basename(root),
       });
     } catch (error) {
       return sendError(res, 500, String(error?.message || error));

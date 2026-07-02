@@ -1,5 +1,5 @@
 import fs from "fs/promises"
-import { existsSync, statSync } from "fs"
+import { existsSync } from "fs"
 import path from "path"
 import { getLibraryDb } from "../db/index.mjs"
 import { buildLibraryIndex, buildPartialIndex, isAudioFile, LIBRARY_EXCLUDE, relify } from "../musicLibrary.mjs"
@@ -37,7 +37,8 @@ export async function walkFilesystemStats(musicRoot) {
       }
       if (!entry.isFile() || !isAudioFile(entry.name)) continue
       try {
-        const st = statSync(abs)
+        // stat async: statSync qui bloccava l'event loop per l'intero walk.
+        const st = await fs.stat(abs)
         out.set(rel, {
           relPath: rel,
           size: st.size,

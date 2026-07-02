@@ -2,22 +2,14 @@ import { randomUUID } from "node:crypto"
 import { execFile } from "node:child_process"
 import { promisify } from "node:util"
 import { browseIdFromMusicBrowsePageUrl } from "./youtubeMusicBrowse.mjs"
+import { YTM_BROWSE_URL, innertubeClientVersion } from "./youtubeInnertube.mjs"
 
 const execFileAsync = promisify(execFile)
-
-const YTM_INNERTUBE_KEY = "AIzaSyC9XL3QWnjsQplBUbSJY1cffBoVwD0aN1U"
-const YTM_BROWSE_URL = `https://music.youtube.com/youtubei/v1/browse?key=${YTM_INNERTUBE_KEY}`
 
 const PREVIEW_CACHE_TTL_MS = 90_000
 
 /** @type {Map<string, { streamUrl: string, expires: number }>} */
 const previewStreamCache = new Map()
-
-function innertubeClientVersion() {
-  return String(
-    process.env.REKORD_YTM_INNERTUBE_CLIENT_VERSION || "1.20241127.01.00",
-  ).trim()
-}
 
 function extractRunsText(node) {
   if (!node) return ""

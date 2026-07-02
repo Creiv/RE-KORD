@@ -458,20 +458,26 @@ export function AppShell() {
     indexRef.current = index;
   }, [index]);
 
+  const { resyncTracksFromIndex } = p;
+  const {
+    ready: userReady,
+    rehydrateTrackListsFromLibrary,
+    rehydrateShuffleExclusionsFromIndex,
+  } = user;
   useEffect(() => {
-    if (!index || !user.ready) return;
-    p.resyncTracksFromIndex(index);
-    user.rehydrateTrackListsFromLibrary(index);
+    if (!index || !userReady) return;
+    resyncTracksFromIndex(index);
+    rehydrateTrackListsFromLibrary(index);
     const sig = libraryIndexRehydrateSig(index);
     if (sig === indexLibrarySigRef.current) return;
     indexLibrarySigRef.current = sig;
-    user.rehydrateShuffleExclusionsFromIndex(index);
+    rehydrateShuffleExclusionsFromIndex(index);
   }, [
     index,
-    p.resyncTracksFromIndex,
-    user.ready,
-    user.rehydrateTrackListsFromLibrary,
-    user.rehydrateShuffleExclusionsFromIndex,
+    resyncTracksFromIndex,
+    userReady,
+    rehydrateTrackListsFromLibrary,
+    rehydrateShuffleExclusionsFromIndex,
   ]);
 
   useEffect(() => {
@@ -950,7 +956,6 @@ export function AppShell() {
           <PlayerDock
             onGoToAscolta={onGoToAscolta}
             onOpenLibraryArtist={smartNavToLibraryArtist}
-            onOpenLibraryAlbum={navToLibraryAlbum}
             onOpenLibraryForTrack={smartNavToLibraryForTrack}
             resolvePlaybackTrack={resolvePlaybackTrack}
             libraryTracks={index?.tracks}

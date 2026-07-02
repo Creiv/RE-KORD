@@ -50,10 +50,11 @@ export function registerSystemRoutes(app) {
         const libraryDb = {
           enabled: true,
           bootstrapped: isLibraryDbBootstrapped(root),
-          path: rekordDbPath(root),
           exists: existsSync(rekordDbPath(root)),
           epoch: getLibraryEpoch(root),
         };
+        // Path assoluto del DB solo per l'admin (come musicRoot).
+        if (isServerAdminRequest(req)) libraryDb.path = rekordDbPath(root);
         if (libraryDb.bootstrapped) {
           try {
             const db = getLibraryDb(root);

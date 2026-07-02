@@ -95,10 +95,6 @@ function castContext(): CastFrameworkContext | null {
   }
 }
 
-export function isWebCastActive(): boolean {
-  return castActive
-}
-
 export function registerCastPlaybackCallbacks(
   cbs: CastPlaybackCallbacks,
 ): () => void {
@@ -199,52 +195,6 @@ export function syncWebCastNow(): void {
   if (!session) return
   if (payload.track.relPath === lastLoadedMediaId) return
   loadPayloadOnSession(session, payload)
-}
-
-export async function requestWebCastSession(): Promise<boolean> {
-  const loaded = await ensureCastSdkLoaded()
-  if (!loaded || !initCastContextIfNeeded()) return false
-  const cc = castContext()
-  if (!cc) return false
-  try {
-    const session = await cc.requestSession()
-    castActive = true
-    lastLoadedMediaId = ""
-    callbacks?.onSessionStart()
-    const payload = callbacks?.onRequestSync()
-    if (payload) loadPayloadOnSession(session, payload)
-    return true
-  } catch {
-    return false
-  }
-}
-
-export async function endWebCastSession(): Promise<void> {
-  const session = castContext()?.getCurrentSession() as
-    | (CastSession & { stop: (ok: () => void, err: (e: unknown) => void) => void })
-    | null
-  if (!session) {
-    castActive = false
-    callbacks?.onSessionEnd()
-    return
-  }
-  await new Promise<void>((resolve) => {
-    session.stop(
-      () => resolve(),
-      () => resolve(),
-    )
-  })
-  castActive = false
-  lastLoadedMediaId = ""
-  callbacks?.onSessionEnd()
-}
-
-export async function toggleWebCastSession(): Promise<boolean> {
-  if (castActive) {
-    await endWebCastSession()
-    return false
-  }
-  return requestWebCastSession()
 }
 
 /** Precarica SDK e contesto Cast senza UI (sync sessione da browser/dispositivo). */

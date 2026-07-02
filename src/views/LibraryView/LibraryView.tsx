@@ -281,6 +281,12 @@ export default function LibraryView({
     [album, index.tracks]
   );
 
+  // Handler stabile per riga: mantiene efficace il memo di TrackListRow.
+  const playAlbumTrackAt = useCallback(
+    (trIndex: number) => playSequence(albumTracks, trIndex),
+    [playSequence, albumTracks]
+  );
+
   const [albumGenrePickerOpen, setAlbumGenrePickerOpen] = useState(false);
   const [albumGenreBusy, setAlbumGenreBusy] = useState(false);
   const [albumGenreErr, setAlbumGenreErr] = useState<string | null>(null);
@@ -1139,7 +1145,8 @@ export default function LibraryView({
               <TrackListRow
                 key={track.relPath}
                 track={track}
-                onPlay={() => playSequence(albumTracks, trIndex)}
+                playIndex={trIndex}
+                onPlayAt={playAlbumTrackAt}
               />
             ))}
           </div>
@@ -1743,6 +1750,9 @@ export default function LibraryView({
                 onOpen={() => onOpenArtist(item.id)}
               />
             ))}
+            {sortedOverviewArtists.length === 0 && index.selectionEmpty ? (
+              <p className="panel-empty">{t("library.selectionEmptyHint")}</p>
+            ) : null}
           </div>
         ) : (
           <div className="genre-browse-wrap">

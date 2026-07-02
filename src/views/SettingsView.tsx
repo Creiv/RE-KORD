@@ -55,6 +55,8 @@ type SettingsViewProps = {
   index: LibraryIndex | null;
 };
 
+const EMPTY_ACCOUNT_LEVELS: ReadonlyMap<string, number> = new Map();
+
 function SettingsView({ index }: SettingsViewProps) {
   const user = useUserState();
   const { t, locale, setLocale } = useI18n();
@@ -105,14 +107,33 @@ function SettingsView({ index }: SettingsViewProps) {
     null
   );
 
-  useEffect(() => {
+  // Riallinea il draft quando il valore persistito cambia dall'esterno:
+  // pattern "adjust state during render" per evitare un re-render a cascata.
+  const [prevGlassOpacity, setPrevGlassOpacity] = useState(
+    user.state.settings.glassOpacity
+  );
+  if (prevGlassOpacity !== user.state.settings.glassOpacity) {
+    setPrevGlassOpacity(user.state.settings.glassOpacity);
     setGlassOpacityDraft(user.state.settings.glassOpacity);
-  }, [user.state.settings.glassOpacity]);
+  }
+
+  const glassOpacityPendingRef = useRef<number | null>(null);
+  const updateSettingsRef = useRef(user.updateSettings);
+  useEffect(() => {
+    updateSettingsRef.current = user.updateSettings;
+  }, [user.updateSettings]);
 
   useEffect(
     () => () => {
-      if (glassOpacitySaveTimer.current)
+      if (glassOpacitySaveTimer.current) {
         clearTimeout(glassOpacitySaveTimer.current);
+        // Debounce ancora pendente all'unmount (navigate/cambio account):
+        // salva subito invece di perdere il valore scelto.
+        const pending = glassOpacityPendingRef.current;
+        if (pending != null) {
+          updateSettingsRef.current({ glassOpacity: pending });
+        }
+      }
     },
     []
   );
@@ -129,7 +150,9 @@ function SettingsView({ index }: SettingsViewProps) {
       );
       if (glassOpacitySaveTimer.current)
         clearTimeout(glassOpacitySaveTimer.current);
+      glassOpacityPendingRef.current = v;
       glassOpacitySaveTimer.current = setTimeout(() => {
+        glassOpacityPendingRef.current = null;
         user.updateSettings({ glassOpacity: v });
       }, 500);
     },
@@ -154,9 +177,9 @@ function SettingsView({ index }: SettingsViewProps) {
   const [newAccountName, setNewAccountName] = useState("");
   const [accountBusy, setAccountBusy] = useState(false);
   const [accountErr, setAccountErr] = useState<string | null>(null);
-  const [accountLevels, setAccountLevels] = useState<Map<string, number>>(
-    () => new Map(),
-  );
+  const [fetchedAccountLevels, setFetchedAccountLevels] = useState<
+    Map<string, number>
+  >(() => new Map());
   const [activityLog, setActivityLog] = useState<ActivityLogEntry[] | null>(
     null
   );
@@ -177,7 +200,7 @@ function SettingsView({ index }: SettingsViewProps) {
       return false;
     }
   });
-  const rekordAppVersion = String(import.meta.env.VITE_REKORD_VERSION ?? "4.2.0");
+  const rekordAppVersion = String(import.meta.env.VITE_REKORD_VERSION ?? "4.3.0");
 
   useEffect(() => {
     Promise.all([fetchConfig(), fetchAccounts()])
@@ -249,22 +272,20 @@ function SettingsView({ index }: SettingsViewProps) {
     return buildAchievementsSnapshot(user.state, index).level.level;
   }, [user.ready, user.state, selectedAccountId, index]);
 
+  const otherAccounts = useMemo(
+    () =>
+      accounts?.accounts.filter(
+        (account) => account.id !== selectedAccountId,
+      ) ?? [],
+    [accounts, selectedAccountId],
+  );
+
   useEffect(() => {
-    if (!index) {
-      setAccountLevels(new Map());
-      return;
-    }
-    const others =
-      accounts?.accounts.filter((account) => account.id !== selectedAccountId) ??
-      [];
-    if (!others.length) {
-      setAccountLevels(new Map());
-      return;
-    }
+    if (!index || !otherAccounts.length) return;
     let cancelled = false;
     void (async () => {
       const entries = await Promise.all(
-        others.map(async (account) => {
+        otherAccounts.map(async (account) => {
           try {
             const state = await fetchUserStateForAccount(account.id);
             const level = buildAchievementsSnapshot(state, index).level.level;
@@ -275,7 +296,7 @@ function SettingsView({ index }: SettingsViewProps) {
         }),
       );
       if (cancelled) return;
-      setAccountLevels(
+      setFetchedAccountLevels(
         new Map(
           entries.filter(
             (entry): entry is readonly [string, number] => entry != null,
@@ -286,7 +307,12 @@ function SettingsView({ index }: SettingsViewProps) {
     return () => {
       cancelled = true;
     };
-  }, [accounts, selectedAccountId, index]);
+  }, [otherAccounts, index]);
+
+  // Derivato: senza indice o altri account la mappa dei livelli è vuota,
+  // senza bisogno di azzerarla con un setState dentro l'effect.
+  const accountLevels =
+    index && otherAccounts.length ? fetchedAccountLevels : EMPTY_ACCOUNT_LEVELS;
 
   const accountLevelFor = useCallback(
     (accountId: string) => {
@@ -316,6 +342,9 @@ function SettingsView({ index }: SettingsViewProps) {
 
   const selectSessionAccount = (id: string) => {
     if (!id || id === selectedAccountId) return;
+    // Flush delle patch pendenti sull'account CORRENTE prima dello switch
+    // (il flush su pagehide partirebbe con l'id nuovo già in localStorage).
+    user.flushUserStateNow({ silent: true });
     setSelectedAccountId(id);
     setSelectedAccountIdState(id);
     const url = new URL("/", window.location.href);
@@ -1033,17 +1062,29 @@ function SettingsView({ index }: SettingsViewProps) {
                       setLibraryBusy(true);
                       probeLibraryStructure(libraryPath.trim())
                         .then((probe) => {
+                          const estimated = probe.stats.estimatedTracks ?? 0;
                           setLibraryProbeHint(
                             t("settings.libraryProbeHint", {
-                              tracks: probe.stats.estimatedTracks ?? 0,
+                              tracks: estimated,
                               layout:
                                 probe.candidates[0]?.layout ||
                                 "artist/album/track",
                             }),
                           );
-                          return saveAppConfig({ musicRoot: libraryPath.trim() });
+                          // Cartella senza brani: conferma esplicita prima di
+                          // salvare e ricaricare con libreria vuota.
+                          if (
+                            estimated === 0 &&
+                            !window.confirm(t("settings.libraryProbeEmptyConfirm"))
+                          ) {
+                            return null;
+                          }
+                          return saveAppConfig({ musicRoot: libraryPath.trim() }).then(
+                            () => true,
+                          );
                         })
-                        .then(() => {
+                        .then((saved) => {
+                          if (!saved) return;
                           window.location.replace(
                             new URL("/", window.location.href).href
                           );
@@ -1470,6 +1511,9 @@ function SettingsView({ index }: SettingsViewProps) {
         </p>
         <p className="settings-colophon__subtle subtle sm">
           {t("settings.colophonLine5")}
+        </p>
+        <p className="settings-colophon__subtle subtle sm">
+          {t("settings.colophonLine6")}
         </p>
       </footer>
     </div>

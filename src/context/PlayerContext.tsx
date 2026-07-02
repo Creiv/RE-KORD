@@ -85,7 +85,6 @@ type Ctx = {
   play: () => void;
   pause: () => void;
   toggle: () => void;
-  setVolume: (v: number) => void;
   setRepeat: (m: RepeatMode) => void;
   setShuffle: (v: boolean) => void;
   seek: (t: number) => void;
@@ -260,6 +259,7 @@ export function PlayerProvider({ children }: { children: React.ReactNode }) {
   const repeatRef = useRef<RepeatMode>("all");
   const lastTrackBoundaryAdvanceAtRef = useRef(0);
   const [current, setCurrent] = useState<EnrichedTrack | null>(null);
+  const currentRelPath = current?.relPath;
   const [queue, setQueue] = useState<EnrichedTrack[]>([]);
   const [currentIndex, setCurrentIndex] = useState(0);
   const [isPlaying, setIsPlaying] = useState(false);
@@ -364,11 +364,11 @@ export function PlayerProvider({ children }: { children: React.ReactNode }) {
   }, [current]);
 
   useLayoutEffect(() => {
-    if (!current) return;
+    if (currentRelPath === undefined) return;
     resetPlayerProgressTime();
     const timer = window.setTimeout(() => setCurrentTime(0), 0);
     return () => window.clearTimeout(timer);
-  }, [current?.relPath]);
+  }, [currentRelPath]);
 
   useEffect(() => {
     activeDeckRef.current = activeDeckIx;
@@ -441,9 +441,8 @@ export function PlayerProvider({ children }: { children: React.ReactNode }) {
       const t = ctx.currentTime;
       gOut.gain.cancelScheduledValues(t);
       gIn.gain.cancelScheduledValues(t);
-      gOut.gain.setValueAtTime(1, t);
-      gIn.gain.setValueAtTime(1, t);
     }
+    snapGainsToSolo(inIx);
 
     activeDeckRef.current = inIx;
     setActiveDeckIx(inIx);
@@ -452,6 +451,8 @@ export function PlayerProvider({ children }: { children: React.ReactNode }) {
     setCurrent(nextTr);
     keepPlayingRef.current = true;
     pushRecent(nextTr);
+    const inEl = inIx === 0 ? audioDeck0Ref.current : audioDeck1Ref.current;
+    if (inEl && !inEl.paused) setIsPlaying(true);
   }, [pushRecent, snapGainsToSolo]);
 
   const abortCrossfade = useCallback(() => {
@@ -939,12 +940,15 @@ export function PlayerProvider({ children }: { children: React.ReactNode }) {
     return () => {
       trackLoadGenRef.current += 1;
     };
-  }, [abortCrossfade, current?.relPath, pushRecent, snapGainsToSolo]);
+    // Il caricamento audio deve ripartire solo al cambio di brano (relPath),
+    // non a ogni cambio di identità dell'oggetto `current` (es. resync indice).
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [abortCrossfade, currentRelPath, pushRecent, snapGainsToSolo]);
 
   useEffect(() => {
-    halfListenTrackRef.current = current?.relPath ?? null;
+    halfListenTrackRef.current = currentRelPath ?? null;
     halfListenCountedRef.current = false;
-  }, [current?.relPath]);
+  }, [currentRelPath]);
 
   useEffect(() => {
     const a0 = audioDeck0Ref.current;
@@ -1010,14 +1014,29 @@ export function PlayerProvider({ children }: { children: React.ReactNode }) {
         }
         advanceAfterTrackCompleted();
       };
+      const onPlay = () => {
+        if (crossfadeBusyRef.current) {
+          const inIx = crossfadeInIxRef.current;
+          if (inIx != null && ixFor(audio) === inIx) {
+            setIsPlaying(true);
+            return;
+          }
+        }
+        if (ixFor(audio) !== activeDeckRef.current) return;
+        setIsPlaying(true);
+      };
       const onExternalPause = () => {
         if (appInitiatedPauseRef.current) return;
+        if (crossfadeBusyRef.current) return;
         if (ixFor(audio) !== activeDeckRef.current) return;
-        // Pausa automatica di fine traccia (il browser la emette subito prima
-        // di 'ended'): non è una pausa esterna. Senza questo guard l'icona
-        // scattava a "play" a ogni cambio brano e restava sbagliata durante
-        // il crossfade (l'audio prosegue sull'altro deck).
         if (audio.ended) return;
+        const d = audio.duration;
+        const nearEnd =
+          Number.isFinite(d) && d > 0 && audio.currentTime >= d - 0.5;
+        if (nearEnd) {
+          advanceAfterTrackCompleted();
+          return;
+        }
         if (!keepPlayingRef.current || !currentRef.current) return;
         if (isAutomotiveDisplayMode()) {
           audio.muted = true;
@@ -1041,12 +1060,14 @@ export function PlayerProvider({ children }: { children: React.ReactNode }) {
       audio.addEventListener("timeupdate", onTime);
       audio.addEventListener("loadedmetadata", onMeta);
       audio.addEventListener("ended", onEnd);
+      audio.addEventListener("play", onPlay);
       audio.addEventListener("pause", onExternalPause);
       audio.addEventListener("volumechange", onVolumeChange);
       return () => {
         audio.removeEventListener("timeupdate", onTime);
         audio.removeEventListener("loadedmetadata", onMeta);
         audio.removeEventListener("ended", onEnd);
+        audio.removeEventListener("play", onPlay);
         audio.removeEventListener("pause", onExternalPause);
         audio.removeEventListener("volumechange", onVolumeChange);
       };
@@ -1098,7 +1119,7 @@ export function PlayerProvider({ children }: { children: React.ReactNode }) {
 
   /** Prefetch head HTTP dei prossimi 2 brani in coda (max 256KB ciascuno). */
   useEffect(() => {
-    if (!current || queue.length === 0) return;
+    if (currentRelPath === undefined || queue.length === 0) return;
     const HEAD_BYTES = 262_144;
     for (let i = 1; i <= 2; i++) {
       const tr = queue[currentIndex + i];
@@ -1111,11 +1132,10 @@ export function PlayerProvider({ children }: { children: React.ReactNode }) {
         /* best-effort */
       });
     }
-  }, [current?.relPath, currentIndex, queue]);
+  }, [currentRelPath, currentIndex, queue]);
 
   useEffect(() => {
     const id = window.setInterval(() => {
-      if (document.visibilityState !== "hidden") return;
       if (!keepPlayingRef.current) return;
       advanceAfterTrackCompleted();
     }, 900);
@@ -1318,10 +1338,6 @@ export function PlayerProvider({ children }: { children: React.ReactNode }) {
     if (isPlaying) pause();
     else void play();
   }, [isPlaying, pause, play]);
-
-  const setVolume = useCallback((next: number) => {
-    void next;
-  }, []);
 
   const seek = useCallback((time: number) => {
     void abortCrossfade();
@@ -1583,13 +1599,15 @@ export function PlayerProvider({ children }: { children: React.ReactNode }) {
   }, []);
 
   const next = useCallback(() => {
-    const crossfade = abortCrossfade();
+    // Crossfade in corso: committa al brano in ingresso invece di abortire
+    // e saltare oltre (UI avanti, audio sul deck sbagliato).
+    if (crossfadeBusyRef.current) {
+      finalizeCrossfade();
+      syncMediaSessionNowRef.current();
+      return;
+    }
     if (!queue.length) return;
-    const baseIndex =
-      crossfade.wasActive && crossfade.incomingIdx != null
-        ? crossfade.incomingIdx
-        : currentIndex;
-    const nextIndex = resolveNextPlaybackIndex(baseIndex);
+    const nextIndex = resolveNextPlaybackIndex(currentIndex);
     if (nextIndex == null) {
       keepPlayingRef.current = false;
       setIsPlaying(false);
@@ -1599,7 +1617,7 @@ export function PlayerProvider({ children }: { children: React.ReactNode }) {
     setCurrent(queueRef.current[nextIndex] || null);
     keepPlayingRef.current = true;
     syncMediaSessionNowRef.current();
-  }, [abortCrossfade, currentIndex, queue.length, repeat, resolveNextPlaybackIndex]);
+  }, [currentIndex, finalizeCrossfade, queue.length, resolveNextPlaybackIndex]);
 
   const setShuffle = useCallback((enable: boolean) => {
     if (!enable) {
@@ -1673,6 +1691,8 @@ export function PlayerProvider({ children }: { children: React.ReactNode }) {
     syncMediaSessionNowRef.current();
   }, [abortCrossfade, currentIndex, queue, repeat]);
 
+  const { toggleFavorite, toggleShuffleExcludedTrack } = user;
+  const shuffleExcludedAlbumIds = user.state.shuffleExcludedAlbumIds;
   useEffect(() => {
     mediaBridgeRef.current = {
       play: () => {
@@ -1711,14 +1731,14 @@ export function PlayerProvider({ children }: { children: React.ReactNode }) {
       toggleFavoriteCurrent: () => {
         const cur = currentRef.current;
         if (!cur) return;
-        user.toggleFavorite(cur.relPath);
+        toggleFavorite(cur.relPath);
       },
       toggleExcludeCurrent: () => {
         const cur = currentRef.current;
         if (!cur) return;
-        const exAlbums = new Set(user.state.shuffleExcludedAlbumIds);
+        const exAlbums = new Set(shuffleExcludedAlbumIds);
         if (isTrackAlbumShuffleExcluded(cur, exAlbums)) return;
-        user.toggleShuffleExcludedTrack(cur.relPath);
+        toggleShuffleExcludedTrack(cur.relPath);
       },
     };
   }, [
@@ -1732,9 +1752,9 @@ export function PlayerProvider({ children }: { children: React.ReactNode }) {
     seek,
     setShuffle,
     setRepeat,
-    user.toggleFavorite,
-    user.toggleShuffleExcludedTrack,
-    user.state.shuffleExcludedAlbumIds,
+    toggleFavorite,
+    toggleShuffleExcludedTrack,
+    shuffleExcludedAlbumIds,
   ]);
 
   useEffect(() => {
@@ -1815,7 +1835,6 @@ export function PlayerProvider({ children }: { children: React.ReactNode }) {
       },
       pause,
       toggle,
-      setVolume,
       setRepeat,
       setShuffle,
       seek,
@@ -1865,7 +1884,6 @@ export function PlayerProvider({ children }: { children: React.ReactNode }) {
       seek,
       seekRatio,
       setShuffle,
-      setVolume,
       shuffle,
       toggle,
       user.favorites,

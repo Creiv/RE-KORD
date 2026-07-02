@@ -321,26 +321,22 @@ public class RekordMediaService extends Service {
         session.setActive(true);
 
         Notification notification = buildNotification();
-        if ("playing".equals(playbackState)) {
-            if (!foreground) {
-                if (Build.VERSION.SDK_INT >= 29) {
-                    startForeground(
-                        NOTIFICATION_ID,
-                        notification,
-                        ServiceInfo.FOREGROUND_SERVICE_TYPE_MEDIA_PLAYBACK
-                    );
-                } else {
-                    startForeground(NOTIFICATION_ID, notification);
-                }
-                foreground = true;
+        // Foreground mantenuto anche in pausa finché c'è una sessione attiva:
+        // l'audio vive nel WebView, se il processo viene sospeso in background
+        // (OEM aggressivi) i controlli lock screen e la ripresa fallirebbero.
+        // Lo stato "none" passa da stopForegroundCompat() prima di arrivare qui.
+        if (!foreground) {
+            if (Build.VERSION.SDK_INT >= 29) {
+                startForeground(
+                    NOTIFICATION_ID,
+                    notification,
+                    ServiceInfo.FOREGROUND_SERVICE_TYPE_MEDIA_PLAYBACK
+                );
             } else {
-                notifySafely(notification);
+                startForeground(NOTIFICATION_ID, notification);
             }
+            foreground = true;
         } else {
-            if (foreground) {
-                stopForeground(STOP_FOREGROUND_DETACH);
-                foreground = false;
-            }
             notifySafely(notification);
         }
     }

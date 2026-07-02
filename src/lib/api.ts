@@ -11,6 +11,7 @@ import type {
   UserStatePatch,
   UserStateV1,
 } from "../types"
+import { randomUUID } from "./randomUUID"
 
 type Wrapped<T> = { ok: boolean; data: T; error: string | null }
 const SESSION_ACCOUNT_STORAGE_KEY = "kord-session-account-id"
@@ -206,7 +207,13 @@ function rememberAvailableAccount(data: AccountsResponse | AppConfig) {
     if ("accounts" in data && current) {
       if (data.accounts.some((account) => account.id === current)) return
       const fallback = data.defaultAccountId || data.accounts[0]?.id
-      if (fallback) setSelectedAccountId(fallback)
+      if (fallback && fallback !== current) {
+        // L'account salvato non esiste più (eliminato altrove): switch +
+        // reload completo, altrimenti la UI mostrerebbe lo stato del vecchio
+        // account mentre le API usano già quello nuovo.
+        setSelectedAccountId(fallback)
+        window.location.replace(new URL("/", window.location.href).href)
+      }
       return
     }
     if (current) return
@@ -224,6 +231,16 @@ function pathnameOnly(full: string) {
 }
 
 function accountHeaders(base: HeadersInit = {}) {
+  // Un header account già impostato dal chiamante ha precedenza
+  // (es. flush user-state pinnato all'account che ha generato la patch).
+  if (
+    base &&
+    !Array.isArray(base) &&
+    !(base instanceof Headers) &&
+    (base as Record<string, string>)["X-KORD-Account-Id"]
+  ) {
+    return base
+  }
   const id = getSelectedAccountId()
   return id ? { ...base, "X-KORD-Account-Id": id } : base
 }
@@ -585,11 +602,19 @@ export async function clearCustomThemeBg(): Promise<void> {
   await unwrap<null>(response)
 }
 
-export async function patchUserState(patch: UserStatePatch): Promise<UserStateV1> {
+export async function patchUserState(
+  patch: UserStatePatch,
+  opts?: { accountId?: string | null },
+): Promise<UserStateV1> {
   await ensureSelectedAccountId()
+  // Header esplicito quando noto: al cambio account il flush su pagehide
+  // parte quando localStorage contiene già il NUOVO id — senza pin, le
+  // patch pendenti dell'account precedente verrebbero scritte su quello nuovo.
+  const headers: Record<string, string> = { "Content-Type": "application/json" }
+  if (opts?.accountId) headers["X-KORD-Account-Id"] = opts.accountId
   const response = await apiFetch("/api/user-state", {
     method: "PATCH",
-    headers: { "Content-Type": "application/json" },
+    headers,
     body: JSON.stringify({ state: patch }),
   })
   return unwrapUserStateMutation(response)
@@ -1187,23 +1212,7 @@ export async function fetchDownloadFlatCount(url: string): Promise<number> {
 
 /** UUID v4 per /api/download: su http://IP:porta randomUUID() può lanciare (contesto non sicuro). */
 export function newStudioDownloadId(): string {
-  const c = globalThis.crypto
-  if (c && typeof c.randomUUID === "function") {
-    try {
-      return c.randomUUID()
-    } catch {
-      /* SecurityError fuori da localhost/https */
-    }
-  }
-  if (!c || typeof c.getRandomValues !== "function") {
-    throw new Error("Impossibile generare downloadId (crypto assente)")
-  }
-  const buf = new Uint8Array(16)
-  c.getRandomValues(buf)
-  buf[6] = (buf[6]! & 0x0f) | 0x40
-  buf[8] = (buf[8]! & 0x3f) | 0x80
-  const h = Array.from(buf, (b) => b.toString(16).padStart(2, "0")).join("")
-  return `${h.slice(0, 8)}-${h.slice(8, 12)}-${h.slice(12, 16)}-${h.slice(16, 20)}-${h.slice(20, 32)}`
+  return randomUUID()
 }
 
 export async function runYtdlpDownload(

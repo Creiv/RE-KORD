@@ -1,3 +1,4 @@
+/* eslint-disable react-refresh/only-export-components */
 import { createContext, useContext, useEffect, type ReactNode } from "react"
 import { trackCoverDisplay } from "../lib/coverDisplay"
 import {

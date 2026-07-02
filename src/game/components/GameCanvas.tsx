@@ -589,7 +589,7 @@ export function GameCanvas({
     rafRef.current = requestAnimationFrame(() => drawRef.current());
   }, [
     canvasLite,
-    chart.duration,
+    chart,
     embedded,
     finish,
     maybeReportRunProgress,
@@ -837,6 +837,10 @@ export function GameCanvas({
   useEffect(() => {
     const shouldLive = embedded && syncLive;
     const shouldCountdownBegin = embedded && autoBegin && !syncLive;
+    // Copie locali per il cleanup: i ref puntano a nodi che React può
+    // rimontare prima che il cleanup giri.
+    const lanePads = lanePadRefs.current;
+    const laneStrips = laneStripRefs.current;
     let cancelled = false;
     stateRef.current = initialRunState(chart.notes);
     lastRunUpdateScoreRef.current = -1;
@@ -865,7 +869,7 @@ export function GameCanvas({
         if (lane) clearTimeout(lane);
       }
       lanePressReleaseTimersRef.current = [null, null, null, null];
-      clearLanePadDom(lanePadRefs.current, laneStripRefs.current);
+      clearLanePadDom(lanePads, laneStrips);
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps -- runId + songId
   }, [runId, chart.songId, embedded, autoBegin, onRunUpdate, syncLanePadUi, syncLive]);

@@ -18,15 +18,7 @@ import {
   UiBarChart,
   UiMusicNote,
 } from "../components/RekordUiIcons";
-
-function initials(text: string) {
-  return text
-    .split(/\s+/)
-    .filter(Boolean)
-    .slice(0, 2)
-    .map((part) => part[0]?.toUpperCase() || "")
-    .join("");
-}
+import { initials } from "../lib/initials";
 
 const STATISTICS_TOP_N = 3;
 

@@ -1,4 +1,4 @@
-import { useCallback, useLayoutEffect, useMemo, useState, type CSSProperties } from "react";
+import { useCallback, useMemo, useState, type CSSProperties } from "react";
 import { useTrackCoverDisplay } from "../context/LibraryArtworkContext";
 import { usePlayer, useTrackRowPlayer } from "../context/PlayerContext";
 import {
@@ -175,11 +175,9 @@ export function DashboardSmartRadioCard({
     return buildSmartRadioCandidatePool(recent, favorites);
   }, [user.state.recent, dashboard.favoriteTracks, index.tracks]);
 
-  const [sessionPickedTracks, setSessionPickedTracks] = useState<
-    EnrichedTrack[] | null
-  >(null);
-
-  useLayoutEffect(() => {
+  // Snapshot una tantum per visita (navigazione in dashboard / reload pagina):
+  // l'inizializzatore lazy di useState gira solo al mount.
+  const [sessionPickedTracks] = useState<EnrichedTrack[]>(() => {
     const recent = enrichTracksFromLibrary(
       user.state.recent.slice(0, 2),
       index.tracks,
@@ -189,20 +187,15 @@ export function DashboardSmartRadioCard({
       index.tracks,
     );
     const pool = buildSmartRadioCandidatePool(recent, favorites);
-    setSessionPickedTracks(
-      pickSmartRadioDisplayTracks(
-        pool,
-        SMART_RADIO_MAX_DISPLAY_TRACKS + 1,
-        index.tracks,
-      ),
+    return pickSmartRadioDisplayTracks(
+      pool,
+      SMART_RADIO_MAX_DISPLAY_TRACKS + 1,
+      index.tracks,
     );
-    // Solo al mount (navigazione in dashboard / reload pagina).
-    // eslint-disable-next-line react-hooks/exhaustive-deps -- snapshot una tantum per visita
-  }, []);
+  });
 
   const displayTracks = useMemo(
-    () =>
-      (sessionPickedTracks ?? []).slice(0, Math.max(0, slotCount - 1)),
+    () => sessionPickedTracks.slice(0, Math.max(0, slotCount - 1)),
     [sessionPickedTracks, slotCount],
   );
 
@@ -217,6 +210,13 @@ export function DashboardSmartRadioCard({
       goListen();
     },
     [playGlobalRadio, goListen],
+  );
+
+  const hasRandomEligible = useMemo(
+    () =>
+      eligibleTracksForIntelligentRandom(index, excludedAlbums, excludedTracks)
+        .length > 0,
+    [index, excludedAlbums, excludedTracks],
   );
 
   const playRandom = useCallback(() => {
@@ -267,7 +267,12 @@ export function DashboardSmartRadioCard({
             type="button"
             className="dashboard-smart-radio-tile dashboard-smart-radio-tile--random"
             onClick={playRandom}
-            title={t("dashboard.smartRadioRandom")}
+            disabled={!hasRandomEligible}
+            title={
+              hasRandomEligible
+                ? t("dashboard.smartRadioRandom")
+                : t("dashboard.smartRadioRandomAllExcluded")
+            }
             aria-label={t("dashboard.smartRadioRandom")}
           >
             <span

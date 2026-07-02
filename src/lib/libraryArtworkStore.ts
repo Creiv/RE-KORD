@@ -37,8 +37,3 @@ export function syncLibraryAlbumArtworkFromIndex(
 ): void {
   setLibraryAlbumArtworkMap(buildAlbumArtworkMap(index))
 }
-
-/** Per test: stato corrente della mappa album → artwork. */
-export function peekAlbumArtworkMap(): Map<string, AlbumArtworkRef> {
-  return albumArtById
-}

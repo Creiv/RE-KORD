@@ -236,6 +236,34 @@
 
 .starCalloutPlay {
   flex-shrink: 0;
+  /* Gradiente senza color-mix: su WebView datate il mix nel player.css
+     rende trasparente l'intero sfondo del tasto play. */
+  background: linear-gradient(
+    135deg,
+    var(--nebula-play-c, var(--accent)),
+    var(--accent2)
+  ) !important;
+  color: var(--text-on-accent, #07101b);
+  opacity: 1;
+}
+
+.starCalloutPlay:hover {
+  filter: brightness(1.06);
+  background: linear-gradient(
+    135deg,
+    var(--nebula-play-c, var(--accent)),
+    var(--accent2)
+  ) !important;
+}
+
+.starCalloutRadio {
+  flex-shrink: 0;
+  opacity: 0.85;
+}
+
+.starCalloutRadio :global(.player-bar2__ic-glyph--svg svg) {
+  width: 1.05rem;
+  height: 1.05rem;
 }
 
 .starCalloutPlay[data-playing="true"] {
@@ -246,6 +274,36 @@
 .starCallout :global(.player-bar2__ic--play .player-bar2__ic-glyph--svg svg) {
   width: 1.2rem;
   height: 1.2rem;
+}
+
+.hint {
+  position: absolute;
+  bottom: 14px;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 3;
+  max-width: calc(100% - 28px);
+  padding: 6px 14px;
+  border-radius: 999px;
+  border: 1px solid color-mix(in srgb, var(--border, #334155) 60%, transparent);
+  background: color-mix(in srgb, var(--surface, #0f172a) 78%, transparent);
+  backdrop-filter: blur(10px);
+  color: var(--text-muted, #94a3b8);
+  font-size: 0.72rem;
+  text-align: center;
+  pointer-events: none;
+  animation: nebulaHintIn 0.6s ease both;
+}
+
+@keyframes nebulaHintIn {
+  from {
+    opacity: 0;
+    transform: translateX(-50%) translateY(6px);
+  }
+  to {
+    opacity: 1;
+    transform: translateX(-50%) translateY(0);
+  }
 }
 
 .empty {
@@ -300,4 +358,19 @@
     -webkit-box-orient: vertical;
     overflow: hidden;
   }
+}
+
+:global(html[data-glass-backdrop="0"]) .hint,
+:global(html[data-glass-backdrop="0"]) .starCallout,
+:global(html[data-glass-backdrop="0"]) .topToolsBtn {
+  backdrop-filter: none;
+  -webkit-backdrop-filter: none;
+}
+
+:global(html[data-color-mix="0"]) .hint,
+:global(html[data-color-mix="0"]) .starCallout,
+:global(html[data-color-mix="0"]) .topToolsBtn,
+:global(html[data-color-mix="0"]) .brand {
+  background: rgba(15, 23, 42, 0.92);
+  border-color: rgba(148, 163, 184, 0.28);
 }

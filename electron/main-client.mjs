@@ -126,18 +126,6 @@ function showConnect(fallbackBase) {
   void mainWindow?.loadURL(u);
 }
 
-function openAppFromState(base, accountId) {
-  const url = appUrlFor(base, accountId);
-  if (!url) {
-    showConnect();
-    return;
-  }
-  useConnectScreen = false;
-  lastOpenUrl = url;
-  appendLaunchLog(`load ${url}`);
-  void mainWindow?.loadURL(url);
-}
-
 let lastOpenUrl = "";
 
 function createWindow() {

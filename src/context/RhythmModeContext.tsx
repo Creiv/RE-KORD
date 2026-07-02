@@ -59,7 +59,7 @@ export function RhythmModeProvider({ children }: { children: React.ReactNode }) 
 
   const value = useMemo(
     () => ({ open, stylesReady, setOpen, toggle }),
-    [open, stylesReady, toggle]
+    [open, stylesReady, setOpen, toggle]
   );
   return (
     <RhythmModeContext.Provider value={value}>

@@ -34,6 +34,7 @@
         --radius-pill: 6px;
         --shadow-elev-1: 0 1px 0 rgba(0, 0, 0, 0.35), 0 2px 10px rgba(0, 0, 0, 0.22);
         --shadow-elev-2: 0 4px 18px rgba(0, 0, 0, 0.28);
+        --focus-ring: rgba(56, 189, 248, 0.72);
         --focus-ring: color-mix(in srgb, var(--accent2) 65%, white 20%);
         --space-3: 0.625rem;
         --space-4: 0.875rem;
@@ -599,6 +600,41 @@
         .row-split {
           grid-template-columns: minmax(0, 1fr) 5rem;
         }
+      }
+    </style>
+    <script>
+      (function () {
+        try {
+          var el = document.createElement("div");
+          el.style.cssText =
+            "position:absolute;left:-9999px;visibility:hidden;pointer-events:none";
+          document.documentElement.appendChild(el);
+          el.style.backgroundColor =
+            "color-mix(in srgb, rgb(0, 0, 0) 100%, transparent)";
+          var bg = getComputedStyle(el).backgroundColor;
+          document.documentElement.removeChild(el);
+          var broken =
+            !bg ||
+            bg === "transparent" ||
+            bg === "rgba(0, 0, 0, 0)";
+          document.documentElement.dataset.colorMix = broken ? "0" : "1";
+        } catch (e) {
+          document.documentElement.dataset.colorMix = "0";
+        }
+      })();
+    </script>
+    <style>
+      html[data-color-mix="0"] .connect-lang .segmented {
+        background: var(--surface2);
+      }
+      html[data-color-mix="0"] .surface-card {
+        background: var(--surface2);
+        border-color: var(--border);
+      }
+      html[data-color-mix="0"] .ghost-input,
+      html[data-color-mix="0"] .account-pick button {
+        background: var(--ghost-input-bg);
+        border-color: var(--border);
       }
     </style>
   </head>

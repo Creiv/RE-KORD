@@ -1,6 +1,6 @@
 import { buildLibraryIndex } from "../musicLibrary.mjs"
 import { readLibraryIndexCache } from "../libraryIndexCache.mjs"
-import { isLibraryDbBootstrapped, getLibraryDb } from "./index.mjs"
+import { isLibraryDbBootstrapped } from "./index.mjs"
 import { persistLibraryIndexToDb } from "./queries/library.mjs"
 
 /**
@@ -17,12 +17,4 @@ export async function bootstrapLibraryDb(libraryRoot) {
 
   await persistLibraryIndexToDb(libraryRoot, index)
   return true
-}
-
-/** @param {string} libraryRoot */
-export function ensureLibraryDbReady(libraryRoot) {
-  getLibraryDb(libraryRoot)
-  if (!isLibraryDbBootstrapped(libraryRoot)) {
-    throw new Error("Library database not bootstrapped")
-  }
 }

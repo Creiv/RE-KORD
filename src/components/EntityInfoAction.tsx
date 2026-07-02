@@ -44,6 +44,17 @@ export function EntityInfoAction({
     useState<EntityInfoBundle>(EMPTY_BUNDLE);
   const [open, setOpen] = useState(false);
 
+  // Reset quando cambia l'entità: pattern "adjust state during render"
+  // (https://react.dev/learn/you-might-not-need-an-effect).
+  const entityKey = `${artistDir}\u0000${albumDir ?? ""}`;
+  const [prevEntityKey, setPrevEntityKey] = useState(entityKey);
+  if (prevEntityKey !== entityKey) {
+    setPrevEntityKey(entityKey);
+    setBundle(EMPTY_BUNDLE);
+    setArtistBundle(EMPTY_BUNDLE);
+    setOpen(false);
+  }
+
   useEffect(() => {
     if (!open) return;
     const onKey = (e: KeyboardEvent) => {
@@ -55,9 +66,6 @@ export function EntityInfoAction({
 
   useEffect(() => {
     let active = true;
-    setBundle(EMPTY_BUNDLE);
-    setArtistBundle(EMPTY_BUNDLE);
-    setOpen(false);
     if (!artistDir) return;
     getEntityInfo(artistDir, albumDir ?? undefined)
       .then((next) => {

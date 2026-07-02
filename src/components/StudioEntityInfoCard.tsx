@@ -86,10 +86,21 @@ export function StudioEntityInfoCard({ artists }: { artists: LibArtist[] }) {
       );
   }, [artist, sortLocale]);
 
-  useEffect(() => {
+  // Reset quando cambia il target: pattern "adjust state during render"
+  // (https://react.dev/learn/you-might-not-need-an-effect).
+  const [prevTarget, setPrevTarget] = useState({ artist, albums, locale });
+  if (
+    prevTarget.artist !== artist ||
+    prevTarget.albums !== albums ||
+    prevTarget.locale !== locale
+  ) {
+    setPrevTarget({ artist, albums, locale });
     setSelected(new Set());
     setRows([]);
     setSavedByKey({});
+  }
+
+  useEffect(() => {
     if (!artist) return;
     let active = true;
     const targets: { key: string; albumDir: string | null }[] = [

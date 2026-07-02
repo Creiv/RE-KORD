@@ -1,7 +1,13 @@
 # RE-KORD — Mappa completa delle funzionalità
 
-> Versione app: 4.2.0 — documento generato dall'analisi del codice (giugno 2026).
+> Versione app: 4.3.0 — documento generato dall'analisi del codice (luglio 2026).
 > Organizzato per pagina/sezione e categoria.
+
+## Novità — 4.3
+
+- **Sonic Nebula**: mappa galattica interattiva della libreria — ogni brano è una stella posizionata per BPM (asse orizzontale) ed energia percettiva (asse verticale); nebulose colorate per cluster di mood; pan/zoom, fullscreen, filtri mood; click per play, Shift+click per radio locale; tab **Nebula** in Libreria + card dashboard con mini-preview animata
+- **Smart Radio in dashboard**: griglia "Ascolto veloce" da recenti e preferiti (max 19 tile, un brano per album) + tile Casuale; avvio radio intelligente da ogni tile; link rapido a Studio; griglia responsive (`useDashboardSmartRadioGrid`)
+- **Resilienza APK in background**: probe salute server e refresh stato al ritorno in foreground (`useBackendRecoveryOnResume`: visibility, pageshow, online, `appStateChange` Capacitor); gate "Server non raggiungibile" con retry manuale; riconnessione automatica senza ricaricare l'app
 
 ## Novità — giugno 2026 (4.2)
 
@@ -78,6 +84,8 @@
 - Hero card con pulsante "Ascolta/Riprendi" (avvia shuffle intelligente o riprende)
 - 4 metriche: artisti, album, tracce, avvisi qualità
 - Card mix consigliati (DashboardMixCard)
+- **Smart Radio** (DashboardSmartRadioCard): griglia tile da recenti + preferiti, un brano per album, tile Casuale, play radio da tile, overlay Studio
+- **Sonic Nebula** (DashboardNebulaCard): anteprima canvas animata della nebula, CTA per aprire la tab Nebula in Libreria
 - Griglia "Album aggiornati di recente" (click → dettaglio album in Libreria)
 - Top 5 preferiti per play count (click → riproduzione radio)
 - Sezione avvisi qualità con conteggi per tipo e link a Studio
@@ -91,10 +99,11 @@
 - Filtri segmentati: Tutti / Artisti / Album / Tracce
 - Risultati limitati (12 artisti, 12 album, 50 tracce)
 
-### Browse in 3 modalità
+### Browse in 4 modalità
 - **Artisti**: griglia tile, ordinamento per nome o play count
 - **Generi**: griglia con preview copertine, tile "Senza genere", conteggi tracce/album, ordinamenti
 - **Mood** (sperimentale): filtri per 14 mood con match "Qualsiasi/Tutti" e lista tracce filtrata
+- **Nebula** (Sonic Nebula): esplorazione galattica canvas — stelle = tracce (BPM/energia), nebulose = cluster mood; pan/zoom, filtri, play/radio locale, fullscreen; embed in Libreria o card dashboard
 
 ### Dettaglio Artista
 - Riproduzione shuffle dell'artista
@@ -475,6 +484,7 @@
 - Riconnessione automatica all'avvio al server salvato; **tasto Indietro = navigazione di pagina** (history del routing SPA via `@capacitor/app`), alla radice torna alla shell
 - **Widget di ascolto nativo**: MediaSession Android via plugin `@jofr/capacitor-media-session` (notifica media, lock screen, tasti cuffie/auto, seek) — `src/lib/mediaSession.ts` usa il bridge nativo nel client e l'API web in Chrome/PWA
 - **Riproduzione in background**: `RekordMediaService` (foreground service `mediaPlayback`) mantiene l'audio attivo con l'app in background
+- **Riconnessione API in background**: al ritorno in foreground (visibility, online, `appStateChange`) probe `/api/health`, refresh stato utente e libreria; gate con retry se il server non risponde
 - **ExoPlayer nativo** opzionale (Media3): toggle in Impostazioni; bridge JS `RekordNativePlayback` in `MainActivity`
 - **Cast Google Home**: Cast Framework (`RekordCastManager`, `RekordCastOptionsProvider`) integrato nel player
 - **Blocco rotazione portrait** a livello manifest (parità con la PWA installata)

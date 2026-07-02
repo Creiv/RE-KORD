@@ -580,7 +580,7 @@ export function registerDownloadRoutes(app) {
                 postDownloadError: postDownloadError
                   ? String(postDownloadError?.message || postDownloadError)
                   : null,
-                musicRoot: root,
+                musicRoot: path.basename(root),
                 command,
                 indexEpoch,
                 outputDir: outputDirForLog || null,
@@ -629,7 +629,7 @@ export function registerDownloadRoutes(app) {
             code: resultCode,
             progress: lastProgressEmitted,
             error: error.message,
-            musicRoot: root,
+            musicRoot: path.basename(root),
             command,
             ...itemSummary,
           })}\n`;

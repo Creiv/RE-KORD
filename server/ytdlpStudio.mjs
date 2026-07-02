@@ -15,6 +15,19 @@ const execFileAsync = promisify(execFile);
 /** downloadId (UUID) → { child, userCancelled, killTimer } per /api/download-cancel */
 export const activeYtdlpDownloads = new Map();
 
+/** Termina tutti i processi yt-dlp attivi (shutdown del server). */
+export function killActiveYtdlpDownloads() {
+  for (const entry of activeYtdlpDownloads.values()) {
+    if (entry.killTimer) clearTimeout(entry.killTimer);
+    try {
+      entry.child?.kill("SIGTERM");
+    } catch {
+      /* processo già terminato */
+    }
+  }
+  activeYtdlpDownloads.clear();
+}
+
 export function isUuidDownloadId(value) {
   return /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(
     String(value ?? "").trim()

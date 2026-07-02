@@ -334,6 +334,8 @@ export type LibraryIndex = {
   musicRoot?: string;
   /** Epoch cache server (opzionale, backward compatible). */
   indexEpoch?: number;
+  /** Libreria vuota per selezione account (non per indice server vuoto). */
+  selectionEmpty?: boolean;
   artists: LibraryArtistIndex[];
   albums: LibraryAlbumIndex[];
   tracks: LibraryTrackIndex[];

@@ -253,36 +253,40 @@ export function registerUserStateRoutes(app) {
   });
 
   app.get("/api/cover", (req, res) => {
-    const root = getMusicRoot();
-    const relPath = String(req.query.path || "");
-    if (
-      !relPath ||
-      pathHasParentDirSegment(relPath) ||
-      hasReservedPathSegment(relPath)
-    ) {
-      return res.status(400).end();
-    }
-    const filePath = path.join(root, relPath.replaceAll("/", path.sep));
-    let resolvedPath = filePath;
-    if (!existsSync(resolvedPath) && isLibraryDbBootstrapped(root)) {
-      const mediaRel = resolveTrackFileRelPath(root, relPath);
-      if (mediaRel && mediaRel !== relPath) {
-        resolvedPath = path.join(root, mediaRel.replaceAll("/", path.sep));
+    try {
+      const root = getMusicRoot();
+      const relPath = String(req.query.path || "");
+      if (
+        !relPath ||
+        pathHasParentDirSegment(relPath) ||
+        hasReservedPathSegment(relPath)
+      ) {
+        return res.status(400).end();
       }
-    }
-    if (!underRoot(resolvedPath, root) || !existsSync(resolvedPath))
+      const filePath = path.join(root, relPath.replaceAll("/", path.sep));
+      let resolvedPath = filePath;
+      if (!existsSync(resolvedPath) && isLibraryDbBootstrapped(root)) {
+        const mediaRel = resolveTrackFileRelPath(root, relPath);
+        if (mediaRel && mediaRel !== relPath) {
+          resolvedPath = path.join(root, mediaRel.replaceAll("/", path.sep));
+        }
+      }
+      if (!underRoot(resolvedPath, root) || !existsSync(resolvedPath))
+        return res.status(404).end();
+      const dir = statSync(resolvedPath).isDirectory()
+        ? resolvedPath
+        : path.dirname(resolvedPath);
+      for (const name of coverCandidates()) {
+        const full = path.join(dir, name);
+        if (existsSync(full) && underRoot(full, root)) {
+          res.setHeader("Cache-Control", "private, max-age=86400, immutable");
+          return res.sendFile(full);
+        }
+      }
       return res.status(404).end();
-    const dir = statSync(resolvedPath).isDirectory()
-      ? resolvedPath
-      : path.dirname(resolvedPath);
-    for (const name of coverCandidates()) {
-      const full = path.join(dir, name);
-      if (existsSync(full) && underRoot(full, root)) {
-        res.setHeader("Cache-Control", "private, max-age=86400, immutable");
-        return res.sendFile(full);
-      }
+    } catch {
+      return res.status(404).end();
     }
-    return res.status(404).end();
   });
 
   app.get("/api/track-stat", (req, res) => {

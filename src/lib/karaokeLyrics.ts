@@ -1,4 +1,7 @@
-export type KaraokeLyricLine = { atSec: number; text: string };
+import { parseLrcLyrics } from "./lrc";
+import type { ParsedLrcLine } from "./lrc";
+
+export type KaraokeLyricLine = ParsedLrcLine;
 
 export type KaraokeLines = {
   current: string;
@@ -6,31 +9,7 @@ export type KaraokeLines = {
   next: string;
 };
 
-export function parseLrcLyrics(raw: string): KaraokeLyricLine[] {
-  const out: KaraokeLyricLine[] = [];
-  const rows = raw.split(/\r?\n/);
-  for (const row of rows) {
-    const text = row.replace(/\[[^\]]*]/g, "").trim();
-    const tags = [...row.matchAll(/\[(\d{1,2}):(\d{2})(?:[.:](\d{1,3}))?\]/g)];
-    for (const m of tags) {
-      const mm = Number(m[1] || 0);
-      const ss = Number(m[2] || 0);
-      const fracRaw = String(m[3] || "");
-      const frac =
-        fracRaw.length === 0
-          ? 0
-          : fracRaw.length === 1
-            ? Number(fracRaw) / 10
-            : fracRaw.length === 2
-              ? Number(fracRaw) / 100
-              : Number(fracRaw) / 1000;
-      const atSec = mm * 60 + ss + frac;
-      if (Number.isFinite(atSec)) out.push({ atSec, text });
-    }
-  }
-  out.sort((a, b) => a.atSec - b.atSec);
-  return out;
-}
+export { parseLrcLyrics };
 
 function plainLyricsLines(raw: string): string[] {
   return raw

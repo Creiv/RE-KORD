@@ -360,13 +360,18 @@ export const TrackListRow = memo(function TrackListRow({
   track,
   active,
   onPlay,
+  onPlayAt,
+  playIndex,
   extraActions,
   autoFocusActive = true,
 }: {
   track: EnrichedTrack;
   /** If omitted, row is active when it matches the current track (`relPath`). Queue uses explicit index. */
   active?: boolean;
-  onPlay: () => void;
+  onPlay?: () => void;
+  /** Alternativa a onPlay con identità stabile: rende efficace il memo nelle liste. */
+  onPlayAt?: (index: number) => void;
+  playIndex?: number;
   extraActions?: ReactNode;
   /** Disabilita lo scroll automatico della riga quando diventa quella attiva. */
   autoFocusActive?: boolean;
@@ -403,6 +408,10 @@ export const TrackListRow = memo(function TrackListRow({
   const hasLyrics = lyricsRaw.length > 0;
   const hasLrcLyrics = hasLyrics && parseLrcLyrics(lyricsRaw).length > 0;
   const durationStr = formatDurationMs(track.meta?.durationMs);
+  const handlePlay = useCallback(() => {
+    if (onPlayAt && playIndex != null) onPlayAt(playIndex);
+    else onPlay?.();
+  }, [onPlay, onPlayAt, playIndex]);
   const rowActive = active !== undefined ? active : isCurrent;
   const prevActiveRef = useRef(false);
   const [overflowOpen, setOverflowOpen] = useState(false);
@@ -457,17 +466,19 @@ export const TrackListRow = memo(function TrackListRow({
   return (
     <div
       ref={rowRef}
-      className={`track-row${rowActive ? " is-active" : ""}`}
+      className={`track-row${rowActive ? " is-active" : ""}${
+        useOverflowActions ? " track-row--compact-tools" : ""
+      }`}
     >
       <TrackRowArtPlay
         track={track}
-        onPlay={onPlay}
+        onPlay={handlePlay}
         isNowPlaying={rowActive}
       />
       <button
         type="button"
         className="track-row__main"
-        onClick={onPlay}
+        onClick={handlePlay}
       >
         <span className="track-row__title-row">
           <span className="track-row__title">{track.title}</span>

@@ -22,6 +22,8 @@ import {
 } from "./remoteAccess.mjs";
 
 import { sendError, apiSkipsLibraryGate } from "./httpUtils.mjs";
+import { killActiveYtdlpDownloads } from "./ytdlpStudio.mjs";
+import { stopAllLibraryWatchers } from "./scanner/watcher.mjs";
 import { hasReservedPathSegment, pathHasParentDirSegment } from "./pathSafety.mjs";
 import { getLibraryIndex } from "./libraryIndexService.mjs";
 import { registerSystemRoutes } from "./routes/systemRoutes.mjs";
@@ -198,6 +200,8 @@ async function startListening() {
 for (const sig of ["SIGINT", "SIGTERM"]) {
   process.on(sig, () => {
     stopRemoteAccess();
+    killActiveYtdlpDownloads();
+    stopAllLibraryWatchers();
     process.exit(0);
   });
 }

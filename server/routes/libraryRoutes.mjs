@@ -3,6 +3,7 @@
  * Estratto da index.mjs (Fase 6).
  */
 import { accountIdFromReq, sendError, sendOk } from "../httpUtils.mjs";
+import { isServerAdminRequest } from "../requestAccess.mjs";
 import {
   getFilteredIndexForAccount,
   getLibraryIndex,
@@ -313,6 +314,11 @@ export function registerLibraryRoutes(app) {
 
   app.post("/api/library/probe", async (req, res) => {
     try {
+      // Consente di ispezionare path arbitrari del filesystem: come la
+      // scelta della cartella libreria (configRoutes), è riservato all'admin.
+      if (!isServerAdminRequest(req)) {
+        return sendError(res, 403, "Admin only");
+      }
       const root = String(req.body?.musicRoot || getMusicRoot() || "").trim();
       if (!root) return sendError(res, 400, "musicRoot is required");
       const report = await probeLibraryStructure(root, {

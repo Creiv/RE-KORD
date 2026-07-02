@@ -92,6 +92,21 @@ export function scheduleLibraryScan(libraryRoot, opts = {}) {
     key,
     setTimeout(() => {
       debounceTimers.delete(key)
+      const inflight = scanFlight.get(key)
+      if (inflight) {
+        // Scan già in corso: runLibraryScan ignorerebbe i nuovi path.
+        // Lascia pendingPaths intatto e riprova a fine volo.
+        void inflight
+          .catch(() => {})
+          .finally(() => {
+            scheduleLibraryScan(libraryRoot, {
+              ...opts,
+              paths: undefined,
+              debounceMs: 400,
+            })
+          })
+        return
+      }
       const paths = pendingPaths.has(key) ? [...pendingPaths.get(key)] : opts.paths
       pendingPaths.delete(key)
       void runLibraryScan(libraryRoot, { ...opts, paths }).catch((err) => {
@@ -99,8 +114,4 @@ export function scheduleLibraryScan(libraryRoot, opts = {}) {
       })
     }, ms),
   )
-}
-
-export async function invalidateAndScanLibrary(libraryRoot, opts = {}) {
-  scheduleLibraryScan(libraryRoot, { ...opts, full: opts.full ?? false })
 }

@@ -2,6 +2,21 @@ import { createReadStream } from "fs"
 import path from "path"
 import { isCloudflareTunnelRequest } from "./requestAccess.mjs"
 
+/**
+ * Pipe di un read stream verso la response con gestione errori: senza
+ * handler, un errore I/O (o un client disconnesso) emette un "error"
+ * non catturato che può abbattere il processo.
+ */
+function pipeStreamToResponse(stream, res) {
+  stream.on("error", () => {
+    stream.destroy()
+    if (!res.headersSent) res.status(500)
+    res.end()
+  })
+  res.on("close", () => stream.destroy())
+  return stream.pipe(res)
+}
+
 /** MIME audio per estensione — cast, browser e ExoPlayer. */
 export const AUDIO_MIME_BY_EXT = {
   ".mp3": "audio/mpeg",
@@ -147,7 +162,7 @@ export function serveMediaFileWithRange(req, res, filePath, stat) {
     res.setHeader("Content-Range", `bytes 0-${end}/${stat.size}`)
     res.setHeader("Content-Length", end + 1)
     if (req.method === "HEAD") return res.end()
-    return createReadStream(filePath, { start: 0, end }).pipe(res)
+    return pipeStreamToResponse(createReadStream(filePath, { start: 0, end }), res)
   }
 
   const parsed = parseByteRange(req.headers.range, stat.size)
@@ -165,13 +180,13 @@ export function serveMediaFileWithRange(req, res, filePath, stat) {
     )
     res.setHeader("Content-Length", parsed.end - parsed.start + 1)
     if (req.method === "HEAD") return res.end()
-    return createReadStream(filePath, {
-      start: parsed.start,
-      end: parsed.end,
-    }).pipe(res)
+    return pipeStreamToResponse(
+      createReadStream(filePath, { start: parsed.start, end: parsed.end }),
+      res,
+    )
   }
 
   res.setHeader("Content-Length", stat.size)
   if (req.method === "HEAD") return res.status(200).end()
-  return createReadStream(filePath).pipe(res)
+  return pipeStreamToResponse(createReadStream(filePath), res)
 }

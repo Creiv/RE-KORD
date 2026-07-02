@@ -113,6 +113,22 @@
   }
 }
 
+@media (min-width: 560px) {
+  .page-toolbar {
+    grid-template-columns: minmax(0, 1fr) minmax(0, auto);
+    align-items: center;
+  }
+
+  .page-toolbar__actions {
+    width: auto;
+    justify-content: flex-end;
+  }
+
+  .page-toolbar__actions.queue-hero-actions {
+    justify-content: flex-end;
+  }
+}
+
 @media (max-width: 1000px) {
   .queue-page .page-toolbar,
   .playlists-page .page-toolbar,
@@ -624,6 +640,12 @@
 }
 
 @container rekord-page (min-width: 1100px) {
+  .statistics-page__sections {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
+@media (min-width: 1100px) {
   .statistics-page__sections {
     grid-template-columns: minmax(0, 1fr);
   }
