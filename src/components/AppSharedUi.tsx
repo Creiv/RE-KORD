@@ -32,7 +32,7 @@ import { formatTrackByline, isFavoriteRelPath } from "../lib/libraryNav";
 import { formatDurationMs } from "../lib/duration";
 import { versionedUrl } from "../lib/versionedUrl";
 import { initials } from "../lib/initials";
-import { parseLrcLyrics } from "../lib/lrc";
+import { trackLyricsIconKind } from "../lib/trackLyricsIcon";
 import { parseTrackGenres, trackBelongsToGenreKey } from "../lib/genres";
 import { parseTrackMoods, TRACK_MOOD_COLORS } from "../lib/trackMoods";
 import { CoverImg } from "./CoverImg";
@@ -65,6 +65,35 @@ import type {
   LibraryTrackIndex,
   TrackMeta,
 } from "../types";
+
+export function TrackRowLyricsIcon({
+  meta,
+  className = "",
+}: {
+  meta?: TrackMeta | null;
+  className?: string;
+}) {
+  const { t } = useI18n();
+  const kind = trackLyricsIconKind(meta);
+  if (kind === "hidden") return null;
+  const label =
+    kind === "lrc"
+      ? t("trackRow.lyricsLrc")
+      : kind === "plain"
+        ? t("trackRow.lyricsPlain")
+        : t("trackRow.lyricsMissing");
+  return (
+    <span
+      className={`track-row__lyrics-inline ${className} ${
+        kind === "lrc" ? "is-lrc" : kind === "plain" ? "is-plain" : "is-off"
+      }`}
+      title={label}
+      aria-label={label}
+    >
+      <UiLyrics />
+    </span>
+  );
+}
 
 export function TrackFileMetaChip({ meta }: { meta?: TrackMeta | null }) {
   const { t } = useI18n();
@@ -404,9 +433,7 @@ export const TrackListRow = memo(function TrackListRow({
   const excludeOverflowMenuLabel = shuffleExcluded
     ? t("trackRow.unblockShuffle")
     : t("trackRow.blockShuffle");
-  const lyricsRaw = String(track.meta?.lyrics || "").trim();
-  const hasLyrics = lyricsRaw.length > 0;
-  const hasLrcLyrics = hasLyrics && parseLrcLyrics(lyricsRaw).length > 0;
+  const showLyricsIcon = trackLyricsIconKind(track.meta) !== "hidden";
   const durationStr = formatDurationMs(track.meta?.durationMs);
   const handlePlay = useCallback(() => {
     if (onPlayAt && playIndex != null) onPlayAt(playIndex);
@@ -498,58 +525,28 @@ export const TrackListRow = memo(function TrackListRow({
               ({playCount})
             </span>
             <TrackFileMetaChip meta={track.meta} />
-            <span
-              className={`track-row__lyrics-inline track-row__lyrics-inline--stats ${
-                hasLrcLyrics ? "is-lrc" : hasLyrics ? "is-plain" : "is-off"
-              }`}
-              title={
-                hasLrcLyrics
-                  ? t("trackRow.lyricsLrc")
-                  : hasLyrics
-                  ? t("trackRow.lyricsPlain")
-                  : t("trackRow.lyricsMissing")
-              }
-              aria-label={
-                hasLrcLyrics
-                  ? t("trackRow.lyricsLrc")
-                  : hasLyrics
-                  ? t("trackRow.lyricsPlain")
-                  : t("trackRow.lyricsMissing")
-              }
-            >
-              <UiLyrics />
-            </span>
+            <TrackRowLyricsIcon
+              meta={track.meta}
+              className="track-row__lyrics-inline--stats"
+            />
           </span>
         </span>
         <span className="track-row__meta">
           <span className="track-row__meta-text">
             {formatTrackByline(track)}
           </span>
-          <span className="track-row__meta-sep" aria-hidden>
-            {" "}
-            ·{" "}
-          </span>
-          <span
-            className={`track-row__lyrics-inline track-row__lyrics-inline--meta ${
-              hasLrcLyrics ? "is-lrc" : hasLyrics ? "is-plain" : "is-off"
-            }`}
-            title={
-              hasLrcLyrics
-                ? t("trackRow.lyricsLrc")
-                : hasLyrics
-                ? t("trackRow.lyricsPlain")
-                : t("trackRow.lyricsMissing")
-            }
-            aria-label={
-              hasLrcLyrics
-                ? t("trackRow.lyricsLrc")
-                : hasLyrics
-                ? t("trackRow.lyricsPlain")
-                : t("trackRow.lyricsMissing")
-            }
-          >
-            <UiLyrics />
-          </span>
+          {showLyricsIcon ? (
+            <>
+              <span className="track-row__meta-sep" aria-hidden>
+                {" "}
+                ·{" "}
+              </span>
+              <TrackRowLyricsIcon
+                meta={track.meta}
+                className="track-row__lyrics-inline--meta"
+              />
+            </>
+          ) : null}
         </span>
       </button>
       <div

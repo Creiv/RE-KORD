@@ -197,14 +197,14 @@ function normalizeSettings(raw: Partial<UserSettings> | UserSettingsPatch): User
       if (legacy === "soft" || legacy === "horizon" || legacy === "embers")
         m = "signals";
       else if (legacy === "prism") m = "bars";
+      // "karaoke" non è più selezionabile: vive solo nel pulsante microfono.
       return m === "mirror" ||
         m === "osc" ||
         m === "oscSoft" ||
         m === "hmb" ||
         m === "bars" ||
         m === "signals" ||
-        m === "discowall" ||
-        m === "karaoke"
+        m === "discowall"
         ? m
         : "hmb";
     })(),
@@ -603,7 +603,7 @@ function legacyImport(): Partial<UserStateV1> {
                 ? "signals"
                 : vizMode === "prism"
                   ? "bars"
-                  : vizMode === "rekord"
+                  : vizMode === "rekord" || vizMode === "karaoke"
                     ? "hmb"
                     : vizMode,
           }

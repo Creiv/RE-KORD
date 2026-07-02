@@ -660,6 +660,7 @@ export function registerMetadataRoutes(app) {
         "releaseDate",
         "genre",
         "lyrics",
+        "lyricsAutoChecked",
         "trackNumber",
         "discNumber",
         "source",
@@ -667,7 +668,10 @@ export function registerMetadataRoutes(app) {
       ];
       const safe = {};
       for (const k of allowed) {
-        if (Object.prototype.hasOwnProperty.call(patch, k)) safe[k] = patch[k];
+        if (Object.prototype.hasOwnProperty.call(patch, k)) {
+          safe[k] =
+            k === "lyricsAutoChecked" ? Boolean(patch[k]) : patch[k]
+        }
       }
       const hasMood =
         Object.prototype.hasOwnProperty.call(patch, "moods") ||

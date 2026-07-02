@@ -1,4 +1,4 @@
-export const SCHEMA_VERSION = 6
+export const SCHEMA_VERSION = 7
 
 export const MIGRATION_SQL = `
 CREATE TABLE IF NOT EXISTS schema_migrations (
@@ -89,6 +89,7 @@ CREATE TABLE IF NOT EXISTS tracks (
   genre TEXT,
   release_date TEXT,
   lyrics TEXT,
+  lyrics_auto_checked INTEGER NOT NULL DEFAULT 0,
   moods_json TEXT,
   duration_ms INTEGER,
   track_number INTEGER,

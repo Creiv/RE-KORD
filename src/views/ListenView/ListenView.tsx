@@ -26,17 +26,22 @@ import { SectionHeadLead } from "../../components/SectionHeadLead";
 import {
   TrackFileMetaChip,
   TrackListRow,
+  TrackRowLyricsIcon,
 } from "../../components/AppSharedUi";
 import {
   UiFavorite,
   UiHistory,
   UiImage,
-  UiLyrics,
+  UiMicrophone,
   UiMusicNote,
   UiNavList,
   UiNote,
 } from "../../components/RekordUiIcons";
 import { uploadAlbumCover } from "../../lib/api";
+import {
+  markAutoLrcCheckedAfterError,
+  runAutoLrcQuickSaveForTrack,
+} from "../../lib/autoLrc";
 import { useTrackCoverDisplay } from "../../context/LibraryArtworkContext";
 import { versionedUrl } from "../../lib/versionedUrl";
 import { albumFolderFromTrack } from "../../lib/trackPaths";
@@ -47,6 +52,7 @@ import { PlayCollectionButton } from "../../components/PlayCollectionButton";
 import { formatDurationMs } from "../../lib/duration";
 import { fmtDate, trackInfoBadges, trackReleaseYear } from "../../lib/metaFormat";
 import { parseLrcLyrics, currentLrcLineIndex } from "../../lib/lrc";
+import { trackLyricsIconKind } from "../../lib/trackLyricsIcon";
 import type {
   AppSection,
   EnrichedTrack,
@@ -158,11 +164,90 @@ export default function ListenView({
   const hasLyrics = currentLyricsRaw.length > 0;
   const hasLrcLyrics = parsedLrc.length > 0;
 
+  const [lyricsFetchBusy, setLyricsFetchBusy] = useState(false);
+  const [lyricsAutoStatus, setLyricsAutoStatus] = useState<
+    "idle" | "okLrc" | "okPlain" | "missing" | "error"
+  >("idle");
+  const [lyricsAutoMsg, setLyricsAutoMsg] = useState<string | null>(null);
+  const [karaokeOpen, setKaraokeOpen] = useState(false);
+
+  useEffect(() => {
+    const timer = window.setTimeout(() => {
+      setLyricsAutoStatus("idle");
+      setLyricsAutoMsg(null);
+    }, 0);
+    return () => window.clearTimeout(timer);
+  }, [cur?.relPath]);
+
+  const runListenAutoLrc = () => {
+    if (!cur || lyricsFetchBusy) return;
+    const track = cur;
+    setLyricsFetchBusy(true);
+    setLyricsAutoStatus("idle");
+    setLyricsAutoMsg(null);
+    void (async () => {
+      try {
+        const result = await runAutoLrcQuickSaveForTrack(track);
+        onLibraryDelta?.(result.delta, false);
+        setLyricsAutoStatus(result.status);
+        if (result.status === "missing") {
+          setLyricsAutoMsg(t("trackMeta.fetchLrcEmpty"));
+        } else if (result.status === "okPlain") {
+          setLyricsAutoMsg(t("trackMeta.fetchLrcPlainFound"));
+        }
+      } catch (e) {
+        setLyricsAutoStatus("error");
+        setLyricsAutoMsg(e instanceof Error ? e.message : String(e));
+        const delta = await markAutoLrcCheckedAfterError(track);
+        if (delta) onLibraryDelta?.(delta, false);
+      } finally {
+        setLyricsFetchBusy(false);
+      }
+    })();
+  };
+
+  type LyricsBadge = "busy" | "error" | "lrc" | "plain" | "missing" | "idle";
+  const lyricsBadge: LyricsBadge = lyricsFetchBusy
+    ? "busy"
+    : lyricsAutoStatus === "error"
+      ? "error"
+      : hasLrcLyrics
+        ? "lrc"
+        : hasLyrics
+          ? "plain"
+          : cur?.meta?.lyricsAutoChecked || lyricsAutoStatus === "missing"
+            ? "missing"
+            : "idle";
+  const lyricsBadgeLabel =
+    lyricsBadge === "busy"
+      ? t("trackMeta.fetchLrcBusy")
+      : lyricsBadge === "error"
+        ? t("trackMeta.lyricsAutoStatus.error")
+        : lyricsBadge === "lrc"
+          ? t("trackRow.lyricsLrc")
+          : lyricsBadge === "plain"
+            ? t("trackRow.lyricsPlain")
+            : lyricsBadge === "missing"
+              ? t("trackMeta.lyricsAutoStatus.missing")
+              : t("trackRow.lyricsMissing");
+  const lyricsBadgeText =
+    lyricsBadge === "busy"
+      ? "… LRC"
+      : lyricsBadge === "error"
+        ? "! LRC"
+        : lyricsBadge === "lrc"
+          ? "✓ LRC"
+          : lyricsBadge === "plain"
+            ? "✓ TXT"
+            : lyricsBadge === "missing"
+              ? "✕ LRC"
+              : "– LRC";
+
   const trackChangeTransitionsOn =
     user.state.settings.audioCrossfadeSec > 0;
 
   const lrcScrollRef = useRef<HTMLDivElement>(null);
-  const lrcCurrentLineRef = useRef<HTMLParagraphElement | null>(null);
+  const lrcCurrentLineRef = useRef<HTMLButtonElement | null>(null);
   const vizScrollRef = useRef<HTMLDivElement | null>(null);
   const coverFileInputRef = useRef<HTMLInputElement | null>(null);
   const [coverUploadBusy, setCoverUploadBusy] = useState(false);
@@ -378,35 +463,18 @@ export default function ListenView({
                 <p className="listen-stage__sub listen-stage__sub--with-stats">
                   <span className="listen-stage__sub-lead">
                     {formatTrackByline(cur)}
-                    <span className="track-row__meta-sep" aria-hidden>
-                      {" "}
-                      ·{" "}
-                    </span>
-                    <span
-                      className={`track-row__lyrics-inline ${
-                        hasLrcLyrics
-                          ? "is-lrc"
-                          : hasLyrics
-                          ? "is-plain"
-                          : "is-off"
-                      } listen-stage__lyrics-inline`}
-                      title={
-                        hasLrcLyrics
-                          ? t("trackRow.lyricsLrc")
-                          : hasLyrics
-                          ? t("trackRow.lyricsPlain")
-                          : t("trackRow.lyricsMissing")
-                      }
-                      aria-label={
-                        hasLrcLyrics
-                          ? t("trackRow.lyricsLrc")
-                          : hasLyrics
-                          ? t("trackRow.lyricsPlain")
-                          : t("trackRow.lyricsMissing")
-                      }
-                    >
-                      <UiLyrics />
-                    </span>
+                    {trackLyricsIconKind(cur.meta) !== "hidden" ? (
+                      <>
+                        <span className="track-row__meta-sep" aria-hidden>
+                          {" "}
+                          ·{" "}
+                        </span>
+                        <TrackRowLyricsIcon
+                          meta={cur.meta}
+                          className="listen-stage__lyrics-inline"
+                        />
+                      </>
+                    ) : null}
                     {listenDurationStr ? ` · ${listenDurationStr}` : ""}
                   </span>
                   <span className="listen-stage__sub-sep" aria-hidden>
@@ -449,6 +517,25 @@ export default function ListenView({
             ) : (
               <Visualizer mode={user.state.settings.vizMode} />
             )}
+            <button
+              type="button"
+              className="listen-stage__karaoke-btn"
+              title={t("listen.karaokeOpenTitle")}
+              aria-label={t("listen.karaokeOpenTitle")}
+              onClick={(event) => {
+                event.stopPropagation();
+                setKaraokeOpen(true);
+              }}
+            >
+              <UiMicrophone className="listen-stage__karaoke-btn-ic" />
+            </button>
+            {karaokeOpen ? (
+              <Visualizer
+                mode="karaoke"
+                fullscreenOnly
+                onExitFullscreen={() => setKaraokeOpen(false)}
+              />
+            ) : null}
           </div>
           <ListenSleepTimer />
         </section>
@@ -540,9 +627,9 @@ export default function ListenView({
                           ? "section-nav-tab is-on"
                           : "section-nav-tab"
                       }
-                      disabled={!hasLyrics}
+                      disabled={!cur}
                       onClick={() => {
-                        if (hasLyrics) setListenRecentPanel("lyrics");
+                        if (cur) setListenRecentPanel("lyrics");
                       }}
                     >
                       {t("listen.recentLyricsPlainTitle")}
@@ -561,20 +648,14 @@ export default function ListenView({
               ) : (
                 <span
                   className={`listen-recent-panel__lrc-state ${
-                    hasLrcLyrics ? "is-on" : "is-off"
-                  }`}
-                  aria-label={
-                    hasLrcLyrics
-                      ? t("trackRow.lyricsLrc")
-                      : t("trackRow.lyricsMissing")
-                  }
-                  title={
-                    hasLrcLyrics
-                      ? t("trackRow.lyricsLrc")
-                      : t("trackRow.lyricsMissing")
-                  }
+                    lyricsBadge === "lrc" || lyricsBadge === "plain"
+                      ? "is-on"
+                      : "is-off"
+                  } listen-recent-panel__lrc-state--${lyricsBadge}`}
+                  aria-label={lyricsBadgeLabel}
+                  title={lyricsBadgeLabel}
                 >
-                  {hasLrcLyrics ? "✓ " : "✕ "}LRC
+                  {lyricsBadgeText}
                 </span>
               )}
             </div>
@@ -611,8 +692,9 @@ export default function ListenView({
                       className="listen-recent-lyrics__lrc"
                     >
                       {parsedLrc.map((row, idx) => (
-                        <p
+                        <button
                           key={`${row.atSec}-${idx}`}
+                          type="button"
                           ref={
                             idx === currentLrcIdx
                               ? lrcCurrentLineRef
@@ -620,12 +702,14 @@ export default function ListenView({
                           }
                           className={
                             idx === currentLrcIdx
-                              ? "listen-recent-lyrics__line is-current"
-                              : "listen-recent-lyrics__line"
+                              ? "listen-recent-lyrics__line listen-recent-lyrics__line--seek is-current"
+                              : "listen-recent-lyrics__line listen-recent-lyrics__line--seek"
                           }
+                          title={t("listen.lyricsSeekTitle")}
+                          onClick={() => p.seek(row.atSec)}
                         >
                           {row.text || "…"}
-                        </p>
+                        </button>
                       ))}
                     </div>
                   ) : (
@@ -635,9 +719,40 @@ export default function ListenView({
                   )}
                 </div>
               ) : (
-                <p className="panel-empty subtle sm">
-                  {t("listen.recentLyricsNone")}
-                </p>
+                <div className="panel-empty panel-empty--actions listen-recent-lyrics__empty">
+                  <p className="subtle sm">
+                    {lyricsBadge === "missing"
+                      ? t("trackMeta.lyricsAutoStatus.missing")
+                      : t("listen.recentLyricsNone")}
+                  </p>
+                  {lyricsAutoMsg ? (
+                    <p className="subtle sm warnline">{lyricsAutoMsg}</p>
+                  ) : null}
+                  {cur ? (
+                    <div className="listen-recent-lyrics__empty-actions">
+                      <button
+                        type="button"
+                        className="ghost-btn meta-edit-lyrics-btn"
+                        disabled={lyricsFetchBusy}
+                        onClick={() =>
+                          openTrackMetaEdit(cur, { openLyrics: true })
+                        }
+                      >
+                        {t("trackMeta.lyricsEditBtn")}
+                      </button>
+                      <button
+                        type="button"
+                        className="ghost-btn meta-edit-lyrics-btn"
+                        disabled={lyricsFetchBusy}
+                        onClick={runListenAutoLrc}
+                      >
+                        {lyricsFetchBusy
+                          ? t("trackMeta.fetchLrcBusy")
+                          : t("trackMeta.fetchLrc")}
+                      </button>
+                    </div>
+                  ) : null}
+                </div>
               )}
             </div>
           </section>

@@ -217,6 +217,15 @@
   opacity: 0.28;
 }
 
+.listen-recent-panel__lrc-state--error {
+  color: var(--warning);
+  opacity: 0.9;
+}
+
+.listen-recent-panel__lrc-state--busy {
+  opacity: 0.6;
+}
+
 .listen-recent-lyrics {
   margin: 0;
   padding: 0;
@@ -240,6 +249,37 @@
   line-height: 1.45;
   color: var(--muted);
   transition: color 0.14s ease;
+}
+
+/* Righe LRC cliccabili: seek al timestamp della riga. */
+.listen-recent-lyrics__line--seek {
+  appearance: none;
+  background: none;
+  border: 0;
+  padding: 0;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+  width: 100%;
+  border-radius: 4px;
+}
+
+.listen-recent-lyrics__line--seek:hover,
+.listen-recent-lyrics__line--seek:focus-visible {
+  color: var(--text);
+}
+
+.listen-recent-lyrics__empty {
+  display: flex;
+  flex-direction: column;
+  gap: 0.6rem;
+  align-items: flex-start;
+}
+
+.listen-recent-lyrics__empty-actions {
+  display: flex;
+  gap: 0.5rem;
+  flex-wrap: wrap;
 }
 
 .listen-recent-lyrics__line.is-current {

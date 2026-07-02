@@ -86,6 +86,17 @@ function runMigrations(db) {
   if (version < 6) {
     migrateV6LoosePaths(db)
     db.prepare("INSERT INTO schema_migrations (version) VALUES (?)").run(6)
+    version = 6
+  }
+  if (version < 7) {
+    try {
+      db.exec(
+        "ALTER TABLE tracks ADD COLUMN lyrics_auto_checked INTEGER NOT NULL DEFAULT 0",
+      )
+    } catch {
+      /* colonna già presente */
+    }
+    db.prepare("INSERT INTO schema_migrations (version) VALUES (?)").run(7)
   }
 }
 

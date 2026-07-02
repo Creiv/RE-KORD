@@ -4,7 +4,7 @@ import os from "os"
 import path from "path"
 import Database from "better-sqlite3"
 import { describe, expect, it, afterEach } from "vitest"
-import { MIGRATION_SQL } from "./schema.mjs"
+import { MIGRATION_SQL, SCHEMA_VERSION } from "./schema.mjs"
 import { migrateV6LoosePaths, resolveLooseTrackPaths } from "./migrateV6.mjs"
 import { closeLibraryDb, getLibraryDb } from "./index.mjs"
 import { resolveTrackFileRelPath } from "../scanner/engine.mjs"
@@ -86,7 +86,7 @@ describe("migration v6", () => {
     const ver = db.prepare("SELECT MAX(version) AS v FROM schema_migrations").get() as {
       v: number
     }
-    expect(ver.v).toBe(6)
+    expect(ver.v).toBe(SCHEMA_VERSION)
 
     const album = db
       .prepare("SELECT id, folder_rel_path FROM albums WHERE loose = 1")

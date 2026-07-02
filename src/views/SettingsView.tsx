@@ -810,8 +810,7 @@ function SettingsView({ index }: SettingsViewProps) {
                     | "oscSoft"
                     | "hmb"
                     | "signals"
-                    | "discowall"
-                    | "karaoke",
+                    | "discowall",
                 })
               }
             >
@@ -822,7 +821,6 @@ function SettingsView({ index }: SettingsViewProps) {
               <option value="hmb">{t("settings.vizHmb")}</option>
               <option value="signals">{t("settings.vizSignals")}</option>
               <option value="discowall">{t("settings.vizDiscowall")}</option>
-              <option value="karaoke">{t("settings.vizKaraoke")}</option>
             </select>
           </label>
           <div className="settings-theme-glass-block settings-ui-section__span">

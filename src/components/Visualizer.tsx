@@ -12,7 +12,16 @@ import { parseLrcLyrics, resolveKaraokeLines } from "../lib/karaokeLyrics";
 import { VizCanvasEngine } from "../lib/vizCanvasEngine";
 import type { VizMode } from "../types";
 
-export function Visualizer({ mode }: { mode: VizMode }) {
+export function Visualizer({
+  mode,
+  fullscreenOnly = false,
+  onExitFullscreen,
+}: {
+  mode: VizMode;
+  /** Render solo come overlay fullscreen (es. karaoke da pulsante microfono). */
+  fullscreenOnly?: boolean;
+  onExitFullscreen?: () => void;
+}) {
   const { t } = useI18n();
   const { getAnalyser, isPlaying, current, duration } = usePlayer();
   const progressTime = usePlayerProgressTime();
@@ -46,24 +55,34 @@ export function Visualizer({ mode }: { mode: VizMode }) {
   );
   const wrapRef = useRef<HTMLDivElement>(null);
   const cRef = useRef<HTMLCanvasElement>(null);
-  const [expanded, setExpanded] = useState(false);
+  const [expandedState, setExpandedState] = useState(false);
+  const expanded = fullscreenOnly || expandedState;
   const engineRef = useRef(new VizCanvasEngine());
   const visibleRef = useRef(
     typeof document !== "undefined" ? !document.hidden : true,
   );
 
+  const collapse = useCallback(() => {
+    if (fullscreenOnly) onExitFullscreen?.();
+    else setExpandedState(false);
+  }, [fullscreenOnly, onExitFullscreen]);
+
   const toggleExpanded = useCallback(() => {
-    setExpanded((v) => !v);
-  }, []);
+    if (fullscreenOnly) {
+      onExitFullscreen?.();
+      return;
+    }
+    setExpandedState((v) => !v);
+  }, [fullscreenOnly, onExitFullscreen]);
 
   useEffect(() => {
     if (!expanded) return;
     const onKey = (event: KeyboardEvent) => {
-      if (event.key === "Escape") setExpanded(false);
+      if (event.key === "Escape") collapse();
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [expanded]);
+  }, [expanded, collapse]);
 
   useEffect(() => {
     if (!expanded || typeof document === "undefined") return;
@@ -212,6 +231,11 @@ export function Visualizer({ mode }: { mode: VizMode }) {
       ) : null}
     </div>
   );
+
+  if (fullscreenOnly) {
+    if (typeof document === "undefined") return null;
+    return createPortal(wrap, document.body);
+  }
 
   if (expanded && typeof document !== "undefined") {
     return (

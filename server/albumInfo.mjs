@@ -335,6 +335,7 @@ export async function loadTrackJsonMetaMapFromDir(albumDir) {
         releaseDate: row.release_date || null,
         genre: row.genre || null,
         lyrics: row.lyrics || null,
+        lyricsAutoChecked: Boolean(row.lyrics_auto_checked),
         durationMs: row.duration_ms ?? null,
         trackNumber: row.track_number ?? null,
         discNumber: row.disc_number ?? null,
@@ -363,6 +364,7 @@ export async function loadTrackJsonMetaMapFromDir(albumDir) {
           v.lyrics != null && String(v.lyrics).trim()
             ? String(v.lyrics).trim()
             : null,
+        lyricsAutoChecked: Boolean(v.lyricsAutoChecked),
         durationMs: Number.isFinite(v.durationMs) ? v.durationMs : null,
         trackNumber: Number.isFinite(v.trackNumber) ? v.trackNumber : null,
         discNumber: Number.isFinite(v.discNumber) ? v.discNumber : null,
@@ -507,6 +509,13 @@ export async function saveTrackManualMeta(albumDir, fileName, patch, trackRelPat
     }
     if (Object.prototype.hasOwnProperty.call(patch, "lyrics")) {
       next.lyrics = str(patch.lyrics, 20000)
+      if (next.lyrics) next.lyricsAutoChecked = false
+      else if (!Object.prototype.hasOwnProperty.call(patch, "lyricsAutoChecked")) {
+        next.lyricsAutoChecked = false
+      }
+    }
+    if (Object.prototype.hasOwnProperty.call(patch, "lyricsAutoChecked")) {
+      next.lyricsAutoChecked = Boolean(patch.lyricsAutoChecked)
     }
     if (Object.prototype.hasOwnProperty.call(patch, "source")) {
       next.source = str(patch.source, 200)

@@ -379,6 +379,8 @@ export const EN: Record<string, string> = {
   "listen.recentLyricsTitle": "Synced lyrics",
   "listen.recentLyricsPlainTitle": "Lyrics",
   "listen.recentLyricsNone": "No lyrics saved for the current track.",
+  "listen.lyricsSeekTitle": "Jump to this point in the track",
+  "listen.karaokeOpenTitle": "Open full-screen karaoke",
   "listen.recentEmpty": "History will appear after you play some tracks.",
   "library.searchEyebrow": "Search",
   "library.searchHeading": "Results for “{{q}}”",
@@ -646,7 +648,6 @@ export const EN: Record<string, string> = {
   "settings.vizDiscowallIdle": "Start a track to light up the wall.",
   "settings.vizExpand": "Expand visualizer",
   "settings.vizCloseExpanded": "Close expanded visualizer",
-  "settings.vizKaraoke": "Karaoke",
   "settings.plectrDisableVizBackdrop":
     "Disable audio visualizer as background in Plectr",
   "settings.vizPrism": "Prism",

@@ -31,6 +31,7 @@ export function trackRowToIndex(row) {
       releaseDate: row.release_date || null,
       genre: row.genre || null,
       lyrics: row.lyrics || null,
+      lyricsAutoChecked: Boolean(row.lyrics_auto_checked),
       moods,
       durationMs: numOrNull(row.duration_ms),
       trackNumber: numOrNull(row.track_number),

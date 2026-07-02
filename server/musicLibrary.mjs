@@ -143,6 +143,7 @@ export function trackFromFile({
         trackMeta?.lyrics != null && String(trackMeta.lyrics).trim()
           ? String(trackMeta.lyrics).trim()
           : null,
+      lyricsAutoChecked: Boolean(trackMeta?.lyricsAutoChecked),
       moods: [],
       durationMs,
       trackNumber: numOrNull(

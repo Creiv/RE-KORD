@@ -1669,6 +1669,8 @@ export type TrackMetaSavePatch = {
   releaseDate?: string | null;
   genre?: string | null;
   lyrics?: string | null;
+  /** true se AUTO LRC è stato eseguito senza trovare testo */
+  lyricsAutoChecked?: boolean;
   /** fino a 3 id canonici; `null` o `[]` azzera. */
   moods?: string[] | null;
   /** compat salvataggi vecchi */

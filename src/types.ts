@@ -16,6 +16,8 @@ export type TrackMeta = {
   source: string | null;
   url: string | null;
   lyrics?: string | null;
+  /** Auto LRC eseguito almeno una volta senza testo salvato. */
+  lyricsAutoChecked?: boolean;
   /** Miglior punteggio Plectr (per account, da user state). */
   plectrBest?: PlectrBestScore | null;
 };

@@ -386,6 +386,8 @@ export const IT: Record<string, string> = {
   "listen.recentLyricsTitle": "Testo sincronizzato",
   "listen.recentLyricsPlainTitle": "Testo",
   "listen.recentLyricsNone": "Nessun lyrics registrato per il brano corrente.",
+  "listen.lyricsSeekTitle": "Salta a questo punto del brano",
+  "listen.karaokeOpenTitle": "Apri karaoke a schermo intero",
   "listen.recentEmpty": "La cronologia si popolerà dopo i primi ascolti.",
   "library.searchEyebrow": "Ricerca",
   "library.searchHeading": "Risultati per “{{q}}”",
@@ -654,7 +656,6 @@ export const IT: Record<string, string> = {
   "settings.vizDiscowallIdle": "Avvia un brano per accendere la parete.",
   "settings.vizExpand": "Espandi visualizzatore",
   "settings.vizCloseExpanded": "Chiudi visualizzatore espanso",
-  "settings.vizKaraoke": "Karaoke",
   "settings.plectrDisableVizBackdrop":
     "Disattiva visualizzatore audio come sfondo in Plectr",
   "settings.vizPrism": "Prisma",

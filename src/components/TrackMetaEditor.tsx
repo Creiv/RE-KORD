@@ -18,6 +18,10 @@ import {
   fetchTrackLyrics,
   saveTrackInfoManual,
 } from "../lib/api";
+import {
+  markAutoLrcCheckedAfterError,
+  runAutoLrcQuickSaveForTrack,
+} from "../lib/autoLrc";
 import { useI18n } from "../i18n/useI18n";
 import {
   runWithLibrarySyncActivity,
@@ -38,9 +42,14 @@ import { TrackMoodGlyph } from "./TrackMoodGlyph";
 import type { EnrichedTrack, LibraryEntityDelta } from "../types";
 import { UiAdd, UiClose } from "./RekordUiIcons";
 
-const TrackMetaEditContext = createContext<(track: EnrichedTrack) => void>(
-  () => {}
-);
+export type TrackMetaEditOpenOpts = {
+  /** Apre subito l'editor lyrics dentro il dialog. */
+  openLyrics?: boolean;
+};
+
+const TrackMetaEditContext = createContext<
+  (track: EnrichedTrack, opts?: TrackMetaEditOpenOpts) => void
+>(() => {});
 
 export function useOpenTrackMetaEdit() {
   return useContext(TrackMetaEditContext);
@@ -232,11 +241,13 @@ function trackMoodsSignature(ids: TrackMoodId[]): string {
 function TrackMetaEditorModal({
   track,
   genreOptions,
+  initialLyricsOpen = false,
   onClose,
   onSaved,
 }: {
   track: EnrichedTrack | null;
   genreOptions: readonly string[];
+  initialLyricsOpen?: boolean;
   onClose: () => void;
   onSaved: (delta?: LibraryEntityDelta) => void | Promise<void>;
 }) {
@@ -274,16 +285,18 @@ function TrackMetaEditorModal({
       setMoods(im);
       const lyr = String(m?.lyrics || "");
       setLyricsValue(lyr);
-      setLyricsOpen(false);
+      setLyricsOpen(initialLyricsOpen);
       initialMoodsSigRef.current = trackMoodsSignature(im);
       initialLyricsRef.current = lyr;
       setGenreSearchReset((n) => n + 1);
       setErr(null);
       setLyricsErr(null);
-      setLyricsAutoStatus("idle");
+      setLyricsAutoStatus(
+        m?.lyricsAutoChecked && !lyr.trim() ? "missing" : "idle",
+      );
     }, 0);
     return () => window.clearTimeout(timer);
-  }, [track]);
+  }, [track, initialLyricsOpen]);
 
   const removeGenre = useCallback((i: number) => {
     setGenres((prev) => prev.filter((_, j) => j !== i));
@@ -472,42 +485,24 @@ function TrackMetaEditorModal({
         librarySync.beginActivity,
         "sync.activity.savingLyrics",
         async () => {
-          const fetched = await fetchTrackLyrics(track.relPath);
-          const synced = String(fetched.syncedLyrics || "").trim();
-          const plain = String(fetched.plainLyrics || "").trim();
-          const next = synced || plain;
-          if (!next) {
-            setLyricsAutoStatus("missing");
+          const result = await runAutoLrcQuickSaveForTrack(track);
+          await Promise.resolve(onSaved(result.delta));
+          setLyricsAutoStatus(result.status);
+          if (result.status === "missing") {
             setLyricsErr(t("trackMeta.fetchLrcEmpty"));
             return;
           }
-          const patch = { lyrics: next };
-          const saved = await saveTrackInfoManual(track.relPath, patch);
-          await Promise.resolve(
-            onSaved({
-              relPath: saved.relPath,
-              track:
-                saved.track ??
-                ({
-                  relPath: saved.relPath,
-                  title: track.title,
-                  meta: {
-                    ...(track.meta || {}),
-                    ...(saved.meta as EnrichedTrack["meta"]),
-                    lyrics: patch.lyrics,
-                  } as EnrichedTrack["meta"],
-                } satisfies LibraryEntityDelta["track"]),
-              album: saved.album,
-            })
-          );
-          setLyricsValue(next);
-          setLyricsAutoStatus(synced ? "okLrc" : "okPlain");
-          if (!synced && plain) setLyricsErr(t("trackMeta.fetchLrcPlainFound"));
+          setLyricsValue(result.lyrics ?? "");
+          if (result.status === "okPlain") {
+            setLyricsErr(t("trackMeta.fetchLrcPlainFound"));
+          }
         }
       );
     } catch (er: unknown) {
       setLyricsAutoStatus("error");
       setLyricsErr(er instanceof Error ? er.message : String(er));
+      const delta = await markAutoLrcCheckedAfterError(track);
+      if (delta) await Promise.resolve(onSaved(delta));
     } finally {
       setLyricsFetchBusy(false);
     }
@@ -761,15 +756,23 @@ export function TrackMetaEditProvider({
   genreOptions: readonly string[];
   onSaved: (delta?: LibraryEntityDelta) => void | Promise<void>;
 }) {
-  const [track, setTrack] = useState<EnrichedTrack | null>(null);
-  const open = useCallback((tr: EnrichedTrack) => setTrack(tr), []);
+  const [openState, setOpenState] = useState<{
+    track: EnrichedTrack;
+    openLyrics: boolean;
+  } | null>(null);
+  const open = useCallback(
+    (tr: EnrichedTrack, opts?: TrackMetaEditOpenOpts) =>
+      setOpenState({ track: tr, openLyrics: opts?.openLyrics === true }),
+    []
+  );
   return (
     <TrackMetaEditContext.Provider value={open}>
       {children}
       <TrackMetaEditorModal
-        track={track}
+        track={openState?.track ?? null}
         genreOptions={genreOptions}
-        onClose={() => setTrack(null)}
+        initialLyricsOpen={openState?.openLyrics ?? false}
+        onClose={() => setOpenState(null)}
         onSaved={onSaved}
       />
     </TrackMetaEditContext.Provider>

@@ -72,17 +72,23 @@ export type ShuffleExclusionOpts = {
   excludedTracks?: Set<string>;
 };
 
+/**
+ * Regola bloccati: i brani esclusi dallo shuffle non entrano mai nelle code
+ * generate, con una sola eccezione — se si parte esplicitamente da un brano
+ * bloccato, i bloccati restano ammessi nell'intera coda.
+ */
 function filterPoolForExclusions(
   pool: readonly EnrichedTrack[],
-  seedRelPath: string | null,
+  seed: EnrichedTrack | null,
   opts?: ShuffleExclusionOpts
 ): EnrichedTrack[] {
   if (!opts?.respectExclusions) return [...pool];
   const exA = opts.excludedAlbums ?? new Set<string>();
   const exT = opts.excludedTracks ?? new Set<string>();
+  if (seed && isTrackShuffleExcluded(seed, exT, exA)) return [...pool];
   return pool.filter(
     (t) =>
-      (seedRelPath != null && t.relPath === seedRelPath) ||
+      (seed != null && t.relPath === seed.relPath) ||
       !isTrackShuffleExcluded(t, exT, exA)
   );
 }
@@ -100,39 +106,44 @@ function artistMatches(seed: EnrichedTrack, t: EnrichedTrack): boolean {
   );
 }
 
-/** Punteggio similarità seed → candidato (lessicografico: mood → generi → artista). */
+/**
+ * Punteggio similarità seed → candidato. Mood e genere pesano allo stesso
+ * modo: ognuno contribuisce con la frazione di overlap rispetto a quanti
+ * mood (max 3) / generi ha il seed — chi ne condivide di più ranka più in
+ * alto. Lo stesso artista dà solo un piccolo bonus di spareggio.
+ */
 export function seedSimilarityScore(
   seed: EnrichedTrack,
   candidate: EnrichedTrack,
 ): number {
   const seedMoods = parseTrackMoods(seed.meta);
-  let moodTier = 0;
+  let moodScore = 0;
   if (seedMoods.length > 0) {
     const moodSet = new Set(seedMoods);
     const overlap = parseTrackMoods(candidate.meta).filter((m) =>
       moodSet.has(m),
     ).length;
-    moodTier = overlap / seedMoods.length;
+    moodScore = overlap / seedMoods.length;
   }
 
   const seedGenres = trackGenresForScoring(seed);
-  let genreTier = 0;
+  let genreScore = 0;
   if (seedGenres.length > 0) {
     const seedGenreSet = new Set(seedGenres);
     const candidateGenres = trackGenresForScoring(candidate);
     const overlap = candidateGenres.filter((g) => seedGenreSet.has(g)).length;
-    genreTier = overlap / seedGenres.length;
+    genreScore = overlap / seedGenres.length;
   }
 
-  const artistTier = artistMatches(seed, candidate) ? 1 : 0;
+  const artistBonus = artistMatches(seed, candidate) ? 0.05 : 0;
 
-  // Codifica lessicografica: mood domina sempre genere, genere domina artista.
-  return moodTier * 1_000_000 + genreTier * 1_000 + artistTier;
+  return moodScore + genreScore + artistBonus;
 }
 
 function sortPoolBySeedSimilarity(
   seed: EnrichedTrack,
   pool: readonly EnrichedTrack[],
+  recentRelPaths?: ReadonlySet<string>,
 ): EnrichedTrack[] {
   const scored = pool.map((track) => ({
     track,
@@ -144,21 +155,14 @@ function sortPoolBySeedSimilarity(
     return a.jitter - b.jitter;
   });
 
-  // Spread artista consecutivi solo dentro la stessa fascia di score,
-  // così non si inverte l'ordine mood → genere → artista.
-  const byScore = new Map<number, EnrichedTrack[]>();
-  for (const { track, score } of scored) {
-    const band = byScore.get(score);
-    if (band) band.push(track);
-    else byScore.set(score, [track]);
+  // I riprodotti di recente scivolano in fondo alla coda (a parità di
+  // similarità restano ordinati), così non rientrano subito in ascolto.
+  if (recentRelPaths && recentRelPaths.size > 0) {
+    const fresh = scored.filter((s) => !recentRelPaths.has(s.track.relPath));
+    const stale = scored.filter((s) => recentRelPaths.has(s.track.relPath));
+    if (fresh.length > 0) return [...fresh, ...stale].map((s) => s.track);
   }
-  const ordered: EnrichedTrack[] = [];
-  for (const score of [...byScore.keys()].sort((a, b) => b - a)) {
-    const band = byScore.get(score)!;
-    spreadConsecutiveArtists(band);
-    ordered.push(...band);
-  }
-  return ordered;
+  return scored.map((s) => s.track);
 }
 
 export function buildShuffleQueueFromSeed(
@@ -167,30 +171,38 @@ export function buildShuffleQueueFromSeed(
   opts: SmartShuffleOpts & ShuffleExclusionOpts = {}
 ): EnrichedTrack[] {
   const seedCanon = resolveTrackFromLibrary(seed, pool);
-  const filtered = filterPoolForExclusions(pool, seedCanon.relPath, opts);
+  const filtered = filterPoolForExclusions(pool, seedCanon, opts);
   const rest = filtered.filter((t) => t.relPath !== seedCanon.relPath);
   if (!rest.length) return [seedCanon];
-  const shuffled = buildSmartRandomQueue(rest, opts);
+  const shuffled = buildSmartRandomQueue(rest, {
+    ...opts,
+    currentRelPath: seedCanon.relPath,
+    currentArtist: seedCanon.artist,
+  });
   return [seedCanon, ...shuffled];
 }
 
 export function buildCardPlayQueueFromSeed(
   seed: EnrichedTrack,
   libraryTracks: readonly EnrichedTrack[],
-  opts?: { maxLength?: number } & ShuffleExclusionOpts
+  opts?: { maxLength?: number } & SmartShuffleOpts & ShuffleExclusionOpts
 ): EnrichedTrack[] {
   const maxLen =
     opts?.maxLength !== undefined ? opts.maxLength : CARD_QUEUE_CAP;
   const cap = Math.max(1, Math.min(maxLen, CARD_QUEUE_CAP));
   const seedCanon = resolveTrackFromLibrary(seed, libraryTracks);
-  const pool = filterPoolForExclusions(
-    libraryTracks,
-    seedCanon.relPath,
-    opts
-  ).filter((t) => t.relPath !== seedCanon.relPath);
+  const pool = filterPoolForExclusions(libraryTracks, seedCanon, opts).filter(
+    (t) => t.relPath !== seedCanon.relPath
+  );
 
-  const tail = sortPoolBySeedSimilarity(seedCanon, pool);
+  const tail = sortPoolBySeedSimilarity(
+    seedCanon,
+    pool,
+    opts?.recentRelPaths
+  );
   const full = [seedCanon, ...tail];
+  // Niente stesso artista di fila quando c'è alternativa (il seed resta primo).
+  spreadConsecutiveArtists(full);
   return full.slice(0, cap);
 }
 

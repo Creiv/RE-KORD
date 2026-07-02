@@ -593,6 +593,10 @@ export function saveTrackMetaToDb(libraryRoot, relPath, patch) {
   }
   if (Object.prototype.hasOwnProperty.call(patch, "lyrics")) {
     next.lyrics = str(patch.lyrics, 20000)
+    if (next.lyrics) next.lyrics_auto_checked = 0
+  }
+  if (Object.prototype.hasOwnProperty.call(patch, "lyricsAutoChecked")) {
+    next.lyrics_auto_checked = patch.lyricsAutoChecked ? 1 : 0
   }
   if (Object.prototype.hasOwnProperty.call(patch, "source")) {
     next.source = str(patch.source, 200)
@@ -623,6 +627,7 @@ export function saveTrackMetaToDb(libraryRoot, relPath, patch) {
         release_date = @release_date,
         genre = @genre,
         lyrics = @lyrics,
+        lyrics_auto_checked = @lyrics_auto_checked,
         source = @source,
         url = @url,
         track_number = @track_number,
@@ -636,6 +641,7 @@ export function saveTrackMetaToDb(libraryRoot, relPath, patch) {
       release_date: next.release_date,
       genre: next.genre,
       lyrics: next.lyrics,
+      lyrics_auto_checked: next.lyrics_auto_checked ? 1 : 0,
       source: next.source,
       url: next.url,
       track_number: next.track_number,
@@ -664,6 +670,7 @@ export function saveTrackMetaToDb(libraryRoot, relPath, patch) {
     releaseDate: row?.release_date || null,
     genre: row?.genre || null,
     lyrics: row?.lyrics || null,
+    lyricsAutoChecked: Boolean(row?.lyrics_auto_checked),
     durationMs: row?.duration_ms ?? null,
     trackNumber: row?.track_number ?? null,
     discNumber: row?.disc_number ?? null,

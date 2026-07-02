@@ -298,14 +298,14 @@ function sanitizeSettings(settings) {
       let m = src.vizMode
       if (m === "soft" || m === "horizon" || m === "embers") m = "signals"
       if (m === "prism") m = "bars"
+      // "karaoke" non è più un vizMode selezionabile: fallback su hmb.
       return m === "mirror" ||
         m === "osc" ||
         m === "oscSoft" ||
         m === "hmb" ||
         m === "bars" ||
         m === "signals" ||
-        m === "discowall" ||
-        m === "karaoke"
+        m === "discowall"
         ? m
         : "hmb"
     })(),

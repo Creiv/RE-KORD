@@ -69,6 +69,39 @@
     0 0 0 3px color-mix(in srgb, var(--accent2) 18%, transparent);
 }
 
+/* Pulsante microfono: apre il karaoke fullscreen sopra il visualizer. */
+.listen-stage__karaoke-btn {
+  position: absolute;
+  top: 0.55rem;
+  right: 0.55rem;
+  z-index: 3;
+  display: grid;
+  place-items: center;
+  width: 2rem;
+  height: 2rem;
+  padding: 0;
+  border: 1px solid color-mix(in srgb, var(--border) 80%, transparent);
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--listen-viz-bg) 66%, transparent);
+  color: color-mix(in srgb, var(--text) 78%, transparent);
+  cursor: pointer;
+  opacity: 0.72;
+  transition: opacity 0.14s ease, color 0.14s ease, transform 0.14s ease;
+  backdrop-filter: blur(6px);
+}
+
+.listen-stage__karaoke-btn:hover,
+.listen-stage__karaoke-btn:focus-visible {
+  opacity: 1;
+  color: var(--text);
+  transform: scale(1.05);
+}
+
+.listen-stage__karaoke-btn-ic {
+  width: 1.05rem;
+  height: 1.05rem;
+}
+
 .viz-wrap.is-expanded {
   position: fixed;
   top: 0;
