@@ -1,14 +1,33 @@
 import fs from "fs/promises"
 import path from "path"
-import { existsSync } from "fs"
+import { existsSync, statSync } from "fs"
 import { getLibraryDb } from "../db/index.mjs"
 import { rekordArtworkDir } from "../db/paths.mjs"
 import { newArtworkId } from "../db/queries/library.mjs"
 import { coverCandidates } from "../musicLibrary.mjs"
+import { ensureArtworkThumbs } from "./thumbs.mjs"
+import { isFfmpegAvailable } from "../ffmpegBin.mjs"
+
+/** Copia solo se il sorgente è cambiato: evita riscritture (e thumb rigenerate) a ogni scan. */
+async function copyCoverIfChanged(sourcePath, destPath) {
+  try {
+    const src = statSync(sourcePath)
+    const dst = statSync(destPath)
+    if (dst.size === src.size && dst.mtimeMs >= src.mtimeMs) return true
+  } catch {
+    /* dest assente → copia */
+  }
+  try {
+    await fs.copyFile(sourcePath, destPath)
+    return true
+  } catch {
+    return false
+  }
+}
 
 /**
  * Registra copertina da file cartella in .kord/artwork/.
- * Copia l'originale; le entry thumb puntano allo stesso file (ridimensionato via CSS).
+ * Copia l'originale e genera thumb 128/256 via ffmpeg (fallback: file originale).
  * @param {string} libraryRoot
  * @param {string} albumId
  * @param {string} coverRelPath
@@ -43,11 +62,13 @@ export async function registerFolderCoverArtwork(libraryRoot, albumId, coverRelP
   const ext = path.extname(sourcePath).toLowerCase() === ".png" ? "png" : "jpg"
   const fullDest = path.join(artDir, `${artId}.${ext}`)
 
-  try {
-    await fs.copyFile(sourcePath, fullDest)
-  } catch {
-    return null
-  }
+  if (!(await copyCoverIfChanged(sourcePath, fullDest))) return null
+
+  const { thumb128, thumb256 } = await ensureArtworkThumbs(
+    fullDest,
+    artDir,
+    artId,
+  )
 
   const now = Date.now()
   db.prepare(
@@ -64,8 +85,8 @@ export async function registerFolderCoverArtwork(libraryRoot, albumId, coverRelP
     album_id: albumId,
     mime: ext === "png" ? "image/png" : "image/jpeg",
     full_path: fullDest,
-    thumb_128_path: fullDest,
-    thumb_256_path: fullDest,
+    thumb_128_path: thumb128,
+    thumb_256_path: thumb256,
     updated_at: now,
   })
 
@@ -110,6 +131,12 @@ export async function registerDownloadedCoverArtwork(
 
   await fs.writeFile(fullDest, imageBuffer)
 
+  const { thumb128, thumb256 } = await ensureArtworkThumbs(
+    fullDest,
+    artDir,
+    artId,
+  )
+
   const coverRelPath = `${albumFolderRel}/cover.${safeExt}`.replace(/\\/g, "/")
   const now = Date.now()
   db.prepare(
@@ -120,8 +147,8 @@ export async function registerDownloadedCoverArtwork(
     album.id,
     safeExt === "png" ? "image/png" : "image/jpeg",
     fullDest,
-    fullDest,
-    fullDest,
+    thumb128,
+    thumb256,
     now,
   )
   db.prepare(
@@ -135,6 +162,57 @@ function firstExistingPath(paths) {
     if (p && existsSync(p)) return p
   }
   return null
+}
+
+/**
+ * Genera le thumb mancanti per artwork già registrate (librerie pre-thumb,
+ * dove thumb_128/256 puntano ancora al file full). Best-effort, pensata per
+ * girare in background al boot: aggiorna anche albums.updated_at così i client
+ * invalidano la cache HTTP (`?v=`) e scaricano la thumb piccola.
+ * @param {string} libraryRoot
+ */
+export async function backfillArtworkThumbs(libraryRoot) {
+  if (!isFfmpegAvailable()) return { updated: 0 }
+  const root = path.resolve(String(libraryRoot))
+  const db = getLibraryDb(root)
+  const rows = db
+    .prepare(
+      "SELECT id, album_id, full_path, thumb_128_path, thumb_256_path FROM artwork",
+    )
+    .all()
+  const artDir = rekordArtworkDir(root)
+  await fs.mkdir(artDir, { recursive: true })
+  let updated = 0
+  for (const row of rows) {
+    const fullPath = String(row.full_path || "")
+    if (!fullPath || !existsSync(fullPath)) continue
+    const needsThumbs =
+      !row.thumb_128_path ||
+      !row.thumb_256_path ||
+      row.thumb_128_path === fullPath ||
+      row.thumb_256_path === fullPath ||
+      !existsSync(row.thumb_128_path) ||
+      !existsSync(row.thumb_256_path)
+    if (!needsThumbs) continue
+    const { thumb128, thumb256 } = await ensureArtworkThumbs(
+      fullPath,
+      artDir,
+      row.id,
+    ).catch(() => ({ thumb128: fullPath, thumb256: fullPath }))
+    if (thumb128 === fullPath && thumb256 === fullPath) continue
+    const now = Date.now()
+    db.prepare(
+      "UPDATE artwork SET thumb_128_path = ?, thumb_256_path = ?, updated_at = ? WHERE id = ?",
+    ).run(thumb128, thumb256, now, row.id)
+    if (row.album_id) {
+      db.prepare("UPDATE albums SET updated_at = ? WHERE id = ?").run(
+        now,
+        row.album_id,
+      )
+    }
+    updated++
+  }
+  return { updated }
 }
 
 /** @param {string} artworkId @param {'128'|'256'|'full'} size */

@@ -617,6 +617,8 @@ export const EN: Record<string, string> = {
     "4.2 highlights: adaptive library scan with configurable layout, real/logical paths for loose tracks, Tracce→Tracks migration, and Discogs integration for metadata and artwork.",
   "settings.colophonLine6":
     "4.3 highlights: Sonic Nebula library explorer, Smart Radio on the dashboard, and APK background recovery with automatic server reconnect.",
+  "settings.colophonLine7":
+    "4.4 highlights: instant covers with 128/256px thumbnails generated via ffmpeg, with automatic backfill for existing libraries.",
   "settings.tutorialEyebrow": "Help",
   "settings.tutorialHeading": "Tutorial",
   "settings.tutorialLead":

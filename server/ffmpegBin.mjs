@@ -1,4 +1,5 @@
 import { existsSync } from "fs"
+import { spawnSync } from "child_process"
 import path from "path"
 import { fileURLToPath } from "url"
 
@@ -24,4 +25,27 @@ export function isTranscodeAvailable() {
   if (configured && existsSync(configured)) return true
   if (existsSync(resolveBundledFfmpegPath())) return true
   return false
+}
+
+/** Cache della probe `ffmpeg -version` sul PATH (null = mai provato). */
+let ffmpegOnPathProbe = null
+
+/**
+ * Come isTranscodeAvailable ma accetta anche ffmpeg nel PATH di sistema
+ * (tipico in dev/Linux). Usato per le thumbnail delle cover.
+ */
+export function isFfmpegAvailable() {
+  if (isTranscodeAvailable()) return true
+  if (ffmpegOnPathProbe === null) {
+    try {
+      const res = spawnSync(DEFAULT_FFMPEG_BIN, ["-version"], {
+        stdio: "ignore",
+        timeout: 3000,
+      })
+      ffmpegOnPathProbe = res.status === 0
+    } catch {
+      ffmpegOnPathProbe = false
+    }
+  }
+  return ffmpegOnPathProbe
 }

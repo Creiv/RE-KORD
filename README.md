@@ -8,7 +8,7 @@
   <a href="https://www.reddit.com/r/RE_KORD/"><strong>r/RE_KORD</strong></a>
 </p>
 
-<h1 align="center">RE-KORD 4.3</h1>
+<h1 align="center">RE-KORD 4.4</h1>
 
 <p align="center">
   <strong>Your music. Your server. Your rules.</strong><br />
@@ -74,7 +74,14 @@ LAN access out of the box, one-click **Cloudflare tunnel** with QR code for
 remote listening, multiple local profiles, full **backup/restore**, and a
 self-updating client model: update the server once, every client follows.
 
-## New in 4.3
+## New in 4.4
+
+- 🖼️ **Instant covers** — real 128/256px thumbnails generated server-side with
+  the bundled ffmpeg (no extra dependencies): album grids and cards load
+  kilobytes instead of megabytes, with automatic backfill for existing
+  libraries at startup.
+
+## Since 4.3
 
 - 🌌 **Sonic Nebula** — explore your library as an interactive galaxy: every
   track is a star positioned by BPM (horizontal) and energy (vertical), with
@@ -207,14 +214,14 @@ library database live in `MUSIC_ROOT/.kord/` (`rekord.db` plus account data) and
 survive reinstalls. After upgrading from 4.0, run **Library metadata cleanup**
 once in Studio → Tools to migrate legacy JSON sidecars.
 
-### Packaging 4.3
+### Packaging 4.4
 
 ```bash
-npm run pack:linux:server -- 4.3.0   # → release/RE-KORD-Server-4.3.0-linux-x86_64.AppImage
-npm run pack:win:server  -- 4.3.0    # Windows server (NSIS on Windows hosts, .7z from Linux)
-npm run pack:linux:client -- 4.3.0   # thin desktop client
-npm run pack:win:client  -- 4.3.0
-npm run pack:android:client -- 4.3.0 # → release/RE-KORD-Client-4.3.0-android.apk
+npm run pack:linux:server -- 4.4.0   # → release/RE-KORD-Server-4.4.0-linux-x86_64.AppImage
+npm run pack:win:server  -- 4.4.0    # Windows server (NSIS on Windows hosts, .7z from Linux)
+npm run pack:linux:client -- 4.4.0   # thin desktop client
+npm run pack:win:client  -- 4.4.0
+npm run pack:android:client -- 4.4.0 # → release/RE-KORD-Client-4.4.0-android.apk
 ```
 
 Server packs bundle **yt-dlp** and **cloudflared** for the target OS. Windows
@@ -235,4 +242,4 @@ law compliance. Use only content you have the rights or permission to use.
 
 ---
 
-<p align="center"><em>RE-KORD 4.3 by Creiv — local music, serious tools, play on the beat.</em></p>
+<p align="center"><em>RE-KORD 4.4 by Creiv — local music, serious tools, play on the beat.</em></p>

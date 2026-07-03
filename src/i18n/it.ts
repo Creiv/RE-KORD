@@ -625,6 +625,8 @@ export const IT: Record<string, string> = {
     "Novità 4.2: scan libreria adattivo con layout configurabile, path reali/logici per tracce loose, migrazione Tracce→Tracks e integrazione Discogs per metadati e copertine.",
   "settings.colophonLine6":
     "Novità 4.3: Sonic Nebula per esplorare la libreria, Smart Radio in dashboard e riconnessione automatica al server nell'APK in background.",
+  "settings.colophonLine7":
+    "Novità 4.4: copertine istantanee con thumbnail 128/256px generate via ffmpeg, con backfill automatico delle librerie esistenti.",
   "settings.tutorialEyebrow": "Aiuto",
   "settings.tutorialHeading": "Tutorial",
   "settings.tutorialLead":

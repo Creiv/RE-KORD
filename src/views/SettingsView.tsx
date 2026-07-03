@@ -203,7 +203,7 @@ function SettingsView({ index }: SettingsViewProps) {
       return false;
     }
   });
-  const rekordAppVersion = String(import.meta.env.VITE_REKORD_VERSION ?? "4.3.0");
+  const rekordAppVersion = String(import.meta.env.VITE_REKORD_VERSION ?? "4.4.0");
 
   useEffect(() => {
     Promise.all([fetchConfig(), fetchAccounts()])
@@ -1556,6 +1556,9 @@ function SettingsView({ index }: SettingsViewProps) {
         </p>
         <p className="settings-colophon__subtle subtle sm">
           {t("settings.colophonLine6")}
+        </p>
+        <p className="settings-colophon__subtle subtle sm">
+          {t("settings.colophonLine7")}
         </p>
       </footer>
     </div>

@@ -370,7 +370,15 @@ export function registerLibraryRoutes(app) {
       if (!filePath || !existsSync(filePath)) return res.status(404).end();
       const row = getArtworkRecord(root, id);
       res.setHeader("Cache-Control", "public, max-age=31536000, immutable");
-      if (row?.mime) res.setHeader("Content-Type", row.mime);
+      // Le thumb sono sempre JPEG: il mime in DB descrive solo il file full.
+      const ext = path.extname(filePath).toLowerCase();
+      const mime =
+        ext === ".png"
+          ? "image/png"
+          : ext === ".jpg" || ext === ".jpeg"
+            ? "image/jpeg"
+            : row?.mime || null;
+      if (mime) res.setHeader("Content-Type", mime);
       // sendFile rifiuta path sotto cartelle “dot” (.kord) senza dotfiles: allow
       return res.sendFile(path.resolve(filePath), { dotfiles: "allow" }, (err) => {
         if (err && !res.headersSent) res.status(404).end();

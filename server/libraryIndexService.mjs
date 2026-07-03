@@ -22,9 +22,31 @@ import {
 } from "./db/queries/library.mjs"
 import { runLibraryScan, scheduleLibraryScan } from "./scanner/index.mjs"
 import { startLibraryWatcher } from "./scanner/watcher.mjs"
+import { backfillArtworkThumbs } from "./artwork/index.mjs"
 
 /** Evita bootstrap/scan duplicate in parallelo. */
 const libraryIndexFlight = new Map()
+
+/** Backfill thumb: una sola volta per root per processo, in background. */
+const thumbBackfillStarted = new Set()
+
+function startArtworkThumbBackfill(root) {
+  const key = path.resolve(root)
+  if (thumbBackfillStarted.has(key)) return
+  thumbBackfillStarted.add(key)
+  void backfillArtworkThumbs(key)
+    .then(({ updated }) => {
+      if (updated > 0) {
+        console.log(`[rekord] artwork thumbs backfilled: ${updated}`)
+      }
+    })
+    .catch((error) => {
+      console.warn(
+        "[rekord] artwork thumb backfill failed:",
+        error?.message || error,
+      )
+    })
+}
 
 export async function getLibraryIndex(root = getMusicRoot()) {
   if (!existsSync(root) || !underRoot(root, root)) {
@@ -40,6 +62,7 @@ export async function getLibraryIndex(root = getMusicRoot()) {
       console.log(`[rekord] library database bootstrapped at ${root}/.kord/rekord.db`)
     }
     await backfillMissingArtworkCache(root)
+    startArtworkThumbBackfill(root)
     startLibraryWatcher(root)
     return buildLibraryIndexFromDb(root)
   })()

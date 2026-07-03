@@ -1,7 +1,11 @@
 # RE-KORD — Mappa completa delle funzionalità
 
-> Versione app: 4.3.0 — documento generato dall'analisi del codice (luglio 2026).
+> Versione app: 4.4.0 — documento generato dall'analisi del codice (luglio 2026).
 > Organizzato per pagina/sezione e categoria.
+
+## Novità — 4.4
+
+- **Copertine istantanee**: thumbnail reali 128/256px generate lato server via ffmpeg (`server/artwork/thumbs.mjs`) alla registrazione delle cover; backfill automatico in background al boot per le librerie esistenti (`backfillArtworkThumbs`); guardie mtime per non rigenerare a ogni scan; nessuna dipendenza aggiuntiva (usa l'ffmpeg già bundlato o nel PATH)
 
 ## Novità — 4.3
 
