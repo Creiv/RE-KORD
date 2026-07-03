@@ -196,7 +196,10 @@ const DEFAULT_LABELS = {
   timeAria: "Song progress",
 };
 
-export function GameCanvas({
+/** memo: il pannello che lo ospita si ri-renderizza a ogni nota colpita
+ *  (aggiornamento best score live); le props sono stabili e riconciliare
+ *  qui l'intero sottoalbero ruberebbe frame al canvas su CPU lente. */
+export const GameCanvas = React.memo(function GameCanvas({
   chart,
   audioUrl,
   runId,
@@ -1018,7 +1021,7 @@ export function GameCanvas({
       />
     </main>
   );
-}
+});
 
 function initialRunState(notes: ChartNote[]): RunState {
   return {

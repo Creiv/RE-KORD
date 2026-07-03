@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useRef } from "react";
+import { shouldPauseBackgroundVisualizersForPlectr } from "../../hooks/useRhythmModeOpen";
 import type { NebulaFog, NebulaModel, NebulaStar, NebulaCamera } from "../../lib/sonicNebula";
 import { NEBULA_CENTER, NEBULA_GALAXY_RADIUS } from "../../lib/sonicNebula";
 
@@ -489,10 +490,20 @@ export function NebulaCanvas({
     const ctx = canvas.getContext("2d", { alpha: false });
     if (!ctx) return;
 
-    const syncBuffer = () => {
+    /* La misura del frame vive SOLO nel ResizeObserver: chiamare
+     * getBoundingClientRect a ogni frame forza un reflow sincrono
+     * dell'intera pagina (misurato: la voce di script più costosa
+     * dell'app durante il gameplay di Plectr). */
+    const measuredRef = { w: 0, h: 0 };
+    const readMeasure = () => {
       const rect = frame.getBoundingClientRect();
-      const w = Math.max(1, Math.floor(rect.width));
-      const h = Math.max(1, Math.floor(rect.height));
+      measuredRef.w = rect.width;
+      measuredRef.h = rect.height;
+    };
+
+    const syncBuffer = () => {
+      const w = Math.max(1, Math.floor(measuredRef.w));
+      const h = Math.max(1, Math.floor(measuredRef.h));
       const cap = w < 520 ? 1.5 : 2;
       const dpr = Math.min(window.devicePixelRatio || 1, cap);
       const prev = sizeRef.current;
@@ -511,9 +522,15 @@ export function NebulaCanvas({
     };
 
     redrawRef.current = drawFrame;
+    readMeasure();
     drawFrame(performance.now());
 
-    const ro = new ResizeObserver(() => {
+    const ro = new ResizeObserver((entries) => {
+      const entry = entries[entries.length - 1];
+      if (entry) {
+        measuredRef.w = entry.contentRect.width;
+        measuredRef.h = entry.contentRect.height;
+      }
       drawFrame(performance.now());
     });
     ro.observe(frame);
@@ -526,6 +543,10 @@ export function NebulaCanvas({
     }
 
     const loop = (t: number) => {
+      rafRef.current = requestAnimationFrame(loop);
+      /* Con Plectr aperto la nebula (dashboard o vista libreria) è dietro
+       * al pannello: disegnarla ruberebbe frame al gioco. */
+      if (shouldPauseBackgroundVisualizersForPlectr()) return;
       const p = propsRef.current;
       const active = p.playing || Boolean(p.hoveredId || p.selectedId);
       const minInterval = active ? 0 : 40;
@@ -533,7 +554,6 @@ export function NebulaCanvas({
         drawFrame(t);
         lastDrawRef.current = t;
       }
-      rafRef.current = requestAnimationFrame(loop);
     };
     rafRef.current = requestAnimationFrame(loop);
 

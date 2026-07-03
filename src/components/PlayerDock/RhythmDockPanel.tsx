@@ -224,22 +224,29 @@ export const RhythmDockPanel = memo(function RhythmDockPanel({
     };
   });
 
+  /** Il game loop chiama getAudio/getCurrentTime ~3 volte a frame:
+   *  audioElementMatchesTrack costruisce URL + legge localStorage a ogni
+   *  chiamata (micro-stutter delle note su CPU lente). Il match viene
+   *  ricalcolato solo quando cambiano audio.src o la traccia. */
+  const audioMatchCacheRef = useRef({ src: "", trackKey: "", ok: false });
+  const audioForTrack = useCallback((): HTMLAudioElement | null => {
+    const audio = playerBridgeRef.current.audioRef.current;
+    if (!audio) return null;
+    const tr = trackRef.current;
+    const trackKey = `${tr.relPath}\u0000${tr.filePath ?? ""}`;
+    const cache = audioMatchCacheRef.current;
+    if (audio.src !== cache.src || trackKey !== cache.trackKey) {
+      cache.src = audio.src;
+      cache.trackKey = trackKey;
+      cache.ok = audioElementMatchesTrack(audio, tr);
+    }
+    return cache.ok ? audio : null;
+  }, []);
+
   const playerSync = useMemo(
     () => ({
-      getCurrentTime: () => {
-        const audio = playerBridgeRef.current.audioRef.current;
-        if (!audio || !audioElementMatchesTrack(audio, trackRef.current)) {
-          return 0;
-        }
-        return audio.currentTime;
-      },
-      getAudio: () => {
-        const audio = playerBridgeRef.current.audioRef.current;
-        if (!audio || !audioElementMatchesTrack(audio, trackRef.current)) {
-          return null;
-        }
-        return audio;
-      },
+      getCurrentTime: () => audioForTrack()?.currentTime ?? 0,
+      getAudio: () => audioForTrack(),
       seek: (seconds: number) => {
         playerBridgeRef.current.seek(seconds);
       },
@@ -252,7 +259,7 @@ export const RhythmDockPanel = memo(function RhythmDockPanel({
         }
       },
     }),
-    [],
+    [audioForTrack],
   );
 
   const gameLabels = useMemo(

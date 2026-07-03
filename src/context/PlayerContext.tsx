@@ -444,14 +444,28 @@ export function PlayerProvider({ children }: { children: React.ReactNode }) {
     }
     snapGainsToSolo(inIx);
 
+    const inEl = inIx === 0 ? audioDeck0Ref.current : audioDeck1Ref.current;
+    const relPathChanged = nextTr.relPath !== currentRef.current?.relPath;
+    prefetchedRelPathRef.current = trackPlaybackKey(nextTr);
+
     activeDeckRef.current = inIx;
     setActiveDeckIx(inIx);
-    skipNextCurrentLoadRef.current = true;
+    // Salta il load solo se il relPath cambia (l'effect non riparte altrimenti
+    // e il flag resterebbe appeso fino al primo Next su brano diverso).
+    if (relPathChanged) {
+      skipNextCurrentLoadRef.current = true;
+    } else if (inEl) {
+      if (Number.isFinite(inEl.duration) && inEl.duration > 0) {
+        setDuration(inEl.duration);
+      }
+      const t = inEl.currentTime;
+      setCurrentTime(t);
+      setPlayerProgressTime(t, true);
+    }
     setCurrentIndex(nextIdx);
     setCurrent(nextTr);
     keepPlayingRef.current = true;
     pushRecent(nextTr);
-    const inEl = inIx === 0 ? audioDeck0Ref.current : audioDeck1Ref.current;
     if (inEl && !inEl.paused) setIsPlaying(true);
   }, [pushRecent, snapGainsToSolo]);
 
@@ -605,6 +619,7 @@ export function PlayerProvider({ children }: { children: React.ReactNode }) {
 
     inEl.src = mediaUrlForTrack(nextTr);
     inEl.load();
+    prefetchedRelPathRef.current = trackPlaybackKey(nextTr);
 
     try {
       if (ctx.state === "suspended") await ctx.resume();
@@ -672,8 +687,19 @@ export function PlayerProvider({ children }: { children: React.ReactNode }) {
       setIsPlaying(false);
       return;
     }
+    const nextTr = queueRef.current[nextIndex];
+    // Repeat all su coda singola (o wrap allo stesso brano): relPath invariato,
+    // l'effect di load non riparte — riavvia il deck attivo come per repeat one.
+    if (nextTr?.relPath === cur.relPath) {
+      audio.currentTime = 0;
+      setCurrentTime(0);
+      setPlayerProgressTime(0, true);
+      keepPlayingRef.current = true;
+      void audio.play().catch(() => setIsPlaying(false));
+      return;
+    }
     setCurrentIndex(nextIndex);
-    setCurrent(queueRef.current[nextIndex] || null);
+    setCurrent(nextTr || null);
     keepPlayingRef.current = true;
   }, [resolveNextPlaybackIndex]);
 
@@ -850,15 +876,21 @@ export function PlayerProvider({ children }: { children: React.ReactNode }) {
         audioDeck0Ref.current,
         audioDeck1Ref.current,
       );
-      if (ready) {
+      const expectedKey = trackPlaybackKey(current);
+      const deckMatchesCurrent =
+        ready &&
+        prefetchedRelPathRef.current === expectedKey &&
+        audioReadyEnough(ready);
+      if (deckMatchesCurrent) {
         if (Number.isFinite(ready.duration) && ready.duration > 0) {
           setDuration(ready.duration);
         }
         const t = ready.currentTime;
         setCurrentTime(t);
         setPlayerProgressTime(t, true);
+        return;
       }
-      return;
+      // Flag obsoleto o deck non allineato: load completo sotto.
     }
 
     void abortCrossfade();
@@ -1613,11 +1645,24 @@ export function PlayerProvider({ children }: { children: React.ReactNode }) {
       setIsPlaying(false);
       return;
     }
+    const nextTr = queueRef.current[nextIndex];
+    if (nextTr && current?.relPath === nextTr.relPath) {
+      const audio = audioRef.current;
+      if (audio) {
+        audio.currentTime = 0;
+        setCurrentTime(0);
+        setPlayerProgressTime(0, true);
+        keepPlayingRef.current = true;
+        void audio.play().catch(() => setIsPlaying(false));
+      }
+      syncMediaSessionNowRef.current();
+      return;
+    }
     setCurrentIndex(nextIndex);
-    setCurrent(queueRef.current[nextIndex] || null);
+    setCurrent(nextTr || null);
     keepPlayingRef.current = true;
     syncMediaSessionNowRef.current();
-  }, [currentIndex, finalizeCrossfade, queue.length, resolveNextPlaybackIndex]);
+  }, [current, currentIndex, finalizeCrossfade, queue.length, resolveNextPlaybackIndex]);
 
   const setShuffle = useCallback((enable: boolean) => {
     if (!enable) {
