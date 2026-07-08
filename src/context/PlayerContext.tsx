@@ -246,6 +246,9 @@ export function PlayerProvider({ children }: { children: React.ReactNode }) {
     /* bound in effect */
   });
   const trackLoadingRef = useRef(false);
+  /** Brano effettivamente udibile — metadati lock screen fino al load completato. */
+  const mediaSessionAudibleTrackRef = useRef<EnrichedTrack | null>(null);
+  const pendingTrackTransitionRef = useRef(false);
   const transcodeAvailableRef = useRef(true);
   const appConfigRef = useRef<{
     lanAccessUrl: string | null;
@@ -465,6 +468,8 @@ export function PlayerProvider({ children }: { children: React.ReactNode }) {
     setCurrentIndex(nextIdx);
     setCurrent(nextTr);
     keepPlayingRef.current = true;
+    mediaSessionAudibleTrackRef.current = nextTr;
+    pendingTrackTransitionRef.current = false;
     pushRecent(nextTr);
     if (inEl && !inEl.paused) setIsPlaying(true);
   }, [pushRecent, snapGainsToSolo]);
@@ -904,6 +909,7 @@ export function PlayerProvider({ children }: { children: React.ReactNode }) {
     if (!outEl || !inEl) return;
 
     const run = async () => {
+      pendingTrackTransitionRef.current = true;
       trackLoadingRef.current = true;
       syncMediaSessionNowRef.current();
       try {
@@ -948,6 +954,8 @@ export function PlayerProvider({ children }: { children: React.ReactNode }) {
             outEl.removeAttribute("src");
             void outEl.load();
             setIsPlaying(true);
+            mediaSessionAudibleTrackRef.current = track;
+            pendingTrackTransitionRef.current = false;
             pushRecent(track);
             syncMediaSessionNowRef.current();
           } catch {
@@ -963,6 +971,7 @@ export function PlayerProvider({ children }: { children: React.ReactNode }) {
       } finally {
         if (gen === trackLoadGenRef.current) {
           trackLoadingRef.current = false;
+          pendingTrackTransitionRef.current = false;
           syncMediaSessionNowRef.current();
         }
       }
@@ -1056,6 +1065,8 @@ export function PlayerProvider({ children }: { children: React.ReactNode }) {
         }
         if (ixFor(audio) !== activeDeckRef.current) return;
         setIsPlaying(true);
+        const cur = currentRef.current;
+        if (cur) mediaSessionAudibleTrackRef.current = cur;
       };
       const onExternalPause = () => {
         if (appInitiatedPauseRef.current) return;
@@ -1066,7 +1077,8 @@ export function PlayerProvider({ children }: { children: React.ReactNode }) {
         const nearEnd =
           Number.isFinite(d) && d > 0 && audio.currentTime >= d - 0.5;
         if (nearEnd) {
-          advanceAfterTrackCompleted();
+          setIsPlaying(false);
+          syncMediaSessionNowRef.current();
           return;
         }
         if (!keepPlayingRef.current || !currentRef.current) return;
@@ -1077,7 +1089,6 @@ export function PlayerProvider({ children }: { children: React.ReactNode }) {
             /* */
           });
         } else {
-          keepPlayingRef.current = false;
           setIsPlaying(false);
         }
         syncMediaSessionNowRef.current();
@@ -1175,12 +1186,22 @@ export function PlayerProvider({ children }: { children: React.ReactNode }) {
   }, [advanceAfterTrackCompleted]);
 
   const syncMediaSessionNow = useCallback(() => {
-    const track = currentRef.current;
-    if (!track) {
+    const uiTrack = currentRef.current;
+    if (!uiTrack) {
+      mediaSessionAudibleTrackRef.current = null;
       syncMediaSessionState({ track: null, playbackState: "none" });
       return;
     }
     const audio = audioRef.current;
+    const loading = trackLoadingRef.current;
+    const transitioning =
+      pendingTrackTransitionRef.current ||
+      loading ||
+      crossfadeBusyRef.current;
+    const audible = mediaSessionAudibleTrackRef.current;
+    const skipMetadata = transitioning && !!audible;
+    const sessionTrack = skipMetadata && audible ? audible : uiTrack;
+
     const rawDur = audio?.duration;
     const dur =
       Number.isFinite(duration) && duration > 0
@@ -1189,11 +1210,13 @@ export function PlayerProvider({ children }: { children: React.ReactNode }) {
           ? rawDur
           : 0;
     const pos = audio ? readPlayerProgressTime() : 0;
-    const keepPlaying = keepPlayingRef.current;
-    const loading = trackLoadingRef.current;
     const baseOrigin = resolvePlaybackBaseOrigin(appConfigRef.current);
     const q = queueRef.current;
-    const qIndex = indexRef.current;
+    let qIndex = indexRef.current;
+    if (skipMetadata && audible) {
+      const audibleIdx = q.findIndex((t) => t.relPath === audible.relPath);
+      if (audibleIdx >= 0) qIndex = audibleIdx;
+    }
     const castOpts = {
       forCast: true as const,
       transcodeAvailable: transcodeAvailableRef.current,
@@ -1205,17 +1228,21 @@ export function PlayerProvider({ children }: { children: React.ReactNode }) {
       castOpts,
     );
     syncMediaSessionState({
-      track,
-      playbackState:
-        keepPlaying && (isPlayingRef.current || loading) ? "playing" : "paused",
+      track: sessionTrack,
+      playbackState: isPlayingRef.current ? "playing" : "paused",
       duration: dur > 0 ? dur : undefined,
       position: dur > 0 ? pos : undefined,
       playbackRate: audio?.playbackRate || 1,
-      skipPosition: loading,
+      skipPosition: transitioning,
+      skipMetadata,
       mediaUri: baseOrigin
-        ? castStreamUrl(track.filePath || track.relPath, baseOrigin, castOpts)
+        ? castStreamUrl(
+            sessionTrack.filePath || sessionTrack.relPath,
+            baseOrigin,
+            castOpts,
+          )
         : undefined,
-      mediaId: track.relPath,
+      mediaId: sessionTrack.relPath,
       queue: queueEntries,
       queueIndex: activeIndex,
       hasPrevious: mediaSessionHasPrevious(
@@ -1230,6 +1257,9 @@ export function PlayerProvider({ children }: { children: React.ReactNode }) {
         !!queueRemainderRef.current?.length,
       ),
     });
+    if (!transitioning) {
+      mediaSessionAudibleTrackRef.current = uiTrack;
+    }
   }, [duration]);
 
   useEffect(() => {
@@ -1289,6 +1319,7 @@ export function PlayerProvider({ children }: { children: React.ReactNode }) {
       keepPlayingRef.current = true;
       setIsPlaying(true);
       const cur = currentRef.current;
+      if (cur) mediaSessionAudibleTrackRef.current = cur;
       if (cur) pushRecent(cur);
       syncMediaSessionNow();
     } catch {
@@ -1362,7 +1393,10 @@ export function PlayerProvider({ children }: { children: React.ReactNode }) {
   }, [applyMediaMute, pause]);
 
   const playForMediaSession = useCallback(() => {
+    keepPlayingRef.current = true;
     if (mediaMutedRef.current) applyMediaMute(false);
+    const ctx = audioCtxRef.current;
+    if (ctx?.state === "suspended") void ctx.resume();
     void play();
   }, [applyMediaMute, play]);
 
@@ -1427,10 +1461,14 @@ export function PlayerProvider({ children }: { children: React.ReactNode }) {
       if (shouldShuffle) {
         preShuffleRelPathsRef.current = nextQueue.map((t) => t.relPath);
         const shuffled = shuffleTailFromCurrent(nextQueue, safeIndex);
+        pendingTrackTransitionRef.current = true;
         setQueue(shuffled);
         setCurrentIndex(safeIndex);
         setCurrent(shuffled[safeIndex] || null);
       } else {
+        if (nextQueue[safeIndex]?.relPath !== currentRef.current?.relPath) {
+          pendingTrackTransitionRef.current = true;
+        }
         setQueue(nextQueue);
         setCurrentIndex(safeIndex);
         setCurrent(nextQueue[safeIndex] || null);
@@ -1659,6 +1697,7 @@ export function PlayerProvider({ children }: { children: React.ReactNode }) {
       return;
     }
     setCurrentIndex(nextIndex);
+    pendingTrackTransitionRef.current = true;
     setCurrent(nextTr || null);
     keepPlayingRef.current = true;
     syncMediaSessionNowRef.current();
@@ -1713,6 +1752,7 @@ export function PlayerProvider({ children }: { children: React.ReactNode }) {
     if (index < 0 || index >= q.length) return;
     void abortCrossfade();
     setCurrentIndex(index);
+    pendingTrackTransitionRef.current = true;
     setCurrent(q[index] || null);
     keepPlayingRef.current = true;
     syncMediaSessionNowRef.current();
@@ -1731,6 +1771,7 @@ export function PlayerProvider({ children }: { children: React.ReactNode }) {
     const prevIndex = resolvePrevIndex(queue.length, currentIndex, repeat);
     if (prevIndex == null) return;
     setCurrentIndex(prevIndex);
+    pendingTrackTransitionRef.current = true;
     setCurrent(queue[prevIndex] || null);
     keepPlayingRef.current = true;
     syncMediaSessionNowRef.current();

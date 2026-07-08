@@ -192,6 +192,8 @@ export type MediaSessionSync = {
   playbackRate?: number
   /** Salta setPositionState (es. cambio brano in corso su Android). */
   skipPosition?: boolean
+  /** Mantieni titolo/copertina precedenti finché il nuovo audio non è pronto. */
+  skipMetadata?: boolean
   /** URI assoluto del file audio (Google Cast / output picker). */
   mediaUri?: string
   mediaId?: string
@@ -219,6 +221,7 @@ export function syncMediaSessionState(sync: MediaSessionSync): void {
           mediaId: sync.mediaId ?? sync.track.relPath,
           playbackState: sync.playbackState,
           skipPosition: sync.skipPosition ?? false,
+          skipMetadata: sync.skipMetadata ?? false,
           duration:
             !sync.skipPosition &&
             sync.duration != null &&

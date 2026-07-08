@@ -143,6 +143,14 @@ public class RekordMediaService extends Service {
     }
 
     @Override
+    public int onStartCommand(Intent intent, int flags, int startId) {
+        if (intent != null && session != null) {
+            MediaButtonReceiver.handleIntent(session, intent);
+        }
+        return START_STICKY;
+    }
+
+    @Override
     public void onDestroy() {
         if (session != null) {
             session.setActive(false);
@@ -160,14 +168,68 @@ public class RekordMediaService extends Service {
         ActionListener l = this.listener;
         if (l != null) l.onMediaAction(action, seekTimeSec);
     }
-
-    /** Stato completo dalla webapp (JSON); chiamare dal main thread. */
     public void updateStateFromJson(String json) {
         try {
             JSONObject o = new JSONObject(json);
-            this.title = o.optString("title", "");
-            this.artist = o.optString("artist", "");
-            this.album = o.optString("album", "");
+            final boolean skipMetadata = o.optBoolean("skipMetadata", false);
+            if (!skipMetadata) {
+                this.title = o.optString("title", "");
+                this.artist = o.optString("artist", "");
+                this.album = o.optString("album", "");
+                this.mediaId = o.optString("mediaId", "");
+                this.mediaUri = o.optString("mediaUri", "");
+                this.hasPrevious = o.optBoolean("hasPrevious", false);
+                this.hasNext = o.optBoolean("hasNext", false);
+                this.queueIndex = o.optInt("queueIndex", 0);
+
+                String nextArtwork = o.isNull("artworkUrl") ? null : o.optString("artworkUrl", null);
+                if (nextArtwork != null && !nextArtwork.equals(this.artworkUrl)) {
+                    this.artworkUrl = nextArtwork;
+                    fetchArtwork(nextArtwork);
+                } else if (nextArtwork == null) {
+                    this.artworkUrl = null;
+                    this.artwork = null;
+                    this.artworkLoadedFor = null;
+                }
+
+                List<MediaSessionCompat.QueueItem> nextQueue = new ArrayList<>();
+                JSONArray queueJson = o.optJSONArray("queue");
+                if (queueJson != null) {
+                    for (int i = 0; i < queueJson.length(); i++) {
+                        JSONObject item = queueJson.optJSONObject(i);
+                        if (item == null) continue;
+                        String id = item.optString("id", "");
+                        long queueId = item.optLong("queueId", i);
+                        String itemTitle = item.optString("title", "");
+                        String itemArtist = item.optString("artist", "");
+                        String itemAlbum = item.optString("album", "");
+                        String itemMediaUri = item.optString("mediaUri", "");
+                        String itemArtwork = item.optString("artworkUrl", "");
+
+                        MediaDescriptionCompat.Builder desc = new MediaDescriptionCompat.Builder()
+                            .setMediaId(id)
+                            .setTitle(itemTitle)
+                            .setSubtitle(itemArtist)
+                            .setDescription(itemAlbum);
+                        if (!itemMediaUri.isEmpty()) {
+                            try {
+                                desc.setMediaUri(Uri.parse(itemMediaUri));
+                            } catch (Exception ignored) {
+                                /* */
+                            }
+                        }
+                        if (!itemArtwork.isEmpty()) {
+                            try {
+                                desc.setIconUri(Uri.parse(itemArtwork));
+                            } catch (Exception ignored) {
+                                /* */
+                            }
+                        }
+                        nextQueue.add(new MediaSessionCompat.QueueItem(desc.build(), queueId));
+                    }
+                }
+                this.playQueue = nextQueue;
+            }
             this.playbackState = o.optString("playbackState", "none");
             if (!o.optBoolean("skipPosition", false)) {
                 long nextDurationMs = (long) Math.max(0, o.optDouble("duration", 0) * 1000.0);
@@ -177,59 +239,6 @@ public class RekordMediaService extends Service {
                 this.positionMs = (long) Math.max(0, o.optDouble("position", 0) * 1000.0);
             }
             this.speed = (float) (o.optDouble("playbackRate", 1) > 0 ? o.optDouble("playbackRate", 1) : 1);
-            this.mediaId = o.optString("mediaId", "");
-            this.mediaUri = o.optString("mediaUri", "");
-            this.hasPrevious = o.optBoolean("hasPrevious", false);
-            this.hasNext = o.optBoolean("hasNext", false);
-            this.queueIndex = o.optInt("queueIndex", 0);
-
-            String nextArtwork = o.isNull("artworkUrl") ? null : o.optString("artworkUrl", null);
-            if (nextArtwork != null && !nextArtwork.equals(this.artworkUrl)) {
-                this.artworkUrl = nextArtwork;
-                fetchArtwork(nextArtwork);
-            } else if (nextArtwork == null) {
-                this.artworkUrl = null;
-                this.artwork = null;
-                this.artworkLoadedFor = null;
-            }
-
-            List<MediaSessionCompat.QueueItem> nextQueue = new ArrayList<>();
-            JSONArray queueJson = o.optJSONArray("queue");
-            if (queueJson != null) {
-                for (int i = 0; i < queueJson.length(); i++) {
-                    JSONObject item = queueJson.optJSONObject(i);
-                    if (item == null) continue;
-                    String id = item.optString("id", "");
-                    long queueId = item.optLong("queueId", i);
-                    String itemTitle = item.optString("title", "");
-                    String itemArtist = item.optString("artist", "");
-                    String itemAlbum = item.optString("album", "");
-                    String itemMediaUri = item.optString("mediaUri", "");
-                    String itemArtwork = item.optString("artworkUrl", "");
-
-                    MediaDescriptionCompat.Builder desc = new MediaDescriptionCompat.Builder()
-                        .setMediaId(id)
-                        .setTitle(itemTitle)
-                        .setSubtitle(itemArtist)
-                        .setDescription(itemAlbum);
-                    if (!itemMediaUri.isEmpty()) {
-                        try {
-                            desc.setMediaUri(Uri.parse(itemMediaUri));
-                        } catch (Exception ignored) {
-                            /* */
-                        }
-                    }
-                    if (!itemArtwork.isEmpty()) {
-                        try {
-                            desc.setIconUri(Uri.parse(itemArtwork));
-                        } catch (Exception ignored) {
-                            /* */
-                        }
-                    }
-                    nextQueue.add(new MediaSessionCompat.QueueItem(desc.build(), queueId));
-                }
-            }
-            this.playQueue = nextQueue;
             apply();
         } catch (Exception e) {
             Log.w(TAG, "stato media non valido: " + e.getMessage());

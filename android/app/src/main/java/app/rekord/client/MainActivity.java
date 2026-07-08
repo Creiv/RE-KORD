@@ -6,11 +6,15 @@ import android.content.Context;
 import android.content.Intent;
 import android.content.ServiceConnection;
 import android.content.pm.PackageManager;
+import android.media.AudioAttributes;
+import android.media.AudioFocusRequest;
+import android.media.AudioManager;
 import android.os.Build;
 import android.os.Bundle;
 import android.os.Handler;
 import android.os.IBinder;
 import android.os.Looper;
+import android.os.PowerManager;
 import android.webkit.JavascriptInterface;
 import android.webkit.WebView;
 import com.getcapacitor.BridgeActivity;
@@ -28,7 +32,12 @@ public class MainActivity extends BridgeActivity {
     private int pendingMediaRetries = 0;
     private static final long MEDIA_ACTION_RETRY_MS = 400L;
     private static final int MEDIA_ACTION_MAX_RETRIES = 30;
+    private static final long MEDIA_COMMAND_WAKE_MS = 12_000L;
     private final Runnable deliverPendingMediaActionRunnable = this::deliverPendingMediaAction;
+
+    private AudioManager audioManager;
+    private AudioFocusRequest audioFocusRequest;
+    private PowerManager.WakeLock mediaCommandWakeLock;
 
     private final ServiceConnection mediaConnection = new ServiceConnection() {
         @Override
@@ -62,6 +71,12 @@ public class MainActivity extends BridgeActivity {
             android.util.Log.w("RekordClient", "Cast SDK non disponibile: " + e.getMessage());
         }
         WebView webView = this.bridge.getWebView();
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+            webView.setRendererPriorityPolicy(
+                WebView.RENDERER_PRIORITY_IMPORTANT,
+                true
+            );
+        }
         webView.addJavascriptInterface(new MediaJsApi(), "RekordMediaNative");
         bindService(
             new Intent(this, RekordMediaService.class),
@@ -91,6 +106,10 @@ public class MainActivity extends BridgeActivity {
     private void dispatchMediaAction(String action, double seekTimeSec) {
         pendingMediaAction = action;
         pendingMediaSeekSec = seekTimeSec;
+        if ("play".equals(action) || "unmute".equals(action)) {
+            requestPlaybackAudioFocus(() -> deliverPendingMediaAction());
+            return;
+        }
         deliverPendingMediaAction();
     }
 
@@ -101,6 +120,7 @@ public class MainActivity extends BridgeActivity {
             schedulePendingMediaRetry();
             return;
         }
+        acquireMediaCommandWakeLock();
         // Solo al comando utente: riattiva brevemente il WebView per play/pause da lock screen.
         webView.onResume();
         webView.resumeTimers();
@@ -137,6 +157,67 @@ public class MainActivity extends BridgeActivity {
         pendingMediaRetries++;
         mainHandler.removeCallbacks(deliverPendingMediaActionRunnable);
         mainHandler.postDelayed(deliverPendingMediaActionRunnable, MEDIA_ACTION_RETRY_MS);
+    }
+
+    /** Tiene la CPU attiva mentre il WebView esegue play/pause da lock screen o Bluetooth. */
+    private void acquireMediaCommandWakeLock() {
+        if (mediaCommandWakeLock == null) {
+            PowerManager pm = (PowerManager) getSystemService(POWER_SERVICE);
+            if (pm == null) return;
+            mediaCommandWakeLock = pm.newWakeLock(
+                PowerManager.PARTIAL_WAKE_LOCK,
+                "Rekord:MediaCommand"
+            );
+            mediaCommandWakeLock.setReferenceCounted(false);
+        }
+        if (!mediaCommandWakeLock.isHeld()) {
+            mediaCommandWakeLock.acquire(MEDIA_COMMAND_WAKE_MS);
+        }
+    }
+
+    private void requestPlaybackAudioFocus(Runnable then) {
+        if (audioManager == null) {
+            audioManager = (AudioManager) getSystemService(AUDIO_SERVICE);
+        }
+        if (audioManager == null) {
+            then.run();
+            return;
+        }
+        int result;
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+            if (audioFocusRequest == null) {
+                AudioAttributes attrs = new AudioAttributes.Builder()
+                    .setUsage(AudioAttributes.USAGE_MEDIA)
+                    .setContentType(AudioAttributes.CONTENT_TYPE_MUSIC)
+                    .build();
+                audioFocusRequest = new AudioFocusRequest.Builder(
+                    AudioManager.AUDIOFOCUS_GAIN
+                )
+                    .setAudioAttributes(attrs)
+                    .setAcceptsDelayedFocusGain(true)
+                    .setOnAudioFocusChangeListener(focusChange -> {
+                        /* la webapp gestisce pause/play sull'elemento audio */
+                    })
+                    .build();
+            }
+            result = audioManager.requestAudioFocus(audioFocusRequest);
+        } else {
+            result = audioManager.requestAudioFocus(
+                focusChange -> {
+                    /* */
+                },
+                AudioManager.STREAM_MUSIC,
+                AudioManager.AUDIOFOCUS_GAIN
+            );
+        }
+        if (
+            result == AudioManager.AUDIOFOCUS_REQUEST_GRANTED ||
+            result == AudioManager.AUDIOFOCUS_REQUEST_DELAYED
+        ) {
+            then.run();
+        } else {
+            then.run();
+        }
     }
 
     private void applyMediaState(String json) {
