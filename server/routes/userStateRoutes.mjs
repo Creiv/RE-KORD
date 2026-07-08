@@ -11,6 +11,7 @@ import {
   findCustomThemeBgPath,
   mediaTypeForThemeBgPath,
   saveCustomThemeBg,
+  THEME_BG_MAX_BYTES,
 } from "../customThemeBg.mjs";
 import { accountIdFromReq, actLog, sendError, sendOk } from "../httpUtils.mjs";
 import { getFilteredIndexForAccount } from "../libraryIndexService.mjs";
@@ -37,7 +38,7 @@ import { existsSync, statSync } from "fs";
 
 const uploadCustomThemeBg = multer({
   storage: multer.memoryStorage(),
-  limits: { fileSize: 8 * 1024 * 1024 },
+  limits: { fileSize: THEME_BG_MAX_BYTES },
 });
 
 export function registerUserStateRoutes(app) {
@@ -84,7 +85,16 @@ export function registerUserStateRoutes(app) {
 
   app.post(
     "/api/user-state/custom-theme-bg",
-    uploadCustomThemeBg.single("file"),
+    (req, res, next) => {
+      uploadCustomThemeBg.single("file")(req, res, (err) => {
+        if (err?.code === "LIMIT_FILE_SIZE") {
+          const maxMb = Math.round(THEME_BG_MAX_BYTES / (1024 * 1024));
+          return sendError(res, 413, `Image file too large (max ${maxMb} MB)`);
+        }
+        if (err) return sendError(res, 400, String(err.message || err));
+        next();
+      });
+    },
     async (req, res) => {
       try {
         const root = getMusicRoot();
@@ -98,6 +108,7 @@ export function registerUserStateRoutes(app) {
           accId,
           req.file.buffer,
           req.file.mimetype,
+          req.file.originalname,
         );
         return sendOk(res, { bgImage, bgImageRev: Date.now() });
       } catch (error) {

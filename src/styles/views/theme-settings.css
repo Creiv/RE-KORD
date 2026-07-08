@@ -150,6 +150,11 @@
   background-repeat: no-repeat;
 }
 
+img.theme-picker__strip-seg--bg {
+  object-fit: cover;
+  object-position: center;
+}
+
 /* (ui style selector rimosso: lo stile Pro è la base) */
 
 .custom-theme-dialog {
@@ -276,14 +281,43 @@
 }
 
 .custom-theme-dialog__bg-mode-swatch--image.has-image {
-  background-size: cover;
-  background-position: center;
+  padding: 0;
+  overflow: hidden;
+  background: var(--surface2);
+}
+
+.custom-theme-dialog__bg-mode-swatch-fill {
+  display: block;
+  width: 100%;
+  height: 100%;
+  border-radius: inherit;
+}
+
+.custom-theme-dialog__image-preview {
+  display: block;
+  width: 100%;
+  height: 7.5rem;
+  background-color: color-mix(in srgb, var(--surface2) 80%, transparent);
+  object-fit: cover;
+  object-position: center;
 }
 
 .custom-theme-dialog__swatch-grid {
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));
   gap: 0.45rem;
+}
+
+.custom-theme-dialog__swatch-grid--4 {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.custom-theme-dialog__image-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.35rem;
+  min-width: 0;
 }
 
 .custom-theme-dialog__swatch {
@@ -378,13 +412,6 @@
 .custom-theme-dialog__image-drop:disabled {
   opacity: 0.65;
   cursor: wait;
-}
-
-.custom-theme-dialog__image-preview {
-  display: block;
-  width: 100%;
-  height: 7.5rem;
-  background-color: color-mix(in srgb, var(--surface2) 80%, transparent);
 }
 
 .custom-theme-dialog__image-toolbar {

@@ -2,13 +2,15 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { CustomThemeDialog } from "./CustomThemeDialog";
 import { useI18n } from "../i18n/useI18n";
 import { DEFAULT_CUSTOM_THEME, THEME_CATALOG } from "../lib/themeCatalog";
-import { customThemeBgImageCss } from "../lib/customThemeBgFit";
+import { customThemeBgImageCss, objectFitForBgImageFit } from "../lib/customThemeBgFit";
+import { THEME_BG_MAX_MB, validateThemeBgFile } from "../lib/themeBgFile";
 import type { CustomThemeBgImageFit, CustomThemeSettings, ThemeMode } from "../types";
 
 function ThemeStrip({
   bg,
   bgImageUrl,
   bgImageFit,
+  bgImageExt,
   section,
   accent,
   accent2,
@@ -17,29 +19,47 @@ function ThemeStrip({
   bg: string;
   bgImageUrl?: string | null;
   bgImageFit?: CustomThemeBgImageFit;
+  bgImageExt?: string | null;
   section: string;
   accent: string;
   accent2: string;
   t: (k: string) => string;
 }) {
   const fitCss = customThemeBgImageCss(bgImageFit);
+  const gifBg = bgImageExt === "gif" && bgImageUrl;
   return (
     <span className="theme-picker__strip" aria-hidden>
-      <span
-        className="theme-picker__strip-seg theme-picker__strip-seg--bg"
-        style={
-          bgImageUrl
-            ? {
-                backgroundColor: bg,
-                backgroundImage: `url("${bgImageUrl}")`,
-                backgroundSize: fitCss.size,
-                backgroundPosition: fitCss.position,
-                backgroundRepeat: fitCss.repeat,
-              }
-            : { background: bg }
-        }
-        title={t("themePicker.stripBg")}
-      />
+      {gifBg ? (
+        <img
+          src={bgImageUrl}
+          alt=""
+          aria-hidden
+          className="theme-picker__strip-seg theme-picker__strip-seg--bg"
+          style={{
+            backgroundColor: bg,
+            objectFit: objectFitForBgImageFit(bgImageFit)
+              .objectFit as React.CSSProperties["objectFit"],
+            objectPosition: objectFitForBgImageFit(bgImageFit).objectPosition,
+          }}
+          title={t("themePicker.stripBg")}
+        />
+      ) : (
+        <span
+          className="theme-picker__strip-seg theme-picker__strip-seg--bg"
+          style={
+            bgImageUrl
+              ? {
+                  backgroundColor: bg,
+                  backgroundImage: `url("${bgImageUrl}")`,
+                  backgroundSize: fitCss.size,
+                  backgroundPosition: fitCss.position,
+                  backgroundRepeat: fitCss.repeat,
+                }
+              : { background: bg }
+          }
+          title={t("themePicker.stripBg")}
+        />
+      )}
       <span className="theme-picker__strip-seg" style={{ background: section }} title={t("themePicker.stripSection")} />
       <span className="theme-picker__strip-seg" style={{ background: accent }} title={t("themePicker.stripAccent1")} />
       <span className="theme-picker__strip-seg" style={{ background: accent2 }} title={t("themePicker.stripAccent2")} />
@@ -129,8 +149,14 @@ export function ThemePicker({
       if (!onCustomThemeBgUpload) {
         throw new Error("upload unavailable");
       }
-      if (!/^image\/(jpeg|png|webp|gif)$/i.test(file.type)) {
+      const validation = validateThemeBgFile(file);
+      if (validation === "type") {
         const err = t("themePicker.customBgTypeErr");
+        setCustomThemeBgErr(err);
+        throw new Error(err);
+      }
+      if (validation === "size") {
+        const err = t("themePicker.customBgSizeErr", { maxMb: THEME_BG_MAX_MB });
         setCustomThemeBgErr(err);
         throw new Error(err);
       }
@@ -184,6 +210,7 @@ export function ThemePicker({
           bg={cur.bg}
           bgImageUrl={bgPreviewUrl}
           bgImageFit={value === "custom" ? customTheme.bgImageFit : undefined}
+          bgImageExt={value === "custom" ? customTheme.bgImage : undefined}
           section={cur.section}
           accent={cur.accent}
           accent2={cur.accent2}
@@ -228,6 +255,9 @@ export function ThemePicker({
                             bgImageFit={
                               entry.id === "custom" ? customTheme.bgImageFit : undefined
                             }
+                            bgImageExt={
+                              entry.id === "custom" ? customTheme.bgImage : undefined
+                            }
                             section={preview.section}
                             accent={preview.accent}
                             accent2={preview.accent2}
@@ -262,6 +292,7 @@ export function ThemePicker({
           onClearBg={handleClearBg}
           bgBusy={customThemeBgBusy}
           bgError={customThemeBgErr}
+          onBgError={setCustomThemeBgErr}
         />
       ) : null}
     </div>

@@ -5,6 +5,10 @@ import {
   clearCustomThemeBgImageCssVars,
   normalizeCustomThemeBgImageFit,
 } from "../lib/customThemeBgFit";
+import {
+  applyAnimatedCustomThemeBg,
+  clearAnimatedCustomThemeBg,
+} from "../lib/customThemeBgLayer";
 import { DEFAULT_CUSTOM_THEME } from "../lib/themeCatalog";
 import { probeGlassBackdrop } from "../lib/glassBackdrop";
 import { isColorMixBroken } from "../lib/cssColorMix";
@@ -435,16 +439,25 @@ export function useThemeDomEffects(settings: UserSettings) {
       custom?.bgMode === "image" &&
       Boolean(custom.bgImage);
     if (useBgImage) {
-      root.style.setProperty(
-        "--page-bg-image",
-        `url("${customThemeBgImageUrl(custom.bgImageRev ?? undefined)}")`,
-      );
+      const url = customThemeBgImageUrl(custom.bgImageRev ?? undefined);
       applyCustomThemeBgImageCssVars(root, custom.bgImageFit);
       root.dataset.customBgImage = "1";
+      if (custom.bgImage === "gif") {
+        applyAnimatedCustomThemeBg(root, url, custom.bgImageFit);
+        if (root.dataset.customBgGifRepeat === "1") {
+          root.style.setProperty("--page-bg-image", `url("${url}")`);
+        } else {
+          root.style.removeProperty("--page-bg-image");
+        }
+      } else {
+        clearAnimatedCustomThemeBg(root);
+        root.style.setProperty("--page-bg-image", `url("${url}")`);
+      }
       return;
     }
     root.style.removeProperty("--page-bg-image");
     clearCustomThemeBgImageCssVars(root);
+    clearAnimatedCustomThemeBg(root);
     delete root.dataset.customBgImage;
   }, [settings.customTheme, settings.theme]);
 

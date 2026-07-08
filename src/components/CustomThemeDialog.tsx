@@ -2,36 +2,63 @@ import {
   useCallback,
   useEffect,
   useRef,
+  useState,
   type ChangeEvent,
-  type CSSProperties,
 } from "react";
 import { createPortal } from "react-dom";
 import { useI18n } from "../i18n/useI18n";
 import { customThemeBgImageUrl } from "../lib/api";
-import { customThemeBgImageCss, CUSTOM_THEME_BG_IMAGE_FITS } from "../lib/customThemeBgFit";
+import {
+  customThemeBgImageCss,
+  CUSTOM_THEME_BG_IMAGE_FITS,
+  objectFitForBgImageFit,
+} from "../lib/customThemeBgFit";
+import { extractThemeColorsFromImageUrl } from "../lib/extractThemeColorsFromImage";
+import {
+  themeBgAcceptAttribute,
+  THEME_BG_MAX_MB,
+  validateThemeBgFile,
+} from "../lib/themeBgFile";
 import type { CustomThemeBgMode, CustomThemeSettings } from "../types";
 
-function bgImageLayerStyle(
-  theme: CustomThemeSettings,
-  bgImageUrl: string | null,
-  opts?: { forceImage?: boolean },
-): CSSProperties | undefined {
-  const bgMode = theme.bgMode === "image" ? "image" : "color";
-  const showImage = bgImageUrl && (opts?.forceImage || bgMode === "image");
-  if (showImage) {
-    const fit = customThemeBgImageCss(theme.bgImageFit);
-    return {
-      backgroundColor: theme.bg,
-      backgroundImage: `url("${bgImageUrl}")`,
-      backgroundSize: fit.size,
-      backgroundPosition: fit.position,
-      backgroundRepeat: fit.repeat,
-    };
+function BgImagePreview({
+  theme,
+  bgImageUrl,
+  className,
+}: {
+  theme: CustomThemeSettings;
+  bgImageUrl: string;
+  className: string;
+}) {
+  const fit = customThemeBgImageCss(theme.bgImageFit);
+  if (theme.bgImage === "gif") {
+    const { objectFit, objectPosition } = objectFitForBgImageFit(theme.bgImageFit);
+    return (
+      <img
+        src={bgImageUrl}
+        alt=""
+        aria-hidden
+        className={className}
+        style={{
+          backgroundColor: theme.bg,
+          objectFit: objectFit as React.CSSProperties["objectFit"],
+          objectPosition,
+        }}
+      />
+    );
   }
-  if (bgMode === "color") {
-    return { background: theme.bg };
-  }
-  return undefined;
+  return (
+    <span
+      className={className}
+      style={{
+        backgroundColor: theme.bg,
+        backgroundImage: `url("${bgImageUrl}")`,
+        backgroundSize: fit.size,
+        backgroundPosition: fit.position,
+        backgroundRepeat: fit.repeat,
+      }}
+    />
+  );
 }
 
 function ThemePreviewStrip({
@@ -44,17 +71,21 @@ function ThemePreviewStrip({
   t: (k: string) => string;
 }) {
   const bgMode = theme.bgMode === "image" ? "image" : "color";
-  const bgLayerStyle = bgImageLayerStyle(theme, bgImageUrl);
   return (
     <div className="custom-theme-dialog__preview-strip" aria-hidden>
-      <span
-        className="custom-theme-dialog__preview-strip-seg custom-theme-dialog__preview-strip-seg--bg"
-        style={
-          bgLayerStyle ??
-          (bgMode === "color" ? { background: theme.bg } : undefined)
-        }
-        title={t("themePicker.stripBg")}
-      />
+      {bgImageUrl && bgMode === "image" ? (
+        <BgImagePreview
+          theme={theme}
+          bgImageUrl={bgImageUrl}
+          className="custom-theme-dialog__preview-strip-seg custom-theme-dialog__preview-strip-seg--bg"
+        />
+      ) : (
+        <span
+          className="custom-theme-dialog__preview-strip-seg custom-theme-dialog__preview-strip-seg--bg"
+          style={bgMode === "color" ? { background: theme.bg } : undefined}
+          title={t("themePicker.stripBg")}
+        />
+      )}
       <span
         className="custom-theme-dialog__preview-strip-seg"
         style={{ background: theme.section }}
@@ -122,6 +153,7 @@ export function CustomThemeDialog({
   onClearBg,
   bgBusy = false,
   bgError = null,
+  onBgError,
 }: {
   open: boolean;
   theme: CustomThemeSettings;
@@ -131,10 +163,21 @@ export function CustomThemeDialog({
   onClearBg: () => Promise<void>;
   bgBusy?: boolean;
   bgError?: string | null;
+  onBgError?: (message: string | null) => void;
 }) {
   const { t } = useI18n();
   const panelRef = useRef<HTMLDivElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const [paletteBusy, setPaletteBusy] = useState(false);
+  const [paletteErr, setPaletteErr] = useState<string | null>(null);
+  const mountedRef = useRef(true);
+
+  useEffect(() => {
+    mountedRef.current = true;
+    return () => {
+      mountedRef.current = false;
+    };
+  }, []);
 
   useEffect(() => {
     if (!open) return;
@@ -150,15 +193,20 @@ export function CustomThemeDialog({
     panelRef.current.focus();
   }, [open]);
 
+  // Riapertura pulita: niente errori/spinner residui dalla sessione precedente.
+  useEffect(() => {
+    if (!open) return;
+    setPaletteErr(null);
+    setPaletteBusy(false);
+    onBgError?.(null);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [open]);
+
   const bgMode: CustomThemeBgMode = theme.bgMode === "image" ? "image" : "color";
   const storedBgImageUrl = theme.bgImage
     ? customThemeBgImageUrl(theme.bgImageRev ?? undefined)
     : null;
   const bgPreviewUrl = bgMode === "image" ? storedBgImageUrl : null;
-  const bgPreviewStyle: CSSProperties | undefined =
-    bgPreviewUrl != null
-      ? bgImageLayerStyle(theme, bgPreviewUrl)
-      : undefined;
 
   const patchTheme = useCallback(
     (patch: Partial<CustomThemeSettings>) => {
@@ -171,9 +219,19 @@ export function CustomThemeDialog({
     const f = event.target.files?.[0];
     if (event.target) event.target.value = "";
     if (!f || bgBusy) return;
-    if (!/^image\/(jpeg|png|webp|gif)$/i.test(f.type)) return;
+    const validation = validateThemeBgFile(f);
+    if (validation === "type") {
+      onBgError?.(t("themePicker.customBgTypeErr"));
+      return;
+    }
+    if (validation === "size") {
+      onBgError?.(t("themePicker.customBgSizeErr", { maxMb: THEME_BG_MAX_MB }));
+      return;
+    }
+    onBgError?.(null);
     try {
       const { bgImage, bgImageRev } = await onUploadBg(f);
+      setPaletteErr(null);
       onThemeChange({
         ...theme,
         bgMode: "image",
@@ -192,17 +250,34 @@ export function CustomThemeDialog({
       const { bgImage: _b, bgImageRev: _r, ...rest } = theme;
       void _b;
       void _r;
+      setPaletteErr(null);
       onThemeChange({ ...rest, bgMode: "color" });
     } catch {
       /* parent handles error state */
     }
   };
 
+  const onExtractPalette = async () => {
+    if (!storedBgImageUrl || bgBusy || paletteBusy) return;
+    setPaletteBusy(true);
+    setPaletteErr(null);
+    try {
+      const colors = await extractThemeColorsFromImageUrl(storedBgImageUrl);
+      if (!mountedRef.current) return;
+      onThemeChange({ ...theme, ...colors });
+    } catch {
+      if (mountedRef.current) setPaletteErr(t("themePicker.customBgExtractErr"));
+    } finally {
+      if (mountedRef.current) setPaletteBusy(false);
+    }
+  };
+
   if (!open) return null;
 
-  const colorFields = (
-    ["section", "accent", "accent2"] as const
-  ).map((key) => (
+  const colorKeys = theme.bgImage
+    ? (["bg", "section", "accent", "accent2"] as const)
+    : (["section", "accent", "accent2"] as const);
+  const colorFields = colorKeys.map((key) => (
     <ColorSwatchField
       key={key}
       label={t(`themePicker.custom.${key}`)}
@@ -280,13 +355,16 @@ export function CustomThemeDialog({
                 className={`custom-theme-dialog__bg-mode-swatch custom-theme-dialog__bg-mode-swatch--image${
                   storedBgImageUrl ? " has-image" : ""
                 }`}
-                style={
-                  storedBgImageUrl
-                    ? bgImageLayerStyle(theme, storedBgImageUrl, { forceImage: true })
-                    : undefined
-                }
                 aria-hidden
-              />
+              >
+                {storedBgImageUrl ? (
+                  <BgImagePreview
+                    theme={{ ...theme, bgMode: "image" }}
+                    bgImageUrl={storedBgImageUrl}
+                    className="custom-theme-dialog__bg-mode-swatch-fill"
+                  />
+                ) : null}
+              </span>
               <span>{t("themePicker.customBgImage")}</span>
             </button>
           </div>
@@ -310,10 +388,10 @@ export function CustomThemeDialog({
                 onClick={() => fileInputRef.current?.click()}
               >
                 {bgPreviewUrl ? (
-                  <span
+                  <BgImagePreview
+                    theme={theme}
+                    bgImageUrl={bgPreviewUrl}
                     className="custom-theme-dialog__image-preview"
-                    style={bgPreviewStyle}
-                    aria-hidden
                   />
                 ) : (
                   <span className="custom-theme-dialog__image-placeholder">
@@ -330,14 +408,26 @@ export function CustomThemeDialog({
               </button>
               <div className="custom-theme-dialog__image-toolbar">
                 {theme.bgImage ? (
-                  <button
-                    type="button"
-                    className="ghost-btn ghost-btn--sm custom-theme-dialog__image-clear"
-                    disabled={bgBusy}
-                    onClick={() => void onClearImage()}
-                  >
-                    {t("themePicker.customBgClear")}
-                  </button>
+                  <div className="custom-theme-dialog__image-actions">
+                    <button
+                      type="button"
+                      className="ghost-btn ghost-btn--sm custom-theme-dialog__image-extract"
+                      disabled={bgBusy || paletteBusy}
+                      onClick={() => void onExtractPalette()}
+                    >
+                      {paletteBusy
+                        ? t("themePicker.customBgExtractBusy")
+                        : t("themePicker.customBgExtract")}
+                    </button>
+                    <button
+                      type="button"
+                      className="ghost-btn ghost-btn--sm custom-theme-dialog__image-clear"
+                      disabled={bgBusy || paletteBusy}
+                      onClick={() => void onClearImage()}
+                    >
+                      {t("themePicker.customBgClear")}
+                    </button>
+                  </div>
                 ) : (
                   <span className="custom-theme-dialog__image-toolbar-spacer" aria-hidden />
                 )}
@@ -368,7 +458,7 @@ export function CustomThemeDialog({
             <input
               ref={fileInputRef}
               type="file"
-              accept="image/jpeg,image/png,image/webp,image/gif"
+              accept={themeBgAcceptAttribute()}
               className="sr-only"
               onChange={(event) => void onFileChange(event)}
             />
@@ -378,12 +468,21 @@ export function CustomThemeDialog({
         {bgError ? (
           <p className="subtle sm warnline custom-theme-dialog__err">{bgError}</p>
         ) : null}
+        {paletteErr ? (
+          <p className="subtle sm warnline custom-theme-dialog__err">{paletteErr}</p>
+        ) : null}
 
         <div className="custom-theme-dialog__section">
           <span className="custom-theme-dialog__section-label">
             {t("themePicker.customColorsHeading")}
           </span>
-          <div className="custom-theme-dialog__swatch-grid">{colorFields}</div>
+          <div
+            className={`custom-theme-dialog__swatch-grid${
+              colorKeys.length === 4 ? " custom-theme-dialog__swatch-grid--4" : ""
+            }`}
+          >
+            {colorFields}
+          </div>
         </div>
       </div>
     </div>,

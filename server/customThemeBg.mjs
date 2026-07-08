@@ -5,7 +5,9 @@ import { rekordAccountDir } from "./rekordDataStore.mjs"
 
 const THEME_BG_BASENAME = "theme-bg"
 const ALLOWED_EXT = new Set(["jpg", "jpeg", "png", "webp", "gif"])
-const MAX_BYTES = 8 * 1024 * 1024
+/** Limite upload sfondo tema (GIF animate possono superare i few MB). */
+export const THEME_BG_MAX_BYTES = 32 * 1024 * 1024
+const MAX_BYTES = THEME_BG_MAX_BYTES
 
 const MIME_TO_EXT = {
   "image/jpeg": "jpg",
@@ -18,6 +20,52 @@ function extFromMime(mimeType) {
   const mime = String(mimeType || "").trim().toLowerCase()
   const ext = MIME_TO_EXT[mime]
   return ext && ALLOWED_EXT.has(ext) ? ext : null
+}
+
+function extFromFilename(name) {
+  const ext = path.extname(String(name || "")).slice(1).toLowerCase()
+  if (ext === "jpeg") return "jpg"
+  return ALLOWED_EXT.has(ext) ? ext : null
+}
+
+/** Riconosce il formato reale dai magic bytes: una GIF salvata con estensione
+ *  sbagliata non verrebbe animata dal client (che attiva il layer <img> solo
+ *  quando bgImage === "gif"). */
+export function sniffImageExt(buffer) {
+  if (!buffer || buffer.length < 4) return null
+  if (
+    buffer[0] === 0x47 && buffer[1] === 0x49 &&
+    buffer[2] === 0x46 && buffer[3] === 0x38
+  ) {
+    return "gif" // "GIF8"
+  }
+  if (
+    buffer[0] === 0x89 && buffer[1] === 0x50 &&
+    buffer[2] === 0x4e && buffer[3] === 0x47
+  ) {
+    return "png"
+  }
+  if (buffer[0] === 0xff && buffer[1] === 0xd8 && buffer[2] === 0xff) {
+    return "jpg"
+  }
+  if (
+    buffer.length >= 12 &&
+    buffer[0] === 0x52 && buffer[1] === 0x49 &&
+    buffer[2] === 0x46 && buffer[3] === 0x46 &&
+    buffer[8] === 0x57 && buffer[9] === 0x45 &&
+    buffer[10] === 0x42 && buffer[11] === 0x50
+  ) {
+    return "webp" // RIFF....WEBP
+  }
+  return null
+}
+
+function resolveThemeBgExt(buffer, mimeType, originalname) {
+  return (
+    sniffImageExt(buffer) ||
+    extFromMime(mimeType) ||
+    extFromFilename(originalname)
+  )
 }
 
 function themeBgPathInDir(dir, ext) {
@@ -57,22 +105,22 @@ async function removeExistingThemeBgFiles(dir) {
   }
 }
 
-export async function saveCustomThemeBg(libraryRoot, accountId, buffer, mimeType) {
+export async function saveCustomThemeBg(libraryRoot, accountId, buffer, mimeType, originalname) {
   const dir = rekordAccountDir(libraryRoot, accountId)
   if (!dir) {
     const e = new Error("Invalid account")
     e.code = "INVALID_ACCOUNT"
     throw e
   }
-  const ext = extFromMime(mimeType)
+  if (!buffer?.length || buffer.length > MAX_BYTES) {
+    const e = new Error(`Image file too large (max ${THEME_BG_MAX_BYTES / (1024 * 1024)} MB)`)
+    e.code = "IMAGE_TOO_LARGE"
+    throw e
+  }
+  const ext = resolveThemeBgExt(buffer, mimeType, originalname)
   if (!ext) {
     const e = new Error("Unsupported image type")
     e.code = "INVALID_IMAGE_TYPE"
-    throw e
-  }
-  if (!buffer?.length || buffer.length > MAX_BYTES) {
-    const e = new Error("Image file too large (max 8 MB)")
-    e.code = "IMAGE_TOO_LARGE"
     throw e
   }
   await fs.mkdir(dir, { recursive: true })

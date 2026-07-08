@@ -383,7 +383,7 @@
   - Colorful: Sunset, Aurora, Ember, Forest, Ocean, Rose
   - Light: Slate, Amethyst, Citrus, Carmine
   - Custom
-- **Tema custom**: 4 colori (sfondo, sezioni, accent1, accent2); sfondo a colore o immagine (upload JPEG/PNG/WebP/GIF max 8MB; fit: cover / contain / fill / repeat / center); bianco/nero del testo scelto dalla luminosità del colore Sezioni (dallo sfondo quando il vetro è molto trasparente)
+- **Tema custom**: 4 colori (sfondo, sezioni, accent1, accent2); sfondo a colore o immagine (upload JPEG/PNG/WebP/GIF max 32MB, formato verificato dai magic bytes; GIF animate renderizzate con layer dedicato; fit: cover / contain / fill / repeat / center); pulsante **Estrai colori dall'immagine** che genera la palette dalla foto/GIF (multi-frame sulle GIF, contrasto WCAG garantito sugli accent); bianco/nero del testo scelto dalla luminosità del colore Sezioni (dallo sfondo quando il vetro è molto trasparente)
 - **Layout Pro Workspace**: shell unificata (icon rail, superfici piatte, canvas organizzato) — non più selezionabile tra stili Classico/Moderno
 - **Superfici vetro**: trasparenze con blur (auto-disattivate se il browser/OS non le supporta) e **opacità regolabile** 0–100% (slider + campo numerico, anteprima live, salvataggio con debounce 500ms; controlli disabilitati a vetro spento)
 - **Visualizzatore**: scelta delle 8 modalità + opzione "disattiva sfondo visualizzatore in Plectr"

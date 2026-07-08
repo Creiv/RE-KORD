@@ -49,4 +49,44 @@ export function clearCustomThemeBgImageCssVars(root: HTMLElement) {
   root.style.removeProperty("--page-bg-size");
   root.style.removeProperty("--page-bg-repeat");
   root.style.removeProperty("--page-bg-position");
+  root.style.removeProperty("--page-bg-object-fit");
+  root.style.removeProperty("--page-bg-object-position");
+}
+
+/** Estensioni immagine sfondo tema custom (incluso GIF animato). */
+export function isCustomThemeBgImageExt(ext: string | null | undefined): boolean {
+  return ext === "jpg" || ext === "png" || ext === "webp" || ext === "gif";
+}
+
+export function objectFitForBgImageFit(
+  fit: CustomThemeBgImageFit | undefined,
+): { objectFit: string; objectPosition: string; useCssBackground: boolean } {
+  const normalized = normalizeCustomThemeBgImageFit(fit);
+  if (normalized === "repeat") {
+    return { objectFit: "cover", objectPosition: "center", useCssBackground: true };
+  }
+  if (normalized === "fill") {
+    return { objectFit: "fill", objectPosition: "center", useCssBackground: false };
+  }
+  if (normalized === "contain") {
+    return { objectFit: "contain", objectPosition: "center", useCssBackground: false };
+  }
+  if (normalized === "center") {
+    return { objectFit: "none", objectPosition: "center center", useCssBackground: false };
+  }
+  return { objectFit: "cover", objectPosition: "center", useCssBackground: false };
+}
+
+export function applyCustomThemeBgObjectFitCssVars(
+  root: HTMLElement,
+  fit: CustomThemeBgImageFit | undefined,
+) {
+  const { objectFit, objectPosition } = objectFitForBgImageFit(fit);
+  root.style.setProperty("--page-bg-object-fit", objectFit);
+  root.style.setProperty("--page-bg-object-position", objectPosition);
+}
+
+export function clearCustomThemeBgObjectFitCssVars(root: HTMLElement) {
+  root.style.removeProperty("--page-bg-object-fit");
+  root.style.removeProperty("--page-bg-object-position");
 }

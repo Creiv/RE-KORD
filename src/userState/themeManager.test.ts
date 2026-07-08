@@ -1,5 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { DEFAULT_CUSTOM_THEME } from "../lib/themeCatalog";
+import { clearAnimatedCustomThemeBg } from "../lib/customThemeBgLayer";
 import {
   applyCustomThemeVars,
   clearCustomThemeVars,
@@ -20,6 +21,7 @@ describe("themeManager", () => {
 
   afterEach(() => {
     clearCustomThemeVars(root);
+    clearAnimatedCustomThemeBg(root);
     delete root.dataset.theme;
     delete root.dataset.glassSurfaces;
     delete root.dataset.customBgImage;
@@ -45,6 +47,15 @@ describe("themeManager", () => {
     });
     expect(theme.bgMode).toBe("image");
     expect(theme.bgImage).toBe("png");
+  });
+
+  it("normalizeCustomTheme accepts gif extension", () => {
+    const theme = normalizeCustomTheme({
+      bgImage: "GIF",
+      bgMode: "image",
+    });
+    expect(theme.bgImage).toBe("gif");
+    expect(theme.bgMode).toBe("image");
   });
 
   it("hexToRgb parses normalized hex", () => {
