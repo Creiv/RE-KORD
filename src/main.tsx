@@ -3,6 +3,9 @@ import { createRoot } from 'react-dom/client'
 import './index.css'
 import App from './App.tsx'
 import { setSelectedAccountId } from "./lib/api"
+import { migrateLegacyStorageKeys } from "./lib/migrateLegacyNaming"
+
+migrateLegacyStorageKeys()
 import { applyColorMixCompatDataset } from "./lib/cssColorMix"
 import { isStandaloneDisplayMode } from "./lib/routing"
 

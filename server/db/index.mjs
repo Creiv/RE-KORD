@@ -169,3 +169,9 @@ export function closeLibraryDb(libraryRoot) {
   }
   openDbs.delete(key)
 }
+
+export function closeAllLibraryDbs() {
+  for (const key of [...openDbs.keys()]) {
+    closeLibraryDb(key)
+  }
+}

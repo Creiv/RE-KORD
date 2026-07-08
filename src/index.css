@@ -1424,3 +1424,86 @@ kbd {
     transition-duration: 0.01ms !important;
   }
 }
+
+/* Stati condivisi: loading / error / offline */
+.rekord-state {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 1.4rem 1rem;
+  text-align: center;
+  color: var(--muted);
+}
+.rekord-state__title {
+  margin: 0;
+  font-weight: 600;
+  color: var(--text);
+}
+.rekord-state__message {
+  margin: 0;
+  font-size: 0.9rem;
+}
+.rekord-state__spinner {
+  width: 26px;
+  height: 26px;
+  border-radius: 50%;
+  border: 3px solid color-mix(in srgb, var(--accent, #3b82f6) 30%, transparent);
+  border-top-color: var(--accent, #3b82f6);
+  animation: rekord-state-spin 0.9s linear infinite;
+}
+@keyframes rekord-state-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+.rekord-state--error .rekord-state__title {
+  color: var(--danger, #ef4444);
+}
+.rekord-state__retry {
+  margin-top: 0.35rem;
+  padding: 0.4rem 1rem;
+  border-radius: 8px;
+  border: 1px solid color-mix(in srgb, var(--accent, #3b82f6) 45%, transparent);
+  background: transparent;
+  color: var(--text);
+  cursor: pointer;
+}
+.rekord-state__retry:hover {
+  background: color-mix(in srgb, var(--accent, #3b82f6) 14%, transparent);
+}
+
+.rekord-offline-banner {
+  position: fixed;
+  left: 50%;
+  bottom: calc(var(--dock-h, 84px) + 12px);
+  transform: translateX(-50%);
+  z-index: 90;
+  padding: 0.5rem 1rem;
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--danger, #ef4444) 22%, var(--section, #111827));
+  border: 1px solid color-mix(in srgb, var(--danger, #ef4444) 45%, transparent);
+  color: var(--text);
+  font-size: 0.85rem;
+  box-shadow: 0 6px 22px rgba(0, 0, 0, 0.35);
+}
+
+/* Diagnostica in Impostazioni */
+.settings-diagnostics {
+  display: grid;
+  grid-template-columns: max-content 1fr;
+  gap: 0.35rem 1rem;
+  margin-top: 0.8rem;
+  font-size: 0.9rem;
+}
+.settings-diagnostics dt {
+  color: var(--muted);
+}
+.settings-diagnostics dd {
+  margin: 0;
+  word-break: break-word;
+}
+.settings-diagnostics ul {
+  margin: 0;
+  padding-left: 1rem;
+}

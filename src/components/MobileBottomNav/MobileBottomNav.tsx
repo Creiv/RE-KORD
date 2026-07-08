@@ -26,8 +26,8 @@ const MORE_KEYS: { id: AppSection; labelKey: string }[] = [
 
 const PRIMARY: { id: AppSection; labelKey: string }[] = [
   { id: "dashboard", labelKey: "nav.dashboard" },
-  { id: "libreria", labelKey: "nav.library" },
   { id: "studio", labelKey: "nav.studio" },
+  { id: "libreria", labelKey: "nav.library" },
 ];
 
 interface MobileBottomNavProps {

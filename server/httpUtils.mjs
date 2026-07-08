@@ -19,6 +19,8 @@ export function apiSkipsLibraryGate(req) {
   const sub = (req.path || "").replace(/\/+$/, "") || "/";
   if (sub === "/config") return true;
   if (sub === "/health") return true;
+  if (sub === "/diagnostics") return true;
+  if (sub === "/jobs" || sub.startsWith("/jobs/")) return true;
   if (sub === "/network/public-ip") return true;
   if (
     (sub === "/backup/rekord-restore" || sub === "/backup/kord-restore") &&

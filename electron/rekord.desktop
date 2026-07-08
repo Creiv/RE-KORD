@@ -1,0 +1,9 @@
+[Desktop Entry]
+Type=Application
+Name=RE-KORD
+Comment=Local music hub for listening and library management
+Exec=RE-KORD %U
+Icon=RE-KORD
+Categories=Audio;Music;Player;
+Terminal=false
+StartupWMClass=RE-KORD

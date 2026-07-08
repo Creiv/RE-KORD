@@ -619,6 +619,8 @@ export const EN: Record<string, string> = {
     "4.3 highlights: Sonic Nebula library explorer, Smart Radio on the dashboard, and APK background recovery with automatic server reconnect.",
   "settings.colophonLine7":
     "4.4 highlights: instant covers with 128/256px thumbnails generated via ffmpeg, with automatic backfill for existing libraries.",
+  "settings.colophonLine8":
+    "5.0 highlights: structural refactor, CI and 367+ tests, graceful shutdown, diagnostics panel, offline PWA shell, optimistic user-state sync.",
   "settings.tutorialEyebrow": "Help",
   "settings.tutorialHeading": "Tutorial",
   "settings.tutorialLead":
@@ -1421,4 +1423,14 @@ export const EN: Record<string, string> = {
   "rhythm.errors.decode": "Could not decode this track.",
   "rhythm.errors.sparse": "Not enough rhythmic detail for a chart on this track.",
   "rhythm.errors.timeout": "Loading took too long. Try a shorter track or wait for the download to finish.",
+  "state.loading": "Loading…",
+  "state.error": "Something went wrong",
+  "state.retry": "Retry",
+  "state.offline": "You are offline. The shell is available; library sync requires network.",
+  "settings.diagnostics.title": "Diagnostics",
+  "settings.diagnostics.version": "Version",
+  "settings.diagnostics.uptime": "Uptime",
+  "settings.diagnostics.db": "Library database",
+  "settings.diagnostics.errors": "Recent errors",
+  "settings.diagnostics.refresh": "Refresh",
 };

@@ -139,6 +139,10 @@ export async function atomicWriteFileUtf8(targetPath, contents) {
   }
 }
 
+export async function drainWriteChains() {
+  await Promise.allSettled([...writeChains.values()])
+}
+
 export async function ensureRekordSchemaFile(libraryRoot) {
   await ensureKordDataDirOnDisk(libraryRoot)
   const p = rekordSchemaPath(libraryRoot)

@@ -11,38 +11,15 @@ import {
   useSyncExternalStore,
 } from "react";
 import { resolveTrackFromLibrary, trackPlaybackKey } from "../lib/libraryNav";
-import {
-  mediaSessionHasNext,
-  mediaSessionHasPrevious,
-  resolveNextIndex,
-  resolvePrevIndex,
-} from "../lib/playerQueueAdvance";
+import { resolveNextIndex, resolvePrevIndex } from "../lib/playerQueueAdvance";
 import { mediaUrlForTrack, fetchConfig } from "../lib/api";
 import { enrichTrack } from "../lib/enrichTrack";
 import { enrichedTracksNeedPlayerResync } from "../lib/libraryIndex";
 import { isTrackAlbumShuffleExcluded } from "../lib/randomExclusions";
-import {
-  type MediaSessionBridge,
-  registerMediaSessionActions,
-  resolveMediaSessionPauseAction,
-  syncMediaSessionState,
-  buildMediaSessionQueueEntries,
-} from "../lib/mediaSession";
-import {
-  buildCastTrackPayload,
-  castStreamUrl,
-  resolvePlaybackBaseOrigin,
-} from "../lib/castMedia";
-import {
-  canUseWebCastSender,
-  registerCastPlaybackCallbacks,
-  bootstrapWebCastPlayback,
-  syncWebCastNow,
-} from "../lib/castPlayback";
+import { syncWebCastNow } from "../lib/castPlayback";
 import { prefetchQueueCovers } from "../lib/coverPrefetch";
 import { isAutomotiveDisplayMode } from "../lib/routing";
 import {
-  fisherYatesShuffle,
   QUEUE_HISTORY_KEEP,
   QUEUE_REFILL_BATCH,
   QUEUE_REFILL_THRESHOLD,
@@ -54,157 +31,44 @@ import {
 import {
   resetPlayerProgressTime,
   setPlayerProgressTime,
-  readPlayerProgressTime,
 } from "./playerProgressStore";
 import { useUserState } from "./UserStateContext";
-import type {
-  AudioCrossfadeSec,
-  EnrichedTrack,
-  LibAlbum,
-  LibraryIndex,
-  RepeatMode,
-} from "../types";
+import type { EnrichedTrack, LibAlbum, LibraryIndex } from "../types";
+import {
+  audioReadyEnough,
+  createCrossfadeManager,
+  deckAudio,
+  setupDualDeckAudioGraph,
+  waitForAudioReady,
+} from "../player/audioEngine";
+import { applyMediaMute, setupCastPlayback } from "../player/castController";
+import {
+  buildMediaBridge,
+  createEmptyMediaBridge,
+  registerMediaSessionActions,
+  resolvePlayerMediaSessionPauseAction,
+  syncPlayerMediaSession,
+} from "../player/mediaSession";
+import {
+  capQueueAroundFocus,
+  computeIndexAfterMove,
+  computeIndexAfterRemove,
+  planPlayTrackQueue,
+  reorder,
+  restoreQueueFromShufflePaths,
+  shuffleTailFromCurrent,
+} from "../player/queueController";
+import { createSleepTimerController } from "../player/sleepTimer";
+import {
+  FIXED_VOLUME,
+  MAX_QUEUE_LENGTH,
+  type DeckIx,
+  type PlayerContextValue,
+  type TrackRowPlayerStore,
+} from "../player/types";
 
-const FIXED_VOLUME = 1;
-
-type DeckIx = 0 | 1;
-
-type Ctx = {
-  audioRef: React.RefObject<HTMLAudioElement | null>;
-  getAnalyser: () => AnalyserNode | null;
-  current: EnrichedTrack | null;
-  queue: EnrichedTrack[];
-  currentIndex: number;
-  isPlaying: boolean;
-  currentTime: number;
-  duration: number;
-  volume: number;
-  repeat: RepeatMode;
-  shuffle: boolean;
-  favorites: Set<string>;
-  play: () => void;
-  pause: () => void;
-  toggle: () => void;
-  setRepeat: (m: RepeatMode) => void;
-  setShuffle: (v: boolean) => void;
-  seek: (t: number) => void;
-  seekRatio: (r: number) => void;
-  playTrack: (
-    t: EnrichedTrack,
-    list?: EnrichedTrack[],
-    at?: number,
-    opts?: { preserveQueueOrder?: boolean; refillRemainder?: EnrichedTrack[] }
-  ) => void;
-  /** Sostituisce la coda senza interrompere il brano in corso. */
-  replaceQueueKeepingPlayback: (
-    fullQueue: EnrichedTrack[],
-    opts?: { refillRemainder?: EnrichedTrack[] }
-  ) => void;
-  playAlbum: (artist: string, al: LibAlbum) => void;
-  addToQueue: (t: EnrichedTrack | EnrichedTrack[]) => void;
-  removeFromQueue: (index: number) => void;
-  isTrackInQueue: (relPath: string) => boolean;
-  removeFromQueueByRelPath: (relPath: string) => void;
-  moveQueueItem: (from: number, to: number) => void;
-  clearQueue: () => void;
-  next: () => void;
-  prev: () => void;
-  toggleFavorite: (relPath: string) => void;
-  isFavorite: (relPath: string) => boolean;
-  resyncTracksFromIndex: (index: LibraryIndex) => void;
-  /** Aggiorna subito metadati OS (lock screen) e bridge nativo/Cast. */
-  syncMediaSessionNow: () => void;
-  sleepTimerEndsAt: number | null;
-  setSleepTimer: (minutes: number | null) => void;
-};
-
-const PlayerContext = createContext<Ctx | null>(null);
-
-/**
- * Store leggero per le righe delle liste brani: espone solo brano corrente e
- * appartenenza alla coda via useSyncExternalStore, così le righe non si
- * sottoscrivono all'intero PlayerContext (che cambia a ogni play/pause/seek).
- */
-type TrackRowPlayerStore = {
-  subscribe: (listener: () => void) => () => void;
-  getCurrentRelPath: () => string | null;
-  isInQueue: (relPath: string) => boolean;
-  addToQueue: (t: EnrichedTrack | EnrichedTrack[]) => void;
-  removeFromQueueByRelPath: (relPath: string) => void;
-};
-
+const PlayerContext = createContext<PlayerContextValue | null>(null);
 const TrackRowPlayerContext = createContext<TrackRowPlayerStore | null>(null);
-
-const MAX_QUEUE_LENGTH = 500;
-
-function capQueueAroundFocus<T>(items: T[], focusIndex: number) {
-  if (items.length <= MAX_QUEUE_LENGTH) {
-    const i = items.length
-      ? Math.max(0, Math.min(focusIndex, items.length - 1))
-      : 0;
-    return { items, index: i };
-  }
-  const safe = Math.max(0, Math.min(focusIndex, items.length - 1));
-  let start = Math.max(0, safe - Math.floor(MAX_QUEUE_LENGTH / 2));
-  if (start + MAX_QUEUE_LENGTH > items.length) {
-    start = items.length - MAX_QUEUE_LENGTH;
-  }
-  const sliced = items.slice(start, start + MAX_QUEUE_LENGTH);
-  return { items: sliced, index: safe - start };
-}
-
-function reorder<T>(items: T[], from: number, to: number) {
-  const next = [...items];
-  const [moved] = next.splice(from, 1);
-  next.splice(to, 0, moved as T);
-  return next;
-}
-
-function shuffleTailFromCurrent<T>(items: T[], currentIdx: number): T[] {
-  if (items.length <= 1) return items;
-  const i = Math.min(Math.max(0, currentIdx), items.length - 1);
-  const prefix = items.slice(0, i + 1);
-  const tail = items.slice(i + 1);
-  if (tail.length < 2) return [...prefix, ...tail];
-  return [...prefix, ...fisherYatesShuffle(tail)];
-}
-
-function deckAudio(
-  ix: DeckIx,
-  d0: HTMLAudioElement | null,
-  d1: HTMLAudioElement | null,
-): HTMLAudioElement | null {
-  return ix === 0 ? d0 : d1;
-}
-
-function audioReadyEnough(audio: HTMLAudioElement): boolean {
-  return audio.readyState >= HTMLMediaElement.HAVE_FUTURE_DATA;
-}
-
-function waitForAudioReady(audio: HTMLAudioElement): Promise<void> {
-  return new Promise((resolve, reject) => {
-    if (audioReadyEnough(audio)) {
-      resolve();
-      return;
-    }
-    const done = () => {
-      cleanup();
-      resolve();
-    };
-    const fail = () => {
-      cleanup();
-      reject(new Error("audio load failed"));
-    };
-    const cleanup = () => {
-      audio.removeEventListener("canplaythrough", done);
-      audio.removeEventListener("loadeddata", done);
-      audio.removeEventListener("error", fail);
-    };
-    audio.addEventListener("canplaythrough", done, { once: true });
-    audio.addEventListener("loadeddata", done, { once: true });
-    audio.addEventListener("error", fail, { once: true });
-  });
-}
 
 export function PlayerProvider({ children }: { children: React.ReactNode }) {
   const user = useUserState();
@@ -215,6 +79,7 @@ export function PlayerProvider({ children }: { children: React.ReactNode }) {
   const incrementTrackPlayCount = user.incrementTrackPlayCount;
   const enqueueQueuePatch = user.enqueueQueuePatch;
   const flushUserStateNow = user.flushUserStateNow;
+
   const audioRef = useRef<HTMLAudioElement | null>(null);
   const audioDeck0Ref = useRef<HTMLAudioElement | null>(null);
   const audioDeck1Ref = useRef<HTMLAudioElement | null>(null);
@@ -231,9 +96,7 @@ export function PlayerProvider({ children }: { children: React.ReactNode }) {
   const skipNextCurrentLoadRef = useRef(false);
   const trackLoadGenRef = useRef(0);
   const prefetchedRelPathRef = useRef<string | null>(null);
-  const audioCrossfadeSecRef = useRef<AudioCrossfadeSec>(
-    user.state.settings.audioCrossfadeSec,
-  );
+  const audioCrossfadeSecRef = useRef(user.state.settings.audioCrossfadeSec);
   const analyserRef = useRef<AnalyserNode | null>(null);
   const getAnalyser = useCallback(() => analyserRef.current, []);
 
@@ -246,20 +109,19 @@ export function PlayerProvider({ children }: { children: React.ReactNode }) {
     /* bound in effect */
   });
   const trackLoadingRef = useRef(false);
-  /** Brano effettivamente udibile — metadati lock screen fino al load completato. */
   const mediaSessionAudibleTrackRef = useRef<EnrichedTrack | null>(null);
   const pendingTrackTransitionRef = useRef(false);
   const transcodeAvailableRef = useRef(true);
-  const appConfigRef = useRef<{
-    lanAccessUrl: string | null;
-    remotePublicUrl: string | null;
-  }>({ lanAccessUrl: null, remotePublicUrl: null });
+  const appConfigRef = useRef({
+    lanAccessUrl: null as string | null,
+    remotePublicUrl: null as string | null,
+  });
   const outputGainRef = useRef<GainNode | null>(null);
   const sleepTimerTimeoutRef = useRef(0);
   const sleepFadeIntervalRef = useRef(0);
   const [sleepTimerEndsAt, setSleepTimerEndsAt] = useState<number | null>(null);
   const restoredRef = useRef(false);
-  const repeatRef = useRef<RepeatMode>("all");
+  const repeatRef = useRef<"off" | "all" | "one">("all");
   const lastTrackBoundaryAdvanceAtRef = useRef(0);
   const [current, setCurrent] = useState<EnrichedTrack | null>(null);
   const currentRelPath = current?.relPath;
@@ -269,66 +131,151 @@ export function PlayerProvider({ children }: { children: React.ReactNode }) {
   const [currentTime, setCurrentTime] = useState(0);
   const [duration, setDuration] = useState(0);
   const [volume] = useState(FIXED_VOLUME);
-  const [repeat, setRepeat] = useState<RepeatMode>("all");
+  const [repeat, setRepeat] = useState<"off" | "all" | "one">("all");
   const [shuffle, setShuffleState] = useState(false);
   const queueRef = useRef(queue);
   const indexRef = useRef(currentIndex);
   const shuffleRef = useRef(false);
   const preShuffleRelPathsRef = useRef<string[] | null>(null);
-  /** Resto pre-generato della coda (finestra scorrevole): travasato a lotti. */
   const queueRemainderRef = useRef<EnrichedTrack[] | null>(null);
-  /** relPath aggiunti a mano e non ancora riprodotti: blocco subito dopo il corrente. */
   const manualQueuedRef = useRef<Set<string>>(new Set());
-  const mediaBridgeRef = useRef<MediaSessionBridge>({
-    play: () => {
-      return;
-    },
-    pause: () => {
-      return;
-    },
-    mute: () => {
-      return;
-    },
-    unmute: () => {
-      return;
-    },
-    next: () => {
-      return;
-    },
-    prev: () => {
-      return;
-    },
-    playQueueIndex: (index: number) => {
-      void index;
-      return;
-    },
-    seek: (time: number) => {
-      void time;
-      return;
-    },
-    seekBy: (delta: number) => {
-      void delta;
-      return;
-    },
-    toggleShuffle: () => {
-      return;
-    },
-    cycleRepeat: () => {
-      return;
-    },
-    toggleFavoriteCurrent: () => {
-      return;
-    },
-    toggleExcludeCurrent: () => {
-      return;
-    },
-  });
+  const mediaBridgeRef = useRef(createEmptyMediaBridge());
   const currentRef = useRef<EnrichedTrack | null>(null);
   const lastMediaPosAtRef = useRef(0);
   const lastMediaRelPathRef = useRef<string | null>(null);
   const lastMediaSessionSyncAtRef = useRef(0);
   const halfListenCountedRef = useRef(false);
   const halfListenTrackRef = useRef<string | null>(null);
+
+  const crossfadeRefs = useMemo(
+    () => ({
+      audioDeck0Ref,
+      audioDeck1Ref,
+      gain0Ref,
+      gain1Ref,
+      audioCtxRef,
+      activeDeckRef,
+      queueRef,
+      currentRef,
+      crossfadeBusyRef,
+      crossfadeOutIxRef,
+      crossfadeInIxRef,
+      crossfadeNextIdxRef,
+      crossfadeGenRef,
+      crossfadeTimerRef,
+      prefetchedRelPathRef,
+      skipNextCurrentLoadRef,
+      audioCrossfadeSecRef,
+      repeatRef,
+      indexRef,
+      keepPlayingRef,
+      mediaSessionAudibleTrackRef,
+      pendingTrackTransitionRef,
+    }),
+    [],
+  );
+
+  const spliceRemainderBatch = useCallback((): EnrichedTrack[] => {
+    const remainder = queueRemainderRef.current;
+    if (!remainder?.length) return [];
+    const q = queueRef.current;
+    const space = MAX_QUEUE_LENGTH - q.length;
+    if (space <= 0) return [];
+    const batch = remainder.splice(
+      0,
+      Math.min(QUEUE_REFILL_BATCH, Math.max(0, space)),
+    );
+    if (!remainder.length) queueRemainderRef.current = null;
+    if (batch.length && shuffleRef.current && preShuffleRelPathsRef.current) {
+      preShuffleRelPathsRef.current = [
+        ...preShuffleRelPathsRef.current,
+        ...batch.map((t) => t.relPath),
+      ];
+    }
+    if (batch.length) {
+      const nextQ = [...q, ...batch];
+      queueRef.current = nextQ;
+      setQueue(nextQ);
+    }
+    return batch;
+  }, []);
+
+  const resolveNextPlaybackIndex = useCallback(
+    (baseIndex: number): number | null => {
+      const cur = baseIndex;
+      let len = queueRef.current.length;
+      const hasRemainder = !!queueRemainderRef.current?.length;
+      let nextIdx = resolveNextIndex(len, cur, repeatRef.current, hasRemainder);
+      if (nextIdx == null) return null;
+      if (nextIdx >= len && hasRemainder) {
+        spliceRemainderBatch();
+        len = queueRef.current.length;
+        if (nextIdx >= len) {
+          nextIdx = resolveNextIndex(
+            len,
+            cur,
+            repeatRef.current,
+            !!queueRemainderRef.current?.length,
+          );
+        }
+      }
+      return nextIdx;
+    },
+    [spliceRemainderBatch],
+  );
+
+  const crossfadeCallbacksRef = useRef({
+    setActiveDeckIx,
+    setCurrentIndex,
+    setCurrent,
+    setDuration,
+    setCurrentTime,
+    setPlayerProgressTime,
+    setIsPlaying,
+    pushRecent,
+    resolveNextPlaybackIndex,
+  });
+  crossfadeCallbacksRef.current = {
+    setActiveDeckIx,
+    setCurrentIndex,
+    setCurrent,
+    setDuration,
+    setCurrentTime,
+    setPlayerProgressTime,
+    setIsPlaying,
+    pushRecent,
+    resolveNextPlaybackIndex,
+  };
+
+  const crossfadeManager = useMemo(
+    () =>
+      createCrossfadeManager(crossfadeRefs, {
+        setActiveDeckIx: (ix) =>
+          crossfadeCallbacksRef.current.setActiveDeckIx(ix),
+        setCurrentIndex: (i) =>
+          crossfadeCallbacksRef.current.setCurrentIndex(i),
+        setCurrent: (t) => crossfadeCallbacksRef.current.setCurrent(t),
+        setDuration: (d) => crossfadeCallbacksRef.current.setDuration(d),
+        setCurrentTime: (t) =>
+          crossfadeCallbacksRef.current.setCurrentTime(t),
+        setPlayerProgressTime: (t, force) =>
+          crossfadeCallbacksRef.current.setPlayerProgressTime(t, force),
+        setIsPlaying: (v) =>
+          crossfadeCallbacksRef.current.setIsPlaying(v),
+        pushRecent: (t) => crossfadeCallbacksRef.current.pushRecent(t),
+        resolveNextPlaybackIndex: (i) =>
+          crossfadeCallbacksRef.current.resolveNextPlaybackIndex(i),
+      }),
+    [crossfadeRefs],
+  );
+
+  const {
+    snapGainsToSolo: snapGains,
+    finalizeCrossfade,
+    abortCrossfade,
+    prefetchNextOnInactiveDeck,
+    startCrossfade,
+  } = crossfadeManager;
 
   useEffect(() => {
     void fetchConfig()
@@ -386,283 +333,6 @@ export function PlayerProvider({ children }: { children: React.ReactNode }) {
     audioCrossfadeSecRef.current = user.state.settings.audioCrossfadeSec;
   }, [user.state.settings.audioCrossfadeSec]);
 
-  const snapGainsToSolo = useCallback((ix: DeckIx) => {
-    const ctx = audioCtxRef.current;
-    const g0 = gain0Ref.current;
-    const g1 = gain1Ref.current;
-    if (!ctx || !g0 || !g1) return;
-    const t = ctx.currentTime;
-    g0.gain.cancelScheduledValues(t);
-    g1.gain.cancelScheduledValues(t);
-    if (ix === 0) {
-      g0.gain.setValueAtTime(1, t);
-      g1.gain.setValueAtTime(0, t);
-    } else {
-      g0.gain.setValueAtTime(0, t);
-      g1.gain.setValueAtTime(1, t);
-    }
-  }, []);
-
-  const finalizeCrossfade = useCallback(() => {
-    if (!crossfadeBusyRef.current) return;
-    window.clearTimeout(crossfadeTimerRef.current);
-    crossfadeTimerRef.current = 0;
-
-    const outIx = crossfadeOutIxRef.current;
-    const inIx = crossfadeInIxRef.current;
-    const nextIdx = crossfadeNextIdxRef.current;
-    crossfadeOutIxRef.current = null;
-    crossfadeInIxRef.current = null;
-    crossfadeNextIdxRef.current = null;
-    crossfadeBusyRef.current = false;
-
-    if (outIx == null || inIx == null || nextIdx == null) {
-      snapGainsToSolo(activeDeckRef.current);
-      return;
-    }
-
-    const nextTr = queueRef.current[nextIdx];
-    if (!nextTr) {
-      snapGainsToSolo(activeDeckRef.current);
-      return;
-    }
-
-    const outEl = outIx === 0 ? audioDeck0Ref.current : audioDeck1Ref.current;
-    if (!outEl) {
-      snapGainsToSolo(activeDeckRef.current);
-      return;
-    }
-
-    outEl.pause();
-    outEl.removeAttribute("src");
-    void outEl.load();
-
-    const ctx = audioCtxRef.current;
-    const gOut = outIx === 0 ? gain0Ref.current : gain1Ref.current;
-    const gIn = inIx === 0 ? gain0Ref.current : gain1Ref.current;
-    if (ctx && gOut && gIn) {
-      const t = ctx.currentTime;
-      gOut.gain.cancelScheduledValues(t);
-      gIn.gain.cancelScheduledValues(t);
-    }
-    snapGainsToSolo(inIx);
-
-    const inEl = inIx === 0 ? audioDeck0Ref.current : audioDeck1Ref.current;
-    const relPathChanged = nextTr.relPath !== currentRef.current?.relPath;
-    prefetchedRelPathRef.current = trackPlaybackKey(nextTr);
-
-    activeDeckRef.current = inIx;
-    setActiveDeckIx(inIx);
-    // Salta il load solo se il relPath cambia (l'effect non riparte altrimenti
-    // e il flag resterebbe appeso fino al primo Next su brano diverso).
-    if (relPathChanged) {
-      skipNextCurrentLoadRef.current = true;
-    } else if (inEl) {
-      if (Number.isFinite(inEl.duration) && inEl.duration > 0) {
-        setDuration(inEl.duration);
-      }
-      const t = inEl.currentTime;
-      setCurrentTime(t);
-      setPlayerProgressTime(t, true);
-    }
-    setCurrentIndex(nextIdx);
-    setCurrent(nextTr);
-    keepPlayingRef.current = true;
-    mediaSessionAudibleTrackRef.current = nextTr;
-    pendingTrackTransitionRef.current = false;
-    pushRecent(nextTr);
-    if (inEl && !inEl.paused) setIsPlaying(true);
-  }, [pushRecent, snapGainsToSolo]);
-
-  const abortCrossfade = useCallback(() => {
-    const wasActive = crossfadeBusyRef.current;
-    const incomingIdx = crossfadeNextIdxRef.current;
-    const incomingDeckIx = crossfadeInIxRef.current;
-    const outgoingDeckIx = crossfadeOutIxRef.current;
-
-    crossfadeGenRef.current += 1;
-    window.clearTimeout(crossfadeTimerRef.current);
-    crossfadeTimerRef.current = 0;
-    crossfadeBusyRef.current = false;
-    crossfadeOutIxRef.current = null;
-    crossfadeInIxRef.current = null;
-    crossfadeNextIdxRef.current = null;
-
-    const ctx = audioCtxRef.current;
-    const g0 = gain0Ref.current;
-    const g1 = gain1Ref.current;
-    if (ctx && g0 && g1) {
-      const t = ctx.currentTime;
-      g0.gain.cancelScheduledValues(t);
-      g1.gain.cancelScheduledValues(t);
-    }
-    snapGainsToSolo(activeDeckRef.current);
-
-    const a = activeDeckRef.current;
-    const inIx: DeckIx = a === 0 ? 1 : 0;
-    const inactiveEl = inIx === 0 ? audioDeck0Ref.current : audioDeck1Ref.current;
-    if (inactiveEl) {
-      inactiveEl.pause();
-      inactiveEl.removeAttribute("src");
-      void inactiveEl.load();
-    }
-    prefetchedRelPathRef.current = null;
-
-    return { wasActive, incomingIdx, incomingDeckIx, outgoingDeckIx };
-  }, [snapGainsToSolo]);
-
-  const spliceRemainderBatch = useCallback((): EnrichedTrack[] => {
-    const remainder = queueRemainderRef.current;
-    if (!remainder?.length) return [];
-    const q = queueRef.current;
-    const space = MAX_QUEUE_LENGTH - q.length;
-    if (space <= 0) return [];
-    const batch = remainder.splice(
-      0,
-      Math.min(QUEUE_REFILL_BATCH, Math.max(0, space)),
-    );
-    if (!remainder.length) queueRemainderRef.current = null;
-    if (batch.length && shuffleRef.current && preShuffleRelPathsRef.current) {
-      preShuffleRelPathsRef.current = [
-        ...preShuffleRelPathsRef.current,
-        ...batch.map((t) => t.relPath),
-      ];
-    }
-    if (batch.length) {
-      const nextQ = [...q, ...batch];
-      queueRef.current = nextQ;
-      setQueue(nextQ);
-    }
-    return batch;
-  }, []);
-
-  const resolveNextPlaybackIndex = useCallback(
-    (baseIndex: number): number | null => {
-      const cur = baseIndex;
-      let len = queueRef.current.length;
-      const hasRemainder = !!queueRemainderRef.current?.length;
-      let nextIdx = resolveNextIndex(len, cur, repeatRef.current, hasRemainder);
-      if (nextIdx == null) return null;
-      if (nextIdx >= len && hasRemainder) {
-        spliceRemainderBatch();
-        len = queueRef.current.length;
-        if (nextIdx >= len) {
-          nextIdx = resolveNextIndex(
-            len,
-            cur,
-            repeatRef.current,
-            !!queueRemainderRef.current?.length,
-          );
-        }
-      }
-      return nextIdx;
-    },
-    [spliceRemainderBatch],
-  );
-
-  const prefetchNextOnInactiveDeck = useCallback(() => {
-    if (crossfadeBusyRef.current) return;
-    if (audioCrossfadeSecRef.current > 0) return;
-    if (repeatRef.current === "one") return;
-    const idx = indexRef.current;
-    const nextIdx = resolveNextPlaybackIndex(idx);
-    if (nextIdx == null) return;
-    const nextTr = queueRef.current[nextIdx];
-    if (!nextTr) return;
-    const outIx = activeDeckRef.current;
-    const inIx: DeckIx = outIx === 0 ? 1 : 0;
-    const outEl = deckAudio(outIx, audioDeck0Ref.current, audioDeck1Ref.current);
-    const inEl = deckAudio(inIx, audioDeck0Ref.current, audioDeck1Ref.current);
-    if (!outEl || !inEl) return;
-    const d = outEl.duration;
-    if (!Number.isFinite(d) || d <= 0) return;
-    const remain = d - outEl.currentTime;
-    if (remain > 12 || remain < 0.25) return;
-    const path = trackPlaybackKey(nextTr);
-    if (prefetchedRelPathRef.current === path && audioReadyEnough(inEl)) return;
-    prefetchedRelPathRef.current = path;
-    inEl.src = mediaUrlForTrack(nextTr);
-    inEl.load();
-  }, [resolveNextPlaybackIndex]);
-
-  const startCrossfade = useCallback(async () => {
-    const sec = audioCrossfadeSecRef.current;
-    if (!sec) return;
-    if (crossfadeBusyRef.current) return;
-    if (repeatRef.current === "one") return;
-
-    const idx = indexRef.current;
-    const nextIdx = resolveNextPlaybackIndex(idx);
-    if (nextIdx == null) return;
-
-    const outIx = activeDeckRef.current;
-    const inIx: DeckIx = outIx === 0 ? 1 : 0;
-    const outEl = outIx === 0 ? audioDeck0Ref.current : audioDeck1Ref.current;
-    const inEl = inIx === 0 ? audioDeck0Ref.current : audioDeck1Ref.current;
-    if (!outEl || !inEl) return;
-
-    const d = outEl.duration;
-    if (!Number.isFinite(d) || d <= 0) return;
-    const ct = outEl.currentTime;
-    const fadeWindow = Math.min(sec, d);
-    if (ct < d - fadeWindow - 0.02) return;
-    const remain = d - ct;
-    if (remain < 0.08) return;
-
-    const nextTr = queueRef.current[nextIdx];
-    if (!nextTr) return;
-
-    const ctx = audioCtxRef.current;
-    const gOut = outIx === 0 ? gain0Ref.current : gain1Ref.current;
-    const gIn = inIx === 0 ? gain0Ref.current : gain1Ref.current;
-    if (!ctx || !gOut || !gIn) return;
-
-    crossfadeBusyRef.current = true;
-    crossfadeOutIxRef.current = outIx;
-    crossfadeInIxRef.current = inIx;
-    crossfadeNextIdxRef.current = nextIdx;
-
-    inEl.src = mediaUrlForTrack(nextTr);
-    inEl.load();
-    prefetchedRelPathRef.current = trackPlaybackKey(nextTr);
-
-    try {
-      if (ctx.state === "suspended") await ctx.resume();
-      inEl.currentTime = 0;
-      await inEl.play();
-    } catch {
-      crossfadeBusyRef.current = false;
-      crossfadeOutIxRef.current = null;
-      crossfadeInIxRef.current = null;
-      crossfadeNextIdxRef.current = null;
-      snapGainsToSolo(outIx);
-      inEl.pause();
-      inEl.removeAttribute("src");
-      void inEl.load();
-      return;
-    }
-
-    if (!crossfadeBusyRef.current) return;
-
-    const fadeLen = Math.min(sec, Math.max(remain, 0.05));
-    const token = crossfadeGenRef.current;
-    const now = ctx.currentTime;
-    const vOut = gOut.gain.value;
-    const vIn = gIn.gain.value;
-    gOut.gain.cancelScheduledValues(now);
-    gIn.gain.cancelScheduledValues(now);
-    gOut.gain.setValueAtTime(vOut, now);
-    gIn.gain.setValueAtTime(vIn, now);
-    gOut.gain.linearRampToValueAtTime(0, now + fadeLen);
-    gIn.gain.linearRampToValueAtTime(1, now + fadeLen);
-
-    crossfadeTimerRef.current = window.setTimeout(() => {
-      if (token !== crossfadeGenRef.current) return;
-      finalizeCrossfade();
-    }, fadeLen * 1000 + 40);
-  }, [finalizeCrossfade, resolveNextPlaybackIndex, snapGainsToSolo]);
-
-  /** Fine brano: su mobile con schermo spento `ended` / `timeupdate` possono arrivare tardi o mancare. */
   const advanceAfterTrackCompleted = useCallback(() => {
     const now = performance.now();
     if (now - lastTrackBoundaryAdvanceAtRef.current < 450) return;
@@ -693,8 +363,6 @@ export function PlayerProvider({ children }: { children: React.ReactNode }) {
       return;
     }
     const nextTr = queueRef.current[nextIndex];
-    // Repeat all su coda singola (o wrap allo stesso brano): relPath invariato,
-    // l'effect di load non riparte — riavvia il deck attivo come per repeat one.
     if (nextTr?.relPath === cur.relPath) {
       audio.currentTime = 0;
       setCurrentTime(0);
@@ -713,49 +381,14 @@ export function PlayerProvider({ children }: { children: React.ReactNode }) {
     const a1 = audioDeck1Ref.current;
     if (!a0 || !a1 || audioCtxRef.current) return;
 
-    let ctx: AudioContext;
-    try {
-      ctx = new AudioContext();
-    } catch {
-      return;
-    }
+    const graph = setupDualDeckAudioGraph(a0, a1);
+    if (!graph) return;
 
-    let src0: MediaElementAudioSourceNode;
-    let src1: MediaElementAudioSourceNode;
-    try {
-      src0 = ctx.createMediaElementSource(a0);
-      src1 = ctx.createMediaElementSource(a1);
-    } catch {
-      void ctx.close();
-      return;
-    }
-
-    const g0 = ctx.createGain();
-    const g1 = ctx.createGain();
-    g0.gain.value = 1;
-    g1.gain.value = 0;
-    gain0Ref.current = g0;
-    gain1Ref.current = g1;
-
-    const analyser = ctx.createAnalyser();
-    analyser.fftSize = 1024;
-    analyser.smoothingTimeConstant = 0.62;
-    analyser.minDecibels = -88;
-    analyser.maxDecibels = -28;
-
-    const outputGain = ctx.createGain();
-    outputGain.gain.value = 1;
-    outputGainRef.current = outputGain;
-
-    src0.connect(g0);
-    src1.connect(g1);
-    g0.connect(outputGain);
-    g1.connect(outputGain);
-    outputGain.connect(analyser);
-    analyser.connect(ctx.destination);
-
-    audioCtxRef.current = ctx;
-    analyserRef.current = analyser;
+    gain0Ref.current = graph.gain0;
+    gain1Ref.current = graph.gain1;
+    outputGainRef.current = graph.outputGain;
+    audioCtxRef.current = graph.ctx;
+    analyserRef.current = graph.analyser;
 
     return () => {
       analyserRef.current = null;
@@ -763,7 +396,7 @@ export function PlayerProvider({ children }: { children: React.ReactNode }) {
       gain1Ref.current = null;
       outputGainRef.current = null;
       audioCtxRef.current = null;
-      void ctx.close();
+      void graph.ctx.close();
     };
   }, []);
 
@@ -797,12 +430,6 @@ export function PlayerProvider({ children }: { children: React.ReactNode }) {
     enqueueQueuePatch({ tracks: queue, currentIndex });
   }, [currentIndex, enqueueQueuePatch, queue, restoreSession, userReady]);
 
-  /**
-   * Finestra scorrevole: quando davanti al corrente restano pochi brani
-   * travasa un lotto dal remainder pre-generato; pota la storia oltre
-   * QUEUE_HISTORY_KEEP (mai durante un crossfade: gli indici dei deck
-   * diventerebbero stantii; mai in repeat "all": il giro deve restare intero).
-   */
   useEffect(() => {
     if (!queue.length) return;
     const remainder = queueRemainderRef.current;
@@ -820,7 +447,7 @@ export function PlayerProvider({ children }: { children: React.ReactNode }) {
       const space = MAX_QUEUE_LENGTH - (queue.length - drop);
       batch = remainder.splice(
         0,
-        Math.min(QUEUE_REFILL_BATCH, Math.max(0, space))
+        Math.min(QUEUE_REFILL_BATCH, Math.max(0, space)),
       );
       if (!remainder.length) queueRemainderRef.current = null;
     }
@@ -863,7 +490,7 @@ export function PlayerProvider({ children }: { children: React.ReactNode }) {
       void abortCrossfade();
       activeDeckRef.current = 0;
       window.setTimeout(() => setActiveDeckIx(0), 0);
-      snapGainsToSolo(0);
+      snapGains(0);
       const a0 = audioDeck0Ref.current;
       const a1 = audioDeck1Ref.current;
       a0?.pause();
@@ -895,7 +522,6 @@ export function PlayerProvider({ children }: { children: React.ReactNode }) {
         setPlayerProgressTime(t, true);
         return;
       }
-      // Flag obsoleto o deck non allineato: load completo sotto.
     }
 
     void abortCrossfade();
@@ -934,7 +560,7 @@ export function PlayerProvider({ children }: { children: React.ReactNode }) {
         }
         if (gen !== trackLoadGenRef.current) return;
 
-        snapGainsToSolo(inIx);
+        snapGains(inIx);
         activeDeckRef.current = inIx;
         setActiveDeckIx(inIx);
 
@@ -981,10 +607,8 @@ export function PlayerProvider({ children }: { children: React.ReactNode }) {
     return () => {
       trackLoadGenRef.current += 1;
     };
-    // Il caricamento audio deve ripartire solo al cambio di brano (relPath),
-    // non a ogni cambio di identità dell'oggetto `current` (es. resync indice).
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [abortCrossfade, currentRelPath, pushRecent, snapGainsToSolo]);
+  }, [abortCrossfade, currentRelPath, pushRecent, snapGains]);
 
   useEffect(() => {
     halfListenTrackRef.current = currentRelPath ?? null;
@@ -1160,7 +784,6 @@ export function PlayerProvider({ children }: { children: React.ReactNode }) {
     };
   }, [advanceAfterTrackCompleted, finalizeCrossfade]);
 
-  /** Prefetch head HTTP dei prossimi 2 brani in coda (max 256KB ciascuno). */
   useEffect(() => {
     if (currentRelPath === undefined || queue.length === 0) return;
     const HEAD_BYTES = 262_144;
@@ -1186,120 +809,49 @@ export function PlayerProvider({ children }: { children: React.ReactNode }) {
   }, [advanceAfterTrackCompleted]);
 
   const syncMediaSessionNow = useCallback(() => {
-    const uiTrack = currentRef.current;
-    if (!uiTrack) {
-      mediaSessionAudibleTrackRef.current = null;
-      syncMediaSessionState({ track: null, playbackState: "none" });
-      return;
-    }
-    const audio = audioRef.current;
-    const loading = trackLoadingRef.current;
-    const transitioning =
-      pendingTrackTransitionRef.current ||
-      loading ||
-      crossfadeBusyRef.current;
-    const audible = mediaSessionAudibleTrackRef.current;
-    const skipMetadata = transitioning && !!audible;
-    const sessionTrack = skipMetadata && audible ? audible : uiTrack;
-
-    const rawDur = audio?.duration;
-    const dur =
-      Number.isFinite(duration) && duration > 0
-        ? duration
-        : rawDur && Number.isFinite(rawDur) && rawDur > 0
-          ? rawDur
-          : 0;
-    const pos = audio ? readPlayerProgressTime() : 0;
-    const baseOrigin = resolvePlaybackBaseOrigin(appConfigRef.current);
-    const q = queueRef.current;
-    let qIndex = indexRef.current;
-    if (skipMetadata && audible) {
-      const audibleIdx = q.findIndex((t) => t.relPath === audible.relPath);
-      if (audibleIdx >= 0) qIndex = audibleIdx;
-    }
-    const castOpts = {
-      forCast: true as const,
-      transcodeAvailable: transcodeAvailableRef.current,
-    };
-    const { entries: queueEntries, activeIndex } = buildMediaSessionQueueEntries(
-      q,
-      qIndex,
-      baseOrigin,
-      castOpts,
-    );
-    syncMediaSessionState({
-      track: sessionTrack,
-      playbackState: isPlayingRef.current ? "playing" : "paused",
-      duration: dur > 0 ? dur : undefined,
-      position: dur > 0 ? pos : undefined,
-      playbackRate: audio?.playbackRate || 1,
-      skipPosition: transitioning,
-      skipMetadata,
-      mediaUri: baseOrigin
-        ? castStreamUrl(
-            sessionTrack.filePath || sessionTrack.relPath,
-            baseOrigin,
-            castOpts,
-          )
-        : undefined,
-      mediaId: sessionTrack.relPath,
-      queue: queueEntries,
-      queueIndex: activeIndex,
-      hasPrevious: mediaSessionHasPrevious(
-        qIndex,
-        q.length,
-        repeatRef.current,
-      ),
-      hasNext: mediaSessionHasNext(
-        qIndex,
-        q.length,
-        repeatRef.current,
-        !!queueRemainderRef.current?.length,
-      ),
+    syncPlayerMediaSession({
+      currentRef,
+      audioRef,
+      queueRef,
+      indexRef,
+      repeatRef,
+      queueRemainderRef,
+      isPlayingRef,
+      trackLoadingRef,
+      pendingTrackTransitionRef,
+      crossfadeBusyRef,
+      mediaSessionAudibleTrackRef,
+      appConfigRef,
+      transcodeAvailableRef,
+      duration,
     });
-    if (!transitioning) {
-      mediaSessionAudibleTrackRef.current = uiTrack;
-    }
   }, [duration]);
 
   useEffect(() => {
     syncMediaSessionNowRef.current = syncMediaSessionNow;
   }, [syncMediaSessionNow]);
 
-  const applyMediaMute = useCallback(
+  const applyMediaMuteCb = useCallback(
     (muted: boolean) => {
-      mediaMutedRef.current = muted;
-      const a0 = audioDeck0Ref.current;
-      const a1 = audioDeck1Ref.current;
-      if (a0) a0.muted = muted;
-      if (a1) a1.muted = muted;
-      syncMediaSessionNow();
+      applyMediaMute(
+        muted,
+        mediaMutedRef,
+        audioDeck0Ref.current,
+        audioDeck1Ref.current,
+        syncMediaSessionNow,
+      );
     },
     [syncMediaSessionNow],
   );
 
   useEffect(() => {
-    if (!canUseWebCastSender()) return;
-    void bootstrapWebCastPlayback();
-    return registerCastPlaybackCallbacks({
-      onSessionStart: () => applyMediaMute(true),
-      onSessionEnd: () => applyMediaMute(false),
-      onRequestSync: () => {
-        const track = currentRef.current;
-        if (!track) return null;
-        const base = resolvePlaybackBaseOrigin(appConfigRef.current);
-        return buildCastTrackPayload(
-          track,
-          base,
-          readPlayerProgressTime(),
-          {
-            forCast: true,
-            transcodeAvailable: transcodeAvailableRef.current,
-          },
-        );
-      },
+    return setupCastPlayback({
+      currentRef,
+      appConfigRef,
+      transcodeAvailableRef,
+      applyMediaMute: applyMediaMuteCb,
     });
-  }, [applyMediaMute]);
+  }, [applyMediaMuteCb]);
 
   useEffect(() => {
     syncWebCastNow();
@@ -1308,7 +860,7 @@ export function PlayerProvider({ children }: { children: React.ReactNode }) {
 
   const play = useCallback(async () => {
     void abortCrossfade();
-    if (mediaMutedRef.current) applyMediaMute(false);
+    if (mediaMutedRef.current) applyMediaMuteCb(false);
     const ix = activeDeckRef.current;
     const audio = ix === 0 ? audioDeck0Ref.current : audioDeck1Ref.current;
     if (!audio) return;
@@ -1326,7 +878,7 @@ export function PlayerProvider({ children }: { children: React.ReactNode }) {
       setIsPlaying(false);
       syncMediaSessionNow();
     }
-  }, [abortCrossfade, applyMediaMute, pushRecent, syncMediaSessionNow]);
+  }, [abortCrossfade, applyMediaMuteCb, pushRecent, syncMediaSessionNow]);
 
   const pause = useCallback(() => {
     appInitiatedPauseRef.current = true;
@@ -1339,89 +891,65 @@ export function PlayerProvider({ children }: { children: React.ReactNode }) {
     syncMediaSessionNow();
   }, [abortCrossfade, syncMediaSessionNow]);
 
-  const clearSleepTimer = useCallback(() => {
-    if (sleepTimerTimeoutRef.current) {
-      window.clearTimeout(sleepTimerTimeoutRef.current);
-      sleepTimerTimeoutRef.current = 0;
-    }
-    if (sleepFadeIntervalRef.current) {
-      window.clearInterval(sleepFadeIntervalRef.current);
-      window.clearTimeout(sleepFadeIntervalRef.current);
-      sleepFadeIntervalRef.current = 0;
-    }
-    const out = outputGainRef.current;
-    if (out) out.gain.value = 1;
-    setSleepTimerEndsAt(null);
-  }, []);
-
-  const setSleepTimer = useCallback(
-    (minutes: number | null) => {
-      clearSleepTimer();
-      if (minutes == null || minutes <= 0) return;
-      const endsAt = Date.now() + minutes * 60_000;
-      setSleepTimerEndsAt(endsAt);
-      const fadeMs = 30_000;
-      const delay = Math.max(0, endsAt - Date.now() - fadeMs);
-      sleepTimerTimeoutRef.current = window.setTimeout(() => {
-        const out = outputGainRef.current;
-        const fadeStart = Date.now();
-        sleepFadeIntervalRef.current = window.setInterval(() => {
-          const elapsed = Date.now() - fadeStart;
-          const ratio = Math.max(0, 1 - elapsed / fadeMs);
-          if (out) out.gain.value = ratio;
-          if (elapsed >= fadeMs) {
-            clearSleepTimer();
-            pause();
-          }
-        }, 180);
-      }, delay);
-    },
-    [clearSleepTimer, pause],
+  const sleepTimerController = useMemo(
+    () =>
+      createSleepTimerController({
+        sleepTimerTimeoutRef,
+        sleepFadeIntervalRef,
+        outputGainRef,
+        setSleepTimerEndsAt,
+        pause,
+      }),
+    [pause],
   );
 
+  const { set: setSleepTimer } = sleepTimerController;
+
   const pauseForMediaSession = useCallback(() => {
-    const action = resolveMediaSessionPauseAction({
-      isAutomotive: isAutomotiveDisplayMode(),
-      isPlaying: isPlayingRef.current,
-      isMuted: mediaMutedRef.current,
-    });
+    const action = resolvePlayerMediaSessionPauseAction(
+      isPlayingRef.current,
+      mediaMutedRef.current,
+    );
     if (action === "mute") {
-      applyMediaMute(true);
+      applyMediaMuteCb(true);
       return;
     }
     pause();
-  }, [applyMediaMute, pause]);
+  }, [applyMediaMuteCb, pause]);
 
   const playForMediaSession = useCallback(() => {
     keepPlayingRef.current = true;
-    if (mediaMutedRef.current) applyMediaMute(false);
+    if (mediaMutedRef.current) applyMediaMuteCb(false);
     const ctx = audioCtxRef.current;
     if (ctx?.state === "suspended") void ctx.resume();
     void play();
-  }, [applyMediaMute, play]);
+  }, [applyMediaMuteCb, play]);
 
   const toggle = useCallback(() => {
     if (isPlaying) pause();
     else void play();
   }, [isPlaying, pause, play]);
 
-  const seek = useCallback((time: number) => {
-    void abortCrossfade();
-    const t = Math.max(0, time);
-    const audio = audioRef.current;
-    if (!audio) return;
-    audio.currentTime = t;
-    setCurrentTime(t);
-    setPlayerProgressTime(t, true);
-    syncMediaSessionNow();
-  }, [abortCrossfade, syncMediaSessionNow]);
+  const seek = useCallback(
+    (time: number) => {
+      void abortCrossfade();
+      const t = Math.max(0, time);
+      const audio = audioRef.current;
+      if (!audio) return;
+      audio.currentTime = t;
+      setCurrentTime(t);
+      setPlayerProgressTime(t, true);
+      syncMediaSessionNow();
+    },
+    [abortCrossfade, syncMediaSessionNow],
+  );
 
   const seekRatio = useCallback(
     (ratio: number) => {
       if (!duration) return;
       seek(ratio * duration);
     },
-    [duration, seek]
+    [duration, seek],
   );
 
   const playTrack = useCallback(
@@ -1429,55 +957,44 @@ export function PlayerProvider({ children }: { children: React.ReactNode }) {
       track: EnrichedTrack,
       list?: EnrichedTrack[],
       at?: number,
-      opts?: { preserveQueueOrder?: boolean; refillRemainder?: EnrichedTrack[] }
+      opts?: { preserveQueueOrder?: boolean; refillRemainder?: EnrichedTrack[] },
     ) => {
-      const fullQueue = list?.length ? [...list] : [track];
-      const nextIndex =
-        at ?? fullQueue.findIndex((item) => item.relPath === track.relPath);
-      const preCapIndex = nextIndex >= 0 ? nextIndex : 0;
-      const { items: nextQueue, index: safeIndex } = capQueueAroundFocus(
-        fullQueue,
-        preCapIndex,
+      const plan = planPlayTrackQueue(
+        track,
+        list,
+        at,
+        shuffle,
+        queueRef.current,
+        opts,
       );
-      const newSig = nextQueue.map((t) => t.relPath).join("\0");
-      const oldSig = queueRef.current.map((t) => t.relPath).join("\0");
-      const queueReplaced = newSig !== oldSig;
       if (opts?.refillRemainder !== undefined) {
         queueRemainderRef.current = opts.refillRemainder.length
           ? [...opts.refillRemainder]
           : null;
-      } else if (queueReplaced) {
-        // Coda sostituita senza remainder esplicito: il vecchio resto non
-        // appartiene più a questa coda. Un salto dentro la stessa coda
-        // (queueReplaced false) invece lo conserva.
+      } else if (plan.queueReplaced) {
         queueRemainderRef.current = null;
       }
-      if (queueReplaced) manualQueuedRef.current.clear();
-      const shouldShuffle =
-        nextQueue.length > 1 &&
-        shuffle &&
-        queueReplaced &&
-        !opts?.preserveQueueOrder;
-      if (shouldShuffle) {
-        preShuffleRelPathsRef.current = nextQueue.map((t) => t.relPath);
-        const shuffled = shuffleTailFromCurrent(nextQueue, safeIndex);
+      if (plan.queueReplaced) manualQueuedRef.current.clear();
+      if (plan.shouldShuffle && plan.shuffledQueue) {
+        preShuffleRelPathsRef.current = plan.nextQueue.map((t) => t.relPath);
         pendingTrackTransitionRef.current = true;
-        setQueue(shuffled);
-        setCurrentIndex(safeIndex);
-        setCurrent(shuffled[safeIndex] || null);
+        setQueue(plan.shuffledQueue);
+        setCurrentIndex(plan.safeIndex);
+        setCurrent(plan.shuffledQueue[plan.safeIndex] || null);
       } else {
-        if (nextQueue[safeIndex]?.relPath !== currentRef.current?.relPath) {
+        if (
+          plan.nextQueue[plan.safeIndex]?.relPath !==
+          currentRef.current?.relPath
+        ) {
           pendingTrackTransitionRef.current = true;
         }
-        setQueue(nextQueue);
-        setCurrentIndex(safeIndex);
-        setCurrent(nextQueue[safeIndex] || null);
-        if (queueReplaced) {
-          if (shuffle) {
-            preShuffleRelPathsRef.current = nextQueue.map((t) => t.relPath);
-          } else {
-            preShuffleRelPathsRef.current = null;
-          }
+        setQueue(plan.nextQueue);
+        setCurrentIndex(plan.safeIndex);
+        setCurrent(plan.nextQueue[plan.safeIndex] || null);
+        if (plan.queueReplaced) {
+          preShuffleRelPathsRef.current = shuffle
+            ? plan.nextQueue.map((t) => t.relPath)
+            : null;
         }
       }
       keepPlayingRef.current = true;
@@ -1518,13 +1035,13 @@ export function PlayerProvider({ children }: { children: React.ReactNode }) {
 
   const playAlbum = useCallback(
     (artist: string, album: LibAlbum) => {
-      const tracks = album.tracks.map((track) =>
-        enrichTrack(artist, album.name, track, album.meta)
+      const tracks = album.tracks.map((t) =>
+        enrichTrack(artist, album.name, t, album.meta),
       );
       if (!tracks.length) return;
       playTrack(tracks[0], tracks, 0);
     },
-    [playTrack]
+    [playTrack],
   );
 
   const addToQueue = useCallback(
@@ -1572,20 +1089,13 @@ export function PlayerProvider({ children }: { children: React.ReactNode }) {
     if (removedPath) manualQueuedRef.current.delete(removedPath);
     const nextQueue = snapshot.filter((_, itemIndex) => itemIndex !== index);
     setQueue(nextQueue);
-    if (
-      shuffleRef.current &&
-      preShuffleRelPathsRef.current &&
-      removedPath
-    ) {
+    if (shuffleRef.current && preShuffleRelPathsRef.current && removedPath) {
       preShuffleRelPathsRef.current = preShuffleRelPathsRef.current.filter(
-        (p) => p !== removedPath
+        (p) => p !== removedPath,
       );
     }
-    if (index < currentAt) {
-      setCurrentIndex(currentAt - 1);
-      return;
-    }
-    if (index === currentAt) {
+    const idxChange = computeIndexAfterRemove(index, currentAt);
+    if (idxChange === "current_removed") {
       if (!nextQueue.length) {
         queueRemainderRef.current = null;
         setCurrent(null);
@@ -1599,7 +1109,9 @@ export function PlayerProvider({ children }: { children: React.ReactNode }) {
       const nextIndex = Math.min(index, nextQueue.length - 1);
       setCurrent(nextQueue[nextIndex] || null);
       setCurrentIndex(nextIndex);
+      return;
     }
+    if (typeof idxChange === "number") setCurrentIndex(idxChange);
   }, []);
 
   const isTrackInQueue = useCallback(
@@ -1629,9 +1141,7 @@ export function PlayerProvider({ children }: { children: React.ReactNode }) {
     const nextQueue = reorder(queueRef.current, from, to);
     const active = indexRef.current;
     setQueue(nextQueue);
-    if (active === from) setCurrentIndex(to);
-    else if (from < active && to >= active) setCurrentIndex(active - 1);
-    else if (from > active && to <= active) setCurrentIndex(active + 1);
+    setCurrentIndex(computeIndexAfterMove(from, to, active));
   }, []);
 
   const clearQueue = useCallback(() => {
@@ -1669,8 +1179,6 @@ export function PlayerProvider({ children }: { children: React.ReactNode }) {
   }, []);
 
   const next = useCallback(() => {
-    // Crossfade in corso: committa al brano in ingresso invece di abortire
-    // e saltare oltre (UI avanti, audio sul deck sbagliato).
     if (crossfadeBusyRef.current) {
       finalizeCrossfade();
       syncMediaSessionNowRef.current();
@@ -1712,25 +1220,12 @@ export function PlayerProvider({ children }: { children: React.ReactNode }) {
       const q = queueRef.current;
       const idx = indexRef.current;
       const cur = q[idx];
-      const byPath = new Map(q.map((t) => [t.relPath, t]));
-      const seen = new Set<string>();
-      const restored: EnrichedTrack[] = [];
-      for (const p of paths) {
-        const t = byPath.get(p);
-        if (t && !seen.has(p)) {
-          restored.push(t);
-          seen.add(p);
-        }
-      }
-      for (const t of q) {
-        if (!seen.has(t.relPath)) restored.push(t);
-      }
-      if (!restored.length) return;
-      const newIdx = cur
-        ? restored.findIndex((t) => t.relPath === cur.relPath)
-        : 0;
-      const j = newIdx >= 0 ? newIdx : 0;
-      const { items, index: i } = capQueueAroundFocus(restored, j);
+      const { items, index: i } = restoreQueueFromShufflePaths(
+        q,
+        paths,
+        cur?.relPath ?? null,
+      );
+      if (!items.length) return;
       setQueue(items);
       setCurrentIndex(i);
       setCurrent(items[i] || null);
@@ -1747,16 +1242,19 @@ export function PlayerProvider({ children }: { children: React.ReactNode }) {
     setCurrent(shuffled[idx] || null);
   }, []);
 
-  const playQueueIndex = useCallback((index: number) => {
-    const q = queueRef.current;
-    if (index < 0 || index >= q.length) return;
-    void abortCrossfade();
-    setCurrentIndex(index);
-    pendingTrackTransitionRef.current = true;
-    setCurrent(q[index] || null);
-    keepPlayingRef.current = true;
-    syncMediaSessionNowRef.current();
-  }, [abortCrossfade]);
+  const playQueueIndex = useCallback(
+    (index: number) => {
+      const q = queueRef.current;
+      if (index < 0 || index >= q.length) return;
+      void abortCrossfade();
+      setCurrentIndex(index);
+      pendingTrackTransitionRef.current = true;
+      setCurrent(q[index] || null);
+      keepPlayingRef.current = true;
+      syncMediaSessionNowRef.current();
+    },
+    [abortCrossfade],
+  );
 
   const prev = useCallback(() => {
     if (!queue.length) return;
@@ -1780,55 +1278,28 @@ export function PlayerProvider({ children }: { children: React.ReactNode }) {
   const { toggleFavorite, toggleShuffleExcludedTrack } = user;
   const shuffleExcludedAlbumIds = user.state.shuffleExcludedAlbumIds;
   useEffect(() => {
-    mediaBridgeRef.current = {
-      play: () => {
-        void playForMediaSession();
-      },
-      pause: pauseForMediaSession,
-      mute: () => {
-        applyMediaMute(true);
-      },
-      unmute: () => {
-        applyMediaMute(false);
-        if (keepPlayingRef.current && audioRef.current?.paused) {
-          void play();
-        }
-      },
+    mediaBridgeRef.current = buildMediaBridge({
+      playForMediaSession,
+      pauseForMediaSession,
+      applyMediaMute: applyMediaMuteCb,
+      keepPlayingRef,
+      audioRef,
+      play,
       next,
       prev,
       playQueueIndex,
-      seek: (t) => {
-        seek(t);
-      },
-      seekBy: (d) => {
-        const a = audioRef.current;
-        if (!a) return;
-        const nextT = a.currentTime + d;
-        seek(Math.max(0, nextT));
-      },
-      toggleShuffle: () => {
-        setShuffle(!shuffleRef.current);
-      },
-      cycleRepeat: () => {
-        setRepeat((r) =>
-          r === "off" ? "all" : r === "all" ? "one" : "off",
-        );
-      },
-      toggleFavoriteCurrent: () => {
-        const cur = currentRef.current;
-        if (!cur) return;
-        toggleFavorite(cur.relPath);
-      },
-      toggleExcludeCurrent: () => {
-        const cur = currentRef.current;
-        if (!cur) return;
-        const exAlbums = new Set(shuffleExcludedAlbumIds);
-        if (isTrackAlbumShuffleExcluded(cur, exAlbums)) return;
-        toggleShuffleExcludedTrack(cur.relPath);
-      },
-    };
+      seek,
+      shuffleRef,
+      setShuffle,
+      setRepeat,
+      currentRef,
+      toggleFavorite,
+      toggleShuffleExcludedTrack,
+      shuffleExcludedAlbumIds,
+      isTrackAlbumShuffleExcluded,
+    });
   }, [
-    applyMediaMute,
+    applyMediaMuteCb,
     play,
     playForMediaSession,
     pauseForMediaSession,
@@ -1899,10 +1370,10 @@ export function PlayerProvider({ children }: { children: React.ReactNode }) {
       removeFromQueueByRelPath: (relPath) =>
         trackRowActionsRef.current.removeFromQueueByRelPath(relPath),
     }),
-    []
+    [],
   );
 
-  const value = useMemo<Ctx>(
+  const value = useMemo<PlayerContextValue>(
     () => ({
       audioRef,
       getAnalyser,
@@ -1978,7 +1449,7 @@ export function PlayerProvider({ children }: { children: React.ReactNode }) {
       volume,
       sleepTimerEndsAt,
       setSleepTimer,
-    ]
+    ],
   );
 
   return (
@@ -1998,20 +1469,16 @@ export function usePlayer() {
   return ctx;
 }
 
-/**
- * Sottoscrizione granulare per una riga brano: ri-renderizza solo quando
- * cambia "è il brano corrente" o "è in coda" per questo relPath.
- */
 export function useTrackRowPlayer(relPath: string) {
   const store = useContext(TrackRowPlayerContext);
   if (!store) throw new Error("useTrackRowPlayer");
   const isCurrent = useSyncExternalStore(
     store.subscribe,
-    () => store.getCurrentRelPath() === relPath
+    () => store.getCurrentRelPath() === relPath,
   );
   const inQueue = useSyncExternalStore(
     store.subscribe,
-    () => store.isInQueue(relPath)
+    () => store.isInQueue(relPath),
   );
   return {
     isCurrent,

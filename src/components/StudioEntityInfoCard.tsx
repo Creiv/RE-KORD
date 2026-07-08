@@ -117,7 +117,7 @@ export function StudioEntityInfoCard({ artists }: { artists: LibArtist[] }) {
         );
         return [
           tg.key,
-          bundle.items.filter((it) => it.lang === locale),
+          bundle.items.filter((it: EntityInfoItem) => it.lang === locale),
         ] as const;
       })
     ).then((pairs) => {
@@ -251,7 +251,7 @@ export function StudioEntityInfoCard({ artists }: { artists: LibArtist[] }) {
     if (!bundle) return;
     setSavedByKey((prev) => ({
       ...prev,
-      [row.key]: bundle.items.filter((it) => it.lang === locale),
+      [row.key]: bundle.items.filter((it: EntityInfoItem) => it.lang === locale),
     }));
   };
 
@@ -285,7 +285,7 @@ export function StudioEntityInfoCard({ artists }: { artists: LibArtist[] }) {
       if (bundle) {
         setSavedByKey((prev) => ({
           ...prev,
-          [row.key]: bundle.items.filter((it) => it.lang === locale),
+          [row.key]: bundle.items.filter((it: EntityInfoItem) => it.lang === locale),
         }));
         patchRow(row.key, { picked: row.candidates.map(() => false) });
       }

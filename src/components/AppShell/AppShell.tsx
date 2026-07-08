@@ -60,6 +60,7 @@ import { PlayerDock } from "../PlayerDock/PlayerDock";
 import { MobileBottomNav } from "../MobileBottomNav/MobileBottomNav";
 import { SideBar } from "./SideBar/SideBar";
 import { SyncStatusSnackbar } from "./SyncStatusSnackbar";
+import { OfflineBanner } from "../OfflineBanner";
 import { TopBar } from "./TopBar/TopBar";
 import {
   AlbumMetaEditProvider,
@@ -91,8 +92,10 @@ const LazyAchievementsView = lazy(
   () => import("../../views/AchievementsView/AchievementsView")
 );
 const LazySettingsView = lazy(() => import("../../views/SettingsView"));
-const LazyToolsView = lazy(() =>
-  import("../ToolsView").then((m) => ({ default: m.ToolsView }))
+const LazyStudioView = lazy(() =>
+  import("../../views/StudioView/StudioView").then((m) => ({
+    default: m.StudioView,
+  }))
 );
 /** Dopo modifiche ai metadati il server ricostruisce l'indice; evitiamo tsunami di GET /library-index. */
 const LIBRARY_RECONCILE_DEBOUNCE_MS = 1400;
@@ -830,7 +833,7 @@ export function AppShell() {
         return (
           <div className="view-page view-page--studio">
             <Suspense fallback={<RekordViewLoadingFallback />}>
-              <LazyToolsView
+              <LazyStudioView
                 library={legacyLibrary}
                 libraryIndex={index}
                 onReconcileLibrary={reconcileLibrary}
@@ -990,6 +993,7 @@ export function AppShell() {
               busy={syncBusy}
             />
           ) : null}
+          <OfflineBanner />
         </div>
       </AlbumMetaEditProvider>
     </TrackMetaEditProvider>

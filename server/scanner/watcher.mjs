@@ -51,6 +51,10 @@ export function stopLibraryWatcher(libraryRoot) {
 }
 
 /** Chiude tutti i watcher attivi (shutdown del processo). */
+export function watcherCount() {
+  return watchers.size
+}
+
 export function stopAllLibraryWatchers() {
   for (const w of watchers.values()) void w.close()
   watchers.clear()

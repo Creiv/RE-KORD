@@ -659,6 +659,13 @@ export async function writeUserPlectrBestWithCAS(
   throw new Error("writeUserPlectrBestWithCAS exhausted retries")
 }
 
+export async function drainUserStateChains() {
+  await Promise.allSettled([
+    ...readUserChains.values(),
+    ...userStateMutationChains.values(),
+  ])
+}
+
 export async function writeUserTrackMoodsWithCAS(musicRoot, accountId, relPath, moodsList, maxRetries = 8) {
   for (let attempt = 0; attempt < maxRetries; attempt += 1) {
     try {

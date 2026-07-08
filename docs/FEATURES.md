@@ -1,7 +1,17 @@
 # RE-KORD — Mappa completa delle funzionalità
 
-> Versione app: 4.4.0 — documento generato dall'analisi del codice (luglio 2026).
-> Organizzato per pagina/sezione e categoria.
+> Versione app: **5.0.0** — documento aggiornato a luglio 2026.
+> Organizzato per pagina/sezione e categoria. Vedi anche [UPGRADE-5.0.md](UPGRADE-5.0.md).
+
+## Novità — 5.0
+
+- **Refactor architetturale**: Studio in `src/views/StudioView/` con pannelli lazy (Catalogo, Download, Arricchimento, Manutenzione, Editor album); client API diviso in `src/lib/api/` (core, library, userState, studio); Libreria e Impostazioni in sezioni modulari; logica player in `src/player/` (audio, coda, Cast, sleep timer, Media Session)
+- **Affidabilità runtime**: shutdown graceful del server (drain scritture, chiusura HTTP/DB/watcher/subprocess); sync user-state con **revision** ottimistica e conflitto HTTP 409; SQLite in modalità WAL; coda job in-process con API `/api/jobs` (stato, cancellazione)
+- **Osservabilità**: logging strutturato Pino con request ID (`x-request-id`); endpoint `/api/diagnostics` (versione, uptime, salute DB, watcher, job, errori recenti); sezione **Diagnostica** in Impostazioni
+- **Qualità e CI**: workflow GitHub Actions (lint, typecheck, test, build, integrazione, E2E Playwright); 367+ test Vitest; script `sync:version` / `check:version`
+- **PWA offline**: service worker cache-first per shell e asset statici; banner stato offline in UI; API e `/media` restano solo in rete
+- **Naming unificato**: migrazione one-shot chiavi localStorage legacy `kord-*` / `wpp-*` → `rekord-*` al primo avvio
+- **Provider metadati**: infrastruttura adapter in `server/providers/` con errori tipizzati (`ProviderError`) e provider iTunes registrato; estensione Discogs/MusicBrainz pianificata in 5.0.1
 
 ## Novità — 4.4
 
@@ -303,7 +313,10 @@
 
 ---
 
-## 13. Studio / Tools (manutenzione libreria)
+## 13. Studio (manutenzione libreria)
+
+> Da 5.0 la UI Studio vive in `src/views/StudioView/` (ex monolite `ToolsView`).
+> Tab: Catalogo, Download, Arricchimento + Manutenzione, Copertine, Ascolto (Listen).
 
 ### Download da YouTube (yt-dlp)
 - URL singolo / playlist / release, con validazione del tipo e avviso se >35 brani
@@ -405,6 +418,10 @@
 ### Log attività
 - Tabella storica delle azioni server (max 500 voci) con refresh
 
+### Diagnostica (5.0)
+- Sezione dedicata in Impostazioni: versione app, uptime server, stato DB (bootstrapped, epoch, conteggi artisti/album/brani), job in coda, errori recenti, pulsante aggiorna
+- Endpoint `GET /api/diagnostics` (accessibile anche senza libreria configurata)
+
 ### Info app
 - Versione, crediti, note privacy offline-first
 
@@ -431,8 +448,18 @@
 
 ### Multiutente & stato
 - CRUD account
-- Stato utente versionato con optimistic locking (CAS): playlist, preferenze, play count, mood, record Plectr, coda
+- Stato utente versionato con optimistic locking (**revision** incrementale): il client invia `expectedRevision` su PUT/PATCH; il server risponde 409 su conflitto; playlist, preferenze, play count, mood, record Plectr, coda
 - Patch incrementali (flush 400ms, 3s per la sola coda), endpoint dashboard
+
+### Job queue (5.0)
+- Coda in-process per operazioni pesanti (`server/jobs/queue.mjs`)
+- `GET /api/jobs`, `GET /api/jobs/:id`, `POST /api/jobs/:id/cancel`
+- Integrazione scan/enrichment massivi in corso (5.0.1)
+
+### Logging & diagnostica (5.0)
+- Logger Pino (`REKORD_LOG_LEVEL`), request ID middleware, rotazione log in `MUSIC_ROOT/.kord/global_info/logs/` quando `MUSIC_ROOT` è impostato
+- Buffer errori recenti esposto in `/api/diagnostics`
+- Error handler con `requestId` nelle risposte 500
 
 ### Accesso remoto
 - Rilevamento LAN con scoring delle interfacce
@@ -448,6 +475,7 @@
 
 ### Metadati
 - Aggregazione iTunes / Last.fm / MusicBrainz / LrcLib / Wikipedia / TheAudioDB
+- **Provider adapter** (`server/providers/`): interfaccia comune search/lookup, errori `rate_limited` / `unavailable` / `auth`; iTunes registrato; fallback ordinato (estensione provider in 5.0.1)
 - **Discogs** (con token): ricerca release, fetch release, applicazione metadati album e tracklist; scoring candidati; API `POST /api/discogs/search-releases`, `POST /api/discogs/apply-release`
 - Persistenza metadati album/brano in SQLite (`rekord.db`); sidecar JSON legacy solo migrazione/trivia
 - Ricerca e applicazione artwork (download da URL o upload max 15MB)
@@ -472,6 +500,11 @@
 ### Web / PWA
 - Installabile, lock orientamento portrait su telefono con overlay di avviso rotazione
 - Safe-area insets, fallback CSS per device senza Screen Orientation API
+- **Offline (5.0)**: service worker cache-first per shell/asset; banner offline; API e streaming audio solo online
+
+### CI / qualità (5.0)
+- GitHub Actions: lint, typecheck, test Vitest, coverage, build, test integrazione API, E2E Playwright
+- Script `npm run sync:version` e `npm run check:version`
 
 ### Electron (desktop)
 - Server embedded come child process, porta dinamica con health-check (timeout 30s)
@@ -499,7 +532,8 @@
 
 ## 17. Funzionalità trasversali
 
-- i18n completo EN/IT con interpolazione variabili, ordinamenti locale-aware
+- i18n completo EN/IT con interpolazione variabili, ordinamenti locale-aware; test automatico parity chiavi EN/IT
+- **Stati UI condivisi (5.0)**: `LoadingState`, `ErrorState`, banner offline
 - Accessibilità: ARIA label/live, navigazione tastiera, focus management nelle modali, reduced-motion rispettato
 - Splash loader con 15 tip rotanti (ogni 4s), skeleton/shimmer, stati vuoti/errore/busy ovunque
 - Dialoghi di conferma centralizzati (varianti default / danger / warning, code sequenziali)

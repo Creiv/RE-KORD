@@ -627,6 +627,8 @@ export const IT: Record<string, string> = {
     "Novità 4.3: Sonic Nebula per esplorare la libreria, Smart Radio in dashboard e riconnessione automatica al server nell'APK in background.",
   "settings.colophonLine7":
     "Novità 4.4: copertine istantanee con thumbnail 128/256px generate via ffmpeg, con backfill automatico delle librerie esistenti.",
+  "settings.colophonLine8":
+    "Novità 5.0: refactor strutturale, CI e 367+ test, shutdown graceful, pannello diagnostica, PWA offline per la shell, sync user-state ottimistica.",
   "settings.tutorialEyebrow": "Aiuto",
   "settings.tutorialHeading": "Tutorial",
   "settings.tutorialLead":
@@ -1432,4 +1434,14 @@ export const IT: Record<string, string> = {
   "rhythm.errors.decode": "Impossibile decodificare questo brano.",
   "rhythm.errors.sparse": "Pochi dettagli ritmici per generare una chart su questo brano.",
   "rhythm.errors.timeout": "Caricamento troppo lento. Riprova con un brano più corto o attendi che finisca il download.",
+  "state.loading": "Caricamento…",
+  "state.error": "Qualcosa è andato storto",
+  "state.retry": "Riprova",
+  "state.offline": "Sei offline. L'interfaccia è disponibile; la libreria richiede rete.",
+  "settings.diagnostics.title": "Diagnostica",
+  "settings.diagnostics.version": "Versione",
+  "settings.diagnostics.uptime": "Uptime",
+  "settings.diagnostics.db": "Database libreria",
+  "settings.diagnostics.errors": "Errori recenti",
+  "settings.diagnostics.refresh": "Aggiorna",
 };

@@ -10,23 +10,14 @@ import {
   useSyncExternalStore,
 } from "react";
 import {
-  customThemeBgImageUrl,
   fetchUserState,
   getSelectedAccountId,
   isBackendUnreachableError,
-  patchUserState,
 } from "../lib/api";
 import { onBackendRecovery } from "../lib/backendRecovery";
 import { useLibrarySyncActivity } from "./LibrarySyncActivityContext";
 import { readLegacyLocalShuffleMigrated, clearLegacyLocalShuffle } from "../lib/legacyShuffleLocal";
-import { fmtDate } from "../lib/metaFormat";
-import { randomUUID } from "../lib/randomUUID";
 import { normalizeShuffleAlbumKeysWithIndex } from "../lib/shuffleExclusionKeys";
-import {
-  applyCustomThemeBgImageCssVars,
-  clearCustomThemeBgImageCssVars,
-  normalizeCustomThemeBgImageFit,
-} from "../lib/customThemeBgFit";
 import { DEFAULT_CUSTOM_THEME } from "../lib/themeCatalog";
 import { touchListeningActivity } from "../lib/achievements";
 import {
@@ -38,19 +29,18 @@ import {
 } from "../lib/libraryNav";
 import { enrichedTracksNeedPlayerResync } from "../lib/libraryIndex";
 import { isTrackAlbumShuffleExcluded } from "../lib/randomExclusions";
-import { probeGlassBackdrop } from "../lib/glassBackdrop";
-import { isColorMixBroken } from "../lib/cssColorMix";
-import {
-  applyGlassSurfaceCssVars,
-  clearGlassSurfaceCssVars,
-} from "../lib/glassCssVars";
 import {
   applyUserStatePatchFields,
   compactUserStatePatch,
-  flushDelayMsForPending,
-  mergeSavedUserState,
   mergeUserStatePatches,
 } from "../lib/userStatePatch";
+import { createPlaylistOps } from "../userState/playlistOps";
+import { createUserStateSyncEngine } from "../userState/syncEngine";
+import {
+  normalizeCustomTheme,
+  normalizeGlassOpacity,
+  useThemeDomEffects,
+} from "../userState/themeManager";
 import { mergePartialUserSettings, type UserSettingsPatch } from "../lib/userSettingsMerge";
 import {
   gameResultToPlectrBest,
@@ -63,7 +53,6 @@ import {
   THEME_MODES,
   type AppLocale,
   type AudioCrossfadeSec,
-  type CustomThemeSettings,
   type EnrichedTrack,
   type LibraryIndex,
   type QueueState,
@@ -105,62 +94,11 @@ function defaultSettings(): UserSettings {
   };
 }
 
-function normalizeGlassOpacity(raw: unknown): number {
-  const n = Number(raw);
-  if (!Number.isFinite(n)) return 62;
-  return Math.min(100, Math.max(0, Math.round(n)));
-}
-
 function normalizeAudioCrossfadeSec(raw: Partial<UserSettings> | UserSettingsPatch): AudioCrossfadeSec {
   const v = raw.audioCrossfadeSec;
   if (v === 5 || v === 3 || v === 0) return v;
   const legacy = raw as { trackChangeTransitions?: boolean };
   return legacy.trackChangeTransitions === false ? 0 : 3;
-}
-
-function normalizeHexColor(raw: unknown, fallback: string): string {
-  if (typeof raw !== "string") return fallback;
-  const s = raw.trim();
-  if (/^#[0-9a-f]{6}$/i.test(s)) return s.toLowerCase();
-  if (/^#[0-9a-f]{3}$/i.test(s)) {
-    return `#${s[1]}${s[1]}${s[2]}${s[2]}${s[3]}${s[3]}`.toLowerCase();
-  }
-  return fallback;
-}
-
-function normalizeCustomTheme(raw: Partial<CustomThemeSettings> | undefined): CustomThemeSettings {
-  const src = { ...DEFAULT_CUSTOM_THEME, ...(raw ?? {}) };
-  const out: CustomThemeSettings = {
-    bg: normalizeHexColor(src.bg, DEFAULT_CUSTOM_THEME.bg),
-    section: normalizeHexColor(src.section, DEFAULT_CUSTOM_THEME.section),
-    accent: normalizeHexColor(src.accent, DEFAULT_CUSTOM_THEME.accent),
-    accent2: normalizeHexColor(src.accent2, DEFAULT_CUSTOM_THEME.accent2),
-  };
-  const bgImage =
-    typeof src.bgImage === "string" && src.bgImage.trim()
-      ? src.bgImage.trim().toLowerCase().replace(/^jpeg$/, "jpg")
-      : null;
-  const hasBgImage =
-    bgImage === "jpg" ||
-    bgImage === "png" ||
-    bgImage === "webp" ||
-    bgImage === "gif";
-  const bgMode: CustomThemeSettings["bgMode"] =
-    src.bgMode === "image"
-      ? "image"
-      : src.bgMode === "color"
-        ? "color"
-        : hasBgImage
-          ? "image"
-          : "color";
-  out.bgMode = bgMode;
-  out.bgImageFit = normalizeCustomThemeBgImageFit(src.bgImageFit);
-  if (hasBgImage) {
-    out.bgImage = bgImage;
-    const rev = Number(src.bgImageRev);
-    if (Number.isFinite(rev) && rev >= 1) out.bgImageRev = Math.floor(rev);
-  }
-  return out;
 }
 
 function normalizeSettings(raw: Partial<UserSettings> | UserSettingsPatch): UserSettings {
@@ -222,242 +160,6 @@ function normalizeSettings(raw: Partial<UserSettings> | UserSettingsPatch): User
     glassSurfaces: raw.glassSurfaces === true,
     glassOpacity: normalizeGlassOpacity(raw.glassOpacity),
   };
-}
-
-function hexToRgb(hex: string): { r: number; g: number; b: number } {
-  const h = normalizeHexColor(hex, "#000000").slice(1);
-  return {
-    r: parseInt(h.slice(0, 2), 16),
-    g: parseInt(h.slice(2, 4), 16),
-    b: parseInt(h.slice(4, 6), 16),
-  };
-}
-
-function rgbaFromHex(hex: string, alpha: number): string {
-  const c = hexToRgb(hex);
-  return `rgba(${c.r}, ${c.g}, ${c.b}, ${alpha})`;
-}
-
-function mixHex(a: string, b: string, t: number): string {
-  const ca = hexToRgb(a);
-  const cb = hexToRgb(b);
-  const ch = (n: number) => Math.max(0, Math.min(255, Math.round(n))).toString(16).padStart(2, "0");
-  return `#${ch(ca.r * (1 - t) + cb.r * t)}${ch(ca.g * (1 - t) + cb.g * t)}${ch(ca.b * (1 - t) + cb.b * t)}`;
-}
-
-const CUSTOM_THEME_VARS = [
-  "--bg",
-  "--surface",
-  "--surface2",
-  "--surface3",
-  "--border",
-  "--border-strong",
-  "--text",
-  "--muted",
-  "--muted-strong",
-  "--accent",
-  "--accent2",
-  "--focus-ring",
-  "--page-glow-1",
-  "--page-glow-2",
-  "--page-lg-1",
-  "--page-lg-2",
-  "--page-lg-3",
-  "--shell-glow-1",
-  "--shell-lg-1",
-  "--shell-lg-2",
-  "--topbar-bg",
-  "--surface-elev-a",
-  "--surface-elev-b",
-  "--hero-rg-1",
-  "--hero-rg-2",
-  "--hero-lg-1",
-  "--hero-lg-2",
-  "--art-empty-1",
-  "--art-empty-2",
-  "--badge-1",
-  "--badge-2",
-  "--album-fb-1",
-  "--album-fb-2",
-  "--listen-viz-bg",
-  "--glass-1",
-  "--glass-2",
-  "--nav-active-cool",
-  "--segmented-1",
-  "--segmented-2",
-  "--chip-on",
-  "--codebox-bg",
-  "--textarea-bg",
-  "--text-on-accent",
-  "--player-art-fb",
-  "--dirlist-hover-bg",
-  "--meta-strip-bg",
-  "--ghost-input-bg",
-  "--shadow-elev-1",
-  "--shadow-elev-2",
-  "--warning",
-  "--danger",
-] as const;
-
-function clearCustomThemeVars(root: HTMLElement) {
-  for (const name of CUSTOM_THEME_VARS) root.style.removeProperty(name);
-  root.style.removeProperty("color-scheme");
-}
-
-/** Luminanza relativa WCAG 2.1 (0–1). */
-function relativeLuminance(hex: string): number {
-  const { r, g, b } = hexToRgb(hex);
-  const lin = (c: number) => {
-    const s = c / 255;
-    return s <= 0.03928 ? s / 12.92 : Math.pow((s + 0.055) / 1.055, 2.4);
-  };
-  const R = lin(r);
-  const G = lin(g);
-  const B = lin(b);
-  return 0.2126 * R + 0.7152 * G + 0.0722 * B;
-}
-
-/** Se la sezione è chiara, testo e superfici seguono palette chiara. */
-function isLightSection(sectionHex: string): boolean {
-  return relativeLuminance(sectionHex) > 0.45;
-}
-
-/** Sotto questa opacità vetro le card lasciano vedere lo sfondo: il
- *  bianco/nero del testo segue la luminosità dello sfondo, non delle sezioni. */
-const GLASS_INK_FROM_BG_BELOW = 50;
-
-function textOnAccent(accentHex: string): string {
-  return relativeLuminance(accentHex) > 0.55
-    ? mixHex(accentHex, "#0a0a0a", 0.9)
-    : mixHex(accentHex, "#ffffff", 0.94);
-}
-
-function applyCustomThemeVars(
-  root: HTMLElement,
-  theme: CustomThemeSettings,
-  opts?: { inkFromBg?: boolean }
-) {
-  const bg = theme.bg;
-  const section = theme.section;
-  const accent = theme.accent;
-  const accent2 = theme.accent2;
-  // Palette chiara/scura: di norma decide il colore Sezioni (è lì che poggia
-  // il testo); con vetro molto trasparente decide lo sfondo che traspare.
-  const light = isLightSection(opts?.inkFromBg ? bg : section);
-  root.style.colorScheme = light ? "light" : "dark";
-
-  if (light) {
-    const ink = mixHex(section, "#0f172a", 0.78);
-    const inkMuted = mixHex(section, "#475569", 0.52);
-    const inkStrong = mixHex(section, "#0f172a", 0.68);
-    root.style.setProperty("--bg", bg);
-    root.style.setProperty("--surface", rgbaFromHex(mixHex(bg, section, 0.52), 0.9));
-    root.style.setProperty("--surface2", rgbaFromHex(section, 0.93));
-    root.style.setProperty("--surface3", rgbaFromHex(mixHex(section, accent2, 0.12), 0.96));
-    root.style.setProperty("--border", rgbaFromHex(mixHex(accent2, "#1e293b", 0.38), 0.18));
-    root.style.setProperty("--border-strong", rgbaFromHex(mixHex(accent2, "#0f172a", 0.45), 0.3));
-    root.style.setProperty("--text", ink);
-    root.style.setProperty("--muted", inkMuted);
-    root.style.setProperty("--muted-strong", inkStrong);
-    root.style.setProperty("--accent", accent);
-    root.style.setProperty("--accent2", accent2);
-    root.style.setProperty("--warning", "#b45309");
-    root.style.setProperty("--danger", "#c53030");
-    root.style.setProperty(
-      "--focus-ring",
-      `color-mix(in srgb, ${accent2} 52%, #0f172a 32%)`,
-    );
-    root.style.setProperty("--shadow-elev-1", "0 4px 24px rgba(15, 23, 42, 0.08)");
-    root.style.setProperty("--shadow-elev-2", "0 22px 48px rgba(15, 23, 42, 0.12)");
-    root.style.setProperty("--page-glow-1", rgbaFromHex(accent, 0.11));
-    root.style.setProperty("--page-glow-2", rgbaFromHex(accent2, 0.1));
-    root.style.setProperty("--page-lg-1", mixHex(bg, "#ffffff", 0.94));
-    root.style.setProperty("--page-lg-2", mixHex(bg, "#ffffff", 0.98));
-    root.style.setProperty("--page-lg-3", mixHex(mixHex(bg, section, 0.32), "#ffffff", 0.9));
-    root.style.setProperty("--shell-glow-1", rgbaFromHex(accent, 0.06));
-    root.style.setProperty("--shell-lg-1", rgbaFromHex(mixHex(bg, "#ffffff", 0.06), 0.97));
-    root.style.setProperty("--shell-lg-2", mixHex(bg, "#ffffff", 0.02));
-    root.style.setProperty("--topbar-bg", rgbaFromHex(mixHex(bg, "#ffffff", 0.14), 0.88));
-    root.style.setProperty("--surface-elev-a", rgbaFromHex(mixHex(section, bg, 0.14), 0.94));
-    root.style.setProperty("--surface-elev-b", rgbaFromHex(mixHex(bg, section, 0.2), 0.97));
-    root.style.setProperty("--hero-rg-1", rgbaFromHex(accent, 0.12));
-    root.style.setProperty("--hero-rg-2", rgbaFromHex(accent2, 0.1));
-    root.style.setProperty("--hero-lg-1", rgbaFromHex(mixHex(section, bg, 0.1), 0.94));
-    root.style.setProperty("--hero-lg-2", rgbaFromHex(mixHex(bg, section, 0.16), 0.97));
-    root.style.setProperty("--art-empty-1", rgbaFromHex(accent, 0.16));
-    root.style.setProperty("--art-empty-2", rgbaFromHex(accent2, 0.12));
-    root.style.setProperty("--badge-1", rgbaFromHex(accent, 0.2));
-    root.style.setProperty("--badge-2", rgbaFromHex(accent2, 0.14));
-    root.style.setProperty("--album-fb-1", rgbaFromHex(accent, 0.22));
-    root.style.setProperty("--album-fb-2", rgbaFromHex(accent2, 0.15));
-    root.style.setProperty("--listen-viz-bg", rgbaFromHex(mixHex(bg, "#e2e8f0", 0.5), 0.96));
-    root.style.setProperty("--glass-1", rgbaFromHex(mixHex(section, "#ffffff", 0.22), 0.88));
-    root.style.setProperty("--glass-2", rgbaFromHex(mixHex(bg, section, 0.22), 0.92));
-    root.style.setProperty("--nav-active-cool", rgbaFromHex(accent2, 0.12));
-    root.style.setProperty("--segmented-1", rgbaFromHex(accent, 0.12));
-    root.style.setProperty("--segmented-2", rgbaFromHex(accent2, 0.09));
-    root.style.setProperty("--chip-on", rgbaFromHex(accent, 0.12));
-    root.style.setProperty("--codebox-bg", rgbaFromHex(mixHex(bg, "#f8fafc", 0.55), 0.97));
-    root.style.setProperty("--textarea-bg", rgbaFromHex(mixHex(bg, "#ffffff", 0.62), 0.96));
-    root.style.setProperty("--text-on-accent", textOnAccent(accent));
-    root.style.setProperty("--player-art-fb", rgbaFromHex(accent2, 0.1));
-    root.style.setProperty("--dirlist-hover-bg", rgbaFromHex(accent2, 0.08));
-    root.style.setProperty("--meta-strip-bg", "rgba(15, 23, 42, 0.04)");
-    root.style.setProperty("--ghost-input-bg", "rgba(15, 23, 42, 0.045)");
-    return;
-  }
-
-  root.style.setProperty("--bg", bg);
-  root.style.setProperty("--surface", rgbaFromHex(mixHex(bg, section, 0.58), 0.88));
-  root.style.setProperty("--surface2", rgbaFromHex(section, 0.94));
-  root.style.setProperty("--surface3", rgbaFromHex(mixHex(section, accent2, 0.16), 0.96));
-  root.style.setProperty("--border", rgbaFromHex(mixHex(accent2, "#ffffff", 0.2), 0.2));
-  root.style.setProperty("--border-strong", rgbaFromHex(mixHex(accent2, "#ffffff", 0.18), 0.36));
-  root.style.setProperty("--accent", accent);
-  root.style.setProperty("--accent2", accent2);
-  root.style.setProperty("--focus-ring", `color-mix(in srgb, ${accent2} 72%, white 18%)`);
-  root.style.setProperty("--page-glow-1", rgbaFromHex(accent, 0.14));
-  root.style.setProperty("--page-glow-2", rgbaFromHex(accent2, 0.12));
-  root.style.setProperty("--page-lg-1", mixHex(bg, "#000000", 0.26));
-  root.style.setProperty("--page-lg-2", bg);
-  root.style.setProperty("--page-lg-3", mixHex(bg, section, 0.28));
-  root.style.setProperty("--shell-glow-1", rgbaFromHex(accent, 0.07));
-  root.style.setProperty("--shell-lg-1", rgbaFromHex(mixHex(bg, "#000000", 0.18), 0.98));
-  root.style.setProperty("--shell-lg-2", bg);
-  root.style.setProperty("--topbar-bg", rgbaFromHex(mixHex(bg, "#000000", 0.2), 0.86));
-  root.style.setProperty("--surface-elev-a", rgbaFromHex(mixHex(section, bg, 0.18), 0.94));
-  root.style.setProperty("--surface-elev-b", rgbaFromHex(mixHex(bg, section, 0.22), 0.97));
-  root.style.setProperty("--hero-rg-1", rgbaFromHex(accent, 0.14));
-  root.style.setProperty("--hero-rg-2", rgbaFromHex(accent2, 0.12));
-  root.style.setProperty("--hero-lg-1", rgbaFromHex(mixHex(section, bg, 0.12), 0.94));
-  root.style.setProperty("--hero-lg-2", rgbaFromHex(mixHex(bg, section, 0.18), 0.97));
-  root.style.setProperty("--art-empty-1", rgbaFromHex(accent, 0.22));
-  root.style.setProperty("--art-empty-2", rgbaFromHex(accent2, 0.16));
-  root.style.setProperty("--badge-1", rgbaFromHex(accent, 0.24));
-  root.style.setProperty("--badge-2", rgbaFromHex(accent2, 0.18));
-  root.style.setProperty("--album-fb-1", rgbaFromHex(accent, 0.26));
-  root.style.setProperty("--album-fb-2", rgbaFromHex(accent2, 0.18));
-  root.style.setProperty("--listen-viz-bg", rgbaFromHex(mixHex(bg, "#000000", 0.34), 0.94));
-  root.style.setProperty("--glass-1", rgbaFromHex(mixHex(section, bg, 0.24), 0.9));
-  root.style.setProperty("--glass-2", rgbaFromHex(mixHex(bg, section, 0.2), 0.94));
-  root.style.setProperty("--nav-active-cool", rgbaFromHex(accent2, 0.09));
-  root.style.setProperty("--segmented-1", rgbaFromHex(accent, 0.11));
-  root.style.setProperty("--segmented-2", rgbaFromHex(accent2, 0.08));
-  root.style.setProperty("--chip-on", rgbaFromHex(accent, 0.11));
-  root.style.setProperty("--codebox-bg", rgbaFromHex(mixHex(bg, "#000000", 0.35), 0.95));
-  root.style.setProperty("--textarea-bg", rgbaFromHex(mixHex(bg, "#000000", 0.25), 0.95));
-  root.style.setProperty("--player-art-fb", rgbaFromHex(accent2, 0.08));
-  root.style.setProperty("--dirlist-hover-bg", rgbaFromHex(accent2, 0.07));
-  root.style.setProperty("--meta-strip-bg", rgbaFromHex(accent2, 0.06));
-  root.style.setProperty("--ghost-input-bg", rgbaFromHex("#ffffff", 0.045));
-  root.style.removeProperty("--text");
-  root.style.removeProperty("--muted");
-  root.style.removeProperty("--muted-strong");
-  root.style.removeProperty("--text-on-accent");
-  root.style.removeProperty("--warning");
-  root.style.removeProperty("--danger");
-  root.style.removeProperty("--shadow-elev-1");
-  root.style.removeProperty("--shadow-elev-2");
 }
 
 function normalizeUserState(s: UserStateV1): UserStateV1 {
@@ -715,25 +417,41 @@ export function UserStateProvider({ children }: { children: React.ReactNode }) {
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [selectedPlaylist, setSelectedPlaylist] = useState<string | null>(null);
-  const dirtyRef = useRef(false);
-  const playlistDirtyRef = useRef(false);
-  const hydratedRef = useRef(false);
-  const saveSeqRef = useRef(0);
-  /**
-   * Coda live (fonte di verità dopo l'idratazione). Aggiornata da
-   * enqueueQueuePatch senza setState: ogni cambio brano non deve
-   * ri-renderizzare tutti i consumer di useUserState().
-   */
-  const queueStateRef = useRef<QueueState>({ tracks: [], currentIndex: 0 });
-  const pendingPatchRef = useRef<UserStatePatch>({});
-  const inFlightPatchRef = useRef<UserStatePatch>({});
-  const flushTimerRef = useRef<number | null>(null);
-  const flushPendingPatchRef = useRef<
-    ((opts?: { silent?: boolean }) => void) | null
-  >(null);
-  const hydratedAccountIdRef = useRef<string | null>(null);
-  const schedulePendingFlushRef = useRef<(() => void) | null>(null);
-  const flushingRef = useRef(false);
+
+  const syncEngineRef = useRef<ReturnType<typeof createUserStateSyncEngine> | null>(
+    null,
+  );
+  if (!syncEngineRef.current) {
+    syncEngineRef.current = createUserStateSyncEngine({
+      setState,
+      setSaving,
+      setError,
+      beginLibrarySyncActivity: (key) =>
+        beginLibrarySyncActivityRef.current(key),
+      normalizeUserState,
+      mergeLegacy,
+      applyUserStatePatchLocal,
+      userStateToPatch,
+    });
+  }
+  const sync = syncEngineRef.current;
+  const {
+    dirtyRef,
+    playlistDirtyRef,
+    hydratedRef,
+    queueStateRef,
+    pendingPatchRef,
+    inFlightPatchRef,
+    flushTimerRef,
+    hydratedAccountIdRef,
+    commit,
+    enqueueQueuePatch,
+    setQueueSnapshot,
+    flushUserStateNow,
+    flushPendingPatch,
+    schedulePendingFlush,
+    syncUserStateFromServer,
+  } = sync;
 
   useEffect(() => {
     let active = true;
@@ -822,7 +540,7 @@ export function UserStateProvider({ children }: { children: React.ReactNode }) {
       setReady(true);
       hydratedRef.current = true;
       if (dirtyRef.current && Object.keys(pendingPatchRef.current).length > 0) {
-        schedulePendingFlushRef.current?.();
+        schedulePendingFlush();
       }
     };
 
@@ -890,86 +608,11 @@ export function UserStateProvider({ children }: { children: React.ReactNode }) {
     };
   }, []);
 
-  const flushPendingPatch = useCallback((opts?: { silent?: boolean }) => {
-    if (!hydratedRef.current || flushingRef.current) {
-      if (hydratedRef.current && dirtyRef.current) {
-        schedulePendingFlushRef.current?.();
-      }
-      return;
-    }
-    const patch = compactUserStatePatch(pendingPatchRef.current);
-    if (Object.keys(patch).length === 0) {
-      dirtyRef.current = false;
-      return;
-    }
-    pendingPatchRef.current = {};
-    inFlightPatchRef.current = patch;
-    flushingRef.current = true;
-    const seq = ++saveSeqRef.current;
-    // Patch solo-coda: salvataggio di routine a ogni cambio brano — silenzioso
-    // (niente spinner/attività) e senza setState, così nessun consumer di
-    // useUserState() viene ri-renderizzato.
-    const queueOnly =
-      Object.keys(patch).length === 1 && patch.queue !== undefined;
-    const silent = Boolean(opts?.silent) || queueOnly;
-    const endSaveActivity = silent
-      ? () => {}
-      : beginLibrarySyncActivity("sync.activity.savingUserState");
-    if (!silent) setSaving(true);
-    patchUserState(patch, { accountId: hydratedAccountIdRef.current })
-      .then((saved) => {
-        if (seq !== saveSeqRef.current) return;
-        const normalized = normalizeUserState(saved);
-        const hasNewerPending = Object.keys(pendingPatchRef.current).length > 0;
-        if (!queueOnly) {
-          setState((prev) =>
-            hasNewerPending
-              ? {
-                  ...prev,
-                  revision: normalized.revision,
-                }
-              : mergeSavedUserState(prev, normalized, patch, normalizeUserState)
-          );
-        }
-        setError(null);
-        dirtyRef.current = hasNewerPending;
-        if (patch.playlists) playlistDirtyRef.current = false;
-        inFlightPatchRef.current = {};
-      })
-      .catch((err: unknown) => {
-        if (seq !== saveSeqRef.current) return;
-        pendingPatchRef.current = mergeUserStatePatches(
-          patch,
-          pendingPatchRef.current
-        );
-        inFlightPatchRef.current = {};
-        dirtyRef.current = true;
-        setError(
-          isBackendUnreachableError(err)
-            ? "errors.backendUnreachable"
-            : err instanceof Error
-              ? err.message
-              : String(err)
-        );
-      })
-      .finally(() => {
-        endSaveActivity();
-        if (seq === saveSeqRef.current && !silent) setSaving(false);
-        flushingRef.current = false;
-        if (Object.keys(pendingPatchRef.current).length > 0) {
-          schedulePendingFlushRef.current?.();
-        }
-      });
-  }, [beginLibrarySyncActivity]);
   useEffect(() => {
-    flushPendingPatchRef.current = flushPendingPatch;
-  }, [flushPendingPatch]);
-
-  useEffect(() => {
-    const onPageHide = () => flushPendingPatchRef.current?.();
+    const onPageHide = () => flushPendingPatch();
     window.addEventListener("pagehide", onPageHide);
     return () => window.removeEventListener("pagehide", onPageHide);
-  }, []);
+  }, [flushPendingPatch]);
 
   useEffect(
     () => () => {
@@ -978,146 +621,10 @@ export function UserStateProvider({ children }: { children: React.ReactNode }) {
         flushTimerRef.current = null;
       }
     },
-    []
+    [flushTimerRef],
   );
 
-  useEffect(() => {
-    const root = document.documentElement;
-    root.dataset.theme = state.settings.theme;
-    if (state.settings.theme === "custom") {
-      const inkFromBg =
-        state.settings.glassSurfaces &&
-        state.settings.glassOpacity < GLASS_INK_FROM_BG_BELOW;
-      applyCustomThemeVars(
-        root,
-        state.settings.customTheme ?? DEFAULT_CUSTOM_THEME,
-        { inkFromBg }
-      );
-    } else {
-      clearCustomThemeVars(root);
-    }
-  }, [
-    state.settings.customTheme,
-    state.settings.theme,
-    state.settings.glassSurfaces,
-    state.settings.glassOpacity,
-  ]);
-
-  useEffect(() => {
-    const root = document.documentElement;
-    const custom = state.settings.customTheme;
-    const useBgImage =
-      state.settings.theme === "custom" &&
-      custom?.bgMode === "image" &&
-      Boolean(custom.bgImage);
-    if (useBgImage) {
-      root.style.setProperty(
-        "--page-bg-image",
-        `url("${customThemeBgImageUrl(custom.bgImageRev ?? undefined)}")`,
-      );
-      applyCustomThemeBgImageCssVars(root, custom.bgImageFit);
-      root.dataset.customBgImage = "1";
-      return;
-    }
-    root.style.removeProperty("--page-bg-image");
-    clearCustomThemeBgImageCssVars(root);
-    delete root.dataset.customBgImage;
-  }, [state.settings.customTheme, state.settings.theme]);
-
-  useEffect(() => {
-    const root = document.documentElement;
-    if (state.settings.glassSurfaces) {
-      root.dataset.glassSurfaces = "1";
-      const opacity = normalizeGlassOpacity(state.settings.glassOpacity);
-      root.style.setProperty("--glass-user-opacity", String(opacity / 100));
-      if (isColorMixBroken()) {
-        applyGlassSurfaceCssVars(root, opacity);
-      } else {
-        clearGlassSurfaceCssVars(root);
-      }
-    } else {
-      delete root.dataset.glassSurfaces;
-      delete root.dataset.glassBackdrop;
-      root.style.removeProperty("--glass-user-opacity");
-      clearGlassSurfaceCssVars(root);
-    }
-  }, [
-    state.settings.glassSurfaces,
-    state.settings.glassOpacity,
-    state.settings.theme,
-    state.settings.customTheme,
-  ]);
-
-  useEffect(() => {
-    if (!state.settings.glassSurfaces) return;
-    let cancelled = false;
-    void probeGlassBackdrop().then((works) => {
-      if (cancelled) return;
-      document.documentElement.dataset.glassBackdrop = works ? "1" : "0";
-    });
-    return () => {
-      cancelled = true;
-    };
-  }, [state.settings.glassSurfaces]);
-
-  useEffect(() => {
-    document.documentElement.lang =
-      state.settings.locale === "it" ? "it" : "en";
-  }, [state.settings.locale]);
-
-  useEffect(() => {
-    document.documentElement.dataset.trackChangeTransitions =
-      state.settings.audioCrossfadeSec > 0 ? "1" : "0";
-  }, [state.settings.audioCrossfadeSec]);
-
-  const syncUserStateFromServer = useCallback(() => {
-    const endActivity = beginLibrarySyncActivity(
-      "sync.activity.loadingUserState"
-    );
-    return Promise.resolve()
-      .then(() => fetchUserState())
-      .then((remote) => {
-        const mergedRemote = normalizeUserState(mergeLegacy(remote));
-        const localUnsaved = mergeUserStatePatches(
-          inFlightPatchRef.current,
-          pendingPatchRef.current
-        );
-        const hasLocalUnsaved = Object.keys(localUnsaved).length > 0;
-        const preserved = hasLocalUnsaved
-          ? applyUserStatePatchLocal(mergedRemote, localUnsaved)
-          : mergedRemote;
-        queueStateRef.current = preserved.queue;
-        setState((prev) => {
-          if (
-            !hasLocalUnsaved &&
-            Number(mergedRemote.revision || 1) < Number(prev.revision || 1)
-          ) {
-            return prev;
-          }
-          if (!hasLocalUnsaved) return mergedRemote;
-          return {
-            ...preserved,
-            revision: Math.max(
-              Number(mergedRemote.revision || 1),
-              Number(prev.revision || 1)
-            ),
-          };
-        });
-        dirtyRef.current = hasLocalUnsaved;
-        playlistDirtyRef.current = hasLocalUnsaved && Boolean(localUnsaved.playlists);
-        setError(null);
-      })
-      .catch((err: unknown) => {
-        setError(
-          isBackendUnreachableError(err)
-            ? "errors.backendUnreachable"
-            : String(err)
-        );
-      })
-      .finally(() => {
-        endActivity();
-      });
-  }, [beginLibrarySyncActivity]);
+  useThemeDomEffects(state.settings);
 
   const syncUserStateFromServerRef = useRef(syncUserStateFromServer);
   useEffect(() => {
@@ -1127,69 +634,9 @@ export function UserStateProvider({ children }: { children: React.ReactNode }) {
   useEffect(() => {
     return onBackendRecovery(() => {
       void syncUserStateFromServerRef.current();
-      if (dirtyRef.current) schedulePendingFlushRef.current?.();
+      if (dirtyRef.current) schedulePendingFlush();
     });
-  }, []);
-
-  const schedulePendingFlush = useCallback(() => {
-    // `ready` può essere ancora false nello stesso tick di applyRemote (setState async).
-    if (!hydratedRef.current || !dirtyRef.current) return;
-    if (flushTimerRef.current != null) window.clearTimeout(flushTimerRef.current);
-    const delayMs = flushDelayMsForPending(pendingPatchRef.current);
-    flushTimerRef.current = window.setTimeout(() => {
-      flushTimerRef.current = null;
-      flushPendingPatchRef.current?.();
-    }, delayMs);
-  }, []);
-
-  useEffect(() => {
-    schedulePendingFlushRef.current = schedulePendingFlush;
-  }, [schedulePendingFlush]);
-
-  const flushUserStateNow = useCallback((opts?: { silent?: boolean }) => {
-    if (flushTimerRef.current != null) {
-      window.clearTimeout(flushTimerRef.current);
-      flushTimerRef.current = null;
-    }
-    flushPendingPatch(opts);
-  }, [flushPendingPatch]);
-
-  const commit = useCallback(
-    (
-      updater: (prev: UserStateV1) => UserStateV1,
-      options?: {
-        immediate?: boolean;
-        silent?: boolean;
-        patch?: (next: UserStateV1, prev: UserStateV1) => UserStatePatch;
-      }
-    ) => {
-      setState((prev) => {
-        const next = updater(prev);
-        if (next === prev) return prev;
-        dirtyRef.current = true;
-        if (next.playlists !== prev.playlists) playlistDirtyRef.current = true;
-        const omitPlaylists = !playlistDirtyRef.current;
-        const patch =
-          options?.patch?.(next, prev) ?? userStateToPatch(next, omitPlaylists);
-        if (Object.keys(patch).length > 0) {
-          pendingPatchRef.current = mergeUserStatePatches(
-            pendingPatchRef.current,
-            patch
-          );
-        }
-        if (options?.immediate) {
-          window.setTimeout(
-            () => flushPendingPatchRef.current?.({ silent: options?.silent }),
-            0,
-          );
-        } else {
-          schedulePendingFlush();
-        }
-        return next;
-      });
-    },
-    [schedulePendingFlush]
-  );
+  }, [dirtyRef, schedulePendingFlush]);
 
   const toggleFavorite = useCallback(
     (relPath: string) => {
@@ -1455,35 +902,16 @@ export function UserStateProvider({ children }: { children: React.ReactNode }) {
     [commit]
   );
 
-  const normalizeQueueState = useCallback((queue: QueueState): QueueState => ({
-    tracks: queue.tracks,
-    currentIndex: Math.min(
-      Math.max(queue.currentIndex, 0),
-      Math.max(queue.tracks.length - 1, 0)
-    ),
-  }), []);
-
-  const enqueueQueuePatch = useCallback(
-    (queue: QueueState) => {
-      // Niente setState: la coda cambia a ogni avanzamento brano e non deve
-      // invalidare tutti i consumer del context. Vive in queueStateRef e
-      // viene persistita col flush debounced.
-      const nextQueue = normalizeQueueState(queue);
-      queueStateRef.current = nextQueue;
-      pendingPatchRef.current = mergeUserStatePatches(pendingPatchRef.current, {
-        queue: nextQueue,
-      });
-      dirtyRef.current = true;
-      schedulePendingFlush();
-    },
-    [normalizeQueueState, schedulePendingFlush]
-  );
-
-  const setQueueSnapshot = useCallback(
-    (queue: QueueState) => {
-      enqueueQueuePatch(queue);
-    },
-    [enqueueQueuePatch]
+  const {
+    createPlaylist,
+    renamePlaylist,
+    deletePlaylist,
+    addTrackToPlaylist,
+    removeTrackFromPlaylist,
+    saveQueueAsPlaylist,
+  } = useMemo(
+    () => createPlaylistOps({ commit, setSelectedPlaylist }),
+    [commit],
   );
 
   const getTrackPlayCount = useCallback(
@@ -1524,142 +952,6 @@ export function UserStateProvider({ children }: { children: React.ReactNode }) {
       );
     },
     [commit],
-  );
-
-  const createPlaylist = useCallback(
-    (name: string) => {
-      const id = randomUUID();
-      commit(
-        (prev) => ({
-          ...prev,
-          playlists: [
-            ...prev.playlists,
-            {
-              id,
-              name: name.trim() || "New playlist",
-              tracks: [],
-            },
-          ],
-        }),
-        { immediate: true, patch: (next) => ({ playlists: next.playlists }) }
-      );
-      setSelectedPlaylist(id);
-      return id;
-    },
-    [commit]
-  );
-
-  const renamePlaylist = useCallback(
-    (id: string, name: string) => {
-      commit(
-        (prev) => ({
-          ...prev,
-          playlists: prev.playlists.map((playlist) =>
-            playlist.id === id
-              ? { ...playlist, name: name.trim() || playlist.name }
-              : playlist
-          ),
-        }),
-        { immediate: true, patch: (next) => ({ playlists: next.playlists }) }
-      );
-    },
-    [commit]
-  );
-
-  const deletePlaylist = useCallback(
-    (id: string) => {
-      commit(
-        (prev) => ({
-          ...prev,
-          playlists: prev.playlists.filter((playlist) => playlist.id !== id),
-        }),
-        { immediate: true, patch: (next) => ({ playlists: next.playlists }) }
-      );
-      setSelectedPlaylist((current) => (current === id ? null : current));
-    },
-    [commit]
-  );
-
-  const addTrackToPlaylist = useCallback(
-    (id: string, track: EnrichedTrack) => {
-      commit(
-        (prev) => ({
-          ...prev,
-          playlists: prev.playlists.map((playlist) =>
-            playlist.id !== id
-              ? playlist
-              : {
-                  ...playlist,
-                  tracks: playlist.tracks.some(
-                    (item) => item.relPath === track.relPath
-                  )
-                    ? playlist.tracks
-                    : [
-                        ...playlist.tracks,
-                        {
-                          relPath: track.relPath,
-                          title: track.title,
-                          artist: track.artist,
-                          album: track.album,
-                        },
-                      ],
-                }
-          ),
-        }),
-        { immediate: true, patch: (next) => ({ playlists: next.playlists }) }
-      );
-    },
-    [commit]
-  );
-
-  const removeTrackFromPlaylist = useCallback(
-    (id: string, relPath: string) => {
-      commit(
-        (prev) => ({
-          ...prev,
-          playlists: prev.playlists.map((playlist) =>
-            playlist.id === id
-              ? {
-                  ...playlist,
-                  tracks: playlist.tracks.filter(
-                    (track) => track.relPath !== relPath
-                  ),
-                }
-              : playlist
-          ),
-        }),
-        { immediate: true, patch: (next) => ({ playlists: next.playlists }) }
-      );
-    },
-    [commit]
-  );
-
-  const saveQueueAsPlaylist = useCallback(
-    (name: string, queue: EnrichedTrack[]) => {
-      const id = randomUUID();
-      commit(
-        (prev) => ({
-          ...prev,
-          playlists: [
-            ...prev.playlists,
-            {
-              id,
-              name: name.trim() || `Queue ${fmtDate(new Date())}`,
-              tracks: queue.map((track) => ({
-                relPath: track.relPath,
-                title: track.title,
-                artist: track.artist,
-                album: track.album,
-              })),
-            },
-          ],
-        }),
-        { immediate: true, patch: (next) => ({ playlists: next.playlists }) }
-      );
-      setSelectedPlaylist(id);
-      return id;
-    },
-    [commit]
   );
 
   const favorites = useMemo(() => new Set(state.favorites), [state.favorites]);

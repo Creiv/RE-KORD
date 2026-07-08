@@ -8,7 +8,7 @@
   <a href="https://www.reddit.com/r/RE_KORD/"><strong>r/RE_KORD</strong></a>
 </p>
 
-<h1 align="center">RE-KORD 4.4</h1>
+<h1 align="center">RE-KORD 5.0</h1>
 
 <p align="center">
   <strong>Your music. Your server. Your rules.</strong><br />
@@ -74,7 +74,34 @@ LAN access out of the box, one-click **Cloudflare tunnel** with QR code for
 remote listening, multiple local profiles, full **backup/restore**, and a
 self-updating client model: update the server once, every client follows.
 
-## New in 4.4
+## New in 5.0
+
+Major stability and quality release: safer runtime, better test coverage, clearer
+architecture, and improved operability — without changing what RE-KORD does for
+your music.
+
+- 🏗️ **Structural refactor** — Studio split into lazy panels (`StudioView`:
+  Catalog, Download, Enrichment, Maintenance, Album editor); API client split by
+  domain; Library and Settings as section shells; player logic extracted into
+  `src/player/` modules.
+- 🛡️ **Reliability** — graceful shutdown (drain writes, close HTTP/DB/watchers);
+  optimistic **user-state revision** with conflict detection (HTTP 409); SQLite
+  WAL mode; in-process **job queue** with `/api/jobs` status API.
+- 🔍 **Observability** — structured logging (Pino) with request IDs;
+  **Diagnostics** panel in Settings (`/api/diagnostics`: version, uptime, DB
+  health, recent errors, job list).
+- 🧪 **Quality gates** — GitHub Actions CI (lint, typecheck, 367+ unit tests,
+  integration tests, Playwright E2E); version sync script across package,
+  Android, Docker.
+- 📴 **Offline PWA** — service worker caches the app shell and static assets;
+  offline banner in the UI (API and media stay network-only).
+- 🏷️ **Naming cleanup** — one-shot migration of legacy `kord-*` / `wpp-*`
+  localStorage keys to `rekord-*` on first launch.
+- 📖 **Docs** — [CHANGELOG.md](CHANGELOG.md) and [upgrade guide](docs/UPGRADE-5.0.md).
+
+See [docs/FEATURES.md](docs/FEATURES.md) for the full feature map.
+
+## Since 4.4
 
 - 🖼️ **Instant covers** — real 128/256px thumbnails generated server-side with
   the bundled ffmpeg (no extra dependencies): album grids and cards load
@@ -194,6 +221,11 @@ npm run dev          # browser: Vite :5173 + API :3001
 npm run dev:app      # Electron desktop + server
 
 npm test && npm run lint && npm run build
+
+# optional quality gates
+npm run test:integration   # API integration (supertest)
+npm run test:e2e           # Playwright (needs build + server)
+npm run check:version      # package.json vs Gradle vs Docker
 ```
 
 On a fresh **Ubuntu/Debian** machine, if `npm run dev` fails on `better-sqlite3`,
@@ -211,17 +243,19 @@ Fix permissions, e.g. `sudo chown -R $USER:$USER /path/to/music`, then restart.
 
 Library root: `MUSIC_ROOT` env or in-app Settings. Per-profile state and the
 library database live in `MUSIC_ROOT/.kord/` (`rekord.db` plus account data) and
-survive reinstalls. After upgrading from 4.0, run **Library metadata cleanup**
-once in Studio → Tools to migrate legacy JSON sidecars.
+survive reinstalls. Upgrading from 4.x? See [docs/UPGRADE-5.0.md](docs/UPGRADE-5.0.md).
+After upgrading from 4.0, run **Library metadata cleanup**
+once in Studio → Maintenance to migrate legacy JSON sidecars.
 
-### Packaging 4.4
+### Packaging 5.0
 
 ```bash
-npm run pack:linux:server -- 4.4.0   # → release/RE-KORD-Server-4.4.0-linux-x86_64.AppImage
-npm run pack:win:server  -- 4.4.0    # Windows server (NSIS on Windows hosts, .7z from Linux)
-npm run pack:linux:client -- 4.4.0   # thin desktop client
-npm run pack:win:client  -- 4.4.0
-npm run pack:android:client -- 4.4.0 # → release/RE-KORD-Client-4.4.0-android.apk
+npm run pack:linux:server -- 5.0.0   # → release/RE-KORD-Server-5.0.0-linux-x86_64.AppImage
+npm run pack:win:server  -- 5.0.0    # Windows server (NSIS on Windows hosts, .7z from Linux)
+npm run pack:linux:client -- 5.0.0   # thin desktop client
+npm run pack:win:client  -- 5.0.0
+npm run pack:android:client -- 5.0.0 # → release/RE-KORD-Client-5.0.0-android.apk
+npm run sync:version                 # propagate version from package.json
 ```
 
 Server packs bundle **yt-dlp** and **cloudflared** for the target OS. Windows
@@ -242,4 +276,4 @@ law compliance. Use only content you have the rights or permission to use.
 
 ---
 
-<p align="center"><em>RE-KORD 4.4 by Creiv — local music, serious tools, play on the beat.</em></p>
+<p align="center"><em>RE-KORD 5.0 by Creiv — local music, serious tools, play on the beat.</em></p>

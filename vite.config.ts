@@ -28,7 +28,16 @@ export default defineConfig({
     globals: true,
     environment: "jsdom",
     setupFiles: "./src/test/setup.ts",
-    include: ["src/**/*.test.ts", "src/**/*.test.tsx", "server/**/*.test.ts"],
+    include: ["src/**/*.test.ts", "src/**/*.test.tsx", "server/**/*.test.ts", "server/test-integration/**/*.test.ts"],
+    coverage: {
+      provider: "v8",
+      reporter: ["text", "json-summary"],
+      thresholds: {
+        lines: 20,
+      },
+      include: ["src/lib/**", "src/player/**", "server/**"],
+      exclude: ["**/*.test.*", "server/bin/**"],
+    },
   },
   server: {
     port: 5173,

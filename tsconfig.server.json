@@ -1,0 +1,23 @@
+{
+  "compilerOptions": {
+    "target": "ES2022",
+    "module": "NodeNext",
+    "moduleResolution": "NodeNext",
+    "allowJs": true,
+    "checkJs": false,
+    "noEmit": true,
+    "strict": false,
+    "skipLibCheck": true,
+    "types": ["node"],
+    "maxNodeModuleJsDepth": 1
+  },
+  "include": [
+    "server/**/*.mjs",
+    "electron/**/*.mjs",
+    "scripts/**/*.mjs"
+  ],
+  "exclude": [
+    "server/bin/**",
+    "node_modules/**"
+  ]
+}
