@@ -1,7 +1,10 @@
 import { memo, useCallback, useMemo } from "react";
 import { useRhythmMode } from "../../../context/RhythmModeContext";
 import { usePlayer } from "../../../context/PlayerContext";
-import { useUserState } from "../../../context/UserStateContext";
+import {
+  useUserStateSelector,
+  useUserStateStatus,
+} from "../../../context/UserStateContext";
 import { useI18n } from "../../../i18n/useI18n";
 import { buildAchievementsSnapshot, titleForNumericLevel } from "../../../lib/achievements";
 import { LevelProgressRing } from "../../LevelProgressRing";
@@ -25,7 +28,8 @@ export const SideBar = memo(function SideBar({
   index,
 }: SideBarProps) {
   const { t } = useI18n();
-  const user = useUserState();
+  const { ready: userReady } = useUserStateStatus();
+  const userState = useUserStateSelector((s) => s.state);
   const { open: rhythmOpen, toggle: toggleRhythm } = useRhythmMode();
   const player = usePlayer();
 
@@ -50,10 +54,10 @@ export const SideBar = memo(function SideBar({
 
   const levelSnapshot = useMemo(
     () =>
-      user.ready && index
-        ? buildAchievementsSnapshot(user.state, index)
+      userReady && index
+        ? buildAchievementsSnapshot(userState, index)
         : null,
-    [user.ready, user.state, index],
+    [userReady, userState, index],
   );
 
   const openAchievements = useCallback(() => {
@@ -118,7 +122,7 @@ export const SideBar = memo(function SideBar({
         <LevelProgressRing
           level={levelSnapshot?.level.level ?? 1}
           pct={levelSnapshot?.progress.pct ?? 0}
-          loading={!user.ready || levelSnapshot == null}
+          loading={!userReady || levelSnapshot == null}
           active={activeSection === "achievements"}
           title={
             levelSnapshot

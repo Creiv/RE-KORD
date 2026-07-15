@@ -1,5 +1,6 @@
-import { lazy, Suspense } from "react";
+import { lazy, Suspense, useEffect } from "react";
 import { useI18n } from "../../i18n/useI18n";
+import { ViewErrorBoundary } from "../../components/ViewErrorBoundary";
 import type { StudioViewProps } from "./types";
 import { useStudioNavigation } from "./hooks/useStudioNavigation";
 import { useStudioLibrarySync } from "./hooks/useStudioLibrarySync";
@@ -18,6 +19,17 @@ export function StudioView(props: StudioViewProps) {
     useStudioNavigation();
   useStudioLibrarySync();
   const panels = useStudioPanels(props, studioPane, setStudioPane);
+
+  useEffect(() => {
+    if (studioPane !== "listen" || props.libraryIndex) return;
+    const t = window.setTimeout(() => {
+      setStudioPane("catalog");
+    }, 1200);
+    return () => window.clearTimeout(t);
+  }, [studioPane, props.libraryIndex, setStudioPane]);
+
+  const listenReady = studioPane === "listen" && props.libraryIndex;
+  const listenWaiting = studioPane === "listen" && !props.libraryIndex;
 
   return (
     <>
@@ -93,19 +105,26 @@ export function StudioView(props: StudioViewProps) {
         }
       >
         <div className="tools tool-studio-layout">
-          {studioPane === "listen" && props.libraryIndex ? (
+          {listenReady ? (
             <div
               className="studio-pane studio-pane--listen"
               role="region"
               aria-label={t("tools.studioTabListen")}
             >
-              <Suspense fallback={<p className="subtle sm">…</p>}>
-                <LazyListenView
-                  index={props.libraryIndex}
-                  onOpenSection={props.onOpenSection ?? (() => {})}
-                  onLibraryDelta={props.onLibraryDelta}
-                />
-              </Suspense>
+              <ViewErrorBoundary label="Ascolta">
+                <Suspense fallback={<p className="subtle sm">{t("loading.app")}</p>}>
+                  <LazyListenView
+                    index={props.libraryIndex!}
+                    onOpenSection={props.onOpenSection ?? (() => {})}
+                    onLibraryDelta={props.onLibraryDelta}
+                  />
+                </Suspense>
+              </ViewErrorBoundary>
+            </div>
+          ) : null}
+          {listenWaiting ? (
+            <div className="studio-pane studio-pane--listen studio-pane--loading" role="status">
+              <p className="subtle sm">{t("loading.app")}</p>
             </div>
           ) : null}
           {studioPane === "catalog" ? (

@@ -25,6 +25,10 @@ import { registerJobRoutes } from "./jobs/routes.mjs";
 import { registerDiagnosticsRoutes } from "./routes/diagnosticsRoutes.mjs";
 import { requestIdMiddleware, getLogger } from "./logger.mjs";
 import { recordError } from "./errorBuffer.mjs";
+import {
+  isSensitiveServerMutation,
+  isServerAdminRequest,
+} from "./requestAccess.mjs";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
@@ -46,6 +50,13 @@ export function createApp(opts = {}) {
   const distPath = opts.distPath ?? path.join(__dirname, "..", "dist");
 
   app.use(requestIdMiddleware);
+  app.use((_req, res, next) => {
+    res.setHeader("X-Content-Type-Options", "nosniff");
+    res.setHeader("X-Frame-Options", "DENY");
+    res.setHeader("Referrer-Policy", "same-origin");
+    res.setHeader("Permissions-Policy", "camera=(self), microphone=(), geolocation=()");
+    next();
+  });
   app.use((req, res, next) => {
     const origin = String(req.headers.origin || "");
     if (!origin || origin === "null") {
@@ -86,6 +97,16 @@ export function createApp(opts = {}) {
     next();
   });
 
+  app.use((req, res, next) => {
+    if (
+      isSensitiveServerMutation(req) &&
+      !isServerAdminRequest(req)
+    ) {
+      return sendError(res, 403, "Server admin access required");
+    }
+    next();
+  });
+
   app.use("/media", (req, res, next) => {
     const reqPath = req.path || "";
     if (pathHasParentDirSegment(reqPath) || hasReservedPathSegment(reqPath))
@@ -109,12 +130,24 @@ export function createApp(opts = {}) {
 
   const distIndexPath = path.join(distPath, "index.html");
   if (existsSync(distIndexPath)) {
-    app.use(express.static(distPath));
+    app.use(
+      express.static(distPath, {
+        setHeaders(res, filePath) {
+          const rel = path.relative(distPath, filePath).replaceAll(path.sep, "/");
+          if (rel === "index.html" || rel === "sw.js") {
+            res.setHeader("Cache-Control", "no-cache, must-revalidate");
+          } else if (rel.startsWith("assets/")) {
+            res.setHeader("Cache-Control", "public, max-age=31536000, immutable");
+          }
+        },
+      }),
+    );
     app.use((req, res, next) => {
       if (req.path.startsWith("/api") || req.path.startsWith("/media"))
         return next();
       if (req.method !== "GET" && req.method !== "HEAD") return next();
       if (res.headersSent) return;
+      res.setHeader("Cache-Control", "no-cache, must-revalidate");
       res.sendFile("index.html", { root: distPath }, (error) => {
         if (!error) return;
         if (error.code === "ECONNABORTED" || error.code === "EPIPE") return;

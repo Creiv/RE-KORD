@@ -20,6 +20,11 @@ import { syncWebCastNow } from "../lib/castPlayback";
 import { prefetchQueueCovers } from "../lib/coverPrefetch";
 import { isAutomotiveDisplayMode } from "../lib/routing";
 import {
+  ensureAppForegroundListeners,
+  subscribeAppForeground,
+} from "../hooks/useAppForeground";
+import { mediaSessionSyncIntervalMs } from "../lib/renderQuality";
+import {
   QUEUE_HISTORY_KEEP,
   QUEUE_REFILL_BATCH,
   QUEUE_REFILL_THRESHOLD,
@@ -32,7 +37,11 @@ import {
   resetPlayerProgressTime,
   setPlayerProgressTime,
 } from "./playerProgressStore";
-import { useUserState } from "./UserStateContext";
+import {
+  useUserStateActions,
+  useUserStateSelector,
+  useUserStateStatus,
+} from "./UserStateContext";
 import type { EnrichedTrack, LibAlbum, LibraryIndex } from "../types";
 import {
   audioReadyEnough,
@@ -71,14 +80,19 @@ const PlayerContext = createContext<PlayerContextValue | null>(null);
 const TrackRowPlayerContext = createContext<TrackRowPlayerStore | null>(null);
 
 export function PlayerProvider({ children }: { children: React.ReactNode }) {
-  const user = useUserState();
-  const userReady = user.ready;
-  const restoreSession = user.state.settings.restoreSession;
-  const persistedQueue = user.state.queue;
-  const pushRecent = user.pushRecent;
-  const incrementTrackPlayCount = user.incrementTrackPlayCount;
-  const enqueueQueuePatch = user.enqueueQueuePatch;
-  const flushUserStateNow = user.flushUserStateNow;
+  const { ready: userReady } = useUserStateStatus();
+  const restoreSession = useUserStateSelector((s) => s.state.settings.restoreSession);
+  const persistedQueue = useUserStateSelector((s) => s.state.queue);
+  const audioCrossfadeSec = useUserStateSelector((s) => s.state.settings.audioCrossfadeSec);
+  const shuffleExcludedAlbumIds = useUserStateSelector(
+    (s) => s.state.shuffleExcludedAlbumIds,
+  );
+  const {
+    pushRecent,
+    incrementTrackPlayCount,
+    enqueueQueuePatch,
+    flushUserStateNow,
+  } = useUserStateActions();
 
   const audioRef = useRef<HTMLAudioElement | null>(null);
   const audioDeck0Ref = useRef<HTMLAudioElement | null>(null);
@@ -96,7 +110,7 @@ export function PlayerProvider({ children }: { children: React.ReactNode }) {
   const skipNextCurrentLoadRef = useRef(false);
   const trackLoadGenRef = useRef(0);
   const prefetchedRelPathRef = useRef<string | null>(null);
-  const audioCrossfadeSecRef = useRef(user.state.settings.audioCrossfadeSec);
+  const audioCrossfadeSecRef = useRef(audioCrossfadeSec);
   const analyserRef = useRef<AnalyserNode | null>(null);
   const getAnalyser = useCallback(() => analyserRef.current, []);
 
@@ -128,7 +142,6 @@ export function PlayerProvider({ children }: { children: React.ReactNode }) {
   const [queue, setQueue] = useState<EnrichedTrack[]>([]);
   const [currentIndex, setCurrentIndex] = useState(0);
   const [isPlaying, setIsPlaying] = useState(false);
-  const [currentTime, setCurrentTime] = useState(0);
   const [duration, setDuration] = useState(0);
   const [volume] = useState(FIXED_VOLUME);
   const [repeat, setRepeat] = useState<"off" | "all" | "one">("all");
@@ -229,7 +242,6 @@ export function PlayerProvider({ children }: { children: React.ReactNode }) {
     setCurrentIndex,
     setCurrent,
     setDuration,
-    setCurrentTime,
     setPlayerProgressTime,
     setIsPlaying,
     pushRecent,
@@ -240,7 +252,6 @@ export function PlayerProvider({ children }: { children: React.ReactNode }) {
     setCurrentIndex,
     setCurrent,
     setDuration,
-    setCurrentTime,
     setPlayerProgressTime,
     setIsPlaying,
     pushRecent,
@@ -256,8 +267,6 @@ export function PlayerProvider({ children }: { children: React.ReactNode }) {
           crossfadeCallbacksRef.current.setCurrentIndex(i),
         setCurrent: (t) => crossfadeCallbacksRef.current.setCurrent(t),
         setDuration: (d) => crossfadeCallbacksRef.current.setDuration(d),
-        setCurrentTime: (t) =>
-          crossfadeCallbacksRef.current.setCurrentTime(t),
         setPlayerProgressTime: (t, force) =>
           crossfadeCallbacksRef.current.setPlayerProgressTime(t, force),
         setIsPlaying: (v) =>
@@ -316,8 +325,6 @@ export function PlayerProvider({ children }: { children: React.ReactNode }) {
   useLayoutEffect(() => {
     if (currentRelPath === undefined) return;
     resetPlayerProgressTime();
-    const timer = window.setTimeout(() => setCurrentTime(0), 0);
-    return () => window.clearTimeout(timer);
   }, [currentRelPath]);
 
   useEffect(() => {
@@ -330,8 +337,8 @@ export function PlayerProvider({ children }: { children: React.ReactNode }) {
   }, [activeDeckIx]);
 
   useEffect(() => {
-    audioCrossfadeSecRef.current = user.state.settings.audioCrossfadeSec;
-  }, [user.state.settings.audioCrossfadeSec]);
+    audioCrossfadeSecRef.current = audioCrossfadeSec;
+  }, [audioCrossfadeSec]);
 
   const advanceAfterTrackCompleted = useCallback(() => {
     const now = performance.now();
@@ -365,7 +372,6 @@ export function PlayerProvider({ children }: { children: React.ReactNode }) {
     const nextTr = queueRef.current[nextIndex];
     if (nextTr?.relPath === cur.relPath) {
       audio.currentTime = 0;
-      setCurrentTime(0);
       setPlayerProgressTime(0, true);
       keepPlayingRef.current = true;
       void audio.play().catch(() => setIsPlaying(false));
@@ -518,7 +524,6 @@ export function PlayerProvider({ children }: { children: React.ReactNode }) {
           setDuration(ready.duration);
         }
         const t = ready.currentTime;
-        setCurrentTime(t);
         setPlayerProgressTime(t, true);
         return;
       }
@@ -568,7 +573,6 @@ export function PlayerProvider({ children }: { children: React.ReactNode }) {
           setDuration(inEl.duration);
         }
         const deckT = inEl.currentTime;
-        setCurrentTime(deckT);
         setPlayerProgressTime(deckT, true);
         if (keepPlayingRef.current) {
           const ctx = audioCtxRef.current;
@@ -652,7 +656,10 @@ export function PlayerProvider({ children }: { children: React.ReactNode }) {
         }
 
         if (audioCrossfadeSecRef.current > 0 && repeatRef.current !== "one") {
-          void startCrossfade();
+          const remaining = safeDuration - audio.currentTime;
+          if (remaining <= audioCrossfadeSecRef.current + 0.25) {
+            void startCrossfade();
+          }
         }
 
         const now = Date.now();
@@ -937,7 +944,6 @@ export function PlayerProvider({ children }: { children: React.ReactNode }) {
       const audio = audioRef.current;
       if (!audio) return;
       audio.currentTime = t;
-      setCurrentTime(t);
       setPlayerProgressTime(t, true);
       syncMediaSessionNow();
     },
@@ -1196,7 +1202,6 @@ export function PlayerProvider({ children }: { children: React.ReactNode }) {
       const audio = audioRef.current;
       if (audio) {
         audio.currentTime = 0;
-        setCurrentTime(0);
         setPlayerProgressTime(0, true);
         keepPlayingRef.current = true;
         void audio.play().catch(() => setIsPlaying(false));
@@ -1275,8 +1280,7 @@ export function PlayerProvider({ children }: { children: React.ReactNode }) {
     syncMediaSessionNowRef.current();
   }, [abortCrossfade, currentIndex, queue, repeat]);
 
-  const { toggleFavorite, toggleShuffleExcludedTrack } = user;
-  const shuffleExcludedAlbumIds = user.state.shuffleExcludedAlbumIds;
+  const { toggleFavorite, toggleShuffleExcludedTrack } = useUserStateActions();
   useEffect(() => {
     mediaBridgeRef.current = buildMediaBridge({
       playForMediaSession,
@@ -1334,10 +1338,28 @@ export function PlayerProvider({ children }: { children: React.ReactNode }) {
 
   useEffect(() => {
     if (!current) return;
+    ensureAppForegroundListeners();
     syncMediaSessionNow();
-    const ms = isPlaying ? 1000 : 2500;
-    const id = window.setInterval(() => syncMediaSessionNow(), ms);
-    return () => window.clearInterval(id);
+
+    let id = window.setInterval(
+      () => syncMediaSessionNow(),
+      mediaSessionSyncIntervalMs(isPlaying),
+    );
+
+    const reschedule = () => {
+      window.clearInterval(id);
+      syncMediaSessionNow();
+      id = window.setInterval(
+        () => syncMediaSessionNow(),
+        mediaSessionSyncIntervalMs(isPlaying),
+      );
+    };
+
+    const unsub = subscribeAppForeground(reschedule);
+    return () => {
+      window.clearInterval(id);
+      unsub();
+    };
   }, [current, isPlaying, syncMediaSessionNow]);
 
   const trackRowListenersRef = useRef<Set<() => void>>(new Set());
@@ -1381,12 +1403,10 @@ export function PlayerProvider({ children }: { children: React.ReactNode }) {
       queue,
       currentIndex,
       isPlaying,
-      currentTime,
       duration,
       volume,
       repeat,
       shuffle,
-      favorites: user.favorites,
       play: () => {
         void play();
       },
@@ -1407,8 +1427,6 @@ export function PlayerProvider({ children }: { children: React.ReactNode }) {
       clearQueue,
       next,
       prev,
-      toggleFavorite: user.toggleFavorite,
-      isFavorite: user.isFavorite,
       resyncTracksFromIndex,
       syncMediaSessionNow,
       sleepTimerEndsAt,
@@ -1424,7 +1442,6 @@ export function PlayerProvider({ children }: { children: React.ReactNode }) {
       syncMediaSessionNow,
       current,
       currentIndex,
-      currentTime,
       duration,
       isPlaying,
       moveQueueItem,
@@ -1443,9 +1460,6 @@ export function PlayerProvider({ children }: { children: React.ReactNode }) {
       setShuffle,
       shuffle,
       toggle,
-      user.favorites,
-      user.isFavorite,
-      user.toggleFavorite,
       volume,
       sleepTimerEndsAt,
       setSleepTimer,
@@ -1467,6 +1481,24 @@ export function usePlayer() {
   const ctx = useContext(PlayerContext);
   if (!ctx) throw new Error("usePlayer");
   return ctx;
+}
+
+export function usePlayerCurrentId() {
+  const { current } = usePlayer();
+  return current?.relPath ?? null;
+}
+
+export function usePlayerIsPlaying() {
+  const { isPlaying } = usePlayer();
+  return isPlaying;
+}
+
+export function usePlayerQueueMeta() {
+  const { queue, currentIndex } = usePlayer();
+  return useMemo(
+    () => ({ queueLength: queue.length, currentIndex }),
+    [queue.length, currentIndex],
+  );
 }
 
 export function useTrackRowPlayer(relPath: string) {

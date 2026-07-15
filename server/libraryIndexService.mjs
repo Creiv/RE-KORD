@@ -20,15 +20,28 @@ import {
   searchLibraryDb,
   backfillMissingArtworkCache,
 } from "./db/queries/library.mjs"
-import { runLibraryScan, scheduleLibraryScan } from "./scanner/index.mjs"
+import { scheduleLibraryScan } from "./scanner/index.mjs"
 import { startLibraryWatcher } from "./scanner/watcher.mjs"
 import { backfillArtworkThumbs } from "./artwork/index.mjs"
 
 /** Evita bootstrap/scan duplicate in parallelo. */
 const libraryIndexFlight = new Map()
 
+/** Cache in-memory per root: rebuild solo quando epoch cambia. */
+const libraryIndexMemoryCache = new Map()
+
+/** Side-effect bootstrap (watcher, backfill) una volta per root per processo. */
+const bootstrapSideEffectsStarted = new Set()
+
 /** Backfill thumb: una sola volta per root per processo, in background. */
 const thumbBackfillStarted = new Set()
+
+/** Backfill artwork cache: una sola volta per root per processo, in background. */
+const artworkBackfillStarted = new Set()
+
+export function clearLibraryIndexCache(root = getMusicRoot()) {
+  libraryIndexMemoryCache.delete(path.resolve(root))
+}
 
 function startArtworkThumbBackfill(root) {
   const key = path.resolve(root)
@@ -48,23 +61,74 @@ function startArtworkThumbBackfill(root) {
     })
 }
 
+function startMissingArtworkBackfill(root) {
+  const key = path.resolve(root)
+  if (artworkBackfillStarted.has(key)) return
+  artworkBackfillStarted.add(key)
+  void backfillMissingArtworkCache(root).catch((error) => {
+    console.warn(
+      "[rekord] artwork cache backfill failed:",
+      error?.message || error,
+    )
+  })
+}
+
+async function ensureBootstrapSideEffects(root) {
+  const key = path.resolve(root)
+  if (bootstrapSideEffectsStarted.has(key)) return
+  bootstrapSideEffectsStarted.add(key)
+  const created = await bootstrapLibraryDb(root)
+  if (created) {
+    console.log(`[rekord] library database bootstrapped at ${root}/.kord/rekord.db`)
+  }
+  startMissingArtworkBackfill(root)
+  startArtworkThumbBackfill(root)
+  startLibraryWatcher(root)
+}
+
+function readCachedIndex(root) {
+  const key = path.resolve(root)
+  const cached = libraryIndexMemoryCache.get(key)
+  if (!cached) return null
+  try {
+    const epoch = getLibraryEpoch(root)
+    if (cached.epoch === epoch) return cached.index
+  } catch {
+    return null
+  }
+  libraryIndexMemoryCache.delete(key)
+  return null
+}
+
+function storeCachedIndex(root, index) {
+  const key = path.resolve(root)
+  try {
+    const epoch = getLibraryEpoch(root)
+    libraryIndexMemoryCache.set(key, { epoch, index })
+  } catch {
+    /* DB non pronto */
+  }
+}
+
 export async function getLibraryIndex(root = getMusicRoot()) {
   if (!existsSync(root) || !underRoot(root, root)) {
     throw new Error("Music library folder is not available")
   }
   const key = path.resolve(root)
+
+  const cached = readCachedIndex(root)
+  if (cached) return cached
+
   let inflight = libraryIndexFlight.get(key)
   if (inflight) return inflight
 
   inflight = (async () => {
-    const created = await bootstrapLibraryDb(root)
-    if (created) {
-      console.log(`[rekord] library database bootstrapped at ${root}/.kord/rekord.db`)
-    }
-    await backfillMissingArtworkCache(root)
-    startArtworkThumbBackfill(root)
-    startLibraryWatcher(root)
-    return buildLibraryIndexFromDb(root)
+    const hit = readCachedIndex(root)
+    if (hit) return hit
+    await ensureBootstrapSideEffects(root)
+    const index = buildLibraryIndexFromDb(root)
+    storeCachedIndex(root, index)
+    return index
   })()
 
   libraryIndexFlight.set(key, inflight)
@@ -77,6 +141,7 @@ export async function getLibraryIndex(root = getMusicRoot()) {
 }
 
 export async function invalidateLibraryIndex(root = getMusicRoot()) {
+  clearLibraryIndexCache(root)
   libraryIndexFlight.delete(path.resolve(root))
   scheduleLibraryScan(root, { debounceMs: 200 })
 }
@@ -155,12 +220,27 @@ export function libraryAlbumDetailFromIndex(index, relPathOrId) {
   return { album, tracks }
 }
 
+/** Restringe risultati ricerca DB al sotto-insieme già filtrato per account/selezione. */
+function filterSearchResultsToIndex(index, results) {
+  const artistIds = new Set(index.artists.map((a) => a.id))
+  const artistNames = new Set(index.artists.map((a) => a.name))
+  const albumPaths = new Set(index.albums.map((a) => a.relPath))
+  const trackPaths = new Set(index.tracks.map((t) => t.relPath))
+  return {
+    artists: results.artists.filter(
+      (a) => artistIds.has(a.id) || artistNames.has(a.name),
+    ),
+    albums: results.albums.filter((a) => albumPaths.has(a.relPath)),
+    tracks: results.tracks.filter((t) => trackPaths.has(t.relPath)),
+  }
+}
+
 export function searchLibraryIndex(index, query) {
   const q = String(query || "").trim()
   if (!q) return { artists: [], albums: [], tracks: [] }
   if (index?.musicRoot && process.env.REKORD_DB_SEARCH !== "0") {
     try {
-      return searchLibraryDb(index.musicRoot, q)
+      return filterSearchResultsToIndex(index, searchLibraryDb(index.musicRoot, q))
     } catch {
       /* fallback sotto */
     }
@@ -207,4 +287,24 @@ export function getLibraryIndexCacheEpochSnapshot(root = getMusicRoot()) {
   } catch {
     return 0
   }
+}
+
+/** Reset stato in-memory per un root (es. cambio musicRoot). */
+export function resetLibraryIndexServiceStateForRoot(root) {
+  if (!root) return
+  const key = path.resolve(String(root))
+  libraryIndexFlight.delete(key)
+  libraryIndexMemoryCache.delete(key)
+  bootstrapSideEffectsStarted.delete(key)
+  thumbBackfillStarted.delete(key)
+  artworkBackfillStarted.delete(key)
+}
+
+/** Solo test: reset stato modulo. */
+export function resetLibraryIndexServiceStateForTests() {
+  libraryIndexFlight.clear()
+  libraryIndexMemoryCache.clear()
+  bootstrapSideEffectsStarted.clear()
+  thumbBackfillStarted.clear()
+  artworkBackfillStarted.clear()
 }

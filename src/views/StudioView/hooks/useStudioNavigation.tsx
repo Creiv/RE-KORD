@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
+import { setVisualSurfaceContext } from "../../../hooks/useVisualSurfaceActive";
 import {
   REKORD_STUDIO_PANE,
   STUDIO_PANE_EVENT,
@@ -12,14 +13,16 @@ import {
   UiTrackChanges,
 } from "../../../components/RekordUiIcons";
 import {
-  readStoredStudioPane,
+  defaultStudioPane,
   type StudioPane,
 } from "../../../components/toolsViewShared";
 
 export function useStudioNavigation() {
-  const [studioPane, setStudioPane] = useState<StudioPane>(() => {
-    return readStoredStudioPane() ?? "listen";
-  });
+  const [studioPane, setStudioPane] = useState<StudioPane>(() => defaultStudioPane());
+
+  useEffect(() => {
+    setVisualSurfaceContext({ studioPane });
+  }, [studioPane]);
 
   useEffect(() => {
     try {

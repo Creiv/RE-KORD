@@ -1,5 +1,10 @@
 import type { RefObject } from "react";
 import { useLibraryPlayback } from "../../hooks/useLibraryPlayback";
+import {
+  useUserSettingsSlice,
+  useUserShuffleSlice,
+  useUserStateSelector,
+} from "../../context/UserStateContext";
 import type {
   LibraryEntityDelta,
   LibraryIndex,
@@ -11,7 +16,7 @@ import { LibraryBrowseView } from "./components/LibraryBrowseView";
 import { LibrarySearchView } from "./components/LibrarySearchView";
 import { useLibraryAlbumDetail } from "./hooks/useLibraryAlbumDetail";
 import { useLibraryArtistAlbumResolution } from "./hooks/useLibraryArtistAlbumResolution";
-import { useLibraryBrowseData } from "./hooks/useLibraryBrowseData";
+import { useLibraryBrowseData, type LibraryBrowseDataScope } from "./hooks/useLibraryBrowseData";
 import { useLibraryBrowseState } from "./hooks/useLibraryBrowseState";
 import { useLibrarySearch } from "./hooks/useLibrarySearch";
 
@@ -65,7 +70,6 @@ export default function LibraryView({
     libBrowse,
     libOverviewSort,
     artistAlbumSort,
-    user,
     mode,
     setMode,
     selectedGenreKey,
@@ -76,6 +80,23 @@ export default function LibraryView({
     setMoodMatchMode,
     endSearchForBrowse,
   } = browseState;
+
+  const { updateSettings } = useUserSettingsSlice();
+  const {
+    shuffleExcludedAlbumIds,
+    shuffleExcludedTrackRelPaths,
+    toggleShuffleExcludedAlbum,
+    setShuffleTracksExcludedBulk,
+  } = useUserShuffleSlice();
+  const trackPlayCounts = useUserStateSelector((s) => s.state.trackPlayCounts || {});
+
+  const browseDataScope: LibraryBrowseDataScope = query.trim()
+    ? "search"
+    : route.album
+      ? "album"
+      : route.artist
+        ? "artist"
+        : "browse";
 
   const { normalizedQuery, searchResults, openSearchArtist, openSearchAlbum } =
     useLibrarySearch({
@@ -88,6 +109,7 @@ export default function LibraryView({
       showSearchBar,
       onOpenArtist,
       onOpenAlbum,
+      enabled: showSearchBar || Boolean(query.trim()),
     });
 
   const { artist, artistAlbums, album, albumTracks, playAlbumTrackAt } =
@@ -95,21 +117,22 @@ export default function LibraryView({
       index,
       route,
       artistAlbumSort,
-      trackPlayCounts: user.state.trackPlayCounts || {},
+      trackPlayCounts,
       playSequence,
     });
 
   const browseData = useLibraryBrowseData({
     index,
     libOverviewSort,
-    trackPlayCounts: user.state.trackPlayCounts || {},
-    shuffleExcludedAlbumIds: user.state.shuffleExcludedAlbumIds,
-    shuffleExcludedTrackRelPaths: user.state.shuffleExcludedTrackRelPaths,
+    trackPlayCounts,
+    shuffleExcludedAlbumIds,
+    shuffleExcludedTrackRelPaths,
     selectedGenreKey,
     moodFilterIds,
     moodMatchMode,
     artist,
     artistAlbums,
+    scope: browseDataScope,
   });
 
   const albumDetail = useLibraryAlbumDetail({
@@ -158,7 +181,7 @@ export default function LibraryView({
         albumTracks={albumTracks}
         excludedAlbums={browseData.excludedAlbums}
         onOpenArtist={onOpenArtist}
-        toggleShuffleExcludedAlbum={user.toggleShuffleExcludedAlbum}
+        toggleShuffleExcludedAlbum={toggleShuffleExcludedAlbum}
         playSequence={playSequence}
         playAlbumTrackAt={playAlbumTrackAt}
         albumDetail={albumDetail}
@@ -175,7 +198,7 @@ export default function LibraryView({
         artistShuffleEligible={browseData.artistShuffleEligible}
         onOpenArtist={onOpenArtist}
         onOpenAlbum={onOpenAlbum}
-        updateArtistAlbumSort={(sort) => user.updateSettings({ artistAlbumSort: sort })}
+        updateArtistAlbumSort={(sort) => updateSettings({ artistAlbumSort: sort })}
         playArtistShuffle={playArtistShuffle}
       />
     );
@@ -198,9 +221,9 @@ export default function LibraryView({
       moodMatchMode={moodMatchMode}
       setMoodMatchMode={setMoodMatchMode}
       endSearchForBrowse={endSearchForBrowse}
-      updateLibBrowse={(browse) => user.updateSettings({ libBrowse: browse })}
-      updateLibOverviewSort={(sort) => user.updateSettings({ libOverviewSort: sort })}
-      setShuffleTracksExcludedBulk={user.setShuffleTracksExcludedBulk}
+      updateLibBrowse={(browse) => updateSettings({ libBrowse: browse })}
+      updateLibOverviewSort={(sort) => updateSettings({ libOverviewSort: sort })}
+      setShuffleTracksExcludedBulk={setShuffleTracksExcludedBulk}
       onOpenArtist={onOpenArtist}
       playPoolShuffle={playPoolShuffle}
       playCollectionShuffle={playCollectionShuffle}

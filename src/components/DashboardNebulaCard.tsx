@@ -1,5 +1,6 @@
-import { useUserState } from "../context/UserStateContext";
+import { useUserSettingsSlice } from "../context/UserStateContext";
 import { useI18n } from "../i18n/useI18n";
+import { requestNebulaFullscreen } from "../lib/nebulaFullscreen";
 import type { AppSection, LibraryIndex } from "../types";
 import { SectionHeadLead } from "./SectionHeadLead";
 import { UiAutoAwesome } from "./RekordUiIcons";
@@ -15,10 +16,11 @@ export function DashboardNebulaCard({
   onOpenSection,
 }: DashboardNebulaCardProps) {
   const { t } = useI18n();
-  const user = useUserState();
+  const { updateSettings } = useUserSettingsSlice();
 
   const openNebula = () => {
-    user.updateSettings({ libBrowse: "nebula" });
+    updateSettings({ libBrowse: "nebula" });
+    requestNebulaFullscreen();
     onOpenSection("libreria");
   };
 

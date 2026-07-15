@@ -45,8 +45,18 @@ function normalizeBase(input) {
     .trim()
     .replace(/\/+$/, "");
   if (!t) return null;
-  if (!/^https?:\/\//i.test(t)) return `http://${t}`;
-  return t;
+  const withScheme = /^https?:\/\//i.test(t) ? t : `http://${t}`;
+  try {
+    const u = new URL(withScheme);
+    const host = String(u.hostname || "").toLowerCase();
+    if (host === "trycloudflare.com" || host.endsWith(".trycloudflare.com")) {
+      u.protocol = "https:";
+      u.port = "";
+    }
+    return `${u.protocol}//${u.host}`;
+  } catch {
+    return null;
+  }
 }
 
 function appendLaunchLog(msg) {

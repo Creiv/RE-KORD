@@ -1,3 +1,4 @@
+import { lazy, Suspense } from "react";
 import type { CSSProperties, Dispatch, RefObject, SetStateAction } from "react";
 import { TrackListRow } from "../../../components/AppSharedUi";
 import { PlayCollectionButton } from "../../../components/PlayCollectionButton";
@@ -5,6 +6,7 @@ import { ArtistListTile, GenreListTile } from "../../../components/library";
 import { ExcludeShuffleIcon } from "../../../components/ExcludeShuffleIcon";
 import { TrackMoodGlyph } from "../../../components/TrackMoodGlyph";
 import { VirtualTrackList } from "../../../components/VirtualTrackList";
+import { VirtualOverviewGrid } from "../../../components/VirtualOverviewGrid";
 import {
   UiAutoAwesome,
   UiBarChart,
@@ -22,8 +24,12 @@ import {
 } from "../../../lib/trackMoods";
 import type { LibraryIndex, LibraryTrackIndex } from "../../../types";
 import type { useLibraryBrowseData } from "../hooks/useLibraryBrowseData";
+import { usePaginatedArtists } from "../hooks/usePaginatedArtists";
 import { LibrarySearchHero } from "./LibrarySearchHero";
-import SonicNebulaView from "../../SonicNebulaView/SonicNebulaView";
+
+const SonicNebulaView = lazy(
+  () => import("../../SonicNebulaView/SonicNebulaView"),
+);
 
 interface LibraryBrowseViewProps {
   index: LibraryIndex;
@@ -99,6 +105,14 @@ export function LibraryBrowseView({
     sortedMoodTracks,
     moodToolbarBulkAllExcluded,
   } = browseData;
+
+  const paginatedArtists = usePaginatedArtists({
+    sort: libOverviewSort === "plays" ? "tracks" : "name",
+    enabled: libBrowse === "artists",
+  });
+  const artistsForOverview = paginatedArtists.enabled
+    ? (paginatedArtists.artists.length ? paginatedArtists.artists : sortedOverviewArtists)
+    : sortedOverviewArtists;
 
   return (
     <div
@@ -352,10 +366,10 @@ export function LibraryBrowseView({
                     <p className="eyebrow">{t("library.overviewEyebrow")}</p>
                     <h2>
                       {libBrowse === "artists"
-                        ? sortedOverviewArtists.length
+                        ? artistsForOverview.length
                         : sortedGenreBrowseList.length}{" "}
                       {libBrowse === "artists"
-                        ? sortedOverviewArtists.length === 1
+                        ? artistsForOverview.length === 1
                           ? t("library.unitArtist")
                           : t("library.unitArtistPlural")
                         : sortedGenreBrowseList.length === 1
@@ -443,7 +457,9 @@ export function LibraryBrowseView({
             </>
           ) : libBrowse === "nebula" ? (
             <div className="library-nebula-embed">
-              <SonicNebulaView index={index} embedded />
+              <Suspense fallback={null}>
+                <SonicNebulaView index={index} embedded />
+              </Suspense>
             </div>
           ) : libBrowse === "moods" ? (
             <div className="library-mood-browse">
@@ -571,25 +587,42 @@ export function LibraryBrowseView({
               )}
             </div>
           ) : libBrowse === "artists" ? (
-            <div className="library-overview-cols">
-              {sortedOverviewArtists.map((item) => (
+            <VirtualOverviewGrid
+              items={artistsForOverview}
+              getKey={(item) => item.id}
+              onNearEnd={
+                paginatedArtists.enabled && paginatedArtists.hasMore
+                  ? paginatedArtists.loadMore
+                  : undefined
+              }
+              footer={
+                paginatedArtists.enabled && paginatedArtists.hasMore ? (
+                  <button
+                    type="button"
+                    className="btn btn--ghost"
+                    disabled={paginatedArtists.loading}
+                    onClick={() => paginatedArtists.loadMore()}
+                  >
+                    {t("common.loadMore")}
+                  </button>
+                ) : artistsForOverview.length === 0 && index.selectionEmpty ? (
+                  <p className="panel-empty">{t("library.selectionEmptyHint")}</p>
+                ) : null
+              }
+              renderItem={(item) => (
                 <ArtistListTile
-                  key={item.id}
                   artist={item}
                   albumCount={item.albums.length}
                   coverAlbumRelPath={artistCoverById.get(item.id) ?? null}
                   index={index}
                   onOpen={() => onOpenArtist(item.id)}
                 />
-              ))}
-              {sortedOverviewArtists.length === 0 && index.selectionEmpty ? (
-                <p className="panel-empty">{t("library.selectionEmptyHint")}</p>
-              ) : null}
-            </div>
+              )}
+            />
           ) : (
             <div className="genre-browse-wrap">
-              <div className="library-overview-cols">
-                {genreIndex.noGenreCount > 0 ? (
+              {genreIndex.noGenreCount > 0 ? (
+                <div className="library-overview-cols">
                   <GenreListTile
                     genreKey="__none__"
                     title={t("library.genreCardNoGenre")}
@@ -605,10 +638,13 @@ export function LibraryBrowseView({
                       setSelectedGenreKey("__none__");
                     }}
                   />
-                ) : null}
-                {sortedGenreBrowseList.map((g) => (
+                </div>
+              ) : null}
+              <VirtualOverviewGrid
+                items={sortedGenreBrowseList}
+                getKey={(g) => g.key}
+                renderItem={(g) => (
                   <GenreListTile
-                    key={g.key}
                     genreKey={g.key}
                     title={g.label}
                     albumCount={
@@ -622,8 +658,8 @@ export function LibraryBrowseView({
                       setSelectedGenreKey(g.key);
                     }}
                   />
-                ))}
-              </div>
+                )}
+              />
               {genreIndex.list.length === 0 && genreIndex.noGenreCount === 0 ? (
                 <p className="panel-empty">{t("library.noGenresEmpty")}</p>
               ) : null}

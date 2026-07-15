@@ -1,5 +1,5 @@
 import { useCallback, useMemo } from "react";
-import { useUserState } from "../context/UserStateContext";
+import { useUserSettingsSlice } from "../context/UserStateContext";
 import type { AppLocale } from "../types";
 import { EN } from "./en";
 import { IT } from "./it";
@@ -11,8 +11,8 @@ const TABLES: Record<AppLocale, Record<string, string>> = {
 };
 
 export function useI18n() {
-  const { state, updateSettings } = useUserState();
-  const locale = state.settings.locale;
+  const { settings, updateSettings } = useUserSettingsSlice();
+  const locale = settings.locale;
   const table = TABLES[locale] ?? TABLES.en;
   const t = useCallback(
     (key: string, vars?: Record<string, string | number>) =>

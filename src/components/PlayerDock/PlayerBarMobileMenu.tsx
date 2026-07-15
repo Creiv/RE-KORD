@@ -2,7 +2,8 @@ import { memo, useCallback, useEffect, useId, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { useI18n } from "../../i18n/useI18n";
 import { usePlayer } from "../../context/PlayerContext";
-import { useUserState } from "../../context/UserStateContext";
+import { useUserStateActions, useUserStateSelector } from "../../context/UserStateContext";
+import { isFavoriteRelPath } from "../../lib/libraryNav";
 import {
   popoverPlacementStyle,
   usePopoverLayerAnchored,
@@ -20,12 +21,10 @@ import {
 import type { EnrichedTrack } from "../../types";
 
 type PlayerCtx = ReturnType<typeof usePlayer>;
-type UserCtx = ReturnType<typeof useUserState>;
 
 interface PlayerBarMobileMenuProps {
   cur: EnrichedTrack | null;
   p: PlayerCtx;
-  user: UserCtx;
   shuffleExcluded: boolean;
   albumShuffleExcluded: boolean;
   onGoToAscolta: () => void;
@@ -35,12 +34,14 @@ interface PlayerBarMobileMenuProps {
 export const PlayerBarMobileMenu = memo(function PlayerBarMobileMenu({
   cur,
   p,
-  user,
   shuffleExcluded,
   albumShuffleExcluded,
   onGoToAscolta,
   onRadioFromTrack,
 }: PlayerBarMobileMenuProps) {
+  const { toggleFavorite, toggleShuffleExcludedTrack } = useUserStateActions();
+  const favorites = useUserStateSelector((s) => s.favorites);
+  const curIsFavorite = cur ? isFavoriteRelPath(favorites, cur.relPath) : false;
   const { t } = useI18n();
   const menuId = useId();
   const [open, setOpen] = useState(false);
@@ -129,8 +130,8 @@ export const PlayerBarMobileMenu = memo(function PlayerBarMobileMenu({
             key: "fav",
             label: t("trackRow.favTitle"),
             icon: <UiFavorite />,
-            onClick: () => run(() => user.toggleFavorite(cur.relPath)),
-            pressed: user.isFavorite(cur.relPath),
+            onClick: () => run(() => toggleFavorite(cur.relPath)),
+            pressed: curIsFavorite,
           },
           {
             key: "exclude",
@@ -140,7 +141,7 @@ export const PlayerBarMobileMenu = memo(function PlayerBarMobileMenu({
             icon: <ExcludeShuffleIcon />,
             onClick: () => {
               if (albumShuffleExcluded) return;
-              run(() => user.toggleShuffleExcludedTrack(cur.relPath));
+              run(() => toggleShuffleExcludedTrack(cur.relPath));
             },
             disabled: albumShuffleExcluded,
             pressed: shuffleExcluded,

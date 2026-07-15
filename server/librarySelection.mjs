@@ -81,7 +81,7 @@ export async function writeLibrarySelection(libraryRoot, accountId, data) {
 /**
  * @returns {"all"|"empty"|"filter"}
  */
-function getSelectionFilterMode(selection, accountId) {
+export function getSelectionFilterMode(selection, accountId) {
   if (selection == null) {
     return accountId === DEFAULT_ACCOUNT_ID ? "all" : "empty"
   }

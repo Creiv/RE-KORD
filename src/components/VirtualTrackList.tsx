@@ -8,7 +8,7 @@ import {
 import { useVirtualizer } from "@tanstack/react-virtual";
 
 /** Sotto questa soglia la lista è renderizzata per intero (nessun overhead). */
-const DEFAULT_VIRTUALIZE_FROM = 80;
+const DEFAULT_VIRTUALIZE_FROM = 40;
 const DEFAULT_ESTIMATED_ROW_PX = 72;
 const DEFAULT_LIST_GAP_PX = 12;
 

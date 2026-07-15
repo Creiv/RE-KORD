@@ -22,8 +22,25 @@ const packageVersion = (() => {
 export default defineConfig({
   define: {
     "import.meta.env.VITE_REKORD_VERSION": JSON.stringify(packageVersion),
+    "import.meta.env.VITE_REKORD_PAGINATED_LIBRARY": JSON.stringify(
+      process.env.VITE_REKORD_PAGINATED_LIBRARY ?? "1",
+    ),
   },
   plugins: [react()],
+  build: {
+    rollupOptions: {
+      output: {
+        manualChunks(id) {
+          if (!id.includes("node_modules")) return;
+          if (id.includes("react-dom") || /\/react\//.test(id)) {
+            return "react-vendor";
+          }
+          if (id.includes("@tanstack/react-virtual")) return "virtual";
+          if (id.includes("better-sqlite3")) return undefined;
+        },
+      },
+    },
+  },
   test: {
     globals: true,
     environment: "jsdom",

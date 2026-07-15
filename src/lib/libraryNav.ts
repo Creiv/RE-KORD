@@ -262,27 +262,31 @@ export function trackPlaybackKey(track: {
   return track.filePath?.trim() || track.relPath
 }
 
+const trackLookupCache = new WeakMap<
+  readonly EnrichedTrack[],
+  ReturnType<typeof buildLibraryTrackLookup>
+>();
+
+function trackLookupFor<T extends EnrichedTrack>(libraryTracks: readonly T[]) {
+  const key = libraryTracks as readonly EnrichedTrack[];
+  let lookup = trackLookupCache.get(key);
+  if (!lookup) {
+    lookup = buildLibraryTrackLookup(
+      libraryTracks as unknown as readonly LibraryTrackIndex[],
+    );
+    trackLookupCache.set(key, lookup);
+  }
+  return lookup;
+}
+
 export function resolveTrackFromLibrary<T extends EnrichedTrack>(
   seed: T,
   libraryTracks: readonly T[],
 ): T {
-  const byRel = new Map(libraryTracks.map((track) => [track.relPath, track]))
-  const byFile = new Map(
-    libraryTracks
-      .filter((track) => track.filePath?.trim())
-      .map((track) => [track.filePath!.trim(), track]),
-  )
-  const direct = byRel.get(seed.relPath)
-  if (direct) return direct
-  const migrated = byRel.get(legacyLooseRelPath(seed.relPath))
-  if (migrated) return migrated
-  const legacy = byRel.get(seed.relPath.replace("/Tracks/", "/Tracce/"))
-  if (legacy) return legacy
-  if (seed.filePath?.trim()) {
-    const fromFile = byFile.get(seed.filePath.trim())
-    if (fromFile) return fromFile
-  }
-  return seed
+  if (!libraryTracks.length) return seed;
+  const full = lookupLibraryTrack(trackLookupFor(libraryTracks), seed);
+  if (!full) return seed;
+  return { ...seed, ...full } as T;
 }
 
 /** Allinea brani da user state (recenti, playlist stub) con l'indice libreria corrente. */
@@ -290,8 +294,12 @@ export function enrichTracksFromLibrary<T extends EnrichedTrack>(
   seeds: readonly T[],
   libraryTracks: readonly T[],
 ): T[] {
-  if (!libraryTracks.length) return [...seeds]
-  return seeds.map((seed) => resolveTrackFromLibrary(seed, libraryTracks))
+  if (!libraryTracks.length) return [...seeds];
+  const lookup = trackLookupFor(libraryTracks);
+  return seeds.map((seed) => {
+    const full = lookupLibraryTrack(lookup, seed);
+    return full ? ({ ...seed, ...full } as T) : seed;
+  });
 }
 
 export function buildLibraryTrackLookup(tracks: readonly LibraryTrackIndex[]) {
@@ -301,6 +309,8 @@ export function buildLibraryTrackLookup(tracks: readonly LibraryTrackIndex[]) {
     byRelPath.set(track.relPath, track)
     const migrated = legacyLooseRelPath(track.relPath)
     if (migrated !== track.relPath) byRelPath.set(migrated, track)
+    const legacy = legacyLooseRelPathReverse(track.relPath)
+    if (legacy !== track.relPath) byRelPath.set(legacy, track)
     if (track.filePath?.trim()) byFilePath.set(track.filePath.trim(), track)
   }
   return { byRelPath, byFilePath }

@@ -12,6 +12,8 @@ dist
 dist-ssr
 release
 coverage
+test-results
+playwright-report
 *.tsbuildinfo
 .vite
 

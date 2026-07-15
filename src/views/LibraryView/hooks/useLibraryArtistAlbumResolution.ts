@@ -1,5 +1,6 @@
 import { useCallback, useMemo } from "react";
 import { useI18n } from "../../../i18n/useI18n";
+import { buildLibraryTrackLookup, lookupLibraryTrack } from "../../../lib/libraryNav";
 import type {
   LibraryAlbumIndex,
   LibraryArtistIndex,
@@ -88,17 +89,13 @@ export function useLibraryArtistAlbumResolution({
     );
   }, [route.album, artist, artistAlbums]);
 
-  const albumTracks = useMemo(
-    () =>
-      album
-        ? album.tracks
-            .map((relPath) =>
-              index.tracks.find((track) => track.relPath === relPath)
-            )
-            .filter((track): track is LibraryTrackIndex => Boolean(track))
-        : [],
-    [album, index.tracks]
-  );
+  const albumTracks = useMemo(() => {
+    if (!album) return [];
+    const lookup = buildLibraryTrackLookup(index.tracks);
+    return album.tracks
+      .map((relPath) => lookupLibraryTrack(lookup, { relPath }))
+      .filter((track): track is LibraryTrackIndex => Boolean(track));
+  }, [album, index.tracks]);
 
   const playAlbumTrackAt = useCallback(
     (trIndex: number) => playSequence(albumTracks, trIndex),

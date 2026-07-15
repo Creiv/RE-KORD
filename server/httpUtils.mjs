@@ -22,6 +22,7 @@ export function apiSkipsLibraryGate(req) {
   if (sub === "/diagnostics") return true;
   if (sub === "/jobs" || sub.startsWith("/jobs/")) return true;
   if (sub === "/network/public-ip") return true;
+  if (sub === "/remote-access" || sub.startsWith("/remote-access/")) return true;
   if (
     (sub === "/backup/rekord-restore" || sub === "/backup/kord-restore") &&
     req.method === "POST"

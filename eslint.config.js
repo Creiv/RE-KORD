@@ -43,4 +43,22 @@ export default defineConfig([
       'preserve-caught-error': 'off',
     },
   },
+  {
+    files: [
+      'scripts/mobile-qa/**/*.mjs',
+      'scripts/adb-mobile-qa.mjs',
+      'scripts/adb-webview-cdp-validate.mjs',
+    ],
+    extends: [js.configs.recommended],
+    languageOptions: {
+      ecmaVersion: 2022,
+      sourceType: 'module',
+      globals: { ...globals.node, ...globals.browser },
+    },
+    rules: {
+      'no-console': 'off',
+      'no-unused-vars': ['warn', { argsIgnorePattern: '^_' }],
+      'no-undef': 'off',
+    },
+  },
 ])

@@ -33,6 +33,18 @@ describe("sonicNebula", () => {
     expect(a.stars[1]?.y).toBe(b.stars[1]?.y);
   });
 
+  it("caps star count when maxStars is set", () => {
+    const tracks = Array.from({ length: 50 }, (_, i) =>
+      track(`t-${i}.mp3`, `Track ${i}`),
+    );
+    const model = buildNebulaModel(tracks, {
+      playCounts: {},
+      favorites: new Set(),
+      maxStars: 10,
+    });
+    expect(model.stars).toHaveLength(10);
+  });
+
   it("boosts radius for favorites and play counts", () => {
     const tracks = [track("fav.mp3", "Fav")];
     const plain = buildNebulaModel(tracks, { playCounts: {}, favorites: new Set() });

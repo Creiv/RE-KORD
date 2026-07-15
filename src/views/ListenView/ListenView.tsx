@@ -1,18 +1,23 @@
 import {
   lazy,
   Suspense,
-  useEffect,
   useLayoutEffect,
   useMemo,
   useRef,
   useState,
 } from "react";
 import { usePlayer } from "../../context/PlayerContext";
-import { useUserState } from "../../context/UserStateContext";
+import {
+  useUserSettingsSlice,
+  useUserShuffleSlice,
+  useUserStateActions,
+  useUserStateSelector,
+} from "../../context/UserStateContext";
+import { isFavoriteRelPath, lookupByRelPathAliases } from "../../lib/libraryNav";
 import { useI18n } from "../../i18n/useI18n";
 import { useLibraryPlayback } from "../../hooks/useLibraryPlayback";
 import { usePlayerProgressTime } from "../../hooks/usePlayerProgressTime";
-import { useOpenTrackMetaEdit } from "../../components/TrackMetaEditor";
+import { useOpenTrackMetaEdit, useAutoLrcRun } from "../../components/TrackMetaEditor";
 import { TrackMetaEditGlyph } from "../../components/TrackMetaEditor";
 import { CoverImg } from "../../components/CoverImg";
 import { ExcludeShuffleIcon } from "../../components/ExcludeShuffleIcon";
@@ -39,10 +44,7 @@ import {
   UiNote,
 } from "../../components/RekordUiIcons";
 import { uploadAlbumCover } from "../../lib/api";
-import {
-  markAutoLrcCheckedAfterError,
-  runAutoLrcQuickSaveForTrack,
-} from "../../lib/autoLrc";
+import { resolveTrackLyricsDotStatus } from "../../lib/trackLyricsDotStatus";
 import { useTrackCoverDisplay } from "../../context/LibraryArtworkContext";
 import { versionedUrl } from "../../lib/versionedUrl";
 import { albumFolderFromTrack } from "../../lib/trackPaths";
@@ -91,16 +93,23 @@ export default function ListenView({
 }: ListenViewProps) {
   const p = usePlayer();
   const progressTime = usePlayerProgressTime();
-  const user = useUserState();
+  const { shuffleExcludedAlbumIds, shuffleExcludedTrackRelPaths, toggleShuffleExcludedTrack } =
+    useUserShuffleSlice();
+  const { settings } = useUserSettingsSlice();
+  const { toggleFavorite } = useUserStateActions();
+  const favorites = useUserStateSelector((s) => s.favorites);
+  const trackPlayCounts = useUserStateSelector((s) => s.state.trackPlayCounts);
+  const recent = useUserStateSelector((s) => s.state.recent);
   const { t } = useI18n();
   const openTrackMetaEdit = useOpenTrackMetaEdit();
+  const autoLrc = useAutoLrcRun();
   const exAlbums = useMemo(
-    () => new Set(user.state.shuffleExcludedAlbumIds),
-    [user.state.shuffleExcludedAlbumIds]
+    () => new Set(shuffleExcludedAlbumIds),
+    [shuffleExcludedAlbumIds]
   );
   const exTracksSet = useMemo(
-    () => new Set(user.state.shuffleExcludedTrackRelPaths),
-    [user.state.shuffleExcludedTrackRelPaths]
+    () => new Set(shuffleExcludedTrackRelPaths),
+    [shuffleExcludedTrackRelPaths]
   );
   const cur = p.current;
   const { playGlobalRadio, playPoolShuffle } = useLibraryPlayback(index.tracks);
@@ -109,7 +118,10 @@ export default function ListenView({
     : false;
   const trackShuffleExcluded = cur ? exTracksSet.has(cur.relPath) : false;
   const shuffleExcluded = albumShuffleExcluded || trackShuffleExcluded;
-  const playCount = cur ? user.getTrackPlayCount(cur.relPath) : 0;
+  const playCount = cur
+    ? lookupByRelPathAliases(trackPlayCounts, cur.relPath) ?? 0
+    : 0;
+  const curIsFavorite = cur ? isFavoriteRelPath(favorites, cur.relPath) : false;
   const listenDurationStr = cur ? formatDurationMs(cur.meta?.durationMs) : null;
   const listenBadgeLabels = {
     track: t("badges.track"),
@@ -143,11 +155,11 @@ export default function ListenView({
 
   const recentTracks = useMemo(() => {
     const curRel = cur?.relPath;
-    const seeds = user.state.recent
+    const seeds = recent
       .filter((tr) => !curRel || tr.relPath !== curRel)
       .slice(0, 6);
     return enrichTracksFromLibrary(seeds, index.tracks);
-  }, [user.state.recent, cur?.relPath, index.tracks]);
+  }, [recent, cur?.relPath, index.tracks]);
 
   const [listenRecentPanel, setListenRecentPanel] = useState<
     "recent" | "lyrics"
@@ -165,61 +177,23 @@ export default function ListenView({
   const hasLyrics = currentLyricsRaw.length > 0;
   const hasLrcLyrics = parsedLrc.length > 0;
 
-  const [lyricsFetchBusy, setLyricsFetchBusy] = useState(false);
-  const [lyricsAutoStatus, setLyricsAutoStatus] = useState<
-    "idle" | "okLrc" | "okPlain" | "missing" | "error"
-  >("idle");
-  const [lyricsAutoMsg, setLyricsAutoMsg] = useState<string | null>(null);
   const [karaokeOpen, setKaraokeOpen] = useState(false);
 
-  useEffect(() => {
-    const timer = window.setTimeout(() => {
-      setLyricsAutoStatus("idle");
-      setLyricsAutoMsg(null);
-    }, 0);
-    return () => window.clearTimeout(timer);
-  }, [cur?.relPath]);
-
   const runListenAutoLrc = () => {
-    if (!cur || lyricsFetchBusy) return;
-    const track = cur;
-    setLyricsFetchBusy(true);
-    setLyricsAutoStatus("idle");
-    setLyricsAutoMsg(null);
-    void (async () => {
-      try {
-        const result = await runAutoLrcQuickSaveForTrack(track);
-        onLibraryDelta?.(result.delta, false);
-        setLyricsAutoStatus(result.status);
-        if (result.status === "missing") {
-          setLyricsAutoMsg(t("trackMeta.fetchLrcEmpty"));
-        } else if (result.status === "okPlain") {
-          setLyricsAutoMsg(t("trackMeta.fetchLrcPlainFound"));
-        }
-      } catch (e) {
-        setLyricsAutoStatus("error");
-        setLyricsAutoMsg(e instanceof Error ? e.message : String(e));
-        const delta = await markAutoLrcCheckedAfterError(track);
-        if (delta) onLibraryDelta?.(delta, false);
-      } finally {
-        setLyricsFetchBusy(false);
-      }
-    })();
+    if (!cur || autoLrc.busy) return;
+    void autoLrc.runForTrack(cur, (delta) => {
+      if (delta) onLibraryDelta?.(delta, false);
+    });
   };
 
-  /** Stato pallino LRC: stessi codici colore del dialog di modifica brano. */
-  type LyricsDot = "busy" | "error" | "okLrc" | "okPlain" | "missing" | "idle";
-  const lyricsDot: LyricsDot = lyricsFetchBusy
-    ? "busy"
-    : lyricsAutoStatus === "error"
-      ? "error"
-      : hasLrcLyrics
-        ? "okLrc"
-        : hasLyrics
-          ? "okPlain"
-          : cur?.meta?.lyricsAutoChecked || lyricsAutoStatus === "missing"
-            ? "missing"
-            : "idle";
+  const lyricsDot = resolveTrackLyricsDotStatus({
+    meta: cur?.meta,
+    fetchBusy: autoLrc.busy && autoLrc.relPath === cur?.relPath,
+    ephemeralAutoStatus:
+      autoLrc.relPath === cur?.relPath ? autoLrc.status : "idle",
+  });
+  const lyricsAutoMsg =
+    autoLrc.relPath === cur?.relPath ? autoLrc.msg : null;
   const lyricsDotLabel =
     lyricsDot === "busy"
       ? t("trackMeta.fetchLrcBusy")
@@ -234,7 +208,7 @@ export default function ListenView({
               : t("trackRow.lyricsMissing");
 
   const trackChangeTransitionsOn =
-    user.state.settings.audioCrossfadeSec > 0;
+    settings.audioCrossfadeSec > 0;
 
   const lrcScrollRef = useRef<HTMLDivElement>(null);
   const lrcCurrentLineRef = useRef<HTMLButtonElement | null>(null);
@@ -259,11 +233,8 @@ export default function ListenView({
       .finally(() => setCoverUploadBusy(false));
   };
 
-  useEffect(() => {
-    const timer = window.setTimeout(() => {
-      setListenRecentPanel(hasLyrics ? "lyrics" : "recent");
-    }, 0);
-    return () => window.clearTimeout(timer);
+  useLayoutEffect(() => {
+    setListenRecentPanel(hasLyrics ? "lyrics" : "recent");
   }, [hasLyrics, cur?.relPath]);
 
   useLayoutEffect(() => {
@@ -372,11 +343,11 @@ export default function ListenView({
                       <button
                         type="button"
                         className={`listen-stage__fav ${
-                          user.isFavorite(cur.relPath) ? "is-on" : ""
+                          curIsFavorite ? "is-on" : ""
                         }`}
-                        onClick={() => user.toggleFavorite(cur.relPath)}
+                        onClick={() => toggleFavorite(cur.relPath)}
                         title={t("trackRow.favTitle")}
-                        aria-pressed={user.isFavorite(cur.relPath)}
+                        aria-pressed={curIsFavorite}
                         aria-label={t("trackRow.favAria")}
                       >
                         <span className="listen-stage__fav-ic" aria-hidden>
@@ -409,7 +380,7 @@ export default function ListenView({
                         }
                         onClick={() => {
                           if (albumShuffleExcluded) return;
-                          user.toggleShuffleExcludedTrack(cur.relPath);
+                          toggleShuffleExcludedTrack(cur.relPath);
                         }}
                         aria-pressed={shuffleExcluded}
                         aria-label={
@@ -493,7 +464,7 @@ export default function ListenView({
           </div>
           </div>
           <div className="listen-stage__viz" ref={vizScrollRef}>
-            {user.state.settings.vizMode === "discowall" ? (
+            {settings.vizMode === "discowall" ? (
               <Suspense
                 fallback={
                   <div
@@ -505,7 +476,7 @@ export default function ListenView({
                 <LazyDiscoWallVisualizer />
               </Suspense>
             ) : (
-              <Visualizer mode={user.state.settings.vizMode} />
+              <Visualizer mode={settings.vizMode} />
             )}
           </div>
           <ListenSleepTimer />
@@ -726,7 +697,7 @@ export default function ListenView({
                       <button
                         type="button"
                         className="ghost-btn"
-                        disabled={lyricsFetchBusy}
+                        disabled={autoLrc.busy && autoLrc.relPath === cur.relPath}
                         onClick={() =>
                           openTrackMetaEdit(cur, { openLyrics: true })
                         }
@@ -736,10 +707,10 @@ export default function ListenView({
                       <button
                         type="button"
                         className="primary-btn"
-                        disabled={lyricsFetchBusy}
+                        disabled={autoLrc.busy && autoLrc.relPath === cur?.relPath}
                         onClick={runListenAutoLrc}
                       >
-                        {lyricsFetchBusy
+                        {autoLrc.busy && autoLrc.relPath === cur?.relPath
                           ? t("trackMeta.fetchLrcBusy")
                           : t("trackMeta.fetchLrc")}
                       </button>

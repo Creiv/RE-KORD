@@ -3,7 +3,7 @@
  * Da npm:   npm run pack:linux:server -- 5.0.0
  * (senza versione esplicita usa quella di package.json)
  */
-import { execSync } from "node:child_process"
+import { execFileSync, execSync } from "node:child_process"
 import fs from "node:fs"
 import path from "node:path"
 import { fileURLToPath } from "node:url"
@@ -162,23 +162,35 @@ function verifyBetterSqliteNative(targetPlatform, nodePath = path.join(
   if (!fs.existsSync(nodePath)) {
     throw new Error(`better_sqlite3.node mancante dopo rebuild: ${nodePath}`)
   }
-  let kind = ""
+  const header = Buffer.alloc(4096)
+  const fd = fs.openSync(nodePath, "r")
+  let bytesRead = 0
   try {
-    kind = execSync(`file -b "${nodePath}"`, { encoding: "utf8", cwd: root }).trim()
-  } catch (err) {
-    console.warn(`[pack] verifica file saltata: ${err}`)
-    return
+    bytesRead = fs.readSync(fd, header, 0, header.length, 0)
+  } finally {
+    fs.closeSync(fd)
   }
-  const badLinux = targetPlatform === "linux" && !kind.includes("ELF")
-  const badWin =
-    targetPlatform === "win" && !kind.includes("PE32") && !kind.includes("MS Windows")
-  const badMac = targetPlatform === "mac" && !kind.includes("Mach-O")
-  if (badLinux || badWin || badMac) {
+  let kind = "unknown"
+  if (bytesRead >= 4 && header.subarray(0, 4).equals(Buffer.from([0x7f, 0x45, 0x4c, 0x46]))) {
+    kind = "linux"
+  } else if (bytesRead >= 64 && header[0] === 0x4d && header[1] === 0x5a) {
+    const peOffset = header.readUInt32LE(0x3c)
+    if (
+      peOffset + 4 <= bytesRead &&
+      header.subarray(peOffset, peOffset + 4).equals(Buffer.from([0x50, 0x45, 0x00, 0x00]))
+    ) kind = "win"
+  } else if (bytesRead >= 4) {
+    const magic = header.readUInt32BE(0)
+    if (new Set([0xfeedface, 0xfeedfacf, 0xcefaedfe, 0xcffaedfe, 0xcafebabe]).has(magic)) {
+      kind = "mac"
+    }
+  }
+  if (kind !== targetPlatform) {
     throw new Error(
       `better_sqlite3.node ha architettura errata per target "${targetPlatform}": ${kind}`,
     )
   }
-  console.log(`[pack] better_sqlite3.node OK: ${kind}`)
+  console.log(`[pack] better_sqlite3.node OK: formato ${kind}`)
 }
 
 function verifyUnpackedBetterSqlite(targetPlatform) {
@@ -189,23 +201,26 @@ function verifyUnpackedBetterSqlite(targetPlatform) {
 }
 
 const platFlag = platform === "win" ? "--win" : platform === "mac" ? "--mac" : "--linux"
+const packageSmoke = process.env.REKORD_PACK_SMOKE === "1"
 process.env.REKORD_PACK_FLAVOR = flavor
 process.env.REKORD_APP_VERSION = version
 
 if (flavor === "server") {
   execSync("npm run build", { stdio: "inherit", cwd: root })
-  execSync(`node ${path.join(root, "scripts", "fetch-ytdlp.mjs")} ${platform}`, {
-    stdio: "inherit",
-    cwd: root,
-  })
-  execSync(`node ${path.join(root, "scripts", "fetch-cloudflared.mjs")} ${platform}`, {
-    stdio: "inherit",
-    cwd: root,
-  })
+  if (!packageSmoke) {
+    execFileSync(process.execPath, [path.join(root, "scripts", "fetch-ytdlp.mjs"), platform], {
+      stdio: "inherit",
+      cwd: root,
+    })
+    execFileSync(process.execPath, [path.join(root, "scripts", "fetch-cloudflared.mjs"), platform], {
+      stdio: "inherit",
+      cwd: root,
+    })
+  }
   rebuildNativeForElectron(platform)
 }
 
-execSync(`npx electron-builder ${platFlag} --config ${configPath}`, {
+execSync(`npx electron-builder ${platFlag} ${packageSmoke ? "--dir" : ""} --config ${configPath}`, {
   stdio: "inherit",
   cwd: root,
   env: { ...process.env, REKORD_PACK_FLAVOR: flavor, REKORD_APP_VERSION: version },
@@ -213,6 +228,30 @@ execSync(`npx electron-builder ${platFlag} --config ${configPath}`, {
 
 if (flavor === "server") {
   verifyUnpackedBetterSqlite(platform)
+}
+
+if (packageSmoke && flavor === "server" && !isCrossCompile(platform)) {
+  const unpackedDir = unpackedDirForPlatform(platform)
+  const executable =
+    platform === "win"
+      ? path.join(unpackedDir, "RE-KORD Server.exe")
+      : platform === "mac"
+        ? path.join(unpackedDir, "RE-KORD Server.app", "Contents", "MacOS", "RE-KORD Server")
+        : path.join(unpackedDir, "rekord")
+  if (!fs.existsSync(executable)) {
+    throw new Error(`Eseguibile smoke test non trovato: ${executable}`)
+  }
+  const command =
+    platform === "linux" && !process.env.DISPLAY ? "xvfb-run" : executable
+  const args =
+    command === "xvfb-run" ? ["-a", executable, "--package-smoke"] : ["--package-smoke"]
+  console.log(`\n[pack] smoke test pacchetto: ${executable}\n`)
+  execFileSync(command, args, {
+    stdio: "inherit",
+    cwd: unpackedDir,
+    timeout: 90_000,
+    env: { ...process.env, REKORD_ELECTRON_LOG: "1" },
+  })
 }
 
 // Build Windows da host non-Windows: electron-builder salta l'editing

@@ -662,6 +662,8 @@ export function toLegacyLibrary(index) {
   }
 }
 
+export const DASHBOARD_CONTINUE_LISTENING_LIMIT = 30
+
 export function buildDashboard(index, userState) {
   const favoriteSet = new Set(userState?.favorites || [])
   const recentSet = new Set((userState?.recent || []).map((track) => track.relPath))
@@ -699,7 +701,10 @@ export function buildDashboard(index, userState) {
   ]
   return {
     stats: index.stats,
-    continueListening: (userState?.queue?.tracks || []).slice(0, 500),
+    continueListening: (userState?.queue?.tracks || []).slice(
+      0,
+      DASHBOARD_CONTINUE_LISTENING_LIMIT,
+    ),
     recentTracks,
     favoriteTracks,
     recentlyUpdatedAlbums,

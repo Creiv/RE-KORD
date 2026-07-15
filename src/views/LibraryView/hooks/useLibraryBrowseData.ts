@@ -22,6 +22,8 @@ import type {
   LibraryTrackIndex,
 } from "../../../types";
 
+export type LibraryBrowseDataScope = "browse" | "search" | "artist" | "album";
+
 interface UseLibraryBrowseDataOptions {
   index: LibraryIndex;
   libOverviewSort: "name" | "plays";
@@ -33,6 +35,8 @@ interface UseLibraryBrowseDataOptions {
   moodMatchMode: "any" | "all";
   artist: LibraryArtistIndex | null;
   artistAlbums: LibraryAlbumIndex[];
+  /** Limita calcoli O(n) al sotto-view attivo. Default: browse. */
+  scope?: LibraryBrowseDataScope;
 }
 
 export function useLibraryBrowseData({
@@ -46,8 +50,12 @@ export function useLibraryBrowseData({
   moodMatchMode,
   artist,
   artistAlbums,
+  scope = "browse",
 }: UseLibraryBrowseDataOptions) {
   const { t, sortLocale } = useI18n();
+  const isBrowse = scope === "browse";
+  const needsCovers = isBrowse || scope === "search";
+  const needsArtistShuffle = isBrowse || scope === "artist";
 
   const excludedAlbums = useMemo(
     () => new Set(shuffleExcludedAlbumIds),
@@ -58,8 +66,38 @@ export function useLibraryBrowseData({
     [shuffleExcludedTrackRelPaths]
   );
 
+  const playsByArtistName = useMemo(() => {
+    if (!isBrowse) return new Map<string, number>();
+    const counts = trackPlayCounts || {};
+    const m = new Map<string, number>();
+    for (const tr of index.tracks) {
+      m.set(tr.artist, (m.get(tr.artist) ?? 0) + (counts[tr.relPath] ?? 0));
+    }
+    return m;
+  }, [index.tracks, trackPlayCounts, isBrowse]);
+
+  const playsByGenreKey = useMemo(() => {
+    if (!isBrowse) return new Map<string, number>();
+    const counts = trackPlayCounts || {};
+    const m = new Map<string, number>();
+    for (const tr of index.tracks) {
+      const play = counts[tr.relPath] ?? 0;
+      if (!play) continue;
+      const toks = parseTrackGenres(tr.meta?.genre);
+      if (toks.length === 0) {
+        m.set("__none__", (m.get("__none__") ?? 0) + play);
+        continue;
+      }
+      for (const raw of toks) {
+        const key = raw.toLowerCase();
+        m.set(key, (m.get(key) ?? 0) + play);
+      }
+    }
+    return m;
+  }, [index.tracks, trackPlayCounts, isBrowse]);
+
   const artistShuffleEligible = useMemo(() => {
-    if (!artist) return [] as LibraryTrackIndex[];
+    if (!needsArtistShuffle || !artist) return [] as LibraryTrackIndex[];
     const rels = new Set(artistAlbums.flatMap((al) => al.tracks));
     return index.tracks.filter(
       (tr) =>
@@ -67,18 +105,19 @@ export function useLibraryBrowseData({
         !excludedTracks.has(tr.relPath) &&
         !isTrackAlbumShuffleExcluded(tr, excludedAlbums)
     );
-  }, [artist, artistAlbums, index.tracks, excludedAlbums, excludedTracks]);
+  }, [artist, artistAlbums, index.tracks, excludedAlbums, excludedTracks, needsArtistShuffle]);
 
   const artistCoverById = useMemo(
-    () => buildRandomArtistCoverMap(index),
-    [index]
+    () => (needsCovers ? buildRandomArtistCoverMap(index) : new Map()),
+    [index, needsCovers],
   );
   const genreCoverByKey = useMemo(
-    () => buildGenreCoverPreviewMap(index),
-    [index]
+    () => (isBrowse ? buildGenreCoverPreviewMap(index) : new Map()),
+    [index, isBrowse],
   );
 
   const genreAlbumTrackCounts = useMemo(() => {
+    if (!isBrowse) return new Map<string, { albums: Set<string>; tracks: number }>();
     const m = new Map<string, { albums: Set<string>; tracks: number }>();
     const bump = (key: string, albumId: string) => {
       let e = m.get(key);
@@ -95,9 +134,10 @@ export function useLibraryBrowseData({
       else for (const g of toks) bump(g.toLowerCase(), tr.albumId);
     }
     return m;
-  }, [index.tracks]);
+  }, [index.tracks, isBrowse]);
 
   const genreIndex = useMemo(() => {
+    if (!isBrowse) return { list: [] as { key: string; label: string; count: number }[], noGenreCount: 0 };
     const byLower = new Map<string, { label: string; count: number }>();
     let noGenre = 0;
     for (const tr of index.tracks) {
@@ -119,25 +159,26 @@ export function useLibraryBrowseData({
         a.label.localeCompare(b.label, sortLocale, { numeric: true })
       );
     return { list, noGenreCount: noGenre };
-  }, [index.tracks, sortLocale]);
+  }, [index.tracks, sortLocale, isBrowse]);
 
   const tracksInSelectedGenre = useMemo(() => {
-    if (!selectedGenreKey) return [] as LibraryTrackIndex[];
+    if (!isBrowse || !selectedGenreKey) return [] as LibraryTrackIndex[];
     return index.tracks.filter((tr) =>
       trackBelongsToGenreKey(tr.meta?.genre, selectedGenreKey)
     );
-  }, [index.tracks, selectedGenreKey]);
+  }, [index.tracks, selectedGenreKey, isBrowse]);
 
   const selectedGenreLabel = useMemo(() => {
-    if (!selectedGenreKey) return null;
+    if (!isBrowse || !selectedGenreKey) return null;
     if (selectedGenreKey === "__none__") return t("library.noGenreLabel");
     return (
       genreIndex.list.find((g) => g.key === selectedGenreKey)?.label ??
       selectedGenreKey
     );
-  }, [selectedGenreKey, genreIndex.list, t]);
+  }, [selectedGenreKey, genreIndex.list, t, isBrowse]);
 
   const sortedGenreTracks = useMemo(() => {
+    if (!isBrowse) return [] as LibraryTrackIndex[];
     const base = [...tracksInSelectedGenre];
     const counts = trackPlayCounts || {};
     if (libOverviewSort === "plays") {
@@ -157,72 +198,59 @@ export function useLibraryBrowseData({
       );
     }
     return base;
-  }, [tracksInSelectedGenre, sortLocale, libOverviewSort, trackPlayCounts]);
+  }, [tracksInSelectedGenre, sortLocale, libOverviewSort, trackPlayCounts, isBrowse]);
 
   const genreToolbarBulkAllExcluded = useMemo(() => {
-    if (!tracksInSelectedGenre.length) return false;
+    if (!isBrowse || !tracksInSelectedGenre.length) return false;
     return tracksInSelectedGenre.every(
       (tr) =>
         excludedTracks.has(tr.relPath) ||
         isTrackAlbumShuffleExcluded(tr, excludedAlbums)
     );
-  }, [tracksInSelectedGenre, excludedTracks, excludedAlbums]);
+  }, [tracksInSelectedGenre, excludedTracks, excludedAlbums, isBrowse]);
 
   const selectedGenreAlbumCount =
-    selectedGenreKey != null
+    isBrowse && selectedGenreKey != null
       ? genreAlbumTrackCounts.get(selectedGenreKey)?.albums.size ?? 0
       : 0;
 
   const sortedOverviewArtists = useMemo(() => {
-    const counts = trackPlayCounts || {};
+    if (!isBrowse) return [] as LibraryIndex["artists"];
     const list = [...index.artists];
     if (libOverviewSort === "name") {
       list.sort((a, b) =>
         a.name.localeCompare(b.name, sortLocale, { numeric: true })
       );
     } else {
-      const sumPlays = (ar: LibraryArtistIndex) => {
-        let s = 0;
-        for (const tr of index.tracks) {
-          if (tr.artist === ar.name) s += counts[tr.relPath] ?? 0;
-        }
-        return s;
-      };
       list.sort(
         (a, b) =>
-          sumPlays(b) - sumPlays(a) ||
+          (playsByArtistName.get(b.name) ?? 0) -
+            (playsByArtistName.get(a.name) ?? 0) ||
           a.name.localeCompare(b.name, sortLocale, { numeric: true })
       );
     }
     return list;
-  }, [index.artists, index.tracks, libOverviewSort, sortLocale, trackPlayCounts]);
+  }, [index.artists, libOverviewSort, sortLocale, playsByArtistName, isBrowse]);
 
   const sortedGenreBrowseList = useMemo(() => {
-    const counts = trackPlayCounts || {};
+    if (!isBrowse) return [] as { key: string; label: string; count: number }[];
     const list = [...genreIndex.list];
     if (libOverviewSort === "name") {
       list.sort((a, b) =>
         a.label.localeCompare(b.label, sortLocale, { numeric: true })
       );
     } else {
-      const playsForGenreKey = (key: string) => {
-        let s = 0;
-        for (const tr of index.tracks) {
-          if (!trackBelongsToGenreKey(tr.meta?.genre, key)) continue;
-          s += counts[tr.relPath] ?? 0;
-        }
-        return s;
-      };
       list.sort(
         (a, b) =>
-          playsForGenreKey(b.key) - playsForGenreKey(a.key) ||
+          (playsByGenreKey.get(b.key) ?? 0) - (playsByGenreKey.get(a.key) ?? 0) ||
           a.label.localeCompare(b.label, sortLocale, { numeric: true })
       );
     }
     return list;
-  }, [genreIndex.list, index.tracks, libOverviewSort, sortLocale, trackPlayCounts]);
+  }, [genreIndex.list, libOverviewSort, sortLocale, playsByGenreKey, isBrowse]);
 
   const moodOccurrenceCountById = useMemo(() => {
+    if (!isBrowse) return new Map<TrackMoodId, number>();
     const m = new Map<TrackMoodId, number>();
     for (const id of TRACK_MOOD_IDS) m.set(id, 0);
     for (const tr of index.tracks) {
@@ -231,10 +259,10 @@ export function useLibraryBrowseData({
       }
     }
     return m;
-  }, [index.tracks]);
+  }, [index.tracks, isBrowse]);
 
   const tracksMatchingMoodFilter = useMemo(() => {
-    if (moodFilterIds.length === 0) return [] as LibraryTrackIndex[];
+    if (!isBrowse || moodFilterIds.length === 0) return [] as LibraryTrackIndex[];
     const need = new Set(moodFilterIds);
     return index.tracks.filter((tr) => {
       const moods = parseTrackMoods(tr.meta ?? undefined);
@@ -243,9 +271,10 @@ export function useLibraryBrowseData({
       }
       return moodFilterIds.every((mid) => moods.includes(mid));
     });
-  }, [index.tracks, moodFilterIds, moodMatchMode]);
+  }, [index.tracks, moodFilterIds, moodMatchMode, isBrowse]);
 
   const sortedMoodTracks = useMemo(() => {
+    if (!isBrowse) return [] as LibraryTrackIndex[];
     const base = [...tracksMatchingMoodFilter];
     base.sort(
       (a, b) =>
@@ -254,23 +283,25 @@ export function useLibraryBrowseData({
         a.title.localeCompare(b.title, sortLocale, { numeric: true })
     );
     return base;
-  }, [tracksMatchingMoodFilter, sortLocale]);
+  }, [tracksMatchingMoodFilter, sortLocale, isBrowse]);
 
   const moodToolbarBulkAllExcluded = useMemo(() => {
-    if (!tracksMatchingMoodFilter.length) return false;
+    if (!isBrowse || !tracksMatchingMoodFilter.length) return false;
     return tracksMatchingMoodFilter.every(
       (tr) =>
         excludedTracks.has(tr.relPath) ||
         isTrackAlbumShuffleExcluded(tr, excludedAlbums)
     );
-  }, [tracksMatchingMoodFilter, excludedTracks, excludedAlbums]);
+  }, [tracksMatchingMoodFilter, excludedTracks, excludedAlbums, isBrowse]);
 
-  const getLibraryShufflePool = () =>
-    eligibleTracksForIntelligentRandom(
+  const getLibraryShufflePool = () => {
+    if (!isBrowse) return [] as LibraryTrackIndex[];
+    return eligibleTracksForIntelligentRandom(
       index,
       excludedAlbums,
-      excludedTracks
+      excludedTracks,
     );
+  };
 
   const getArtistShufflePool = () => {
     if (!artist) return [] as LibraryTrackIndex[];

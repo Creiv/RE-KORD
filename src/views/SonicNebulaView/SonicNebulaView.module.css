@@ -20,6 +20,14 @@
   overflow: hidden;
 }
 
+.stagePreviewOnly {
+  cursor: pointer;
+}
+
+.stagePreviewOnly:active {
+  cursor: pointer;
+}
+
 .stage {
   position: absolute;
   inset: 0;

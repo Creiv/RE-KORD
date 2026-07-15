@@ -103,3 +103,24 @@
   background: var(--surface2, #161d28);
   border-color: var(--border);
 }
+
+/* Vetro attivo + color-mix rotto: i ::before portano il riempimento (il corpo è transparent). */
+:root[data-glass-surfaces="1"][data-color-mix="0"] .surface-card::before,
+:root[data-glass-surfaces="1"][data-color-mix="0"] .hero-card::before,
+:root[data-glass-surfaces="1"][data-color-mix="0"] .listen-stage::before,
+:root[data-glass-surfaces="1"][data-color-mix="0"] .album-hero::before,
+:root[data-glass-surfaces="1"][data-color-mix="0"] .metric-card::before,
+:root[data-glass-surfaces="1"][data-color-mix="0"] .alert-card::before,
+:root[data-glass-surfaces="1"][data-color-mix="0"] .account-row::before,
+:root[data-glass-surfaces="1"][data-color-mix="0"] .studio-panel::before,
+:root[data-glass-surfaces="1"][data-color-mix="0"] .track-row::before,
+:root[data-glass-surfaces="1"][data-color-mix="0"] .playlist-row::before,
+:root[data-glass-surfaces="1"][data-color-mix="0"] .artcard::before,
+:root[data-glass-surfaces="1"][data-color-mix="0"] .library-list-tile::before,
+:root[data-glass-surfaces="1"][data-color-mix="0"] .panel-empty::before,
+:root[data-glass-surfaces="1"][data-color-mix="0"] .player-bar2::before,
+:root[data-glass-surfaces="1"][data-color-mix="0"] .mobile-bottom-nav::before {
+  background: var(--glass-fill-page, var(--surface2, #161d28));
+  -webkit-backdrop-filter: none;
+  backdrop-filter: none;
+}

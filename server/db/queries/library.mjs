@@ -10,6 +10,9 @@ import {
   resolveArtworkFilePath,
 } from "../../artwork/index.mjs"
 import { orderAlbumTrackList } from "../../albumExpectedOrder.mjs"
+import { recordLibraryDeltaFromScan } from "../../libraryDelta.mjs"
+import { clearLibraryIndexCache } from "../../libraryIndexService.mjs"
+import { getLibraryEpoch } from "../index.mjs"
 
 const insertArtist = `
 INSERT INTO artists (
@@ -241,19 +244,35 @@ function removeTrackByFilePath(db, filePath) {
 }
 
 function pruneEmptyAlbumsForArtists(db, artistIds) {
-  for (const artistId of artistIds) {
-    const albums = db.prepare("SELECT id FROM albums WHERE artist_id = ?").all(artistId)
-    for (const al of albums) {
-      const count = db.prepare("SELECT COUNT(*) AS c FROM tracks WHERE album_id = ?").get(al.id)
-      if (!count?.c) {
-        db.prepare("DELETE FROM album_expected_tracks WHERE album_id = ?").run(al.id)
-        db.prepare("DELETE FROM albums WHERE id = ?").run(al.id)
-      }
-    }
-    const ac = db.prepare("SELECT COUNT(*) AS c FROM albums WHERE artist_id = ?").get(artistId)
-    if (!ac?.c) {
-      db.prepare("DELETE FROM artists WHERE id = ?").run(artistId)
-    }
+  const ids = [...new Set((artistIds || []).filter(Boolean))]
+  if (!ids.length) return
+  const placeholders = ids.map(() => "?").join(",")
+  const emptyAlbums = db
+    .prepare(
+      `SELECT a.id, a.artist_id
+       FROM albums a
+       LEFT JOIN tracks t ON t.album_id = a.id
+       WHERE a.artist_id IN (${placeholders})
+       GROUP BY a.id
+       HAVING COUNT(t.id) = 0`,
+    )
+    .all(...ids)
+  for (const album of emptyAlbums) {
+    db.prepare("DELETE FROM album_expected_tracks WHERE album_id = ?").run(album.id)
+    db.prepare("DELETE FROM albums WHERE id = ?").run(album.id)
+  }
+  const artistsWithoutAlbums = db
+    .prepare(
+      `SELECT a.id
+       FROM artists a
+       LEFT JOIN albums al ON al.artist_id = a.id
+       WHERE a.id IN (${placeholders})
+       GROUP BY a.id
+       HAVING COUNT(al.id) = 0`,
+    )
+    .all(...ids)
+  for (const artist of artistsWithoutAlbums) {
+    db.prepare("DELETE FROM artists WHERE id = ?").run(artist.id)
   }
 }
 
@@ -391,6 +410,12 @@ export async function persistLibraryIndexToDb(libraryRoot, index, opts = {}) {
       await registerFolderCoverArtwork(musicRoot, album.id, album.coverRelPath).catch(() => {})
     }
   }
+  try {
+    recordLibraryDeltaFromScan(musicRoot, getLibraryEpoch(musicRoot), { full: true })
+  } catch {
+    /* ok */
+  }
+  clearLibraryIndexCache(musicRoot)
 }
 
 /**
@@ -461,6 +486,15 @@ export async function persistIncrementalToDb(libraryRoot, index, opts = {}) {
       await registerFolderCoverArtwork(musicRoot, album.id, album.coverRelPath).catch(() => {})
     }
   }
+  try {
+    recordLibraryDeltaFromScan(musicRoot, getLibraryEpoch(musicRoot), {
+      removedPaths,
+      index,
+    })
+  } catch {
+    /* ok */
+  }
+  clearLibraryIndexCache(musicRoot)
 }
 
 export function getLibraryScanState(libraryRoot) {
@@ -498,18 +532,25 @@ export function buildLibraryIndexFromDb(libraryRoot) {
     trackObjsByAlbum.set(row.album_id, list)
   }
 
+  const expectedByAlbum = new Map()
+  const expectedRows = db
+    .prepare(
+      "SELECT album_id, disc, position, title FROM album_expected_tracks ORDER BY album_id, disc, position, title",
+    )
+    .all()
+  for (const row of expectedRows) {
+    const list = expectedByAlbum.get(row.album_id) || []
+    list.push({
+      disc: row.disc,
+      position: row.position,
+      title: row.title,
+    })
+    expectedByAlbum.set(row.album_id, list)
+  }
+
   const albumsByArtist = new Map()
   const albums = albumRows.map((row) => {
-    const expected = db
-      .prepare(
-        "SELECT disc, position, title FROM album_expected_tracks WHERE album_id = ? ORDER BY disc, position, title",
-      )
-      .all(row.id)
-    const expectedTracks = expected.map((e) => ({
-      disc: e.disc,
-      position: e.position,
-      title: e.title,
-    }))
+    const expectedTracks = expectedByAlbum.get(row.id) || []
     const orderedTracks = orderAlbumTrackList(trackObjsByAlbum.get(row.id) || [])
     const trackPaths = orderedTracks.map((t) => t.relPath)
     const list = albumsByArtist.get(row.artist_id) || []
@@ -628,13 +669,23 @@ export function listArtistsPaginated(libraryRoot, { offset = 0, limit = 50, sort
   const rows = db
     .prepare(`SELECT * FROM artists ORDER BY ${order} LIMIT ? OFFSET ?`)
     .all(Math.min(500, Math.max(1, limit)), Math.max(0, offset))
-  return rows.map((row) => {
-    const albumIds = db
-      .prepare("SELECT id FROM albums WHERE artist_id = ? ORDER BY release_date, name")
-      .all(row.id)
-      .map((a) => a.id)
-    return artistRowToIndex(row, albumIds)
-  })
+  if (!rows.length) return []
+
+  const artistIds = rows.map((row) => row.id)
+  const placeholders = artistIds.map(() => "?").join(",")
+  const albumRows = db
+    .prepare(
+      `SELECT id, artist_id FROM albums WHERE artist_id IN (${placeholders}) ORDER BY release_date, name`,
+    )
+    .all(...artistIds)
+  const albumsByArtist = new Map()
+  for (const albumRow of albumRows) {
+    const list = albumsByArtist.get(albumRow.artist_id) || []
+    list.push(albumRow.id)
+    albumsByArtist.set(albumRow.artist_id, list)
+  }
+
+  return rows.map((row) => artistRowToIndex(row, albumsByArtist.get(row.id) || []))
 }
 
 /** @param {string} libraryRoot @param {string} artistId */
@@ -643,13 +694,52 @@ export function listAlbumsForArtist(libraryRoot, artistId) {
   const rows = db
     .prepare("SELECT * FROM albums WHERE artist_id = ? ORDER BY release_date, name")
     .all(artistId)
+  if (!rows.length) return []
+
+  const albumIds = rows.map((row) => row.id)
+  const placeholders = albumIds.map(() => "?").join(",")
+  const trackRows = db
+    .prepare(`SELECT * FROM tracks WHERE album_id IN (${placeholders})`)
+    .all(...albumIds)
+  const tracksByAlbum = new Map()
+  for (const trackRow of trackRows) {
+    const list = tracksByAlbum.get(trackRow.album_id) || []
+    list.push(trackRow)
+    tracksByAlbum.set(trackRow.album_id, list)
+  }
+
   return rows.map((row) => {
-    const trackRows = db.prepare("SELECT * FROM tracks WHERE album_id = ?").all(row.id)
-    const trackPaths = orderAlbumTrackList(trackRows.map((r) => trackRowToIndex(r))).map(
+    const albumTrackRows = tracksByAlbum.get(row.id) || []
+    const trackPaths = orderAlbumTrackList(albumTrackRows.map((r) => trackRowToIndex(r))).map(
       (t) => t.relPath,
     )
     return albumRowToIndex(row, trackPaths)
   })
+}
+
+/** @param {string} libraryRoot @param {string} artistId */
+export function getArtistDetailFromDb(libraryRoot, artistId) {
+  const db = getLibraryDb(libraryRoot)
+  const row = db
+    .prepare("SELECT * FROM artists WHERE id = ? OR name = ? LIMIT 1")
+    .get(artistId, artistId)
+  if (!row) return null
+  const albums = listAlbumsForArtist(libraryRoot, row.id)
+  const albumIds = albums.map((album) => album.id)
+  const tracks = []
+  if (albumIds.length) {
+    const placeholders = albumIds.map(() => "?").join(",")
+    const trackRows = db
+      .prepare(`SELECT * FROM tracks WHERE album_id IN (${placeholders})`)
+      .all(...albumIds)
+    tracks.push(...trackRows.map((trackRow) => trackRowToIndex(trackRow)))
+  }
+  tracks.sort((a, b) => String(a.relPath).localeCompare(String(b.relPath)))
+  return {
+    artist: artistRowToIndex(row, albumIds),
+    albums,
+    tracks,
+  }
 }
 
 /** @param {string} libraryRoot @param {string} folderRelPath */

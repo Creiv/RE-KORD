@@ -12,16 +12,18 @@ import {
 } from "react";
 import { createPortal } from "react-dom";
 import { usePlayer } from "../../context/PlayerContext";
-import { useUserState } from "../../context/UserStateContext";
+import { useUserStateSelector } from "../../context/UserStateContext";
 import { resolveTrackFromLibrary } from "../../lib/libraryNav";
 import {
   buildNebulaModel,
   buildNebulaSpatialGrid,
   defaultNebulaCamera,
   filterNebulaStars,
+  NEBULA_MIN_ZOOM,
   nebulaStarsNear,
   pickNebulaStarAt,
   sampleNebulaStarsForPreview,
+  sampleTracksForNebulaBuild,
   type NebulaCamera,
   type NebulaStar,
 } from "../../lib/sonicNebula";
@@ -149,24 +151,47 @@ export default function SonicNebulaView({
   embedded = false,
 }: SonicNebulaViewProps) {
   const { t } = useI18n();
-  const user = useUserState();
+  const favoritesList = useUserStateSelector((s) => s.state.favorites);
+  const trackPlayCounts = useUserStateSelector((s) => s.state.trackPlayCounts ?? {});
   const player = usePlayer();
 
   const favorites = useMemo(
-    () => new Set(user.state.favorites),
-    [user.state.favorites]
-  );
-
-  const model = useMemo(
-    () =>
-      buildNebulaModel(index.tracks, {
-        playCounts: user.state.trackPlayCounts ?? {},
-        favorites,
-      }),
-    [index.tracks, user.state.trackPlayCounts, favorites]
+    () => new Set(favoritesList),
+    [favoritesList]
   );
 
   const [query, setQuery] = useState("");
+  const [camera, setCamera] = useState<NebulaCamera>(() =>
+    embedded
+      ? defaultNebulaCamera(NEBULA_MIN_ZOOM)
+      : defaultNebulaCamera(),
+  );
+  const [hovered, setHovered] = useState<NebulaStar | null>(null);
+  const [selected, setSelected] = useState<NebulaStar | null>(null);
+  const [expanded, setExpanded] = useState(() =>
+    consumeNebulaFullscreenRequest()
+  );
+  const [hintDismissed, setHintDismissed] = useState(false);
+  const isStaticPreview = embedded && !expanded;
+
+  const model = useMemo(
+    () => {
+      const tracks = isStaticPreview
+        ? sampleTracksForNebulaBuild(index.tracks, 400)
+        : index.tracks;
+      return buildNebulaModel(tracks, {
+        playCounts: trackPlayCounts,
+        favorites,
+      });
+    },
+    [
+      index.tracks,
+      trackPlayCounts,
+      favorites,
+      isStaticPreview,
+    ]
+  );
+
   const visibleStars = useMemo(
     () => filterNebulaStars(model.stars, query),
     [model.stars, query]
@@ -177,13 +202,6 @@ export default function SonicNebulaView({
     [visibleStars]
   );
 
-  const [camera, setCamera] = useState<NebulaCamera>(() => defaultNebulaCamera());
-  const [hovered, setHovered] = useState<NebulaStar | null>(null);
-  const [selected, setSelected] = useState<NebulaStar | null>(null);
-  const [expanded, setExpanded] = useState(() =>
-    consumeNebulaFullscreenRequest()
-  );
-  const [hintDismissed, setHintDismissed] = useState(false);
   const coarsePointer = useMemo(
     () =>
       typeof matchMedia !== "undefined" &&
@@ -491,8 +509,27 @@ export default function SonicNebulaView({
   }, []);
 
   const toggleExpanded = useCallback(() => {
-    setExpanded((value) => !value);
+    setExpanded((value) => {
+      const next = !value;
+      if (value && embedded) {
+        setCamera(defaultNebulaCamera(NEBULA_MIN_ZOOM));
+        setSelected(null);
+        setHovered(null);
+        setQuery("");
+      }
+      return next;
+    });
+  }, [embedded]);
+
+  const openFullscreen = useCallback(() => {
+    setExpanded(true);
   }, []);
+
+  const previewCamera = useMemo(
+    () => defaultNebulaCamera(NEBULA_MIN_ZOOM),
+    [],
+  );
+  const activeCamera = isStaticPreview ? previewCamera : camera;
 
   useEffect(() => {
     /* Tasto N (AppShell): se la vista è già montata passa al fullscreen. */
@@ -517,7 +554,11 @@ export default function SonicNebulaView({
     };
   }, [expanded]);
 
-  const calloutLayout = useStarCalloutLayout(selected, camera, wrapRef);
+  const calloutLayout = useStarCalloutLayout(
+    isStaticPreview ? null : selected,
+    activeCamera,
+    wrapRef,
+  );
   const isSelectedPlaying = Boolean(
     selected &&
       player.isPlaying &&
@@ -549,85 +590,106 @@ export default function SonicNebulaView({
   const stage = (
     <div
       ref={wrapRef}
-      className={`${styles.stage}${expanded ? ` ${styles.stageExpanded}` : ""}`}
-      onWheel={onWheel}
-      onPointerDown={onPointerDown}
-      onPointerMove={onPointerMove}
-      onPointerUp={onPointerUp}
-      onPointerLeave={onPointerLeave}
-      onPointerCancel={onPointerCancel}
+      className={`${styles.stage}${expanded ? ` ${styles.stageExpanded}` : ""}${
+        isStaticPreview ? ` ${styles.stagePreviewOnly}` : ""
+      }`}
+      role={isStaticPreview ? "button" : undefined}
+      tabIndex={isStaticPreview ? 0 : undefined}
+      aria-label={isStaticPreview ? t("nebula.expand") : undefined}
+      onClick={isStaticPreview ? openFullscreen : undefined}
+      onKeyDown={
+        isStaticPreview
+          ? (event) => {
+              if (event.key === "Enter" || event.key === " ") {
+                event.preventDefault();
+                openFullscreen();
+              }
+            }
+          : undefined
+      }
+      onWheel={isStaticPreview ? undefined : onWheel}
+      onPointerDown={isStaticPreview ? undefined : onPointerDown}
+      onPointerMove={isStaticPreview ? undefined : onPointerMove}
+      onPointerUp={isStaticPreview ? undefined : onPointerUp}
+      onPointerLeave={isStaticPreview ? undefined : onPointerLeave}
+      onPointerCancel={isStaticPreview ? undefined : onPointerCancel}
     >
       <NebulaCanvas
         className={styles.canvas}
         frameClassName={styles.canvasFrame}
         model={model}
         visibleStars={visibleStars}
-        camera={camera}
-        hoveredId={hovered?.id ?? null}
-        selectedId={selected?.id ?? null}
+        camera={activeCamera}
+        hoveredId={isStaticPreview ? null : hovered?.id ?? null}
+        selectedId={isStaticPreview ? null : selected?.id ?? null}
         currentId={currentId}
         playing={player.isPlaying}
         currentBpm={currentStar?.bpm ?? 0}
+        interactive={!isStaticPreview}
+        preview={isStaticPreview}
+        surface="library"
       />
 
-      <header
-        className={`${styles.topBar}${
-          embedded ? ` ${styles.topBarEmbedded}` : ""
-        }${expanded ? ` ${styles.topBarExpanded}` : ""}`}
-        data-nebula-chrome
-        onPointerDown={stopChromePointer}
-      >
-        {!embedded || expanded ? (
-          <div
-            className={styles.brand}
-            title={`${t("nebula.legendCenter")}\n${t("nebula.legendEdge")}\n${t(
-              "nebula.legendAngle"
-            )}`}
-          >
-            <UiAutoAwesome className={styles.brandIc} />
-            <span className={styles.brandText}>
-              {t("nebula.title")}{" "}
-              <span className={styles.brandCount}>· {model.stars.length}</span>
-            </span>
+      {!isStaticPreview ? (
+        <header
+          className={`${styles.topBar}${
+            embedded ? ` ${styles.topBarEmbedded}` : ""
+          }${expanded ? ` ${styles.topBarExpanded}` : ""}`}
+          data-nebula-chrome
+          onPointerDown={stopChromePointer}
+        >
+          {!embedded || expanded ? (
+            <div
+              className={styles.brand}
+              title={`${t("nebula.legendCenter")}\n${t("nebula.legendEdge")}\n${t(
+                "nebula.legendAngle"
+              )}`}
+            >
+              <UiAutoAwesome className={styles.brandIc} />
+              <span className={styles.brandText}>
+                {t("nebula.title")}{" "}
+                <span className={styles.brandCount}>· {model.stars.length}</span>
+              </span>
+            </div>
+          ) : null}
+          <div className={styles.topTools}>
+            <input
+              className={styles.search}
+              value={query}
+              onChange={(e) => setQuery(e.target.value)}
+              placeholder={t("nebula.searchPlaceholder")}
+              aria-label={t("nebula.searchPlaceholder")}
+            />
+            <button
+              type="button"
+              className={styles.toolBtn}
+              onClick={surpriseMe}
+              title={t("nebula.surprise")}
+              aria-label={t("nebula.surprise")}
+            >
+              <UiShuffle className={styles.toolBtnIc} aria-hidden />
+            </button>
+            <button
+              type="button"
+              className={styles.toolBtn}
+              onClick={resetView}
+              title={t("nebula.resetView")}
+              aria-label={t("nebula.resetView")}
+            >
+              ↺
+            </button>
+            {expandBtn}
           </div>
-        ) : null}
-        <div className={styles.topTools}>
-          <input
-            className={styles.search}
-            value={query}
-            onChange={(e) => setQuery(e.target.value)}
-            placeholder={t("nebula.searchPlaceholder")}
-            aria-label={t("nebula.searchPlaceholder")}
-          />
-          <button
-            type="button"
-            className={styles.toolBtn}
-            onClick={surpriseMe}
-            title={t("nebula.surprise")}
-            aria-label={t("nebula.surprise")}
-          >
-            <UiShuffle className={styles.toolBtnIc} aria-hidden />
-          </button>
-          <button
-            type="button"
-            className={styles.toolBtn}
-            onClick={resetView}
-            title={t("nebula.resetView")}
-            aria-label={t("nebula.resetView")}
-          >
-            ↺
-          </button>
-          {expandBtn}
-        </div>
-      </header>
+        </header>
+      ) : null}
 
-      {!hintDismissed && !selected ? (
+      {!isStaticPreview && !hintDismissed && !selected ? (
         <div className={styles.hint} aria-hidden>
           {coarsePointer ? t("nebula.hintShort") : t("nebula.hint")}
         </div>
       ) : null}
 
-      {selected && calloutLayout ? (
+      {selected && calloutLayout && !isStaticPreview ? (
         <>
           <div
             className={styles.starVignette}
@@ -715,26 +777,40 @@ export function SonicNebulaMiniPreview({
   index: LibraryIndex;
   onOpen: () => void;
 }) {
-  const user = useUserState();
+  const favoritesList = useUserStateSelector((s) => s.state.favorites);
+  const trackPlayCounts = useUserStateSelector((s) => s.state.trackPlayCounts ?? {});
   const favorites = useMemo(
-    () => new Set(user.state.favorites),
-    [user.state.favorites]
+    () => new Set(favoritesList),
+    [favoritesList]
   );
   const model = useMemo(
     () =>
-      buildNebulaModel(index.tracks, {
-        playCounts: user.state.trackPlayCounts ?? {},
+      buildNebulaModel(sampleTracksForNebulaBuild(index.tracks, 400), {
+        playCounts: trackPlayCounts,
         favorites,
       }),
-    [index.tracks, user.state.trackPlayCounts, favorites]
+    [index.tracks, trackPlayCounts, favorites]
   );
   const sample = useMemo(
     () => sampleNebulaStarsForPreview(model.stars, 300),
     [model.stars]
   );
+  const rootRef = useRef<HTMLButtonElement>(null);
+  const [inView, setInView] = useState(true);
+  useEffect(() => {
+    const el = rootRef.current;
+    if (!el || typeof IntersectionObserver === "undefined") return;
+    const obs = new IntersectionObserver(
+      ([entry]) => setInView(Boolean(entry?.isIntersecting)),
+      { rootMargin: "80px" },
+    );
+    obs.observe(el);
+    return () => obs.disconnect();
+  }, []);
 
   return (
     <button
+      ref={rootRef}
       type="button"
       className="dashboard-nebula-card"
       onClick={onOpen}
@@ -751,7 +827,8 @@ export function SonicNebulaMiniPreview({
         playing={false}
         interactive={false}
         preview
-        animated
+        animated={inView}
+        surface="dashboard"
       />
     </button>
   );

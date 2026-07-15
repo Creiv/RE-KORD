@@ -774,7 +774,17 @@
             .replace(/\/+$/, "");
           if (!t) return null;
           if (!/^https?:\/\//i.test(t)) t = "http://" + t;
-          return t;
+          try {
+            var u = new URL(t);
+            var host = String(u.hostname || "").toLowerCase();
+            if (host === "trycloudflare.com" || host.endsWith(".trycloudflare.com")) {
+              u.protocol = "https:";
+              u.port = "";
+            }
+            return u.protocol + "//" + u.host;
+          } catch (_e) {
+            return null;
+          }
         }
 
         function buildAppUrl(base, accountId) {
@@ -842,6 +852,27 @@
           return body.ok === true && "data" in body ? body.data : body;
         }
 
+        function humanizeConnectError(message) {
+          var s = String(message || "").toLowerCase();
+          if (
+            s.indexOf("no address associated with hostname") >= 0 ||
+            s.indexOf("unable to resolve host") >= 0 ||
+            s.indexOf("unknown host") >= 0 ||
+            s.indexOf("enotfound") >= 0 ||
+            s.indexOf("could not resolve host") >= 0
+          ) {
+            var loc = "en";
+            try {
+              loc =
+                localStorage.getItem("rekord-connect-locale") === "it" ? "it" : "en";
+            } catch (_e) {}
+            return loc === "it"
+              ? "Hostname non trovato. Con Cloudflare, ferma e riavvia la condivisione sul server, poi scansiona il nuovo QR (l'URL cambia a ogni avvio)."
+              : "Hostname not found. For Cloudflare, stop and restart sharing on the server, then scan the new QR code (the URL changes every time).";
+          }
+          return String(message || "Connection failed");
+        }
+
         window.rekordClientConnect = {
           getSaved: function () {
             try {
@@ -862,7 +893,7 @@
             } catch (err) {
               return {
                 ok: false,
-                error: String((err && err.message) || err),
+                error: humanizeConnectError(String((err && err.message) || err)),
               };
             }
           },
@@ -874,7 +905,7 @@
             } catch (err) {
               return {
                 ok: false,
-                error: String((err && err.message) || err),
+                error: humanizeConnectError(String((err && err.message) || err)),
               };
             }
             localStorage.setItem(
@@ -920,6 +951,8 @@
           errPortMissing: "Enter a port number (e.g. 3001).",
           errPortInvalid: "Invalid port (use 1–65535, without http://).",
           errConnection: "Connection failed.",
+          errStaleTunnel:
+            "Hostname not found. For Cloudflare, stop and restart sharing on the server, then scan the new QR code (the URL changes every time).",
           errNoAccounts: "No accounts found on the server.",
           errOpen: "Could not open the library.",
         },
@@ -951,6 +984,8 @@
           errPortMissing: "Inserisci un numero di porta (es. 3001).",
           errPortInvalid: "Porta non valida (usa 1–65535, senza http://).",
           errConnection: "Connessione non riuscita.",
+          errStaleTunnel:
+            "Hostname non trovato. Con Cloudflare, ferma e riavvia la condivisione sul server, poi scansiona il nuovo QR (l'URL cambia a ogni avvio).",
           errNoAccounts: "Nessun account sul server.",
           errOpen: "Impossibile aprire la libreria.",
         },
@@ -1095,11 +1130,21 @@
         const withP = /^https?:\/\//i.test(t0) ? t0 : `http://${t0}`;
         try {
           const u = new URL(withP);
+          const host = String(u.hostname || "").toLowerCase();
+          const protocol =
+            host === "trycloudflare.com" || host.endsWith(".trycloudflare.com")
+              ? "https:"
+              : u.protocol;
+          const port =
+            protocol === "https:" && host.endsWith(".trycloudflare.com")
+              ? ""
+              : u.port;
+          const hostPart = port ? `${u.hostname}:${port}` : u.hostname;
           return {
-            full: `${u.protocol}//${u.host}`,
+            full: `${protocol}//${hostPart}`,
             h: u.hostname,
-            p: u.port || "3001",
-            protocol: u.protocol,
+            p: port || u.port || "3001",
+            protocol,
           };
         } catch {
           return null;

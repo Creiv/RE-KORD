@@ -139,7 +139,6 @@ export type CrossfadeManagerCallbacks = {
   setCurrentIndex: (i: number) => void;
   setCurrent: (t: EnrichedTrack | null) => void;
   setDuration: (d: number) => void;
-  setCurrentTime: (t: number) => void;
   setPlayerProgressTime: (t: number, force?: boolean) => void;
   setIsPlaying: (v: boolean) => void;
   pushRecent: (t: EnrichedTrack) => void;
@@ -223,7 +222,6 @@ export function createCrossfadeManager(
         callbacks.setDuration(inEl.duration);
       }
       const t = inEl.currentTime;
-      callbacks.setCurrentTime(t);
       callbacks.setPlayerProgressTime(t, true);
     }
     callbacks.setCurrentIndex(nextIdx);

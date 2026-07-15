@@ -8,9 +8,13 @@ import { sendError, sendOk } from "../httpUtils.mjs";
 import { invalidateLibraryIndex } from "../libraryIndexService.mjs";
 import { isAudioFile } from "../musicLibrary.mjs";
 import { getMusicRoot } from "../musicRootConfig.mjs";
-import { albumFolderFromRelPath, safeRelSeg, underRoot } from "../pathSafety.mjs";
+import {
+  albumFolderFromRelPath,
+  realPathUnderRootAsync,
+  safeRelSeg,
+  underRoot,
+} from "../pathSafety.mjs";
 import { relPathLooksLikeAlbumFolder } from "../ytdlpStudio.mjs";
-import { existsSync, statSync } from "fs";
 
 export function registerFsRoutes(app) {
   app.get("/api/fs/list", async (req, res) => {
@@ -19,13 +23,20 @@ export function registerFsRoutes(app) {
     if (relPath == null) return sendError(res, 400, "Invalid path");
     try {
       const full = path.join(root, relPath.replaceAll("/", path.sep));
-      if (!underRoot(full, root) || !existsSync(full))
+      const [st, realSafe] = await Promise.all([
+        fs.stat(full).catch(() => null),
+        realPathUnderRootAsync(full, root),
+      ]);
+      if (
+        !underRoot(full, root) ||
+        !st ||
+        !realSafe
+      )
         return sendError(
           res,
           400,
           "Path is outside the library or does not exist"
         );
-      const st = statSync(full);
       if (!st.isDirectory()) return sendError(res, 400, "Not a directory");
       const entries = await fs.readdir(full, { withFileTypes: true });
       const dirs = entries
@@ -58,11 +69,22 @@ export function registerFsRoutes(app) {
     if (q.length > 80) return sendError(res, 400, "Query too long");
     try {
       const results = [];
-      const visit = async (dir, relPath) => {
-        if (results.length >= 80) return;
+      let visited = 0;
+      const maxVisited = 4000;
+      const maxDepth = 12;
+      const visit = async (dir, relPath, depth) => {
+        if (
+          results.length >= 80 ||
+          visited >= maxVisited ||
+          depth > maxDepth
+        ) {
+          return;
+        }
+        if (!(await realPathUnderRootAsync(dir, root))) return;
+        visited += 1;
         const entries = await fs.readdir(dir, { withFileTypes: true });
         for (const entry of entries) {
-          if (results.length >= 80) break;
+          if (results.length >= 80 || visited >= maxVisited) break;
           if (!entry.isDirectory()) continue;
           if (entry.name.startsWith(".")) continue;
           if (entry.name === "kord" || entry.name === "node_modules") continue;
@@ -72,11 +94,14 @@ export function registerFsRoutes(app) {
           if (childRel.toLowerCase().includes(q)) {
             results.push({ name: entry.name, relPath: childRel });
           }
-          await visit(full, childRel);
+          await visit(full, childRel, depth + 1);
         }
       };
-      await visit(root, "");
-      return sendOk(res, { results });
+      await visit(root, "", 0);
+      return sendOk(res, {
+        results,
+        truncated: visited >= maxVisited,
+      });
     } catch (error) {
       return sendError(res, 500, String(error?.message || error));
     }
@@ -109,10 +134,20 @@ export function registerFsRoutes(app) {
       return sendError(res, 400, "Invalid name");
     }
     try {
+      const parentFull = parent
+        ? path.join(root, parent.replaceAll("/", path.sep))
+        : root;
+      if (
+        !underRoot(parentFull, root) ||
+        !(await realPathUnderRootAsync(parentFull, root))
+      ) {
+        return sendError(res, 400, "Invalid parent path");
+      }
       const relPath = parent ? `${parent}/${name}` : name;
       const full = path.join(root, relPath.replaceAll("/", path.sep));
       if (!underRoot(full, root)) return sendError(res, 400, "Invalid path");
-      if (existsSync(full)) return sendError(res, 400, "Folder already exists");
+      if (await fs.stat(full).then(() => true).catch(() => false))
+        return sendError(res, 400, "Folder already exists");
       await fs.mkdir(full, { recursive: false });
       await invalidateLibraryIndex(root);
       return res.json({ ok: true, relPath: relPath.replaceAll(path.sep, "/") });
@@ -134,13 +169,20 @@ export function registerFsRoutes(app) {
     }
     try {
       const full = path.join(root, relPath.replaceAll("/", path.sep));
-      if (!underRoot(full, root) || !existsSync(full))
+      const [st, realSafe] = await Promise.all([
+        fs.stat(full).catch(() => null),
+        realPathUnderRootAsync(full, root),
+      ]);
+      if (
+        !underRoot(full, root) ||
+        !st ||
+        !realSafe
+      )
         return sendError(
           res,
           400,
           "Path is outside the library or does not exist"
         );
-      const st = statSync(full);
       if (!st.isDirectory()) return sendError(res, 400, "Not a directory");
       const deleted = [];
       const baseRel = relPath.replaceAll(path.sep, "/");
@@ -177,8 +219,17 @@ export function registerFsRoutes(app) {
         const rel = safeRelSeg(String(item));
         if (rel == null || !String(rel).trim()) continue;
         const full = path.join(root, rel.replaceAll("/", path.sep));
-        if (!underRoot(full, root) || !existsSync(full)) continue;
-        const st0 = statSync(full);
+        const [st0, realSafe] = await Promise.all([
+          fs.stat(full).catch(() => null),
+          realPathUnderRootAsync(full, root),
+        ]);
+        if (
+          !underRoot(full, root) ||
+          !st0 ||
+          !realSafe
+        ) {
+          continue;
+        }
         if (!st0.isFile()) continue;
         const base = path.basename(full);
         if (!isAudioFile(base)) continue;
@@ -209,10 +260,17 @@ export function registerFsRoutes(app) {
     }
     try {
       const full = path.join(root, albumPath.replaceAll("/", path.sep));
-      if (!underRoot(full, root) || !existsSync(full)) {
+      const [st, realSafe] = await Promise.all([
+        fs.stat(full).catch(() => null),
+        realPathUnderRootAsync(full, root),
+      ]);
+      if (
+        !underRoot(full, root) ||
+        !st ||
+        !realSafe
+      ) {
         return sendError(res, 404, "Album folder not found");
       }
-      const st = statSync(full);
       if (!st.isDirectory()) return sendError(res, 400, "Not a directory");
       const deleted = [];
       const collectAudio = async (dir, relFromRoot) => {

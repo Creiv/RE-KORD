@@ -8,12 +8,7 @@ function getClientAddress(req) {
 
 export function isLoopbackAddress(addr) {
   const a = String(addr || "").trim();
-  return (
-    a === "127.0.0.1" ||
-    a === "::1" ||
-    a === "::ffff:127.0.0.1" ||
-    a.endsWith("127.0.0.1")
-  );
+  return a === "127.0.0.1" || a === "::1" || a === "::ffff:127.0.0.1";
 }
 
 /**
@@ -72,4 +67,39 @@ export function isServerAdminRequest(req) {
     return isDockerGatewayAddress(getClientAddress(req));
   }
   return false;
+}
+
+const ADMIN_MUTATION_PATHS = [
+  /^\/api\/accounts(?:\/|$)/,
+  /^\/api\/fs\//,
+  /^\/api\/library\/(?:layout|scan)$/,
+  /^\/api\/(?:download|download-cancel)$/,
+  /^\/api\/jobs\/[^/]+\/cancel$/,
+  /^\/api\/artwork\/(?:apply|upload)$/,
+  /^\/api\/album-info\/(?:fetch|save)$/,
+  /^\/api\/track-info\/(?:fetch|fetch-album|save|prune-orphans)$/,
+  /^\/api\/track-lyrics\/fetch$/,
+  /^\/api\/studio\/sanitize-track-titles$/,
+  /^\/api\/entity-info\/save$/,
+  /^\/api\/discogs\/apply-release$/,
+];
+
+/** Mutazioni che agiscono su filesystem, indice o processi globali server. */
+export function isSensitiveServerMutation(req) {
+  const method = String(req.method || "GET").toUpperCase();
+  if (!["POST", "PUT", "PATCH", "DELETE"].includes(method)) return false;
+  const requestPath = String(req.path || req.url || "").split("?")[0];
+  if (requestPath === "/api/track-info/save") {
+    const patch = req.body?.patch;
+    const keys =
+      patch && typeof patch === "object" && !Array.isArray(patch)
+        ? Object.keys(patch)
+        : [];
+    // Mood e tag emotivo sono stato account-scoped; non togliere ai client
+    // LAN una capacità già autorizzata.
+    if (keys.length > 0 && keys.every((key) => key === "mood" || key === "moods")) {
+      return false;
+    }
+  }
+  return ADMIN_MUTATION_PATHS.some((pattern) => pattern.test(requestPath));
 }

@@ -5,7 +5,7 @@ import {
   emitStudioPane,
   useStudioNavigation,
 } from "../context/StudioNavigationContext";
-import { useUserState } from "../context/UserStateContext";
+import { useUserStateSelector } from "../context/UserStateContext";
 import { useLibraryPlayback } from "../hooks/useLibraryPlayback";
 import { useMatchMedia } from "../hooks/useMatchMedia";
 import { useDashboardSmartRadioGrid } from "../hooks/useDashboardSmartRadioGrid";
@@ -157,7 +157,7 @@ export function DashboardSmartRadioCard({
   onOpenSection,
 }: DashboardSmartRadioCardProps) {
   const { t } = useI18n();
-  const user = useUserState();
+  const recentTracks = useUserStateSelector((s) => s.state.recent);
   const isMobile = useMatchMedia(MOBILE_LAYOUT_MQ);
   const { ref, columns, slotCount } = useDashboardSmartRadioGrid(isMobile);
   const { playGlobalRadio, playPoolShuffle, excludedAlbums, excludedTracks } =
@@ -165,7 +165,7 @@ export function DashboardSmartRadioCard({
 
   const candidatePool = useMemo(() => {
     const recent = enrichTracksFromLibrary(
-      user.state.recent.slice(0, 2),
+      recentTracks.slice(0, 2),
       index.tracks,
     );
     const favorites = enrichTracksFromLibrary(
@@ -173,13 +173,13 @@ export function DashboardSmartRadioCard({
       index.tracks,
     );
     return buildSmartRadioCandidatePool(recent, favorites);
-  }, [user.state.recent, dashboard.favoriteTracks, index.tracks]);
+  }, [recentTracks, dashboard.favoriteTracks, index.tracks]);
 
   // Snapshot una tantum per visita (navigazione in dashboard / reload pagina):
   // l'inizializzatore lazy di useState gira solo al mount.
   const [sessionPickedTracks] = useState<EnrichedTrack[]>(() => {
     const recent = enrichTracksFromLibrary(
-      user.state.recent.slice(0, 2),
+      recentTracks.slice(0, 2),
       index.tracks,
     );
     const favorites = enrichTracksFromLibrary(

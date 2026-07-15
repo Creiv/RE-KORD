@@ -1,4 +1,6 @@
 import { app, BrowserWindow, dialog, Menu } from "electron"
+import { resolveCloudflaredPath, isCloudflaredAvailable } from "../server/cloudflaredBin.mjs"
+import { resolveYtdlpPath } from "../server/ytdlpPath.mjs"
 import { spawn } from "child_process"
 import path from "path"
 import fs from "fs"
@@ -15,6 +17,10 @@ const PORT_FILE = "rekord-electron-port.json"
 let appPort =
   Number(process.env.REKORD_PORT || process.env.KORD_PORT || process.env.PORT) ||
   DEFAULT_SERVER_PORT
+
+function isPackageSmokeMode() {
+  return process.argv.includes("--package-smoke")
+}
 
 function isDev() {
   return !app.isPackaged
@@ -163,6 +169,8 @@ let serverChild = null
 let mainWindow = null
 /** Ultimo token usato per avviare il server (health probe prima di caricare la UI). */
 let lastServerStartupToken = null
+/** Health già verificato in tryStartOnPort — evita doppio probe in createWindow. */
+let serverHealthConfirmed = false
 
 const APP_NAME = "RE-KORD"
 
@@ -331,6 +339,18 @@ async function tryStartOnPort(userData, port, useStdio, cwd, script) {
   if (app.isPackaged && (process.platform === "linux" || process.platform === "win32")) {
     env.ELECTRON_DISABLE_SANDBOX = "1"
   }
+  if (isCloudflaredAvailable()) {
+    const cloudflared = resolveCloudflaredPath()
+    env.REKORD_CLOUDFLARED_BIN = cloudflared
+    appendLaunchLog(`cloudflared detected: ${cloudflared}`)
+  } else {
+    appendLaunchLog("warn: cloudflared not found in package or PATH")
+  }
+  const ytdlp = resolveYtdlpPath()
+  if (ytdlp && ytdlp !== "yt-dlp") {
+    env.YTDLP_PATH = ytdlp
+    appendLaunchLog(`yt-dlp detected: ${ytdlp}`)
+  }
   appendLaunchLog(`spawn server on ${port} cwd=${cwd}`)
   const strippedSwitches = stripChromeSwitchesForNodeSpawn()
   let child
@@ -377,6 +397,7 @@ async function tryStartOnPort(userData, port, useStdio, cwd, script) {
     return false
   }
   serverChild = child
+  serverHealthConfirmed = true
   serverChild.on("exit", (code) => {
     if (code !== 0 && code != null) {
       appendLaunchLog(`server exit ${code}`)
@@ -465,13 +486,14 @@ async function createWindow() {
   const url = isDev()
     ? `http://127.0.0.1:5173?${clientQ}`
     : `http://127.0.0.1:${p}/?${clientQ}`
-  if (!isDev() && lastServerStartupToken) {
+  if (!isDev() && lastServerStartupToken && !serverHealthConfirmed) {
     try {
       await waitForHealth(p, lastServerStartupToken, 15000)
     } catch (e) {
       appendLaunchLog(`warn: health before loadURL ${e}`)
     }
   }
+  serverHealthConfirmed = false
   void mainWindow.loadURL(url)
   void mainWindow.webContents.on("did-fail-load", (_ev, code, reason) => {
     appendLaunchLog(`did-fail-load ${code} ${reason}`)
@@ -546,6 +568,12 @@ if (!app.requestSingleInstanceLock()) {
       } catch {
         /* ok */
       }
+      app.quit()
+      return
+    }
+    if (isPackageSmokeMode()) {
+      appendLaunchLog("package-smoke: server health ok")
+      stopServer()
       app.quit()
       return
     }

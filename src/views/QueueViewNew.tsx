@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { usePlayer } from "../context/PlayerContext";
-import { useUserState } from "../context/UserStateContext";
+import { useUserPlaylistsSlice } from "../context/UserStateContext";
 import { useI18n } from "../i18n/useI18n";
 import { SectionHeadLead } from "../components/SectionHeadLead";
 import { TrackListRow } from "../components/AppSharedUi";
@@ -17,7 +17,7 @@ function QueueViewNew({
   onOpenSavedPlaylist: (playlistId: string) => void;
 }) {
   const p = usePlayer();
-  const user = useUserState();
+  const { saveQueueAsPlaylist } = useUserPlaylistsSlice();
   const { t } = useI18n();
   const [queueName, setQueueName] = useState("");
   return (
@@ -43,7 +43,7 @@ function QueueViewNew({
                 className="primary-btn"
                 disabled={!p.queue.length}
                 onClick={() => {
-                  const id = user.saveQueueAsPlaylist(queueName, p.queue);
+                  const id = saveQueueAsPlaylist(queueName, p.queue);
                   onOpenSavedPlaylist(id);
                 }}
               >

@@ -3,6 +3,7 @@ import {
   isCloudflareTunnelRequest,
   isDockerGatewayAddress,
   isLoopbackAddress,
+  isSensitiveServerMutation,
   isServerAdminRequest,
 } from "./requestAccess.mjs";
 
@@ -76,5 +77,58 @@ describe("requestAccess", () => {
     } finally {
       if (prev !== undefined) process.env.REKORD_DOCKER = prev;
     }
+  });
+
+  it("classifies server-wide mutations without blocking account state", () => {
+    expect(
+      isSensitiveServerMutation({
+        method: "POST",
+        path: "/api/accounts",
+      }),
+    ).toBe(true);
+    expect(
+      isSensitiveServerMutation({
+        method: "PUT",
+        path: "/api/accounts/other",
+      }),
+    ).toBe(true);
+    expect(
+      isSensitiveServerMutation({
+        method: "POST",
+        path: "/api/fs/delete-album-folder",
+      }),
+    ).toBe(true);
+    expect(
+      isSensitiveServerMutation({
+        method: "POST",
+        path: "/api/artwork/apply",
+      }),
+    ).toBe(true);
+    expect(
+      isSensitiveServerMutation({
+        method: "PATCH",
+        path: "/api/user-state",
+      }),
+    ).toBe(false);
+    expect(
+      isSensitiveServerMutation({
+        method: "PATCH",
+        path: "/api/my-library-selection",
+      }),
+    ).toBe(false);
+    expect(
+      isSensitiveServerMutation({
+        method: "POST",
+        path: "/api/track-info/save",
+        body: { patch: { moods: ["focused"] } },
+      }),
+    ).toBe(false);
+    expect(
+      isSensitiveServerMutation({
+        method: "POST",
+        path: "/api/track-info/save",
+        body: { patch: { title: "Global edit" } },
+      }),
+    ).toBe(true);
   });
 });

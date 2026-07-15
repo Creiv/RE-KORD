@@ -3,7 +3,7 @@ import { DashboardMixCard } from "../../components/DashboardMixCard";
 import { DashboardNebulaCard } from "../../components/DashboardNebulaCard";
 import { DashboardSmartRadioCard } from "../../components/DashboardSmartRadioCard";
 import { usePlayer } from "../../context/PlayerContext";
-import { useUserState } from "../../context/UserStateContext";
+import { useUserStateSelector } from "../../context/UserStateContext";
 import { useLibraryPlayback } from "../../hooks/useLibraryPlayback";
 import { lookupByRelPathAliases } from "../../lib/libraryNav";
 import { eligibleTracksForIntelligentRandom } from "../../lib/randomExclusions";
@@ -51,7 +51,7 @@ export default function DashboardView({
   onOpenSection,
 }: DashboardViewProps) {
   const { t } = useI18n();
-  const user = useUserState();
+  const trackPlayCounts = useUserStateSelector((s) => s.state.trackPlayCounts);
   const player = usePlayer();
   const { playGlobalRadio, playPoolShuffle, excludedAlbums, excludedTracks } =
     useLibraryPlayback(index?.tracks);
@@ -70,12 +70,12 @@ export default function DashboardView({
     () =>
       [...(dashboard?.favoriteTracks || [])].sort(
         (a, b) =>
-          (lookupByRelPathAliases(user.state.trackPlayCounts, b.relPath) ?? 0) -
-            (lookupByRelPathAliases(user.state.trackPlayCounts, a.relPath) ??
+          (lookupByRelPathAliases(trackPlayCounts, b.relPath) ?? 0) -
+            (lookupByRelPathAliases(trackPlayCounts, a.relPath) ??
               0) ||
           a.title.localeCompare(b.title, undefined, { numeric: true })
       ),
-    [dashboard?.favoriteTracks, user.state.trackPlayCounts]
+    [dashboard?.favoriteTracks, trackPlayCounts]
   );
 
   if (!dashboard || !index)

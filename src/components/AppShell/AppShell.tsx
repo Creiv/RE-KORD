@@ -11,6 +11,7 @@ import {
   useState,
 } from "react";
 import type { CSSProperties, RefObject } from "react";
+import { readPlayerProgressTime } from "../../context/playerProgressStore";
 import { usePlayer } from "../../context/PlayerContext";
 import { useRhythmMode } from "../../context/RhythmModeContext";
 import {
@@ -19,12 +20,24 @@ import {
 } from "../../context/StudioNavigationContext";
 import { useLibrarySyncActivity } from "../../context/LibrarySyncActivityContext";
 import { useToolsActivity } from "../../context/ToolsActivityContext";
-import { useUserState } from "../../context/UserStateContext";
+import {
+  useUserSettingsSlice,
+  useUserStateActions,
+  useUserStateSelector,
+  useUserStateStatus,
+} from "../../context/UserStateContext";
 import { useMatchMedia } from "../../hooks/useMatchMedia";
+import {
+  ensureAppForegroundListeners,
+  isAppInForeground,
+  subscribeAppForeground,
+} from "../../hooks/useAppForeground";
+import { setVisualSurfaceContext } from "../../hooks/useVisualSurfaceActive";
 import { usePlayerDockCssVars } from "../../hooks/usePlayerDockCssVars";
 import { useViewportHeight } from "../../hooks/useViewportHeight";
 import { useSyncStatusSnackbar } from "../../hooks/useSyncStatusSnackbar";
 import { MOBILE_LAYOUT_MQ } from "../../lib/breakpoints";
+import { libraryPollDelayMs, shouldSkipLibraryPoll } from "../../lib/libraryPollSchedule";
 import { requestNebulaFullscreen } from "../../lib/nebulaFullscreen";
 import {
   findLibraryTrackByRelPath,
@@ -35,15 +48,16 @@ import {
 } from "../../lib/libraryNav";
 import { useI18n } from "../../i18n/useI18n";
 import {
-  fetchDashboard,
   fetchLibraryChanges,
-  fetchLibraryIndex,
+  fetchLibraryDelta,
+  fetchLibrarySnapshot,
   isBackendUnreachableError,
 } from "../../lib/api";
 import { onBackendRecovery, scheduleBackendRecovery } from "../../lib/backendRecovery";
 import { isRekordClientEmbed } from "../toolsViewShared";
 import { clientLegacyLibrary } from "../../lib/libraryIndex";
 import {
+  applyLibraryDeltaPayload,
   applyLibraryDeltaToIndex,
   applyLibraryDeltasToIndex,
   libraryDeltaTouchesCover,
@@ -55,6 +69,7 @@ import type { LibraryReconcileOptions } from "../../lib/libraryReconcile";
 import { parseTrackGenres } from "../../lib/genres";
 import { useAppRoute } from "../../lib/routing";
 import { RekordSplashLoader } from "../RekordSplashLoader";
+import { ViewErrorBoundary } from "../ViewErrorBoundary";
 import { RekordViewLoadingFallback } from "../RekordViewLoadingFallback";
 import { PlayerDock } from "../PlayerDock/PlayerDock";
 import { MobileBottomNav } from "../MobileBottomNav/MobileBottomNav";
@@ -107,8 +122,22 @@ export function AppShell() {
   usePlayerDockCssVars(p.queue.length);
   useViewportHeight();
   const isMobileLayout = useMatchMedia(MOBILE_LAYOUT_MQ);
-  const user = useUserState();
-  const syncUserStateFromServer = user.syncUserStateFromServer;
+  const { updateSettings, settings } = useUserSettingsSlice();
+  useEffect(() => {
+    setVisualSurfaceContext({
+      section: route.section,
+      libBrowse: settings.libBrowse,
+    });
+  }, [route.section, settings.libBrowse]);
+  const { ready: userReady, error: userError } = useUserStateStatus();
+  const favorites = useUserStateSelector((s) => s.state.favorites);
+  const trackPlayCounts = useUserStateSelector((s) => s.state.trackPlayCounts);
+  const recentTracks = useUserStateSelector((s) => s.state.recent);
+  const {
+    syncUserStateFromServer,
+    rehydrateTrackListsFromLibrary,
+    rehydrateShuffleExclusionsFromIndex,
+  } = useUserStateActions();
   const {
     beginActivity: beginLibrarySyncActivity,
     busy: librarySyncBusy,
@@ -164,11 +193,19 @@ export function AppShell() {
   const backgroundRefreshRef = useRef<Promise<void> | null>(null);
   const libraryRefreshQueuedAfterFlightRef = useRef(false);
   const indexEpochRef = useRef(0);
+  const indexLoadedRef = useRef(false);
+  const resyncTracksRef = useRef(p.resyncTracksFromIndex);
+  resyncTracksRef.current = p.resyncTracksFromIndex;
   const libraryReconcileDebounceRef = useRef<ReturnType<
     typeof globalThis.setTimeout
   > | null>(null);
   const [syncTapAnim, setSyncTapAnim] = useState(false);
   const libraryPollFailuresRef = useRef(0);
+  const libraryPollUnchangedRef = useRef(0);
+  const libraryPollInFlightRef = useRef(false);
+  const libraryPollTimerRef = useRef<number | null>(null);
+  const libraryPollIsPlayingRef = useRef(p.isPlaying);
+  libraryPollIsPlayingRef.current = p.isPlaying;
 
   const refreshLibrary = useCallback(
     (mode: "manual" | "background" = "manual", syncUser = false) => {
@@ -180,9 +217,11 @@ export function AppShell() {
       );
       const blockUi = mode === "manual" && !indexRef.current;
       if (blockUi) setLoading(true);
-      const task = Promise.all([fetchLibraryIndex(), fetchDashboard()])
-        .then(async ([libraryData, dashboardData]) => {
+      const task = Promise.resolve(fetchLibrarySnapshot())
+        .then(async (snapshot) => {
           if (seq !== refreshSeqRef.current) return;
+          const libraryData = snapshot.index;
+          const dashboardData = snapshot.dashboard;
           setIndex((prev) => {
             const next = mergeLibraryIndexFromServer(prev, libraryData);
             syncLibraryAlbumArtworkFromIndex(next);
@@ -190,6 +229,7 @@ export function AppShell() {
           });
           setDashboard(dashboardData);
           setError(null);
+          indexLoadedRef.current = true;
           if (mode === "manual" && syncUser) await syncUserStateFromServer();
         })
         .catch((err: unknown) => {
@@ -287,9 +327,6 @@ export function AppShell() {
 
   const applyLibraryDelta = useCallback(
     (delta: LibraryEntityDelta, reconcile = true) => {
-      const endActivity = beginLibrarySyncActivity(
-        "sync.activity.updatingLibrary"
-      );
       setIndex((prev) => {
         const next = applyLibraryDeltaToIndex(prev, delta);
         if (next) {
@@ -298,29 +335,24 @@ export function AppShell() {
         }
         return next;
       });
-      endActivity();
       if (libraryDeltaTouchesCover(delta)) p.syncMediaSessionNow();
       if (reconcile) scheduleDebouncedLibraryReconcile();
     },
-    [beginLibrarySyncActivity, p, scheduleDebouncedLibraryReconcile]
+    [p, scheduleDebouncedLibraryReconcile]
   );
 
   const applyLibraryDeltas = useCallback(
     (deltas: LibraryEntityDelta[], reconcile = false) => {
       if (!deltas.length) return;
-      const endActivity = beginLibrarySyncActivity(
-        "sync.activity.updatingLibrary"
-      );
       setIndex((prev) => {
         const next = applyLibraryDeltasToIndex(prev, deltas);
         if (next) syncLibraryAlbumArtworkFromIndex(next);
         return next;
       });
-      endActivity();
       if (deltas.some(libraryDeltaTouchesCover)) p.syncMediaSessionNow();
       if (reconcile) scheduleDebouncedLibraryReconcile();
     },
-    [beginLibrarySyncActivity, p, scheduleDebouncedLibraryReconcile]
+    [p, scheduleDebouncedLibraryReconcile]
   );
 
   const refreshAfterAlbumMetaSaved = useCallback(
@@ -403,6 +435,7 @@ export function AppShell() {
   }, [reconcileLibrary]);
 
   useEffect(() => {
+    if (indexLoadedRef.current) return;
     const timer = window.setTimeout(() => {
       void reconcileLibrary({ mode: "manual" });
     }, 0);
@@ -416,16 +449,79 @@ export function AppShell() {
   }, [index?.indexEpoch]);
 
   useEffect(() => {
-    if (!index) return;
-    const pollMs = 4000;
-    const timer = window.setInterval(() => {
-      void fetchLibraryChanges(indexEpochRef.current)
-        .then((snap) => {
+    if (!indexLoadedRef.current || !index) return;
+    ensureAppForegroundListeners();
+
+    const scheduleNextPoll = (delayMs: number) => {
+      if (libraryPollTimerRef.current != null) {
+        window.clearTimeout(libraryPollTimerRef.current);
+      }
+      libraryPollTimerRef.current = window.setTimeout(runPoll, delayMs);
+    };
+
+    const finishPollCycle = () => {
+      libraryPollInFlightRef.current = false;
+      const foreground = isAppInForeground();
+      scheduleNextPoll(
+        libraryPollDelayMs({
+          foreground,
+          consecutiveUnchanged: libraryPollUnchangedRef.current,
+          consecutiveFailures: libraryPollFailuresRef.current,
+          isPlaying: libraryPollIsPlayingRef.current,
+        }),
+      );
+    };
+
+    const runPoll = () => {
+      libraryPollTimerRef.current = null;
+      if (shouldSkipLibraryPoll(isAppInForeground())) {
+        scheduleNextPoll(
+          libraryPollDelayMs({
+            foreground: false,
+            consecutiveUnchanged: libraryPollUnchangedRef.current,
+            consecutiveFailures: libraryPollFailuresRef.current,
+            isPlaying: libraryPollIsPlayingRef.current,
+          }),
+        );
+        return;
+      }
+      if (backgroundRefreshRef.current || libraryPollInFlightRef.current) {
+        finishPollCycle();
+        return;
+      }
+      libraryPollInFlightRef.current = true;
+      const sinceEpoch = indexEpochRef.current;
+      void fetchLibraryChanges(sinceEpoch)
+        .then(async (snap) => {
           libraryPollFailuresRef.current = 0;
-          indexEpochRef.current = snap.indexEpoch;
-          if (snap.changed && !snap.scanning) {
-            void runCoalescedBackgroundRefresh();
+          if (!snap.changed || snap.scanning || backgroundRefreshRef.current) {
+            indexEpochRef.current = snap.indexEpoch;
+            if (!snap.changed && !snap.scanning) {
+              libraryPollUnchangedRef.current += 1;
+            } else {
+              libraryPollUnchangedRef.current = 0;
+            }
+            return;
           }
+          libraryPollUnchangedRef.current = 0;
+          const delta = await fetchLibraryDelta(sinceEpoch);
+          indexEpochRef.current = snap.indexEpoch;
+          if (!delta.changed) return;
+          if (delta.fullRefreshRecommended) {
+            void runCoalescedBackgroundRefresh();
+            return;
+          }
+          setIndex((prev) => {
+            const next = applyLibraryDeltaPayload(prev, delta);
+            if (!next) {
+              void runCoalescedBackgroundRefresh();
+              return prev;
+            }
+            syncLibraryAlbumArtworkFromIndex(next);
+            queueMicrotask(() => resyncTracksRef.current(next));
+            return next;
+          });
+          indexEpochRef.current = delta.indexEpoch;
         })
         .catch(() => {
           libraryPollFailuresRef.current += 1;
@@ -433,9 +529,46 @@ export function AppShell() {
             libraryPollFailuresRef.current = 0;
             scheduleBackendRecovery("poll");
           }
-        });
-    }, pollMs);
-    return () => window.clearInterval(timer);
+        })
+        .finally(finishPollCycle);
+    };
+
+    const unsubForeground = subscribeAppForeground((fg) => {
+      if (libraryPollTimerRef.current != null) {
+        window.clearTimeout(libraryPollTimerRef.current);
+        libraryPollTimerRef.current = null;
+      }
+      if (fg) {
+        libraryPollUnchangedRef.current = 0;
+        runPoll();
+        return;
+      }
+      scheduleNextPoll(
+        libraryPollDelayMs({
+          foreground: false,
+          consecutiveUnchanged: libraryPollUnchangedRef.current,
+          consecutiveFailures: libraryPollFailuresRef.current,
+          isPlaying: libraryPollIsPlayingRef.current,
+        }),
+      );
+    });
+
+    scheduleNextPoll(
+      libraryPollDelayMs({
+        foreground: isAppInForeground(),
+        consecutiveUnchanged: 0,
+        consecutiveFailures: 0,
+        isPlaying: libraryPollIsPlayingRef.current,
+      }),
+    );
+
+    return () => {
+      if (libraryPollTimerRef.current != null) {
+        window.clearTimeout(libraryPollTimerRef.current);
+        libraryPollTimerRef.current = null;
+      }
+      unsubForeground();
+    };
   }, [index, runCoalescedBackgroundRefresh]);
 
   useEffect(() => {
@@ -463,19 +596,16 @@ export function AppShell() {
   }, [index]);
 
   const { resyncTracksFromIndex } = p;
-  const {
-    ready: userReady,
-    rehydrateTrackListsFromLibrary,
-    rehydrateShuffleExclusionsFromIndex,
-  } = user;
   useEffect(() => {
     if (!index || !userReady) return;
     resyncTracksFromIndex(index);
-    rehydrateTrackListsFromLibrary(index);
     const sig = libraryIndexRehydrateSig(index);
-    if (sig === indexLibrarySigRef.current) return;
-    indexLibrarySigRef.current = sig;
-    rehydrateShuffleExclusionsFromIndex(index);
+    const sigChanged = sig !== indexLibrarySigRef.current;
+    if (sigChanged) indexLibrarySigRef.current = sig;
+    startTransition(() => {
+      rehydrateTrackListsFromLibrary(index);
+      if (sigChanged) rehydrateShuffleExclusionsFromIndex(index);
+    });
   }, [
     index,
     resyncTracksFromIndex,
@@ -559,17 +689,16 @@ export function AppShell() {
 
   const favoriteTracks = useMemo(() => {
     if (!index || route.section !== "favorites") return [];
-    return user.state.favorites
+    return favorites
       .map((relPath) => findLibraryTrackByRelPath(index.tracks, relPath))
       .filter((track): track is LibraryTrackIndex => Boolean(track))
       .sort(
         (a, b) =>
-          (lookupByRelPathAliases(user.state.trackPlayCounts, b.relPath) ?? 0) -
-            (lookupByRelPathAliases(user.state.trackPlayCounts, a.relPath) ??
-              0) ||
+          (lookupByRelPathAliases(trackPlayCounts, b.relPath) ?? 0) -
+            (lookupByRelPathAliases(trackPlayCounts, a.relPath) ?? 0) ||
           a.title.localeCompare(b.title, undefined, { numeric: true })
       );
-  }, [index, route.section, user.state.favorites, user.state.trackPlayCounts]);
+  }, [index, route.section, favorites, trackPlayCounts]);
 
   const [libraryGenreOptions, setLibraryGenreOptions] = useState<
     readonly string[]
@@ -702,10 +831,13 @@ export function AppShell() {
         setLibraryHomeTick((n) => n + 1);
       }
       startTransition(() => {
+        if (section === "libreria") {
+          updateSettings({ libBrowse: "artists" });
+        }
         navigate({ section });
       });
     },
-    [closeLibrarySearch, navigate, openStudioListen, p.queue.length, setRhythmOpen],
+    [closeLibrarySearch, navigate, openStudioListen, p.queue.length, setRhythmOpen, updateSettings],
   );
 
   useEffect(() => {
@@ -750,7 +882,7 @@ export function AppShell() {
         /* Legge il tempo dall'elemento audio (lo stato React è throttlato);
            il seek non cambia lo stato play/pausa. */
         const audio = p.audioRef.current;
-        const at = audio ? audio.currentTime : p.currentTime;
+        const at = audio ? audio.currentTime : readPlayerProgressTime();
         const dur =
           audio && Number.isFinite(audio.duration) && audio.duration > 0
             ? audio.duration
@@ -764,8 +896,8 @@ export function AppShell() {
       } else if (event.code === "KeyN") {
         event.preventDefault();
         requestNebulaFullscreen();
-        user.updateSettings({ libBrowse: "nebula" });
-        goAppSection("libreria");
+        updateSettings({ libBrowse: "nebula" });
+        startTransition(() => navigate({ section: "libreria" }));
       } else if (event.code === "KeyP") {
         event.preventDefault();
         if (p.queue.length > 0) setRhythmOpen(true);
@@ -773,20 +905,25 @@ export function AppShell() {
     };
     window.addEventListener("keydown", handler);
     return () => window.removeEventListener("keydown", handler);
-  }, [goAppSection, openLibrarySearch, openStudioListen, p, setRhythmOpen, user]);
+  }, [navigate, openLibrarySearch, openStudioListen, p, setRhythmOpen, updateSettings]);
 
   const onLibraryHome = useCallback(() => {
     closeLibrarySearch();
     setLibraryHomeTick((n) => n + 1);
-    navigate({ section: "libreria" });
-  }, [navigate, closeLibrarySearch]);
+    startTransition(() => {
+      updateSettings({ libBrowse: "artists" });
+      navigate({ section: "libreria", artist: null, album: null });
+    });
+  }, [navigate, closeLibrarySearch, updateSettings]);
 
   const currentView = (() => {
     if (route.section === "settings") {
       return (
-        <Suspense fallback={<RekordViewLoadingFallback />}>
-          <LazySettingsView index={index} />
-        </Suspense>
+        <ViewErrorBoundary label="Settings">
+          <Suspense fallback={<RekordViewLoadingFallback />}>
+            <LazySettingsView index={index} />
+          </Suspense>
+        </ViewErrorBoundary>
       );
     }
     if (bootstrapLoading) return <RekordSplashLoader />;
@@ -798,19 +935,22 @@ export function AppShell() {
     switch (route.section) {
       case "dashboard":
         return (
-          <Suspense fallback={<RekordViewLoadingFallback />}>
-            <LazyDashboardView
-              dashboard={dashboard}
-              index={index}
-              onOpenAlbum={navToLibraryAlbum}
-              onOpenSection={navToSection}
-            />
-          </Suspense>
+          <ViewErrorBoundary label="Dashboard">
+            <Suspense fallback={<RekordViewLoadingFallback />}>
+              <LazyDashboardView
+                dashboard={dashboard}
+                index={index}
+                onOpenAlbum={navToLibraryAlbum}
+                onOpenSection={navToSection}
+              />
+            </Suspense>
+          </ViewErrorBoundary>
         );
       case "libreria":
         return (
-          <Suspense fallback={<RekordViewLoadingFallback />}>
-            <LazyLibraryView
+          <ViewErrorBoundary label="Library">
+            <Suspense fallback={<RekordViewLoadingFallback />}>
+              <LazyLibraryView
               index={index}
               route={route}
               query={deferredSearch}
@@ -828,20 +968,23 @@ export function AppShell() {
               onOpenAlbum={navToLibraryAlbum}
             />
           </Suspense>
+          </ViewErrorBoundary>
         );
       case "studio":
         return (
           <div className="view-page view-page--studio">
-            <Suspense fallback={<RekordViewLoadingFallback />}>
-              <LazyStudioView
-                library={legacyLibrary}
-                libraryIndex={index}
-                onReconcileLibrary={reconcileLibrary}
-                onLibraryDelta={applyLibraryDelta}
-                onLibraryDeltas={applyLibraryDeltas}
-                onOpenSection={navToSection}
-              />
-            </Suspense>
+            <ViewErrorBoundary label="Studio">
+              <Suspense fallback={<RekordViewLoadingFallback />}>
+                <LazyStudioView
+                  library={legacyLibrary}
+                  libraryIndex={index}
+                  onReconcileLibrary={reconcileLibrary}
+                  onLibraryDelta={applyLibraryDelta}
+                  onLibraryDeltas={applyLibraryDeltas}
+                  onOpenSection={navToSection}
+                />
+              </Suspense>
+            </ViewErrorBoundary>
           </div>
         );
       case "queue":
@@ -882,7 +1025,7 @@ export function AppShell() {
               title={t("collection.recentTitle")}
               eyebrow={t("collection.recentEyebrow")}
               leadIcon={<UiHistory className="section-head__ic" />}
-              tracks={user.state.recent}
+              tracks={recentTracks}
               libraryTracks={index.tracks}
               collectionMode="radio"
             />
@@ -957,11 +1100,11 @@ export function AppShell() {
               {error && index ? (
                 <div className={styles.banner}>{formatLoadError(error)}</div>
               ) : null}
-              {user.error ? (
+              {userError ? (
                 <div className={styles.banner}>
-                  {user.error === "errors.backendUnreachable"
-                    ? formatLoadError(user.error)
-                    : `${t("persist.banner")} ${formatLoadError(user.error)}`}
+                  {userError === "errors.backendUnreachable"
+                    ? formatLoadError(userError)
+                    : `${t("persist.banner")} ${formatLoadError(userError)}`}
                 </div>
               ) : null}
 

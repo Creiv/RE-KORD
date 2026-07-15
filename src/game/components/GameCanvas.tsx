@@ -22,6 +22,7 @@ import {
   resolveSmoothSongTime,
 } from "../lib/smoothSongClock";
 import { PlectrVizBackdrop } from "../../lib/plectrVizBackdrop";
+import { canvasDprCap } from "../../lib/renderQuality";
 import type { VizMode } from "../../types";
 import type { Chart, ChartNote, GameResult, Lane } from "../types";
 import { FeedbackBadge } from "./FeedbackBadge";
@@ -287,12 +288,7 @@ export const GameCanvas = React.memo(function GameCanvas({
   const [waitingForStart, setWaitingForStart] = useState(true);
   const canvasLite = embedded || syncLive;
 
-  const readCanvasDpr = useCallback(() => {
-    const base = window.devicePixelRatio || 1;
-    const cap =
-      canvasLite && window.matchMedia("(pointer: coarse)").matches ? 1.35 : 1.75;
-    return Math.min(base, cap);
-  }, [canvasLite]);
+  const readCanvasDpr = useCallback(() => canvasDprCap({ lite: canvasLite }), [canvasLite]);
 
   useLayoutEffect(() => {
     const canvas = canvasRef.current;

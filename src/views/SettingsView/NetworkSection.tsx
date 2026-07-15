@@ -95,13 +95,15 @@ export default function NetworkSection({
                         : t("settings.remoteStart")}
                   </button>
                 </div>
-                {remoteAccess?.publicUrl ? (
+                {remoteAccess?.status === "running" && remoteAccess.publicUrl ? (
                   <p className="subtle sm">
                     {t("settings.remoteUrl", { url: remoteAccess.publicUrl })}
                   </p>
+                ) : remoteAccess?.status === "starting" ? (
+                  <p className="subtle sm">{t("settings.remoteStartingHint")}</p>
                 ) : null}
               </>
-            ) : remoteAccess?.publicUrl ? (
+            ) : remoteAccess?.status === "running" && remoteAccess.publicUrl ? (
               <p className="subtle sm">
                 {t("settings.remoteUrl", { url: remoteAccess.publicUrl })}
               </p>
@@ -115,7 +117,7 @@ export default function NetworkSection({
             ) : null}
           </div>
         </div>
-        {remoteAccess?.publicUrl ? (
+        {remoteAccess?.status === "running" && remoteAccess.publicUrl ? (
           <div className="settings-network-qr-wrap">
             <button
               type="button"

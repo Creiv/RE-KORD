@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import {
+  applyLibraryDeltaPayload,
   applyLibraryDeltaToIndex,
   applyLibraryDeltasToIndex,
   enrichedTracksNeedPlayerResync,
@@ -185,6 +186,21 @@ describe("libraryIndex", () => {
     ];
     const next = applyLibraryDeltasToIndex(base, deltas);
     expect(next?.albums[0]?.hasAlbumMeta).toBe(true);
+  });
+
+  it("applyLibraryDeltaPayload rimuove tracce e aggiorna epoch", () => {
+    const base = miniIndex();
+    const next = applyLibraryDeltaPayload(base, {
+      changed: true,
+      indexEpoch: 9,
+      removedTrackPaths: [base.tracks[0]!.relPath],
+      addedTrackPaths: [],
+      updatedAlbums: [],
+      updatedTracks: [],
+      fullRefreshRecommended: false,
+    });
+    expect(next?.tracks).toHaveLength(0);
+    expect(next?.indexEpoch).toBe(9);
   });
 
   it("applyLibraryDeltaToIndex propaga il rename album su tutte le tracce", () => {

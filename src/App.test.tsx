@@ -135,6 +135,15 @@ const userState: UserStateV1 = {
 function mockApi() {
   globalThis.fetch = vi.fn(async (input: RequestInfo | URL) => {
     const url = String(input);
+    if (url.includes("/api/library-snapshot")) {
+      return new Response(
+        JSON.stringify({
+          ok: true,
+          data: { index: libraryIndex, dashboard },
+          error: null,
+        }),
+      );
+    }
     if (url.includes("/api/library-index")) {
       return new Response(
         JSON.stringify({ ok: true, data: libraryIndex, error: null })
@@ -182,6 +191,19 @@ function mockApi() {
           },
           error: null,
         })
+      );
+    }
+    if (url.includes("/api/library/changes")) {
+      return new Response(
+        JSON.stringify({
+          ok: true,
+          data: {
+            changed: false,
+            indexEpoch: libraryIndex.indexEpoch ?? 1,
+            scanning: false,
+          },
+          error: null,
+        }),
       );
     }
     if (url.includes("/api/activity-log")) {
@@ -241,6 +263,32 @@ describe("App", () => {
     expect(await screen.findByText("Album One")).toBeInTheDocument();
     expect(
       await screen.findByRole("button", { name: "Play album" })
+    ).toBeInTheDocument();
+  });
+
+  it("navigates to studio and shows catalog tab content", async () => {
+    window.history.pushState({}, "", "/");
+    mockApi();
+    render(<App />);
+
+    expect(
+      await screen.findByText(/Library, listening, and tools/i)
+    ).toBeInTheDocument();
+
+    await userEvent.click(screen.getByRole("button", { name: "Studio" }));
+
+    await waitFor(() => {
+      expect(screen.getByRole("button", { name: "Studio" })).toHaveAttribute(
+        "aria-current",
+        "page"
+      );
+    });
+
+    expect(
+      await screen.findByRole("button", { name: "Discover" })
+    ).toBeInTheDocument();
+    expect(
+      screen.getByRole("button", { name: "Listen" })
     ).toBeInTheDocument();
   });
 });

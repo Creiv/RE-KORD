@@ -3,10 +3,13 @@
  * Estratto da index.mjs (Fase 6).
  */
 import multer from "multer";
+import fs from "fs/promises";
+import os from "os";
 import path from "path";
+import { randomUUID } from "crypto";
 import archiver from "archiver";
 import unzipper from "unzipper";
-import { restoreRekordFromZipBuffer, streamRekordBackupZip } from "../backupRekord.mjs";
+import { restoreKordFromZipPath, streamRekordBackupZip } from "../backupRekord.mjs";
 import {
   findCustomThemeBgPath,
   mediaTypeForThemeBgPath,
@@ -14,21 +17,33 @@ import {
 } from "../customThemeBg.mjs";
 import { accountIdFromReq, sendError, sendOk } from "../httpUtils.mjs";
 import { getAccountsSnapshot, getMusicRoot, isMusicRootFromEnv } from "../musicRootConfig.mjs";
+import { isServerAdminRequest } from "../requestAccess.mjs";
 import { mergeAndWriteUserStatePatch, readUserState } from "../userState.mjs";
 
 const uploadRekordBackup = multer({
-  storage: multer.memoryStorage(),
+  storage: multer.diskStorage({
+    destination: os.tmpdir(),
+    filename: (_req, _file, callback) => {
+      callback(null, `rekord-restore-upload-${randomUUID()}.zip`);
+    },
+  }),
   limits: { fileSize: 512 * 1024 * 1024 },
+});
+const uploadThemeArchive = multer({
+  storage: multer.memoryStorage(),
+  limits: { fileSize: 32 * 1024 * 1024 },
 });
 
 const THEME_EXPORT_JSON = "rekord-theme.json";
 
 /** Se lo zip è un export tema (contiene rekord-theme.json) ne restituisce
  *  payload + eventuale immagine di sfondo; altrimenti null (è un backup). */
-async function readThemeZip(buffer) {
+async function readThemeZip(source) {
   let dir;
   try {
-    dir = await unzipper.Open.buffer(buffer);
+    dir = Buffer.isBuffer(source)
+      ? await unzipper.Open.buffer(source)
+      : await unzipper.Open.file(source);
   } catch {
     return null;
   }
@@ -71,15 +86,33 @@ function themeSettingsPatchFromPayload(payload) {
     out.glassOpacity = Number(payload.glassOpacity);
   }
   if (payload.customTheme && typeof payload.customTheme === "object") {
-    const { bgImage: _bi, bgImageRev: _br, ...ct } = payload.customTheme;
+    const ct = { ...payload.customTheme };
+    delete ct.bgImage;
+    delete ct.bgImageRev;
     out.customTheme = ct;
   }
   return out;
 }
 
 export function registerBackupRoutes(app) {
+  const selectRestoreUploadPolicy = (req, res, next) => {
+    const upload = isServerAdminRequest(req)
+      ? uploadRekordBackup
+      : uploadThemeArchive;
+    return upload.single("file")(req, res, (error) => {
+      if (error?.code === "LIMIT_FILE_SIZE") {
+        return sendError(res, 413, "Archive is too large");
+      }
+      if (error) return next(error);
+      return next();
+    });
+  };
+
   const handleRekordBackupDownload = async (req, res) => {
     try {
+      if (!isServerAdminRequest(req)) {
+        return sendError(res, 403, "Server admin access required");
+      }
       const name = `rekord-backup-${new Date()
       .toISOString()
       .replaceAll(":", "-")}.zip`;
@@ -120,7 +153,9 @@ export function registerBackupRoutes(app) {
       };
       let bgFile = null;
       if (s.theme === "custom" && s.customTheme) {
-        const { bgImage: _bi, bgImageRev: _br, ...ct } = s.customTheme;
+        const ct = { ...s.customTheme };
+        delete ct.bgImage;
+        delete ct.bgImageRev;
         payload.customTheme = ct;
         if (s.customTheme.bgMode === "image") {
           const fp = findCustomThemeBgPath(root, accId);
@@ -169,12 +204,13 @@ export function registerBackupRoutes(app) {
 
   const handleRekordBackupRestore = async (req, res) => {
     try {
-      if (!req.file?.buffer?.length) {
+      const uploadSource = req.file?.path || req.file?.buffer;
+      if (!uploadSource || (!req.file?.path && !req.file?.buffer?.length)) {
         return sendError(res, 400, "Missing or empty file");
       }
 
       // Export tema? Importa solo le impostazioni del tema sull'account corrente.
-      const theme = await readThemeZip(req.file.buffer);
+      const theme = await readThemeZip(uploadSource);
       if (theme) {
         const root = getMusicRoot();
         if (!root) return sendError(res, 428, "Library not configured");
@@ -209,6 +245,9 @@ export function registerBackupRoutes(app) {
         });
       }
 
+      if (!isServerAdminRequest(req)) {
+        return sendError(res, 403, "Server admin access required");
+      }
       if (isMusicRootFromEnv()) {
         return sendError(
           res,
@@ -216,7 +255,7 @@ export function registerBackupRoutes(app) {
           "Restore is not available when MUSIC_ROOT is set in the environment",
         );
       }
-      const data = await restoreRekordFromZipBuffer(req.file.buffer);
+      const data = await restoreKordFromZipPath(req.file.path);
       return sendOk(res, data);
     } catch (error) {
       if (error?.code === "ENV_LOCKED") {
@@ -229,9 +268,13 @@ export function registerBackupRoutes(app) {
         return sendError(res, 400, String(error.message || error));
       }
       return sendError(res, 500, String(error?.message || error));
+    } finally {
+      if (req.file?.path) {
+        await fs.unlink(req.file.path).catch(() => {});
+      }
     }
   };
 
-  app.post("/api/backup/rekord-restore", uploadRekordBackup.single("file"), handleRekordBackupRestore);
-  app.post("/api/backup/kord-restore", uploadRekordBackup.single("file"), handleRekordBackupRestore);
+  app.post("/api/backup/rekord-restore", selectRestoreUploadPolicy, handleRekordBackupRestore);
+  app.post("/api/backup/kord-restore", selectRestoreUploadPolicy, handleRekordBackupRestore);
 }

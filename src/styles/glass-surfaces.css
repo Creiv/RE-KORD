@@ -80,6 +80,14 @@
   --glass-panel: color-mix(in srgb, var(--glass-1) 90%, transparent);
   --glass-panel-deep: color-mix(in srgb, var(--glass-2) 86%, transparent);
   --glass-panel-muted: color-mix(in srgb, var(--glass-1) 84%, transparent);
+  --glass-fill-page: var(--glass-panel);
+  --glass-fill-main: linear-gradient(
+    145deg,
+    var(--glass-panel) 0%,
+    var(--glass-panel-deep) 100%
+  );
+  --glass-fill-muted: var(--glass-panel-muted);
+  --glass-fill-accent-band: var(--glass-panel-deep);
   --glass-filter-main: none;
   --glass-filter-soft: none;
   --glass-filter-faint: none;

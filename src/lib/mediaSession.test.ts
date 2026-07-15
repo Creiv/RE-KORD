@@ -5,6 +5,7 @@ import {
   MEDIA_SESSION_ARTWORK_SIZES,
   resolveMediaSessionPauseAction,
   setMediaSessionMetadata,
+  syncMediaSessionState,
 } from "./mediaSession";
 import type { EnrichedTrack } from "../types";
 
@@ -91,5 +92,23 @@ describe("mediaSession", () => {
     expect(entries[3]?.mediaUri).toBe(
       "http://192.168.0.5:3001/media/a/3.mp3",
     );
+  });
+
+  it("syncMediaSessionState imposta dataset.rekordNativePlaying", () => {
+    document.documentElement.dataset.rekordNativePlaying = "0";
+    const track = {
+      id: "t1",
+      relPath: "a/b.mp3",
+      title: "One",
+      artist: "Artist",
+      album: "Album",
+      updatedAt: 1,
+    } as EnrichedTrack;
+    syncMediaSessionState({ track, playbackState: "playing" });
+    expect(document.documentElement.dataset.rekordNativePlaying).toBe("1");
+    syncMediaSessionState({ track, playbackState: "paused" });
+    expect(document.documentElement.dataset.rekordNativePlaying).toBe("0");
+    syncMediaSessionState({ track: null, playbackState: "none" });
+    expect(document.documentElement.dataset.rekordNativePlaying).toBe("0");
   });
 });

@@ -1,5 +1,6 @@
 import type { Chart } from "../game/types";
 import type { VizMode } from "../types";
+import { plectrBackdropCadence } from "./renderQuality";
 import { DiscoWallCanvasEngine } from "./discowallCanvasEngine";
 import { VizCanvasEngine } from "./vizCanvasEngine";
 
@@ -18,23 +19,8 @@ export type PlectrVizBackdropInput = {
    ~30fps; ogni frame del gioco fa solo un drawImage. */
 /* matchMedia crea un nuovo MediaQueryList a ogni chiamata: qui viene
    riusato (readBackdropQuality gira a ogni frame del gioco). */
-let coarsePointerMq: MediaQueryList | null = null;
-
-function hasCoarsePointer(): boolean {
-  if (!coarsePointerMq) {
-    coarsePointerMq = window.matchMedia("(pointer: coarse)");
-  }
-  return coarsePointerMq.matches;
-}
-
 function readBackdropQuality(): { scale: number; intervalMs: number } {
-  if (typeof window === "undefined") {
-    return { scale: 0.5, intervalMs: 32 };
-  }
-  const mobile = hasCoarsePointer() || window.innerWidth < 520;
-  return mobile
-    ? { scale: 0.4, intervalMs: 48 }
-    : { scale: 0.5, intervalMs: 32 };
+  return plectrBackdropCadence();
 }
 
 export class PlectrVizBackdrop {

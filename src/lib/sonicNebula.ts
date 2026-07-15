@@ -12,6 +12,8 @@ import type { EnrichedTrack } from "../types";
 export const NEBULA_WORLD = 2200;
 export const NEBULA_CENTER = NEBULA_WORLD / 2;
 export const NEBULA_GALAXY_RADIUS = NEBULA_WORLD * 0.44;
+/** Zoom minimo consentito in vista interattiva (massimo allontanamento). */
+export const NEBULA_MIN_ZOOM = 0.32;
 
 export type NebulaCamera = {
   x: number;
@@ -288,23 +290,41 @@ function relaxGalaxyStars(
   }
 }
 
+export const NEBULA_MAX_STARS = 3000;
+
 export function buildNebulaModel(
   tracks: readonly EnrichedTrack[],
   opts: {
     playCounts: Record<string, number>;
     favorites: ReadonlySet<string>;
+    maxStars?: number;
   }
 ): NebulaModel {
-  if (!tracks.length) {
+  const maxStars = Math.max(1, opts.maxStars ?? NEBULA_MAX_STARS);
+  const source =
+    tracks.length <= maxStars
+      ? tracks
+      : [...tracks]
+          .sort((a, b) => {
+            const pa =
+              lookupByRelPathAliases(opts.playCounts, a.relPath) ?? 0;
+            const pb =
+              lookupByRelPathAliases(opts.playCounts, b.relPath) ?? 0;
+            if (pb !== pa) return pb - pa;
+            return a.relPath.localeCompare(b.relPath);
+          })
+          .slice(0, maxStars);
+
+  if (!source.length) {
     return { stars: [], fogs: [], bpmMin: 60, bpmMax: 180 };
   }
 
-  const bpms = tracks.map(estimateBpm);
-  const energies = tracks.map(estimateEnergy);
-  const bpmRanks = percentileRanks(bpms, (i) => `${tracks[i]?.relPath}:bpm-rank`);
+  const bpms = source.map(estimateBpm);
+  const energies = source.map(estimateEnergy);
+  const bpmRanks = percentileRanks(bpms, (i) => `${source[i]?.relPath}:bpm-rank`);
   const energyRanks = percentileRanks(
     energies,
-    (i) => `${tracks[i]?.relPath}:energy-rank`
+    (i) => `${source[i]?.relPath}:energy-rank`
   );
   const layoutRank = (raw: number, rank: number) =>
     clamp(raw * 0.62 + rank * 0.38, 0, 1);
@@ -312,7 +332,7 @@ export function buildNebulaModel(
   const bpmMax = Math.max(...bpms);
   const bpmSpan = Math.max(12, bpmMax - bpmMin);
 
-  const stars: NebulaStar[] = tracks.map((track, i) => {
+  const stars: NebulaStar[] = source.map((track, i) => {
     const moods = parseTrackMoods(track.meta ?? undefined);
     const bpm = bpms[i]!;
     const energy = energies[i]!;
@@ -401,6 +421,20 @@ export function filterNebulaStars(
     const hay = `${star.track.title} ${star.track.artist} ${star.track.album}`.toLowerCase();
     return hay.includes(q);
   });
+}
+
+/** Campione deterministico per costruire un modello Nebula leggero in anteprima. */
+export function sampleTracksForNebulaBuild<T extends { relPath: string }>(
+  tracks: readonly T[],
+  limit = 400,
+): T[] {
+  if (tracks.length <= limit) return [...tracks];
+  const out: T[] = [];
+  const step = tracks.length / limit;
+  for (let i = 0; i < limit; i += 1) {
+    out.push(tracks[Math.min(tracks.length - 1, Math.floor(i * step))]!);
+  }
+  return out;
 }
 
 /** Campione bilanciato per anteprima dashboard (densità uniforme sul disco). */

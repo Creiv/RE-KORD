@@ -21,14 +21,19 @@ import {
 import {
   markAutoLrcCheckedAfterError,
   runAutoLrcQuickSaveForTrack,
+  type AutoLrcResult,
 } from "../lib/autoLrc";
+import {
+  resolveTrackLyricsDotStatus,
+  type TrackLyricsEphemeralAutoStatus,
+} from "../lib/trackLyricsDotStatus";
 import { useI18n } from "../i18n/useI18n";
 import {
   runWithLibrarySyncActivity,
   useLibrarySyncActivity,
 } from "../context/LibrarySyncActivityContext";
 import { usePlayer } from "../context/PlayerContext";
-import { useUserState } from "../context/UserStateContext";
+import { useUserStateActions } from "../context/UserStateContext";
 import { useAppConfirm } from "../context/AppConfirmContext";
 import { parseTrackGenres, serializeTrackGenres } from "../lib/genres";
 import {
@@ -39,7 +44,7 @@ import {
   type TrackMoodId,
 } from "../lib/trackMoods";
 import { TrackMoodGlyph } from "./TrackMoodGlyph";
-import type { EnrichedTrack, LibraryEntityDelta } from "../types";
+import type { EnrichedTrack, LibraryEntityDelta, TrackMeta } from "../types";
 import { UiAdd, UiClose } from "./RekordUiIcons";
 
 export type TrackMetaEditOpenOpts = {
@@ -51,8 +56,48 @@ const TrackMetaEditContext = createContext<
   (track: EnrichedTrack, opts?: TrackMetaEditOpenOpts) => void
 >(() => {});
 
+type AutoLrcRunContextValue = {
+  relPath: string | null;
+  busy: boolean;
+  status: TrackLyricsEphemeralAutoStatus;
+  msg: string | null;
+  runForTrack: (
+    track: EnrichedTrack,
+    onSaved?: (delta?: LibraryEntityDelta) => void | Promise<void>,
+  ) => Promise<AutoLrcResult | null>;
+};
+
+const AutoLrcRunContext = createContext<AutoLrcRunContextValue>({
+  relPath: null,
+  busy: false,
+  status: "idle",
+  msg: null,
+  runForTrack: async () => null,
+});
+
 export function useOpenTrackMetaEdit() {
   return useContext(TrackMetaEditContext);
+}
+
+export function useAutoLrcRun() {
+  return useContext(AutoLrcRunContext);
+}
+
+function mergeTrackFromDelta(
+  track: EnrichedTrack,
+  delta: LibraryEntityDelta,
+): EnrichedTrack {
+  const patch = delta.track;
+  if (!patch || patch.relPath !== track.relPath) return track;
+  return {
+    ...track,
+    ...patch,
+    title: patch.title ?? track.title,
+    meta: {
+      ...track.meta,
+      ...(patch.meta ?? {}),
+    } as TrackMeta,
+  };
 }
 
 function toDateInputValue(raw: string | null | undefined): string {
@@ -62,10 +107,6 @@ function toDateInputValue(raw: string | null | undefined): string {
   const d = new Date(s);
   if (!Number.isNaN(d.getTime())) return d.toISOString().slice(0, 10);
   return "";
-}
-
-function hasLrcTimecodes(text: string): boolean {
-  return /\[(?:\d{1,2}):(?:\d{2})(?:[.:]\d{1,3})?\]/.test(text);
 }
 
 export function TrackMetaEditGlyph() {
@@ -274,9 +315,6 @@ function TrackMetaEditorModal({
   const [lyricsOpen, setLyricsOpen] = useState(false);
   const [lyricsValue, setLyricsValue] = useState("");
   const [lyricsFetchBusy, setLyricsFetchBusy] = useState(false);
-  const [lyricsAutoStatus, setLyricsAutoStatus] = useState<
-    "idle" | "okLrc" | "okPlain" | "missing" | "error"
-  >("idle");
   const [busy, setBusy] = useState(false);
   const [deleteBusy, setDeleteBusy] = useState(false);
   const [err, setErr] = useState<string | null>(null);
@@ -284,7 +322,8 @@ function TrackMetaEditorModal({
   const initialMoodsSigRef = useRef("");
   const initialLyricsRef = useRef("");
   const p = usePlayer();
-  const { stripUserStateForRelPaths } = useUserState();
+  const { stripUserStateForRelPaths } = useUserStateActions();
+  const autoLrc = useAutoLrcRun();
 
   useEffect(() => {
     if (!track) return;
@@ -303,9 +342,6 @@ function TrackMetaEditorModal({
       setGenreSearchReset((n) => n + 1);
       setErr(null);
       setLyricsErr(null);
-      setLyricsAutoStatus(
-        m?.lyricsAutoChecked && !lyr.trim() ? "missing" : "idle",
-      );
     }, 0);
     return () => window.clearTimeout(timer);
   }, [track, initialLyricsOpen]);
@@ -489,17 +525,14 @@ function TrackMetaEditorModal({
 
   const runAutoLrcQuickSave = useCallback(async () => {
     if (!track) return;
-    setLyricsFetchBusy(true);
     setLyricsErr(null);
-    setLyricsAutoStatus("idle");
     try {
       await runWithLibrarySyncActivity(
         librarySync.beginActivity,
         "sync.activity.savingLyrics",
         async () => {
-          const result = await runAutoLrcQuickSaveForTrack(track);
-          await Promise.resolve(onSaved(result.delta));
-          setLyricsAutoStatus(result.status);
+          const result = await autoLrc.runForTrack(track, onSaved);
+          if (!result) return;
           if (result.status === "missing") {
             setLyricsErr(t("trackMeta.fetchLrcEmpty"));
             return;
@@ -508,28 +541,23 @@ function TrackMetaEditorModal({
           if (result.status === "okPlain") {
             setLyricsErr(t("trackMeta.fetchLrcPlainFound"));
           }
-        }
+        },
       );
     } catch (er: unknown) {
-      setLyricsAutoStatus("error");
       setLyricsErr(er instanceof Error ? er.message : String(er));
-      const delta = await markAutoLrcCheckedAfterError(track);
-      if (delta) await Promise.resolve(onSaved(delta));
-    } finally {
-      setLyricsFetchBusy(false);
     }
-  }, [librarySync, onSaved, t, track]);
+  }, [autoLrc, librarySync, onSaved, t, track]);
 
   if (!track) return null;
-  const currentLyrics = lyricsValue.trim();
-  const lyricsDotStatus: "idle" | "okLrc" | "okPlain" | "missing" | "error" =
-    lyricsAutoStatus === "missing" || lyricsAutoStatus === "error"
-      ? lyricsAutoStatus
-      : !currentLyrics
-        ? lyricsAutoStatus
-        : hasLrcTimecodes(currentLyrics)
-          ? "okLrc"
-          : "okPlain";
+  const autoLrcBusyForTrack =
+    autoLrc.busy && autoLrc.relPath === track.relPath;
+  const lyricsDotStatus = resolveTrackLyricsDotStatus({
+    meta: track.meta,
+    lyricsText: lyricsValue,
+    fetchBusy: autoLrcBusyForTrack || lyricsFetchBusy,
+    ephemeralAutoStatus:
+      autoLrc.relPath === track.relPath ? autoLrc.status : "idle",
+  });
 
   const lyricsPortal = lyricsOpen
     ? createPortal(
@@ -711,12 +739,12 @@ function TrackMetaEditorModal({
                 <button
                   type="button"
                   className="ghost-btn meta-edit-lyrics-btn"
-                  disabled={busy || deleteBusy || lyricsFetchBusy}
+                  disabled={busy || deleteBusy || autoLrcBusyForTrack || lyricsFetchBusy}
                   onClick={() => {
                     void runAutoLrcQuickSave();
                   }}
                 >
-                  {lyricsFetchBusy ? t("trackMeta.fetchLrcBusy") : t("trackMeta.fetchLrc")}
+                  {autoLrcBusyForTrack ? t("trackMeta.fetchLrcBusy") : t("trackMeta.fetchLrc")}
                 </button>
                 <span
                   className={`meta-edit-lyrics-status-dot meta-edit-lyrics-status-dot--${lyricsDotStatus}`}
@@ -768,25 +796,92 @@ export function TrackMetaEditProvider({
   genreOptions: readonly string[];
   onSaved: (delta?: LibraryEntityDelta) => void | Promise<void>;
 }) {
+  const { t } = useI18n();
   const [openState, setOpenState] = useState<{
     track: EnrichedTrack;
     openLyrics: boolean;
   } | null>(null);
+  const [autoLrcRelPath, setAutoLrcRelPath] = useState<string | null>(null);
+  const [autoLrcBusy, setAutoLrcBusy] = useState(false);
+  const [autoLrcStatus, setAutoLrcStatus] =
+    useState<TrackLyricsEphemeralAutoStatus>("idle");
+  const [autoLrcMsg, setAutoLrcMsg] = useState<string | null>(null);
+
+  const applySaved = useCallback(
+    async (delta?: LibraryEntityDelta) => {
+      await Promise.resolve(onSaved(delta));
+      if (!delta?.track?.relPath) return;
+      setOpenState((prev) => {
+        if (!prev || prev.track.relPath !== delta.track?.relPath) return prev;
+        return { ...prev, track: mergeTrackFromDelta(prev.track, delta) };
+      });
+    },
+    [onSaved],
+  );
+
+  const runForTrack = useCallback(
+    async (
+      track: EnrichedTrack,
+      onSavedOverride?: (delta?: LibraryEntityDelta) => void | Promise<void>,
+    ) => {
+      if (autoLrcBusy) return null;
+      const save = onSavedOverride ?? applySaved;
+      setAutoLrcRelPath(track.relPath);
+      setAutoLrcBusy(true);
+      setAutoLrcStatus("idle");
+      setAutoLrcMsg(null);
+      try {
+        const result = await runAutoLrcQuickSaveForTrack(track);
+        await Promise.resolve(save(result.delta));
+        setAutoLrcStatus(result.status);
+        if (result.status === "missing") {
+          setAutoLrcMsg(t("trackMeta.fetchLrcEmpty"));
+        } else if (result.status === "okPlain") {
+          setAutoLrcMsg(t("trackMeta.fetchLrcPlainFound"));
+        }
+        return result;
+      } catch (er: unknown) {
+        setAutoLrcStatus("error");
+        setAutoLrcMsg(er instanceof Error ? er.message : String(er));
+        const delta = await markAutoLrcCheckedAfterError(track);
+        if (delta) await Promise.resolve(save(delta));
+        return null;
+      } finally {
+        setAutoLrcBusy(false);
+      }
+    },
+    [applySaved, autoLrcBusy, t],
+  );
+
   const open = useCallback(
     (tr: EnrichedTrack, opts?: TrackMetaEditOpenOpts) =>
       setOpenState({ track: tr, openLyrics: opts?.openLyrics === true }),
-    []
+    [],
   );
+
+  const autoLrcValue = useMemo(
+    () => ({
+      relPath: autoLrcRelPath,
+      busy: autoLrcBusy,
+      status: autoLrcStatus,
+      msg: autoLrcMsg,
+      runForTrack,
+    }),
+    [autoLrcBusy, autoLrcMsg, autoLrcRelPath, autoLrcStatus, runForTrack],
+  );
+
   return (
     <TrackMetaEditContext.Provider value={open}>
-      {children}
-      <TrackMetaEditorModal
-        track={openState?.track ?? null}
-        genreOptions={genreOptions}
-        initialLyricsOpen={openState?.openLyrics ?? false}
-        onClose={() => setOpenState(null)}
-        onSaved={onSaved}
-      />
+      <AutoLrcRunContext.Provider value={autoLrcValue}>
+        {children}
+        <TrackMetaEditorModal
+          track={openState?.track ?? null}
+          genreOptions={genreOptions}
+          initialLyricsOpen={openState?.openLyrics ?? false}
+          onClose={() => setOpenState(null)}
+          onSaved={applySaved}
+        />
+      </AutoLrcRunContext.Provider>
     </TrackMetaEditContext.Provider>
   );
 }

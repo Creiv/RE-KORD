@@ -59,6 +59,7 @@ export const IT: Record<string, string> = {
   "topbar.settingsTitle": "Impostazioni",
   "common.open": "Apri",
   "common.close": "Chiudi",
+  "common.loadMore": "Carica altri",
   "common.emDash": "—",
   "app.dialogCancel": "Annulla",
   "app.dialogOk": "OK",
@@ -564,6 +565,8 @@ export const IT: Record<string, string> = {
   "settings.remoteStart": "Avvia accesso esterno",
   "settings.remoteShared": "Server condiviso",
   "settings.remoteStopSharing": "Ferma condivisione",
+  "settings.remoteStartingHint":
+    "Preparazione tunnel Cloudflare… il QR compare quando il link è pronto.",
   "settings.remoteUrl": "URL pubblico: {{url}}",
   "settings.remoteNotShared": "Non condiviso online.",
   "settings.remoteQrAlt": "QR code per aprire {{url}}",

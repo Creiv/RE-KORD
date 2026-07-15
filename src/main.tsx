@@ -12,15 +12,26 @@ import { isStandaloneDisplayMode } from "./lib/routing"
 applyColorMixCompatDataset()
 
 const u = new URLSearchParams(window.location.search)
-const electronEmbed = u.get("rekordClient") === "1"
+const urlClientEmbed = u.get("rekordClient") === "1"
+function detectClientEmbed(): boolean {
+  if (urlClientEmbed) return true
+  try {
+    if (sessionStorage.getItem("rekord-embed") === "client") return true
+  } catch {
+    /* ignore */
+  }
+  const w = window as unknown as { RekordMediaNative?: { update?: unknown } }
+  return typeof w.RekordMediaNative?.update === "function"
+}
+const clientEmbed = detectClientEmbed()
 const fromUrlAccount = String(u.get("accountId") ?? "").trim()
 const electronAccount =
-  electronEmbed ? String(u.get("rekordAccount") ?? "").trim() : ""
+  clientEmbed ? String(u.get("rekordAccount") ?? "").trim() : ""
 const bootstrapAccount = fromUrlAccount || electronAccount
 if (bootstrapAccount) {
   try {
     setSelectedAccountId(bootstrapAccount)
-    if (electronEmbed) {
+    if (clientEmbed) {
       sessionStorage.setItem("rekord-embed", "client")
     }
   } catch {
@@ -31,7 +42,7 @@ if (isStandaloneDisplayMode()) {
   document.documentElement.dataset.portraitLock = "1"
 }
 
-if (electronEmbed) {
+if (clientEmbed) {
   document.documentElement.dataset.rekordClient = "1"
   u.delete("rekordClient")
   u.delete("rekordAccount")

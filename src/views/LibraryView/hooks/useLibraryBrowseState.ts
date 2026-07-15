@@ -1,5 +1,7 @@
 import { startTransition, useCallback, useEffect, useState } from "react";
-import { useUserState } from "../../../context/UserStateContext";
+import {
+  useUserSettingsSlice,
+} from "../../../context/UserStateContext";
 import type { TrackMoodId } from "../../../lib/trackMoods";
 
 export type LibrarySearchFilterMode = "all" | "artists" | "albums" | "tracks";
@@ -15,7 +17,7 @@ export function useLibraryBrowseState({
   showSearchBar,
   onSearchBarClose,
 }: UseLibraryBrowseStateOptions) {
-  const user = useUserState();
+  const { settings, updateSettings } = useUserSettingsSlice();
   const [mode, setMode] = useState<LibrarySearchFilterMode>("all");
   const [selectedGenreKey, setSelectedGenreKey] = useState<string | null>(null);
   const [moodFilterIds, setMoodFilterIds] = useState<TrackMoodId[]>([]);
@@ -25,6 +27,7 @@ export function useLibraryBrowseState({
     if (showSearchBar) onSearchBarClose();
   }, [showSearchBar, onSearchBarClose]);
 
+  /** Reset filtri locali al "home" libreria; libBrowse è già impostato da AppShell. */
   useEffect(() => {
     if (libraryHomeTick < 1) return;
     startTransition(() => {
@@ -38,15 +41,14 @@ export function useLibraryBrowseState({
   useEffect(() => {
     const raw = window.location.pathname.replace(/^\/+/, "").split("/")[0];
     if (raw !== "nebula") return;
-    user.updateSettings({ libBrowse: "nebula" });
+    updateSettings({ libBrowse: "nebula" });
     window.history.replaceState({}, "", "/libreria");
-  }, [user]);
+  }, [updateSettings]);
 
   return {
-    libBrowse: user.state.settings.libBrowse,
-    libOverviewSort: user.state.settings.libOverviewSort,
-    artistAlbumSort: user.state.settings.artistAlbumSort,
-    user,
+    libBrowse: settings.libBrowse,
+    libOverviewSort: settings.libOverviewSort,
+    artistAlbumSort: settings.artistAlbumSort,
     mode,
     setMode,
     selectedGenreKey,

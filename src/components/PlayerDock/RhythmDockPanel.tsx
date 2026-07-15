@@ -8,7 +8,11 @@ import {
 } from "react";
 import { usePlayer } from "../../context/PlayerContext";
 import { useRhythmMode } from "../../context/RhythmModeContext";
-import { useUserState } from "../../context/UserStateContext";
+import {
+  useUserSettingsSlice,
+  useUserStateActions,
+  useUserStateSelector,
+} from "../../context/UserStateContext";
 import { useI18n } from "../../i18n/useI18n";
 import { GameCanvas } from "../../game/components/GameCanvas";
 import { DIFFICULTIES } from "../../game/config/gameConfig";
@@ -80,7 +84,9 @@ export const RhythmDockPanel = memo(function RhythmDockPanel({
 }: RhythmDockPanelProps) {
   const { t } = useI18n();
   const p = usePlayer();
-  const user = useUserState();
+  const { settings } = useUserSettingsSlice();
+  const { savePlectrBest, flushUserStateNow } = useUserStateActions();
+  const plectrBests = useUserStateSelector((s) => s.state.plectrBests);
   const { setOpen } = useRhythmMode();
   const { phase, chartSet, chartRelPath, loadMessage, errorCode } =
     useRhythmChart(track);
@@ -105,11 +111,11 @@ export const RhythmDockPanel = memo(function RhythmDockPanel({
   const prevTrackRelRef = useRef(track.relPath);
 
   const displayBest = useMemo(
-    () => resolveDisplayBest(track.relPath, user.state.plectrBests),
+    () => resolveDisplayBest(track.relPath, plectrBests),
     // bestRevision invalida il memo: getSessionTrackBest legge uno store di
     // sessione esterno mutabile, non tracciato dalle altre dipendenze.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [track.relPath, user.state.plectrBests, bestRevision]
+    [track.relPath, plectrBests, bestRevision]
   );
 
   const chart = useMemo((): Chart | null => {
@@ -147,17 +153,17 @@ export const RhythmDockPanel = memo(function RhythmDockPanel({
     ) => {
       if (result.score <= 0 && result.hits <= 0) return;
       lastRunRef.current = result;
-      const accountBest = plectrBestFromUserState(user.state.plectrBests, relPath);
+      const accountBest = plectrBestFromUserState(plectrBests, relPath);
       saveSessionTrackBest(relPath, result);
       if (opts?.showLast && relPath === track.relPath) setLastResult(result);
       if (!isBetterPlectrScore(result, accountBest)) return;
-      user.savePlectrBest(relPath, result);
+      savePlectrBest(relPath, result);
       const persist = async () => {
         try {
           const { delta } = await persistPlectrBest(relPath, result, accountBest);
           if (delta && onLibraryDelta) onLibraryDelta(delta, false);
           if (opts?.awaitPersist) {
-            user.flushUserStateNow({ silent: true });
+            flushUserStateNow({ silent: true });
           }
         } catch (err: unknown) {
           console.warn(
@@ -180,7 +186,7 @@ export const RhythmDockPanel = memo(function RhythmDockPanel({
         }, 0);
       }
     },
-    [onLibraryDelta, track.relPath, user]
+    [onLibraryDelta, track.relPath, plectrBests, savePlectrBest, flushUserStateNow]
   );
 
   const flushPendingRun = useCallback(
@@ -201,9 +207,9 @@ export const RhythmDockPanel = memo(function RhythmDockPanel({
       setLastResult(null);
       lastRunRef.current = null;
     }
-    hydrateSessionTrackBest(track.relPath, user.state.plectrBests);
+    hydrateSessionTrackBest(track.relPath, plectrBests);
     setBestRevision((n) => n + 1);
-  }, [track.relPath, user.state.plectrBests, flushPendingRun]);
+  }, [track.relPath, plectrBests, flushPendingRun]);
 
   const trackRef = useRef(track);
   const playerBridgeRef = useRef({
@@ -275,8 +281,8 @@ export const RhythmDockPanel = memo(function RhythmDockPanel({
   );
 
   const vizBackdrop = useMemo(() => {
-    if (user.state.settings.plectrDisableVizBackdrop) return undefined;
-    const mode = user.state.settings.vizMode;
+    if (settings.plectrDisableVizBackdrop) return undefined;
+    const mode = settings.vizMode;
     if (mode === "karaoke") return undefined;
     return {
       mode,
@@ -288,8 +294,8 @@ export const RhythmDockPanel = memo(function RhythmDockPanel({
     p.getAnalyser,
     p.isPlaying,
     track.relPath,
-    user.state.settings.plectrDisableVizBackdrop,
-    user.state.settings.vizMode,
+    settings.plectrDisableVizBackdrop,
+    settings.vizMode,
   ]);
 
   const loadLabel = useMemo(() => {
@@ -338,18 +344,18 @@ export const RhythmDockPanel = memo(function RhythmDockPanel({
   }, []);
 
   const flushPendingRunRef = useRef(flushPendingRun);
-  const flushUserStateNowRef = useRef(user.flushUserStateNow);
+  const flushUserStateNowRef = useRef(flushUserStateNow);
   flushPendingRunRef.current = flushPendingRun;
-  flushUserStateNowRef.current = user.flushUserStateNow;
+  flushUserStateNowRef.current = flushUserStateNow;
 
   const onClose = useCallback(() => {
     void flushPendingRun(track.relPath);
-    user.flushUserStateNow({ silent: true });
+    flushUserStateNow({ silent: true });
     setOpen(false);
     if (resumePlaybackOnCloseRef.current && !p.isPlaying) {
       p.play();
     }
-  }, [flushPendingRun, p, setOpen, track.relPath, user]);
+  }, [flushPendingRun, p, setOpen, track.relPath, flushUserStateNow]);
 
   useLayoutEffect(() => {
     return () => {

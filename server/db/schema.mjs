@@ -1,4 +1,4 @@
-export const SCHEMA_VERSION = 7
+export const SCHEMA_VERSION = 8
 
 export const MIGRATION_SQL = `
 CREATE TABLE IF NOT EXISTS schema_migrations (
@@ -82,6 +82,7 @@ CREATE INDEX IF NOT EXISTS idx_album_expected_tracks_album ON album_expected_tra
 CREATE TABLE IF NOT EXISTS tracks (
   id TEXT PRIMARY KEY,
   rel_path TEXT NOT NULL UNIQUE,
+  file_path TEXT,
   album_id TEXT NOT NULL,
   title TEXT NOT NULL,
   artist_name TEXT NOT NULL,

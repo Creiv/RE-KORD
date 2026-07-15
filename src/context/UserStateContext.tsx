@@ -28,6 +28,7 @@ import {
   migrateLooseTrackPathsInUserState,
 } from "../lib/libraryNav";
 import { enrichedTracksNeedPlayerResync } from "../lib/libraryIndex";
+import { isCompactRenderTarget } from "../lib/renderQuality";
 import { isTrackAlbumShuffleExcluded } from "../lib/randomExclusions";
 import {
   applyUserStatePatchFields,
@@ -88,7 +89,7 @@ function defaultSettings(): UserSettings {
     libOverviewSort: "name",
     artistAlbumSort: "date",
     audioCrossfadeSec: 3,
-    plectrDisableVizBackdrop: false,
+    plectrDisableVizBackdrop: isCompactRenderTarget(),
     glassSurfaces: false,
     glassOpacity: 62,
   };
@@ -156,10 +157,17 @@ function normalizeSettings(raw: Partial<UserSettings> | UserSettingsPatch): User
     libOverviewSort,
     artistAlbumSort,
     audioCrossfadeSec: normalizeAudioCrossfadeSec(raw),
-    plectrDisableVizBackdrop: raw.plectrDisableVizBackdrop === true,
+    plectrDisableVizBackdrop:
+      raw.plectrDisableVizBackdrop === false
+        ? false
+        : raw.plectrDisableVizBackdrop === true || isCompactRenderTarget(),
     glassSurfaces: raw.glassSurfaces === true,
     glassOpacity: normalizeGlassOpacity(raw.glassOpacity),
   };
+}
+
+function userSettingsEqual(a: UserSettings, b: UserSettings): boolean {
+  return JSON.stringify(a) === JSON.stringify(b);
 }
 
 function normalizeUserState(s: UserStateV1): UserStateV1 {
@@ -353,13 +361,16 @@ function mergeLegacy(remote: UserStateV1): UserStateV1 {
   };
 }
 
-type UserStateContextValue = {
+type UserStateSnapshot = {
   state: UserStateV1;
   ready: boolean;
   saving: boolean;
   error: string | null;
   favorites: Set<string>;
   selectedPlaylist: string | null;
+};
+
+type UserStateActions = {
   setSelectedPlaylist: (id: string | null) => void;
   toggleFavorite: (relPath: string) => void;
   isFavorite: (relPath: string) => boolean;
@@ -387,7 +398,15 @@ type UserStateContextValue = {
   savePlectrBest: (relPath: string, result: GameResult) => boolean;
 };
 
-const UserStateContext = createContext<UserStateContextValue | null>(null);
+type UserStateContextValue = UserStateSnapshot & UserStateActions;
+
+type UserStateStoreApi = {
+  subscribe: (listener: () => void) => () => void;
+  getSnapshot: () => UserStateSnapshot;
+};
+
+const UserStateStoreContext = createContext<UserStateStoreApi | null>(null);
+const UserStateActionsContext = createContext<UserStateActions | null>(null);
 
 /**
  * Store leggero per le righe delle liste brani: espone preferiti, conteggi
@@ -515,10 +534,36 @@ export function UserStateProvider({ children }: { children: React.ReactNode }) {
         );
       }
 
-      const localUnsaved = mergeUserStatePatches(
+      let localUnsaved = mergeUserStatePatches(
         inFlightPatchRef.current,
         pendingPatchRef.current
       );
+      const pendingGlass = localUnsaved.settings?.glassOpacity;
+      const remoteGlass = remote.settings?.glassOpacity;
+      if (
+        pendingGlass != null &&
+        remoteGlass != null &&
+        Number(pendingGlass) !== Number(remoteGlass)
+      ) {
+        const { settings, ...rest } = localUnsaved;
+        const settingsRest = settings ? { ...settings } : undefined;
+        if (settingsRest) delete settingsRest.glassOpacity;
+        localUnsaved =
+          settingsRest && Object.keys(settingsRest).length > 0
+            ? { ...rest, settings: settingsRest }
+            : rest;
+        if (pendingPatchRef.current.settings?.glassOpacity != null) {
+          const ps = { ...pendingPatchRef.current.settings };
+          delete ps.glassOpacity;
+          pendingPatchRef.current =
+            Object.keys(ps).length > 0
+              ? { ...pendingPatchRef.current, settings: ps }
+              : (() => {
+                  const { settings: _s, ...pRest } = pendingPatchRef.current;
+                  return pRest;
+                })();
+        }
+      }
       const hasLocalUnsaved = Object.keys(localUnsaved).length > 0;
       dirtyRef.current = needsInitialPersist || hasLocalUnsaved;
 
@@ -937,17 +982,24 @@ export function UserStateProvider({ children }: { children: React.ReactNode }) {
   const updateSettings = useCallback(
     (patch: UserSettingsPatch) => {
       commit(
-        (prev) => ({
-          ...prev,
-          settings: normalizeSettings(
+        (prev) => {
+          const merged = normalizeSettings(
             mergePartialUserSettings(prev.settings, patch),
-          ),
-        }),
+          );
+          if (userSettingsEqual(prev.settings, merged)) return prev;
+          return {
+            ...prev,
+            settings: merged,
+          };
+        },
         {
           immediate: true,
-          patch: (_next, prev) => ({
-            settings: mergePartialUserSettings(prev.settings, patch),
-          }),
+          patch: (next, prev) => {
+            if (next.settings === prev.settings) return {};
+            return {
+              settings: mergePartialUserSettings(prev.settings, patch),
+            };
+          },
         },
       );
     },
@@ -955,6 +1007,40 @@ export function UserStateProvider({ children }: { children: React.ReactNode }) {
   );
 
   const favorites = useMemo(() => new Set(state.favorites), [state.favorites]);
+
+  const storeSnapRef = useRef<UserStateSnapshot>({
+    state,
+    ready,
+    saving,
+    error,
+    favorites,
+    selectedPlaylist,
+  });
+  const storeListenersRef = useRef<Set<() => void>>(new Set());
+  useEffect(() => {
+    storeSnapRef.current = {
+      state,
+      ready,
+      saving,
+      error,
+      favorites,
+      selectedPlaylist,
+    };
+    for (const listener of storeListenersRef.current) listener();
+  }, [state, ready, saving, error, favorites, selectedPlaylist]);
+
+  const storeApi = useMemo<UserStateStoreApi>(
+    () => ({
+      subscribe: (listener) => {
+        storeListenersRef.current.add(listener);
+        return () => {
+          storeListenersRef.current.delete(listener);
+        };
+      },
+      getSnapshot: () => storeSnapRef.current,
+    }),
+    [],
+  );
 
   const trackRowListenersRef = useRef<Set<() => void>>(new Set());
   const trackRowSnapRef = useRef<{
@@ -1010,17 +1096,16 @@ export function UserStateProvider({ children }: { children: React.ReactNode }) {
     []
   );
 
-  const value = useMemo<UserStateContextValue>(
+  const isFavorite = useCallback(
+    (relPath: string) => isFavoriteRelPath(favorites, relPath),
+    [favorites],
+  );
+
+  const actions = useMemo<UserStateActions>(
     () => ({
-      state,
-      ready,
-      saving,
-      error,
-      favorites,
-      selectedPlaylist,
       setSelectedPlaylist,
       toggleFavorite,
-      isFavorite: (relPath: string) => isFavoriteRelPath(favorites, relPath),
+      isFavorite,
       pushRecent,
       getTrackPlayCount,
       incrementTrackPlayCount,
@@ -1048,46 +1133,169 @@ export function UserStateProvider({ children }: { children: React.ReactNode }) {
       createPlaylist,
       deletePlaylist,
       enqueueQueuePatch,
-      error,
-      favorites,
       flushUserStateNow,
       getTrackPlayCount,
       incrementTrackPlayCount,
+      isFavorite,
       pushRecent,
       rehydrateShuffleExclusionsFromIndex,
       rehydrateTrackListsFromLibrary,
-      ready,
       removeTrackFromPlaylist,
       renamePlaylist,
       savePlectrBest,
       saveQueueAsPlaylist,
-      saving,
-      selectedPlaylist,
       setQueueSnapshot,
       setShuffleTracksExcludedBulk,
-      state,
       toggleFavorite,
       toggleShuffleExcludedAlbum,
       toggleShuffleExcludedTrack,
       stripUserStateForRelPaths,
       syncUserStateFromServer,
       updateSettings,
-    ]
+    ],
   );
 
   return (
-    <UserStateContext.Provider value={value}>
-      <TrackRowUserContext.Provider value={trackRowStore}>
-        {children}
-      </TrackRowUserContext.Provider>
-    </UserStateContext.Provider>
+    <UserStateStoreContext.Provider value={storeApi}>
+      <UserStateActionsContext.Provider value={actions}>
+        <TrackRowUserContext.Provider value={trackRowStore}>
+          {children}
+        </TrackRowUserContext.Provider>
+      </UserStateActionsContext.Provider>
+    </UserStateStoreContext.Provider>
   );
 }
 
-export function useUserState() {
-  const ctx = useContext(UserStateContext);
-  if (!ctx) throw new Error("useUserState");
-  return ctx;
+export function useUserStateActions() {
+  const actions = useContext(UserStateActionsContext);
+  if (!actions) throw new Error("useUserStateActions");
+  return actions;
+}
+
+/** Selector granulare: ri-render solo quando il valore selezionato cambia. */
+export function useUserStateSelector<T>(selector: (snap: UserStateSnapshot) => T): T {
+  const store = useContext(UserStateStoreContext);
+  if (!store) throw new Error("useUserStateSelector");
+  const selectorRef = useRef(selector);
+  selectorRef.current = selector;
+  return useSyncExternalStore(
+    store.subscribe,
+    () => selectorRef.current(store.getSnapshot()),
+    () => selectorRef.current(store.getSnapshot()),
+  );
+}
+
+/** API compatibile: espone tutto lo snapshot + azioni. */
+export function useUserState(): UserStateContextValue {
+  const snap = useUserStateSelector((s) => s);
+  const actions = useUserStateActions();
+  return { ...snap, ...actions };
+}
+
+/** Selector: stato idratazione / errori sync. */
+export function useUserStateStatus() {
+  const ready = useUserStateSelector((s) => s.ready);
+  const saving = useUserStateSelector((s) => s.saving);
+  const error = useUserStateSelector((s) => s.error);
+  return { ready, saving, error };
+}
+
+/** Selector: solo impostazioni utente (riduce re-render rispetto a useUserState). */
+export function useUserSettingsSlice() {
+  const settings = useUserStateSelector((s) => s.state.settings);
+  const { updateSettings } = useUserStateActions();
+  return useMemo(
+    () => ({ settings, updateSettings }),
+    [settings, updateSettings],
+  );
+}
+
+/** Selector: favorites + playlists. */
+export function useUserCollectionsSlice() {
+  const favorites = useUserStateSelector((s) => s.state.favorites);
+  const playlists = useUserStateSelector((s) => s.state.playlists);
+  const { toggleFavorite } = useUserStateActions();
+  return useMemo(
+    () => ({
+      favorites,
+      playlists,
+      toggleFavorite,
+    }),
+    [favorites, playlists, toggleFavorite],
+  );
+}
+
+/** Selector: esclusioni shuffle + azioni correlate. */
+export function useUserShuffleSlice() {
+  const shuffleExcludedAlbumIds = useUserStateSelector(
+    (s) => s.state.shuffleExcludedAlbumIds,
+  );
+  const shuffleExcludedTrackRelPaths = useUserStateSelector(
+    (s) => s.state.shuffleExcludedTrackRelPaths,
+  );
+  const {
+    toggleShuffleExcludedAlbum,
+    toggleShuffleExcludedTrack,
+    setShuffleTracksExcludedBulk,
+    rehydrateShuffleExclusionsFromIndex,
+  } = useUserStateActions();
+  return useMemo(
+    () => ({
+      shuffleExcludedAlbumIds,
+      shuffleExcludedTrackRelPaths,
+      toggleShuffleExcludedAlbum,
+      toggleShuffleExcludedTrack,
+      setShuffleTracksExcludedBulk,
+      rehydrateShuffleExclusionsFromIndex,
+    }),
+    [
+      shuffleExcludedAlbumIds,
+      shuffleExcludedTrackRelPaths,
+      toggleShuffleExcludedAlbum,
+      toggleShuffleExcludedTrack,
+      setShuffleTracksExcludedBulk,
+      rehydrateShuffleExclusionsFromIndex,
+    ],
+  );
+}
+
+/** Selector: playlist + operazioni CRUD. */
+export function useUserPlaylistsSlice() {
+  const playlists = useUserStateSelector((s) => s.state.playlists);
+  const selectedPlaylist = useUserStateSelector((s) => s.selectedPlaylist);
+  const {
+    setSelectedPlaylist,
+    createPlaylist,
+    renamePlaylist,
+    deletePlaylist,
+    addTrackToPlaylist,
+    removeTrackFromPlaylist,
+    saveQueueAsPlaylist,
+  } = useUserStateActions();
+  return useMemo(
+    () => ({
+      playlists,
+      selectedPlaylist,
+      setSelectedPlaylist,
+      createPlaylist,
+      renamePlaylist,
+      deletePlaylist,
+      addTrackToPlaylist,
+      removeTrackFromPlaylist,
+      saveQueueAsPlaylist,
+    }),
+    [
+      playlists,
+      selectedPlaylist,
+      setSelectedPlaylist,
+      createPlaylist,
+      renamePlaylist,
+      deletePlaylist,
+      addTrackToPlaylist,
+      removeTrackFromPlaylist,
+      saveQueueAsPlaylist,
+    ],
+  );
 }
 
 /**

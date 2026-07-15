@@ -98,6 +98,14 @@ function runMigrations(db) {
     }
     db.prepare("INSERT INTO schema_migrations (version) VALUES (?)").run(7)
   }
+  if (version < 8) {
+    try {
+      db.exec("CREATE INDEX IF NOT EXISTS idx_tracks_file_path ON tracks(file_path)")
+    } catch {
+      /* ok */
+    }
+    db.prepare("INSERT INTO schema_migrations (version) VALUES (?)").run(8)
+  }
 }
 
 /**

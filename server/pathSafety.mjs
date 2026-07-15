@@ -4,12 +4,52 @@
  */
 import path from "path";
 import net from "node:net";
+import { realpathSync, statSync } from "node:fs";
+import { realpath } from "node:fs/promises";
 import { getMusicRoot } from "./musicRootConfig.mjs";
+import { getCachedRealPath, setCachedRealPath } from "./pathResolveCache.mjs";
 
 export function underRoot(full, musicRoot = getMusicRoot()) {
   const root = path.resolve(musicRoot);
   const resolved = path.resolve(full);
   return resolved === root || resolved.startsWith(root + path.sep);
+}
+
+/** Verifica anche i symlink per target già esistenti. */
+export function realPathUnderRoot(full, musicRoot = getMusicRoot()) {
+  try {
+    const rootResolved = path.resolve(musicRoot);
+    const fileResolved = path.resolve(full);
+    const cached = getCachedRealPath(rootResolved, fileResolved);
+    if (cached) {
+      const root = realpathSync(rootResolved);
+      return cached === root || cached.startsWith(root + path.sep);
+    }
+    const root = realpathSync(rootResolved);
+    const resolved = realpathSync(fileResolved);
+    try {
+      const mtimeMs = statSync(fileResolved).mtimeMs;
+      setCachedRealPath(rootResolved, fileResolved, resolved, mtimeMs);
+    } catch {
+      /* ok */
+    }
+    return resolved === root || resolved.startsWith(root + path.sep);
+  } catch {
+    return false;
+  }
+}
+
+/** Variante asincrona per route e scanner, così la risoluzione non blocca l'event loop. */
+export async function realPathUnderRootAsync(full, musicRoot = getMusicRoot()) {
+  try {
+    const [root, resolved] = await Promise.all([
+      realpath(path.resolve(musicRoot)),
+      realpath(path.resolve(full)),
+    ]);
+    return resolved === root || resolved.startsWith(root + path.sep);
+  } catch {
+    return false;
+  }
 }
 
 const RESERVED_MUSIC_DIR_NAMES = new Set(["kord", "wpp"]);

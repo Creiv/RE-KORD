@@ -1,6 +1,9 @@
 import { useMemo } from "react";
 import { emitStudioPane } from "../../context/StudioNavigationContext";
-import { useUserState } from "../../context/UserStateContext";
+import {
+  useUserStateSelector,
+  useUserStateStatus,
+} from "../../context/UserStateContext";
 import { useI18n } from "../../i18n/useI18n";
 import {
   buildAchievementsSnapshot,
@@ -57,16 +60,17 @@ export default function AchievementsView({
   onOpenSection: (section: AppSection) => void;
 }) {
   const { t } = useI18n();
-  const user = useUserState();
+  const { ready: userReady } = useUserStateStatus();
+  const userState = useUserStateSelector((s) => s.state);
 
   const snapshot = useMemo(
-    () => (user.ready ? buildAchievementsSnapshot(user.state, index) : null),
-    [user.ready, user.state, index]
+    () => (userReady ? buildAchievementsSnapshot(userState, index) : null),
+    [userReady, userState, index]
   );
 
   const unlocked =
     snapshot?.achievements.filter((a) => a.unlocked).length ?? 0;
-  const loading = !user.ready || snapshot == null;
+  const loading = !userReady || snapshot == null;
 
   return (
     <div className="view-page achievements-page">

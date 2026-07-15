@@ -1,10 +1,13 @@
 import { binAmplitude, logBinT, sampleSpectrumLinear } from "./freqMap";
+import { isCompactRenderTarget } from "./renderQuality";
 import type { VizMode } from "../types";
 
 const BARS = 64;
 const MIRROR_BARS = 48;
 const FFT_SPECTRUM = 2048;
+const FFT_SPECTRUM_LITE = 1024;
 const FFT_OSC = 2048;
+const FFT_OSC_LITE = 1024;
 const SILK_SOFT_N = 112;
 const SILK_SOFT_N_EXPANDED = 74;
 const OSC_GAIN = 1;
@@ -391,14 +394,16 @@ export class VizCanvasEngine {
     }
 
     if (an) {
+      const fftOsc = isCompactRenderTarget() ? FFT_OSC_LITE : FFT_OSC;
+      const fftSpectrum = isCompactRenderTarget() ? FFT_SPECTRUM_LITE : FFT_SPECTRUM;
       if (mode === "osc" || mode === "oscSoft" || mode === "hmb") {
-        an.fftSize = FFT_OSC;
+        an.fftSize = fftOsc;
         const fLen0 = an.frequencyBinCount;
         if (this.freq.length < fLen0) this.freq = new Uint8Array(fLen0);
         if (this.time.length < an.fftSize) this.time = new Uint8Array(an.fftSize);
         an.getByteTimeDomainData(this.time.subarray(0, an.fftSize) as never);
       } else {
-        an.fftSize = FFT_SPECTRUM;
+        an.fftSize = fftSpectrum;
         const fLen0 = an.frequencyBinCount;
         if (this.freq.length < fLen0) this.freq = new Uint8Array(fLen0);
         an.getByteFrequencyData(this.freq.subarray(0, fLen0) as never);

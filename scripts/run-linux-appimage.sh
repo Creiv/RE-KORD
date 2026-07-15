@@ -13,5 +13,6 @@ if [ -z "$IMG" ] || [ ! -f "$IMG" ]; then
 fi
 chmod +x "$IMG"
 export APPIMAGE_EXTRACT_AND_RUN=1
-export ELECTRON_DISABLE_SANDBOX=1
+# Evita messaggi libva su terminale quando VA-API non è disponibile.
+export LIBVA_DRIVER_NAME="${LIBVA_DRIVER_NAME:-}"
 exec "$IMG" "$@"

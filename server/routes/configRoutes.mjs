@@ -116,16 +116,18 @@ export function registerConfigRoutes(app) {
       .catch((error) => sendError(res, 500, String(error?.message || error)));
   });
 
-  app.post("/api/remote-access/logout", (req, res) => {
+  app.post("/api/remote-access/logout", async (req, res) => {
     if (!isServerAdminRequest(req)) {
       return sendError(res, 403, "Remote access settings are local-only.");
     }
-    setCloudflareLoggedIn(false)
-      .then((ok) => {
-        remoteAccessState.cloudflareLoggedIn = ok;
-        return sendOk(res, remoteSnapshot());
-      })
-      .catch((error) => sendError(res, 500, String(error?.message || error)));
+    try {
+      await stopRemoteAccess();
+      const ok = await setCloudflareLoggedIn(false);
+      remoteAccessState.cloudflareLoggedIn = ok;
+      return sendOk(res, remoteSnapshot());
+    } catch (error) {
+      return sendError(res, 500, String(error?.message || error));
+    }
   });
 
   app.post("/api/remote-access/start", (req, res) => {
@@ -150,18 +152,22 @@ export function registerConfigRoutes(app) {
     }
   });
 
-  app.post("/api/remote-access/stop", (req, res) => {
+  app.post("/api/remote-access/stop", async (req, res) => {
     if (!isServerAdminRequest(req)) {
       return sendError(res, 403, "Remote access settings are local-only.");
     }
-    stopRemoteAccess();
-    void actLog(req, {
-      kind: "server",
-      action: "remote-access",
-      folder: null,
-      detail: "stop",
-    });
-    return sendOk(res, remoteSnapshot());
+    try {
+      await stopRemoteAccess();
+      void actLog(req, {
+        kind: "server",
+        action: "remote-access",
+        folder: null,
+        detail: "stop",
+      });
+      return sendOk(res, remoteSnapshot());
+    } catch (error) {
+      return sendError(res, 500, String(error?.message || error));
+    }
   });
 
   app.put("/api/config", async (req, res) => {

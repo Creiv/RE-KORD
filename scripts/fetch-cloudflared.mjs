@@ -1,9 +1,10 @@
 import { createWriteStream } from "node:fs"
-import { chmod, mkdir, stat } from "node:fs/promises"
+import { chmod, mkdir, rm, stat } from "node:fs/promises"
 import path from "node:path"
 import { fileURLToPath } from "node:url"
 import { pipeline } from "node:stream/promises"
 import { Readable } from "node:stream"
+import { extract } from "tar"
 
 const root = path.join(path.dirname(fileURLToPath(import.meta.url)), "..")
 const outDir = path.join(root, "server", "bin")
@@ -97,10 +98,6 @@ async function downloadToFile(url, dest) {
 }
 
 async function main() {
-  if (platform === "mac") {
-    throw new Error("Asset cloudflared mac in formato .tgz non supportato da questo script.")
-  }
-
   await mkdir(outDir, { recursive: true })
   const dest = path.join(outDir, destName)
 
@@ -142,7 +139,25 @@ async function main() {
   const assets = data.assets || []
   const asset = pickAsset(assets, assetName)
   console.log(`Scarico ${asset.name} -> ${path.relative(root, dest)} (può richiedere alcuni minuti)`)
-  await downloadToFile(asset.browser_download_url, dest)
+  if (platform === "mac") {
+    const archive = `${dest}.tgz`
+    await downloadToFile(asset.browser_download_url, archive)
+    try {
+      await extract({
+        file: archive,
+        cwd: outDir,
+        filter: (entryPath) =>
+          path.posix.basename(entryPath) === "cloudflared",
+      })
+    } finally {
+      await rm(archive, { force: true })
+    }
+    if (!(await existingBinaryOk(dest))) {
+      throw new Error("Archivio cloudflared macOS privo del binario atteso.")
+    }
+  } else {
+    await downloadToFile(asset.browser_download_url, dest)
+  }
   if (platform !== "win") await chmod(dest, 0o755)
   console.log("OK")
 }

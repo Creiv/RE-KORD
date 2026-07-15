@@ -1,6 +1,6 @@
 import chokidar from "chokidar"
 import path from "path"
-import { scheduleLibraryScan } from "./index.mjs"
+import { scheduleLibraryScan, isLibraryScanning } from "./index.mjs"
 
 /** @type {Map<string, import('chokidar').FSWatcher>} */
 const watchers = new Map()
@@ -15,6 +15,8 @@ export function startLibraryWatcher(libraryRoot) {
 
   if (process.env.REKORD_FS_WATCH === "0") return
 
+  const maxWatchDepth = Number(process.env.REKORD_WATCH_DEPTH) || 0
+
   const watcher = chokidar.watch(libraryRoot, {
     ignoreInitial: true,
     ignored: [
@@ -23,12 +25,18 @@ export function startLibraryWatcher(libraryRoot) {
       /[/\\]node_modules[/\\]/,
     ],
     awaitWriteFinish: { stabilityThreshold: 600, pollInterval: 100 },
+    depth: maxWatchDepth > 0 ? maxWatchDepth : undefined,
   })
 
   const trigger = (eventPath) => {
+    const rel = path.relative(libraryRoot, String(eventPath || ""))
+    if (maxWatchDepth > 0) {
+      const depth = rel.split(/[/\\]/).filter(Boolean).length
+      if (depth > maxWatchDepth) return
+    }
     scheduleLibraryScan(libraryRoot, {
       paths: [String(eventPath || "")],
-      debounceMs: 5000,
+      debounceMs: isLibraryScanning(libraryRoot) ? 8000 : 5000,
     })
   }
 

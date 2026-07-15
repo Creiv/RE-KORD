@@ -14,7 +14,7 @@ import {
   useLibrarySyncActivity,
 } from "../context/LibrarySyncActivityContext";
 import { usePlayer } from "../context/PlayerContext";
-import { useUserState } from "../context/UserStateContext";
+import { useUserStateActions } from "../context/UserStateContext";
 import { useAppConfirm } from "../context/AppConfirmContext";
 import type { LibraryAlbumIndex, LibraryEntityDelta } from "../types";
 
@@ -55,7 +55,7 @@ function AlbumMetaEditorModal({
   const [deleteBusy, setDeleteBusy] = useState(false);
   const [err, setErr] = useState<string | null>(null);
   const p = usePlayer();
-  const { stripUserStateForRelPaths } = useUserState();
+  const { stripUserStateForRelPaths } = useUserStateActions();
 
   useEffect(() => {
     if (!album) return;

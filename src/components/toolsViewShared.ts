@@ -158,6 +158,16 @@ export function readStoredStudioPane(): StudioPane | null {
   return null;
 }
 
+/** Pane iniziale Studio: catalog su client mobile, listen su desktop. */
+export function defaultStudioPane(): StudioPane {
+  const stored = readStoredStudioPane();
+  if (stored) return stored;
+  const isMobileClient =
+    typeof document !== "undefined" &&
+    document.documentElement.dataset.rekordClient === "1";
+  return isMobileClient ? "catalog" : "listen";
+}
+
 export function isRekordClientEmbed(): boolean {
   try {
     return sessionStorage.getItem("rekord-embed") === "client";

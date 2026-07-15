@@ -55,6 +55,77 @@ export async function walkFilesystemStats(musicRoot) {
 }
 
 /**
+ * Stat mirato per path segnalati dal watcher (evita walk completo).
+ * @param {string} musicRoot
+ * @param {string[]} absPaths
+ */
+export async function collectStatsForAbsPaths(musicRoot, absPaths) {
+  const root = path.resolve(String(musicRoot || ""))
+  /** @type {Map<string, FsFileEntry>} */
+  const fsEntries = new Map()
+  const removedRelPaths = []
+
+  for (const abs of absPaths) {
+    const resolved = path.resolve(String(abs || ""))
+    if (!resolved.startsWith(root + path.sep) && resolved !== root) continue
+    const rel = path.relative(root, resolved).replace(/\\/g, "/")
+    if (!rel || rel.startsWith("..")) continue
+
+    try {
+      const st = await fs.stat(resolved)
+      if (st.isFile() && isAudioFile(path.basename(resolved))) {
+        fsEntries.set(rel, {
+          relPath: rel,
+          size: st.size,
+          mtimeNs: Math.round(st.mtimeMs * 1e6),
+        })
+      }
+    } catch {
+      removedRelPaths.push(rel)
+    }
+  }
+
+  return { fsEntries, removedRelPaths }
+}
+
+/**
+ * Diff parziale per scan mirato (solo path toccati dal watcher).
+ * @param {import('better-sqlite3').Database} db
+ * @param {Map<string, FsFileEntry>} fsEntries
+ * @param {string[]} removedRelPaths
+ */
+export function diffPartialPaths(db, fsEntries, removedRelPaths) {
+  const added = []
+  const changed = []
+  const unchanged = []
+  const stmt = db.prepare(
+    "SELECT rel_path, size, mtime_ns FROM files WHERE rel_path = ?",
+  )
+
+  for (const [relPath, entry] of fsEntries) {
+    const prev = stmt.get(relPath)
+    if (!prev) {
+      added.push(relPath)
+    } else if (
+      prev.size !== entry.size ||
+      Number(prev.mtime_ns) !== entry.mtimeNs
+    ) {
+      changed.push(relPath)
+    } else {
+      unchanged.push(relPath)
+    }
+  }
+
+  const removed = []
+  const existsStmt = db.prepare("SELECT 1 FROM files WHERE rel_path = ?")
+  for (const rel of removedRelPaths) {
+    if (existsStmt.get(rel)) removed.push(rel)
+  }
+
+  return { added, changed, removed, unchanged }
+}
+
+/**
  * @param {import('better-sqlite3').Database} db
  * @param {Map<string, FsFileEntry>} fsEntries
  */
@@ -163,11 +234,14 @@ export async function runScanEngine(libraryRoot, opts = {}) {
     return { mode: "full", index, removedPaths: [], stats: null }
   }
 
-  const fsEntries = await walkFilesystemStats(root)
   const db = getLibraryDb(root)
-  const diff = diffAgainstFilesTable(db, fsEntries)
 
   if (opts.paths?.length) {
+    const { fsEntries, removedRelPaths } = await collectStatsForAbsPaths(
+      root,
+      opts.paths,
+    )
+    const diff = diffPartialPaths(db, fsEntries, removedRelPaths)
     const scopes = resolveScopesFromPaths(root, opts.paths)
     if (scopes.some((s) => s === "")) {
       const index = await buildLibraryIndex(root, {
@@ -205,6 +279,9 @@ export async function runScanEngine(libraryRoot, opts = {}) {
       },
     }
   }
+
+  const fsEntries = await walkFilesystemStats(root)
+  const diff = diffAgainstFilesTable(db, fsEntries)
 
   const needsWork =
     diff.added.length + diff.changed.length + diff.removed.length > 0

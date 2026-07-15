@@ -13,14 +13,15 @@ import {
   searchLibraryIndex,
 } from "../libraryIndexService.mjs";
 import {
-  listArtistsPaginated,
-  listAlbumsForArtist,
-  getAlbumTracksFromDb,
   getArtworkRecord,
+  listArtistsPaginated,
 } from "../db/queries/library.mjs";
 import { getLibraryEpoch } from "../db/index.mjs";
 import { runLibraryScan, isLibraryScanning } from "../scanner/index.mjs";
 import { getLibraryScanState } from "../db/queries/library.mjs";
+import { buildLibraryDelta } from "../libraryDelta.mjs";
+import { buildDashboard } from "../musicLibrary.mjs";
+import { readUserState } from "../userState.mjs";
 import { probeLibraryStructure, saveLibraryLayout } from "../libraryLayout.mjs";
 import { resolveArtworkFilePath } from "../artwork/index.mjs";
 import { existsSync } from "fs";
@@ -32,6 +33,7 @@ import {
   sanitizeLibrarySelection,
   sanitizeRelPathForSelection,
   writeLibrarySelection,
+  getSelectionFilterMode,
 } from "../librarySelection.mjs";
 import { toLegacyLibrary } from "../musicLibrary.mjs";
 import {
@@ -59,6 +61,39 @@ export function registerLibraryRoutes(app) {
       const index = await getFilteredIndexForAccount(accountId);
       res.set("Cache-Control", "no-store, must-revalidate");
       return sendOk(res, index);
+    } catch (error) {
+      console.error(error);
+      return sendError(res, 500, String(error?.message || error));
+    }
+  });
+
+  app.get("/api/library-snapshot", async (req, res) => {
+    try {
+      const accountId = accountIdFromReq(req);
+      const root = getMusicRoot();
+      const [index, state] = await Promise.all([
+        getFilteredIndexForAccount(accountId),
+        readUserState(root, accountId),
+      ]);
+      res.set("Cache-Control", "no-store, must-revalidate");
+      return sendOk(res, {
+        index,
+        dashboard: buildDashboard(index, state),
+      });
+    } catch (error) {
+      console.error(error);
+      return sendError(res, 500, String(error?.message || error));
+    }
+  });
+
+  app.get("/api/library/delta", async (req, res) => {
+    try {
+      const root = getMusicRoot();
+      await getLibraryIndex(root);
+      const sinceEpoch = Number(req.query.sinceEpoch) || 0;
+      const delta = buildLibraryDelta(root, sinceEpoch);
+      res.set("Cache-Control", "no-store, must-revalidate");
+      return sendOk(res, delta);
     } catch (error) {
       console.error(error);
       return sendError(res, 500, String(error?.message || error));
@@ -249,14 +284,46 @@ export function registerLibraryRoutes(app) {
 
   app.get("/api/library/artists-page", async (req, res) => {
     try {
+      const accountId = accountIdFromReq(req);
       const root = getMusicRoot();
-      await getLibraryIndex(root);
       const offset = Math.max(0, Number(req.query.offset) || 0);
       const limit = Math.min(500, Math.max(1, Number(req.query.limit) || 50));
       const sort = String(req.query.sort || "name");
-      const artists = listArtistsPaginated(root, { offset, limit, sort });
+      const selection = await readLibrarySelection(root, accountId);
+      const mode = getSelectionFilterMode(selection, accountId);
+      const indexEpoch = getLibraryEpoch(root);
+
+      if (mode === "all") {
+        await getLibraryIndex(root);
+        const artists = listArtistsPaginated(root, { offset, limit, sort });
+        res.set("Cache-Control", "no-store, must-revalidate");
+        return sendOk(res, { artists, offset, limit, indexEpoch });
+      }
+
+      if (mode === "empty") {
+        res.set("Cache-Control", "no-store, must-revalidate");
+        return sendOk(res, { artists: [], offset, limit, indexEpoch });
+      }
+
+      const index = await getFilteredIndexForAccount(accountId);
+      const list = [...index.artists];
+      if (sort === "tracks") {
+        list.sort(
+          (a, b) =>
+            (b.trackCount ?? 0) - (a.trackCount ?? 0) ||
+            a.name.localeCompare(b.name),
+        );
+      } else {
+        list.sort((a, b) => a.name.localeCompare(b.name));
+      }
+      const artists = list.slice(offset, offset + limit);
       res.set("Cache-Control", "no-store, must-revalidate");
-      return sendOk(res, { artists, offset, limit, indexEpoch: getLibraryEpoch(root) });
+      return sendOk(res, {
+        artists,
+        offset,
+        limit,
+        indexEpoch: index.indexEpoch ?? indexEpoch,
+      });
     } catch (error) {
       console.error(error);
       return sendError(res, 500, String(error?.message || error));
@@ -265,13 +332,13 @@ export function registerLibraryRoutes(app) {
 
   app.get("/api/library/artists/:id/albums-list", async (req, res) => {
     try {
-      const root = getMusicRoot();
-      await getLibraryIndex(root);
+      const accountId = accountIdFromReq(req);
+      const index = await getFilteredIndexForAccount(accountId);
       const id = decodeURIComponent(String(req.params.id || ""));
-      const albums = listAlbumsForArtist(root, id);
-      if (!albums.length) return sendError(res, 404, "Artist not found");
+      const detail = libraryArtistDetailFromIndex(index, id);
+      if (!detail) return sendError(res, 404, "Artist not found");
       res.set("Cache-Control", "no-store, must-revalidate");
-      return sendOk(res, { artistId: id, albums });
+      return sendOk(res, { artistId: id, albums: detail.albums });
     } catch (error) {
       console.error(error);
       return sendError(res, 500, String(error?.message || error));
@@ -280,11 +347,11 @@ export function registerLibraryRoutes(app) {
 
   app.get("/api/library/album-tracks", async (req, res) => {
     try {
-      const root = getMusicRoot();
-      await getLibraryIndex(root);
+      const accountId = accountIdFromReq(req);
+      const index = await getFilteredIndexForAccount(accountId);
       const relPath = safeRelSeg(String(req.query.relPath || ""));
       if (!relPath) return sendError(res, 400, "relPath is required");
-      const detail = getAlbumTracksFromDb(root, relPath);
+      const detail = libraryAlbumDetailFromIndex(index, relPath);
       if (!detail) return sendError(res, 404, "Album not found");
       res.set("Cache-Control", "no-store, must-revalidate");
       return sendOk(res, detail);

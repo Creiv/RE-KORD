@@ -150,6 +150,49 @@ export function applyLibraryDeltasToIndex(
   );
 }
 
+export type LibraryDeltaPayload = {
+  changed: boolean;
+  indexEpoch: number;
+  removedTrackPaths: string[];
+  addedTrackPaths: string[];
+  updatedAlbums: LibraryAlbumIndex[];
+  updatedTracks?: LibraryTrackIndex[];
+  fullRefreshRecommended?: boolean;
+};
+
+/** Applica un payload delta dal server; ritorna null se serve full refresh. */
+export function applyLibraryDeltaPayload(
+  prev: LibraryIndex | null,
+  payload: LibraryDeltaPayload,
+): LibraryIndex | null {
+  if (!prev || !payload.changed) return prev;
+  if (payload.fullRefreshRecommended) return null;
+
+  let next = prev;
+  if (payload.removedTrackPaths.length) {
+    next =
+      applyLibraryDeltaToIndex(next, { deleted: payload.removedTrackPaths }) ??
+      next;
+  }
+
+  for (const album of payload.updatedAlbums) {
+    next =
+      applyLibraryDeltaToIndex(next, {
+        albumPath: album.relPath,
+        album,
+      }) ?? next;
+  }
+
+  for (const track of payload.updatedTracks || []) {
+    next =
+      applyLibraryDeltaToIndex(next, {
+        track,
+      }) ?? next;
+  }
+
+  return { ...next, indexEpoch: payload.indexEpoch };
+}
+
 /**
  * Dopo un refresh completo dall’API: non perdere copertine già applicate in UI se
  * la cache server era ancora stale (file cover.jpg presente, coverRelPath assente).

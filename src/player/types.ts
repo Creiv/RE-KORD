@@ -13,12 +13,10 @@ export type PlayerContextValue = {
   queue: EnrichedTrack[];
   currentIndex: number;
   isPlaying: boolean;
-  currentTime: number;
   duration: number;
   volume: number;
   repeat: RepeatMode;
   shuffle: boolean;
-  favorites: Set<string>;
   play: () => void;
   pause: () => void;
   toggle: () => void;
@@ -45,8 +43,6 @@ export type PlayerContextValue = {
   clearQueue: () => void;
   next: () => void;
   prev: () => void;
-  toggleFavorite: (relPath: string) => void;
-  isFavorite: (relPath: string) => boolean;
   resyncTracksFromIndex: (index: LibraryIndex) => void;
   syncMediaSessionNow: () => void;
   sleepTimerEndsAt: number | null;

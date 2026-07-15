@@ -408,6 +408,33 @@ export function applyCustomThemeVars(
   root.style.removeProperty("--shadow-elev-2");
 }
 
+/** Applica dataset e variabili vetro dopo che --glass-1 del tema è sul DOM. */
+export function syncGlassSurfaceDom(
+  root: HTMLElement,
+  settings: UserSettings,
+): void {
+  if (!settings.glassSurfaces) {
+    delete root.dataset.glassSurfaces;
+    delete root.dataset.glassBackdrop;
+    root.style.removeProperty("--glass-user-opacity");
+    clearGlassSurfaceCssVars(root);
+    return;
+  }
+  root.dataset.glassSurfaces = "1";
+  const opacity = normalizeGlassOpacity(settings.glassOpacity);
+  root.style.setProperty("--glass-user-opacity", String(opacity / 100));
+  const useJsGlass =
+    isColorMixBroken() || root.dataset.rekordClient === "1";
+  const applyJsGlass = () => {
+    if (useJsGlass) applyGlassSurfaceCssVars(root, opacity);
+    else clearGlassSurfaceCssVars(root);
+  };
+  applyJsGlass();
+  if (useJsGlass && !root.style.getPropertyValue("--glass-fill-page").trim()) {
+    requestAnimationFrame(applyJsGlass);
+  }
+}
+
 export function useThemeDomEffects(settings: UserSettings) {
   useEffect(() => {
     const root = document.documentElement;
@@ -424,6 +451,9 @@ export function useThemeDomEffects(settings: UserSettings) {
     } else {
       clearCustomThemeVars(root);
     }
+    const applyGlass = () => syncGlassSurfaceDom(root, settings);
+    applyGlass();
+    requestAnimationFrame(applyGlass);
   }, [
     settings.customTheme,
     settings.theme,
@@ -463,21 +493,7 @@ export function useThemeDomEffects(settings: UserSettings) {
 
   useEffect(() => {
     const root = document.documentElement;
-    if (settings.glassSurfaces) {
-      root.dataset.glassSurfaces = "1";
-      const opacity = normalizeGlassOpacity(settings.glassOpacity);
-      root.style.setProperty("--glass-user-opacity", String(opacity / 100));
-      if (isColorMixBroken()) {
-        applyGlassSurfaceCssVars(root, opacity);
-      } else {
-        clearGlassSurfaceCssVars(root);
-      }
-    } else {
-      delete root.dataset.glassSurfaces;
-      delete root.dataset.glassBackdrop;
-      root.style.removeProperty("--glass-user-opacity");
-      clearGlassSurfaceCssVars(root);
-    }
+    syncGlassSurfaceDom(root, settings);
   }, [
     settings.glassSurfaces,
     settings.glassOpacity,
@@ -488,14 +504,16 @@ export function useThemeDomEffects(settings: UserSettings) {
   useEffect(() => {
     if (!settings.glassSurfaces) return;
     let cancelled = false;
+    const root = document.documentElement;
     void probeGlassBackdrop().then((works) => {
       if (cancelled) return;
-      document.documentElement.dataset.glassBackdrop = works ? "1" : "0";
+      root.dataset.glassBackdrop = works ? "1" : "0";
+      syncGlassSurfaceDom(root, settings);
     });
     return () => {
       cancelled = true;
     };
-  }, [settings.glassSurfaces]);
+  }, [settings.glassSurfaces, settings.glassOpacity, settings.theme, settings.customTheme]);
 
   useEffect(() => {
     document.documentElement.lang =

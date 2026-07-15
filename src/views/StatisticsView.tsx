@@ -1,5 +1,5 @@
 import { useMemo, useState } from "react";
-import { useUserState } from "../context/UserStateContext";
+import { useUserStateSelector } from "../context/UserStateContext";
 import { useI18n } from "../i18n/useI18n";
 import type { LibraryIndex, LibraryTrackIndex } from "../types";
 import { parseTrackGenres } from "../lib/genres";
@@ -125,24 +125,29 @@ function StatisticsView({
   onOpenArtist: (artistId: string) => void;
   onOpenAlbum: (artistId: string, albumName: string) => void;
 }) {
-  const user = useUserState();
-  const { t, sortLocale } = useI18n();
-  const counts = useMemo(
-    () => user.state.trackPlayCounts || {},
-    [user.state.trackPlayCounts],
+  const trackPlayCounts = useUserStateSelector((s) => s.state.trackPlayCounts || {});
+  const favoritesList = useUserStateSelector((s) => s.state.favorites ?? []);
+  const shuffleExcludedTrackRelPaths = useUserStateSelector(
+    (s) => s.state.shuffleExcludedTrackRelPaths ?? [],
   );
+  const shuffleExcludedAlbumIds = useUserStateSelector(
+    (s) => s.state.shuffleExcludedAlbumIds ?? [],
+  );
+  const plectrBests = useUserStateSelector((s) => s.state.plectrBests);
+  const { t, sortLocale } = useI18n();
+  const counts = useMemo(() => trackPlayCounts, [trackPlayCounts]);
   const [metricMode, setMetricMode] = useState<StatisticsMetricMode>("plays");
   const favoritesSet = useMemo(
-    () => new Set(user.state.favorites ?? []),
-    [user.state.favorites]
+    () => new Set(favoritesList),
+    [favoritesList]
   );
   const blockedTrackSet = useMemo(
-    () => new Set(user.state.shuffleExcludedTrackRelPaths ?? []),
-    [user.state.shuffleExcludedTrackRelPaths]
+    () => new Set(shuffleExcludedTrackRelPaths),
+    [shuffleExcludedTrackRelPaths]
   );
   const blockedAlbumSet = useMemo(
-    () => new Set(user.state.shuffleExcludedAlbumIds ?? []),
-    [user.state.shuffleExcludedAlbumIds]
+    () => new Set(shuffleExcludedAlbumIds),
+    [shuffleExcludedAlbumIds]
   );
   const scoreByTrackRelPath = useMemo(() => {
     const scoreMap: Record<string, number> = {};
@@ -157,7 +162,7 @@ function StatisticsView({
       }
       if (metricMode === "plectr") {
         scoreMap[tr.relPath] =
-          lookupByRelPathAliases(user.state.plectrBests, tr.relPath)?.score ??
+          lookupByRelPathAliases(plectrBests, tr.relPath)?.score ??
           0;
         continue;
       }
@@ -175,7 +180,7 @@ function StatisticsView({
     favoritesSet,
     blockedTrackSet,
     blockedAlbumSet,
-    user.state.plectrBests,
+    plectrBests,
   ]);
   const data = useMemo(
     () =>
@@ -204,7 +209,7 @@ function StatisticsView({
     () => buildRandomArtistCoverMap(index),
     [index]
   );
-  const totalFavorites = user.state.favorites?.length ?? 0;
+  const totalFavorites = favoritesList.length;
   const totalShuffleBlocks = useMemo(() => {
     return index.tracks.filter(
       (tr) =>
@@ -213,8 +218,8 @@ function StatisticsView({
     ).length;
   }, [index.tracks, blockedTrackSet, blockedAlbumSet]);
   const totalPlectrTracks = useMemo(
-    () => countPlectrTracksPlayed(user.state.plectrBests),
-    [user.state.plectrBests]
+    () => countPlectrTracksPlayed(plectrBests),
+    [plectrBests]
   );
 
   const handleOpenTrackInLibrary = (tr: LibraryTrackIndex) => {
@@ -243,7 +248,7 @@ function StatisticsView({
       return t("statistics.favoriteCount", { n: fmtN(n) });
     if (metricMode === "plectr") {
       const grade = relPath
-        ? lookupByRelPathAliases(user.state.plectrBests, relPath)?.grade
+        ? lookupByRelPathAliases(plectrBests, relPath)?.grade
         : undefined;
       return grade
         ? t("statistics.plectrScoreWithGrade", { n: fmtN(n), grade })

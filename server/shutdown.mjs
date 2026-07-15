@@ -39,7 +39,7 @@ export async function gracefulShutdown(signal = "SIGTERM") {
   forceTimer.unref?.();
 
   try {
-    stopRemoteAccess();
+    await stopRemoteAccess();
     killActiveYtdlpDownloads();
     cancelAllJobs();
     stopAllLibraryWatchers();

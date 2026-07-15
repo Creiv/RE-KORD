@@ -16,10 +16,105 @@ import {
   unwrap,
 } from "./core"
 
-export async function fetchLibraryIndex(): Promise<LibraryIndex> {
+export type LibrarySnapshotResponse = {
+  index: LibraryIndex
+  dashboard: DashboardPayload
+}
+
+export async function fetchLibrarySnapshot(): Promise<LibrarySnapshotResponse> {
   await ensureSelectedAccountId()
-  const response = await apiFetch("/api/library-index", { cache: "no-store" })
-  return unwrap<LibraryIndex>(response)
+  const response = await apiFetch("/api/library-snapshot", { cache: "no-store" })
+  return unwrap<LibrarySnapshotResponse>(response)
+}
+
+export type LibraryDeltaResponse = {
+  changed: boolean
+  indexEpoch: number
+  removedTrackPaths: string[]
+  addedTrackPaths: string[]
+  updatedAlbums: LibraryIndex["albums"]
+  updatedTracks?: LibraryIndex["tracks"]
+  fullRefreshRecommended?: boolean
+}
+
+export async function fetchLibraryDelta(
+  sinceEpoch: number,
+): Promise<LibraryDeltaResponse> {
+  const response = await apiFetch(
+    "/api/library/delta",
+    { cache: "no-store" },
+    { sinceEpoch: String(sinceEpoch) },
+  )
+  return unwrap<LibraryDeltaResponse>(response)
+}
+
+export type LibrarySearchResponse = {
+  artists: LibraryIndex["artists"]
+  albums: LibraryIndex["albums"]
+  tracks: LibraryIndex["tracks"]
+}
+
+export async function searchLibrary(
+  q: string,
+  signal?: AbortSignal,
+): Promise<LibrarySearchResponse> {
+  const query = q.trim()
+  if (!query) return { artists: [], albums: [], tracks: [] }
+  await ensureSelectedAccountId()
+  const response = await apiFetch(
+    "/api/library-search",
+    { cache: "no-store", signal },
+    { q: query },
+  )
+  return unwrap<LibrarySearchResponse>(response)
+}
+
+export type PaginatedArtistsResponse = {
+  artists: LibraryIndex["artists"]
+  offset: number
+  limit: number
+  indexEpoch: number
+}
+
+export async function fetchArtistsPage(opts: {
+  offset?: number
+  limit?: number
+  sort?: "name" | "tracks"
+} = {}): Promise<PaginatedArtistsResponse> {
+  await ensureSelectedAccountId()
+  const query: Record<string, string> = {}
+  if (opts.offset != null) query.offset = String(opts.offset)
+  if (opts.limit != null) query.limit = String(opts.limit)
+  if (opts.sort) query.sort = opts.sort
+  const response = await apiFetch("/api/library/artists-page", { cache: "no-store" }, query)
+  return unwrap<PaginatedArtistsResponse>(response)
+}
+
+export async function fetchArtistAlbums(artistId: string): Promise<{
+  artistId: string
+  albums: LibraryIndex["albums"]
+}> {
+  await ensureSelectedAccountId()
+  const response = await apiFetch(
+    `/api/library/artists/${encodeURIComponent(artistId)}/albums-list`,
+    { cache: "no-store" },
+  )
+  return unwrap<{ artistId: string; albums: LibraryIndex["albums"] }>(response)
+}
+
+export async function fetchAlbumTracks(relPath: string): Promise<{
+  album: LibraryIndex["albums"][number]
+  tracks: LibraryIndex["tracks"]
+}> {
+  await ensureSelectedAccountId()
+  const response = await apiFetch(
+    "/api/library/album-tracks",
+    { cache: "no-store" },
+    { relPath },
+  )
+  return unwrap<{ album: LibraryIndex["albums"][number]; tracks: LibraryIndex["tracks"] }>(
+    response,
+  )
 }
 
 export type LibraryChangesResponse = {

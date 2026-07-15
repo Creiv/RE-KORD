@@ -1,5 +1,19 @@
 import { useEffect, useMemo, useRef } from "react";
-import { shouldPauseBackgroundVisualizersForPlectr } from "../../hooks/useRhythmModeOpen";
+import { isAppInForeground } from "../../hooks/useAppForeground";
+import {
+  shouldPauseBackgroundVisualizersForPlectr,
+  subscribeRhythmModeOpen,
+} from "../../hooks/useRhythmModeOpen";
+import {
+  shouldPauseNebulaCanvas,
+  subscribeVisualSurfaceActive,
+  type NebulaSurface,
+} from "../../hooks/useVisualSurfaceActive";
+import {
+  canvasDprCap,
+  isDocumentHidden,
+  nebulaLoopCadence,
+} from "../../lib/renderQuality";
 import type { NebulaFog, NebulaModel, NebulaStar, NebulaCamera } from "../../lib/sonicNebula";
 import { NEBULA_CENTER, NEBULA_GALAXY_RADIUS } from "../../lib/sonicNebula";
 
@@ -20,6 +34,8 @@ export type NebulaCanvasProps = {
   preview?: boolean;
   /** Preview statica (dashboard): un solo frame se false. */
   animated?: boolean;
+  /** Tab che ospita il canvas: pausa il loop se non è quella attiva. */
+  surface?: NebulaSurface;
   className?: string;
   frameClassName?: string;
   onCanvasReady?: (canvas: HTMLCanvasElement | null) => void;
@@ -411,6 +427,7 @@ export function NebulaCanvas({
   interactive = true,
   preview = false,
   animated = true,
+  surface,
   className,
   frameClassName,
   onCanvasReady,
@@ -504,8 +521,7 @@ export function NebulaCanvas({
     const syncBuffer = () => {
       const w = Math.max(1, Math.floor(measuredRef.w));
       const h = Math.max(1, Math.floor(measuredRef.h));
-      const cap = w < 520 ? 1.5 : 2;
-      const dpr = Math.min(window.devicePixelRatio || 1, cap);
+      const dpr = canvasDprCap({ lite: w < 520 });
       const prev = sizeRef.current;
       if (prev.w === w && prev.h === h && prev.dpr === dpr) return;
       sizeRef.current = { w, h, dpr };
@@ -542,27 +558,84 @@ export function NebulaCanvas({
       };
     }
 
+    let timerId = 0;
+
+    const clearLoop = () => {
+      cancelAnimationFrame(rafRef.current);
+      window.clearTimeout(timerId);
+      rafRef.current = 0;
+      timerId = 0;
+    };
+
+    const scheduleNext = (delayMs: number) => {
+      if (rafRef.current || timerId) return;
+      if (delayMs <= 4) {
+        rafRef.current = requestAnimationFrame(loop);
+        return;
+      }
+      timerId = window.setTimeout(() => {
+        timerId = 0;
+        rafRef.current = requestAnimationFrame(loop);
+      }, delayMs);
+    };
+
+    const restartLoop = () => {
+      scheduleNext(0);
+    };
+
+    const stopLoop = () => {
+      clearLoop();
+    };
+
+    const shouldPauseLoop = () =>
+      shouldPauseBackgroundVisualizersForPlectr() ||
+      !isAppInForeground() ||
+      isDocumentHidden() ||
+      (surface !== undefined && shouldPauseNebulaCanvas(surface));
+
+    const syncRhythmPause = () => {
+      if (shouldPauseLoop()) {
+        stopLoop();
+        return;
+      }
+      restartLoop();
+    };
+
+    const onVisibility = () => syncRhythmPause();
+    document.addEventListener("visibilitychange", onVisibility);
+    const unsubRhythm = subscribeRhythmModeOpen(syncRhythmPause);
+    const unsubSurface = subscribeVisualSurfaceActive(syncRhythmPause);
+
     const loop = (t: number) => {
-      rafRef.current = requestAnimationFrame(loop);
-      /* Con Plectr aperto la nebula (dashboard o vista libreria) è dietro
-       * al pannello: disegnarla ruberebbe frame al gioco. */
-      if (shouldPauseBackgroundVisualizersForPlectr()) return;
+      rafRef.current = 0;
+      if (shouldPauseLoop()) {
+        stopLoop();
+        return;
+      }
       const p = propsRef.current;
       const active = p.playing || Boolean(p.hoveredId || p.selectedId);
-      const minInterval = active ? 0 : 40;
-      if (t - lastDrawRef.current >= minInterval) {
+      const cadence = nebulaLoopCadence({ active, preview: p.preview });
+      if (t - lastDrawRef.current >= cadence.minFrameIntervalMs) {
         drawFrame(t);
         lastDrawRef.current = t;
       }
+      const wait = Math.max(
+        1,
+        cadence.minFrameIntervalMs - (performance.now() - lastDrawRef.current),
+      );
+      scheduleNext(wait);
     };
-    rafRef.current = requestAnimationFrame(loop);
+    restartLoop();
 
     return () => {
       redrawRef.current = null;
-      cancelAnimationFrame(rafRef.current);
+      stopLoop();
+      unsubRhythm();
+      unsubSurface();
+      document.removeEventListener("visibilitychange", onVisibility);
       ro.disconnect();
     };
-  }, [animated]);
+  }, [animated, surface]);
 
   return (
     <div ref={frameRef} className={frameClassName ?? "nebula-canvas-frame"}>

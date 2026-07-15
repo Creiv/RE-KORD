@@ -358,22 +358,22 @@ export function useStudioPanels(
   );
 
   const prevMetaAlbumPathRef = useRef(metaAlbumPath);
-  if (metaAlbumPath !== prevMetaAlbumPathRef.current) {
+  useEffect(() => {
+    if (!library || !metaAlbumPath) return;
+    if (metaAlbumPath === prevMetaAlbumPathRef.current) return;
     prevMetaAlbumPathRef.current = metaAlbumPath;
-    if (library && metaAlbumPath) {
-      const name = artistNameForAlbumRelPath(library, metaAlbumPath);
-      if (name) setMetaArtistName(name);
-    }
-  }
+    const name = artistNameForAlbumRelPath(library, metaAlbumPath);
+    if (name) setMetaArtistName(name);
+  }, [library, metaAlbumPath]);
 
   const prevAlbumForCoverRef = useRef(albumForCover);
-  if (albumForCover !== prevAlbumForCoverRef.current) {
+  useEffect(() => {
+    if (!library || !albumForCover) return;
+    if (albumForCover === prevAlbumForCoverRef.current) return;
     prevAlbumForCoverRef.current = albumForCover;
-    if (library && albumForCover) {
-      const name = artistNameForAlbumRelPath(library, albumForCover);
-      if (name) setCoverPickArtist(name);
-    }
-  }
+    const name = artistNameForAlbumRelPath(library, albumForCover);
+    if (name) setCoverPickArtist(name);
+  }, [library, albumForCover]);
 
   useEffect(() => {
     setRelPayload(null);

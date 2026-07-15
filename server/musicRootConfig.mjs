@@ -706,12 +706,24 @@ export async function setPersistedMusicRoot(absolute) {
   // evitare il ciclo statico musicRootConfig → scanner → musicLibrary →
   // albumInfo → musicRootConfig.
   if (previousRoot && previousRoot !== resolved) {
-    const [{ stopLibraryWatcher }, { closeLibraryDb }] = await Promise.all([
+    const [
+      { stopLibraryWatcher },
+      { closeLibraryDb },
+      { resetLibraryIndexServiceStateForRoot },
+      { resetScannerStateForRoot },
+      { resetLibraryDeltaJournalForRoot },
+    ] = await Promise.all([
       import("./scanner/watcher.mjs"),
       import("./db/index.mjs"),
+      import("./libraryIndexService.mjs"),
+      import("./scanner/index.mjs"),
+      import("./libraryDelta.mjs"),
     ]);
     stopLibraryWatcher(previousRoot);
     closeLibraryDb(previousRoot);
+    resetLibraryIndexServiceStateForRoot(previousRoot);
+    resetScannerStateForRoot(previousRoot);
+    resetLibraryDeltaJournalForRoot(previousRoot);
   }
   const cfgDir = path.dirname(CONFIG_FILE);
   enqueueLayoutMigration({

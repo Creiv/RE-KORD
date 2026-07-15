@@ -13,7 +13,13 @@ import {
   shouldPauseBackgroundVisualizersForPlectr,
   subscribeRhythmModeOpen,
 } from "../hooks/useRhythmModeOpen";
+import {
+  shouldPauseListenStageVisualizers,
+  subscribeVisualSurfaceActive,
+} from "../hooks/useVisualSurfaceActive";
+import { subscribeAppForeground } from "../hooks/useAppForeground";
 import { MOBILE_LAYOUT_MQ } from "../lib/breakpoints";
+import { canvasDprCap, discowallLoopCadence } from "../lib/renderQuality";
 import { useRhythmChart } from "../game/hooks/useRhythmChart";
 import type { ChartNote } from "../game/types";
 import { useI18n } from "../i18n/useI18n";
@@ -36,10 +42,6 @@ const MAX_CELLS_PANEL = 1800;
 const MAX_CELLS_EXPANDED = 4000;
 const MIN_CELL = 9;
 const MAX_CELL = 18;
-const FPS_PANEL = 30;
-const FPS_EXPANDED_CALM = 45;
-const FPS_EXPANDED_ACTIVE = 60;
-
 function clamp(v: number, lo = 0, hi = 1) {
   return Math.max(lo, Math.min(hi, v));
 }
@@ -309,9 +311,7 @@ export function DiscoWallVisualizer() {
       }
       width = Math.max(120, nextW || 320);
       height = Math.max(120, nextH || 200);
-      dpr = expanded
-        ? Math.min(window.devicePixelRatio || 1, 1.25)
-        : 1;
+      dpr = expanded ? canvasDprCap({ lite: true }) : 1;
       const maxCells = expanded ? MAX_CELLS_EXPANDED : MAX_CELLS_PANEL;
       cell = clamp(Math.round(width / 92), MIN_CELL, MAX_CELL);
       cols = Math.max(18, Math.floor(width / cell));
@@ -334,12 +334,16 @@ export function DiscoWallVisualizer() {
       rebuildCellCaches();
     };
 
+    const shouldPauseLoop = () =>
+      shouldPauseBackgroundVisualizersForPlectr() ||
+      shouldPauseListenStageVisualizers();
+
     const onVisibility = () => {
       visibleRef.current = !document.hidden;
       if (
         visibleRef.current &&
         inViewRef.current &&
-        !shouldPauseBackgroundVisualizersForPlectr() &&
+        !shouldPauseLoop() &&
         raf === 0
       ) {
         raf = requestAnimationFrame(draw);
@@ -347,7 +351,7 @@ export function DiscoWallVisualizer() {
     };
 
     const syncRhythmPause = () => {
-      if (shouldPauseBackgroundVisualizersForPlectr()) {
+      if (shouldPauseLoop()) {
         cancelAnimationFrame(raf);
         raf = 0;
         return;
@@ -358,6 +362,7 @@ export function DiscoWallVisualizer() {
     };
 
     const unsubRhythm = subscribeRhythmModeOpen(syncRhythmPause);
+    const unsubSurface = subscribeVisualSurfaceActive(syncRhythmPause);
     const layoutMq = window.matchMedia(MOBILE_LAYOUT_MQ);
     layoutMq.addEventListener("change", syncRhythmPause);
 
@@ -397,7 +402,7 @@ export function DiscoWallVisualizer() {
       if (
         !visibleRef.current ||
         !inViewRef.current ||
-        shouldPauseBackgroundVisualizersForPlectr()
+        shouldPauseLoop()
       ) {
         raf = 0;
         return;
@@ -407,13 +412,9 @@ export function DiscoWallVisualizer() {
       const now = performance.now();
       const prevPulse = pulseRef.current;
       const prevFlash = flashRef.current;
-      const targetFps = expanded
-        ? prevPulse > 0.12 || prevFlash > 0.08
-          ? FPS_EXPANDED_ACTIVE
-          : FPS_EXPANDED_CALM
-        : FPS_PANEL;
-      const minInterval = 1000 / targetFps;
-      if (now - lastFrameMs < minInterval) return;
+      const active = prevPulse > 0.12 || prevFlash > 0.08;
+      const cadence = discowallLoopCadence({ expanded, active });
+      if (now - lastFrameMs < cadence.minFrameIntervalMs) return;
       lastFrameMs = now;
       frameIx += 1;
 
@@ -581,7 +582,7 @@ export function DiscoWallVisualizer() {
         raf === 0 &&
         visibleRef.current &&
         inViewRef.current &&
-        !shouldPauseBackgroundVisualizersForPlectr()
+        !shouldPauseLoop()
       ) {
         raf = requestAnimationFrame(draw);
       }
@@ -593,11 +594,15 @@ export function DiscoWallVisualizer() {
     const onWindowResize = () => resize();
     if (expanded) window.addEventListener("resize", onWindowResize);
     document.addEventListener("visibilitychange", onVisibility);
+    const unsubForeground = subscribeAppForeground((fg) => {
+      visibleRef.current = fg;
+      syncRhythmPause();
+    });
     visibleRef.current = !document.hidden;
     if (
       visibleRef.current &&
       inViewRef.current &&
-      !shouldPauseBackgroundVisualizersForPlectr()
+      !shouldPauseLoop()
     ) {
       raf = requestAnimationFrame(draw);
     }
@@ -608,7 +613,9 @@ export function DiscoWallVisualizer() {
       cancelAnimationFrame(raf);
       window.removeEventListener("resize", onWindowResize);
       document.removeEventListener("visibilitychange", onVisibility);
+      unsubForeground();
       unsubRhythm();
+      unsubSurface();
       layoutMq.removeEventListener("change", syncRhythmPause);
       ro.disconnect();
     };

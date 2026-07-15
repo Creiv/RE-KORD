@@ -114,7 +114,11 @@ describe("migration v6", () => {
   it("migrateV6LoosePaths is idempotent", () => {
     const db = new Database(":memory:")
     db.exec(MIGRATION_SQL)
-    db.exec("ALTER TABLE tracks ADD COLUMN file_path TEXT")
+    try {
+      db.exec("ALTER TABLE tracks ADD COLUMN file_path TEXT")
+    } catch {
+      /* colonna già in schema */
+    }
     db.prepare("INSERT INTO artists (id, name) VALUES ('A', 'A')").run()
     db.prepare(
       `INSERT INTO albums (id, artist_id, folder_rel_path, name, loose)

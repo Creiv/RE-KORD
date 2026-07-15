@@ -4,16 +4,18 @@ import { getMusicRoot, isLibraryRootConfigured } from "./musicRootConfig.mjs"
 import {
   hasReservedPathSegment,
   pathHasParentDirSegment,
+  realPathUnderRoot,
   underRoot,
 } from "./pathSafety.mjs"
 import { resolveTrackFileRelPath } from "./scanner/engine.mjs"
 import { serveMediaFileWithRange } from "./mediaStream.mjs"
+import { validateMediaAccess } from "./mediaAccess.mjs"
 
 /**
  * /media/* con Range esplicito (sostituisce express.static per seek FLAC su tunnel).
  */
 export function registerMediaRoutes(app) {
-  app.use("/media", (req, res, next) => {
+  app.use("/media", async (req, res, next) => {
     if (req.method !== "GET" && req.method !== "HEAD") {
       res.status(405).end()
       return
@@ -43,7 +45,11 @@ export function registerMediaRoutes(app) {
 
     const mediaRel = resolveTrackFileRelPath(root, relPath)
     const filePath = path.join(root, mediaRel.replaceAll("/", path.sep))
-    if (!underRoot(filePath, root) || !existsSync(filePath)) {
+    if (
+      !underRoot(filePath, root) ||
+      !existsSync(filePath) ||
+      !realPathUnderRoot(filePath, root)
+    ) {
       res.status(404).end()
       return
     }
@@ -57,6 +63,12 @@ export function registerMediaRoutes(app) {
     }
     if (!stat.isFile()) {
       res.status(404).end()
+      return
+    }
+
+    const access = await validateMediaAccess(req, mediaRel)
+    if (!access.ok) {
+      res.status(access.status ?? 403).end()
       return
     }
 

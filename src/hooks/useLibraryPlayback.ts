@@ -2,7 +2,10 @@ import { useCallback, useMemo } from "react";
 import { resolveTrackFromLibrary } from "../lib/libraryNav";
 import type { EnrichedTrack } from "../types";
 import { usePlayer } from "../context/PlayerContext";
-import { useUserState } from "../context/UserStateContext";
+import {
+  useUserShuffleSlice,
+  useUserStateSelector,
+} from "../context/UserStateContext";
 import {
   buildCardPlayQueueFromSeed,
   buildShuffleQueueFromSeed,
@@ -15,14 +18,16 @@ export function useLibraryPlayback(
   libraryTracks: readonly EnrichedTrack[] | undefined
 ) {
   const p = usePlayer();
-  const user = useUserState();
+  const { shuffleExcludedAlbumIds, shuffleExcludedTrackRelPaths } =
+    useUserShuffleSlice();
+  const recent = useUserStateSelector((s) => s.state.recent);
   const excludedAlbums = useMemo(
-    () => new Set(user.state.shuffleExcludedAlbumIds),
-    [user.state.shuffleExcludedAlbumIds]
+    () => new Set(shuffleExcludedAlbumIds),
+    [shuffleExcludedAlbumIds]
   );
   const excludedTracks = useMemo(
-    () => new Set(user.state.shuffleExcludedTrackRelPaths),
-    [user.state.shuffleExcludedTrackRelPaths]
+    () => new Set(shuffleExcludedTrackRelPaths),
+    [shuffleExcludedTrackRelPaths]
   );
 
   const currentRelPath = p.current?.relPath;
@@ -34,12 +39,12 @@ export function useLibraryPlayback(
       currentRelPath,
       currentArtist,
       recentRelPaths: new Set(
-        user.state.recent.slice(0, 48).map((tr) => tr.relPath)
+        recent.slice(0, 48).map((tr) => tr.relPath)
       ),
       excludedAlbums,
       excludedTracks,
     }),
-    [currentRelPath, currentArtist, user.state.recent, excludedAlbums, excludedTracks]
+    [currentRelPath, currentArtist, recent, excludedAlbums, excludedTracks]
   );
 
   const playSequence = useCallback(

@@ -4,7 +4,12 @@ import type { MouseEvent as ReactMouseEvent } from "react";
 import { usePlayer } from "../../context/PlayerContext";
 import { useRhythmMode } from "../../context/RhythmModeContext";
 import { useI18n } from "../../i18n/useI18n";
-import { useUserState } from "../../context/UserStateContext";
+import {
+  useUserShuffleSlice,
+  useUserStateActions,
+  useUserStateSelector,
+} from "../../context/UserStateContext";
+import { isFavoriteRelPath } from "../../lib/libraryNav";
 import { useMatchMedia } from "../../hooks/useMatchMedia";
 import { usePlayerProgressTime } from "../../hooks/usePlayerProgressTime";
 import { usePlayerBarSwipe } from "../../hooks/usePlayerBarSwipe";
@@ -77,7 +82,10 @@ export const PlayerDock = memo(function PlayerDock({
   const p = usePlayer();
   const { playRadioFromCurrent } = useLibraryPlayback(libraryTracks);
   const { open: rhythmOpen, stylesReady, setOpen: setRhythmOpen } = useRhythmMode();
-  const user = useUserState();
+  const { shuffleExcludedAlbumIds, shuffleExcludedTrackRelPaths, toggleShuffleExcludedTrack } =
+    useUserShuffleSlice();
+  const { toggleFavorite } = useUserStateActions();
+  const favorites = useUserStateSelector((s) => s.favorites);
   const { t } = useI18n();
   const isMobileLayout = useMatchMedia(MOBILE_LAYOUT_MQ);
 
@@ -87,14 +95,15 @@ export const PlayerDock = memo(function PlayerDock({
 
   const plectrVisible = rhythmOpen && stylesReady;
   const exAlbums = useMemo(
-    () => new Set(user.state.shuffleExcludedAlbumIds),
-    [user.state.shuffleExcludedAlbumIds],
+    () => new Set(shuffleExcludedAlbumIds),
+    [shuffleExcludedAlbumIds],
   );
   const exTracksSet = useMemo(
-    () => new Set(user.state.shuffleExcludedTrackRelPaths),
-    [user.state.shuffleExcludedTrackRelPaths],
+    () => new Set(shuffleExcludedTrackRelPaths),
+    [shuffleExcludedTrackRelPaths],
   );
   const cur = p.current;
+  const curIsFavorite = cur ? isFavoriteRelPath(favorites, cur.relPath) : false;
   const shown = cur && resolvePlaybackTrack ? resolvePlaybackTrack(cur) : cur;
   const albumShuffleExcluded = Boolean(
     cur && isTrackAlbumShuffleExcluded(cur, exAlbums),
@@ -218,11 +227,11 @@ export const PlayerDock = memo(function PlayerDock({
                 <button
                   type="button"
                   className={`player-bar2__fav player-bar2__rail-fav ${
-                    user.isFavorite(cur.relPath) ? "is-on" : ""
+                    curIsFavorite ? "is-on" : ""
                   }`}
-                  onClick={() => user.toggleFavorite(cur.relPath)}
+                  onClick={() => toggleFavorite(cur.relPath)}
                   title={t("trackRow.favTitle")}
-                  aria-pressed={user.isFavorite(cur.relPath)}
+                  aria-pressed={curIsFavorite}
                   aria-label={t("trackRow.favAria")}
                 >
                   <span
@@ -360,7 +369,7 @@ export const PlayerDock = memo(function PlayerDock({
                   }
                   onClick={() => {
                     if (!cur || albumShuffleExcluded) return;
-                    user.toggleShuffleExcludedTrack(cur.relPath);
+                    toggleShuffleExcludedTrack(cur.relPath);
                   }}
                 >
                   <span
@@ -400,7 +409,6 @@ export const PlayerDock = memo(function PlayerDock({
               <PlayerBarMobileMenu
                 cur={cur}
                 p={p}
-                user={user}
                 shuffleExcluded={shuffleExcluded}
                 albumShuffleExcluded={albumShuffleExcluded}
                 onGoToAscolta={onGoToAscolta}

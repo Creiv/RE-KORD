@@ -77,6 +77,17 @@ export async function runLibraryScan(libraryRoot, opts = {}) {
  * @param {string} libraryRoot
  * @param {{ full?: boolean, paths?: string[], debounceMs?: number, enrichDuration?: boolean, readTags?: boolean }} opts
  */
+/** Reset timer/scan pendenti per un root (es. cambio musicRoot). */
+export function resetScannerStateForRoot(libraryRoot) {
+  const key = path.resolve(String(libraryRoot || ""))
+  const timer = debounceTimers.get(key)
+  if (timer) clearTimeout(timer)
+  debounceTimers.delete(key)
+  pendingPaths.delete(key)
+  scanFlight.delete(key)
+  scanningFlags.delete(key)
+}
+
 export function scheduleLibraryScan(libraryRoot, opts = {}) {
   const key = path.resolve(String(libraryRoot || ""))
   if (opts.paths?.length) {

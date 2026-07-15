@@ -79,6 +79,43 @@ describe("musicLibrary", () => {
     expect(index.tracks[0]?.meta?.lyrics).toBe("Line one\nLine two")
   })
 
+  it("limits continueListening to dashboard cap", async () => {
+    const musicRoot = await fs.mkdtemp(path.join(os.tmpdir(), "rekord-dashboard-cap-"))
+    await fs.mkdir(path.join(musicRoot, "Artist", "Album"), { recursive: true })
+    await fs.writeFile(path.join(musicRoot, "Artist", "Album", "01 Song.mp3"), "")
+
+    const index = await buildLibraryIndex(musicRoot)
+    const tracks = Array.from({ length: 100 }, (_, i) => ({
+      id: `Artist/Album/t-${i}.mp3`,
+      relPath: `Artist/Album/t-${i}.mp3`,
+      title: `Track ${i}`,
+      artist: "Artist",
+      album: "Album",
+      albumId: "Artist::Album",
+      loose: false,
+      addedAt: 1,
+      updatedAt: 1,
+      meta: {
+        fileName: `t-${i}.mp3`,
+        size: 1,
+        mtime: 1,
+        releaseDate: null,
+        genre: null,
+        lyrics: null,
+        moods: [],
+        durationMs: 1000,
+        trackNumber: i + 1,
+        discNumber: null,
+        source: null,
+        url: null,
+      },
+    }))
+    const state = defaultUserState()
+    state.queue = { tracks, currentIndex: 0, shuffle: false, repeat: "off" }
+    const dashboard = buildDashboard(index, state)
+    expect(dashboard.continueListening).toHaveLength(30)
+  })
+
   it("buildPartialIndex scopes a single album", async () => {
     const musicRoot = await fs.mkdtemp(path.join(os.tmpdir(), "rekord-partial-"))
     await fs.mkdir(path.join(musicRoot, "A", "B1"), { recursive: true })

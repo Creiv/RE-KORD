@@ -24,13 +24,6 @@ async function startListening() {
   await waitForInitialLayoutMigration();
   const logger = getLogger();
 
-  if (process.env.REKORD_DOCKER === "1" && isLibraryRootConfigured()) {
-    const root = getMusicRoot();
-    void getLibraryIndex(root).catch((err) => {
-      logger.warn({ err }, "Docker library warmup failed");
-    });
-  }
-
   const LISTEN_HOST = getListenHost();
   const httpServer = app.listen(PORT, LISTEN_HOST, () => {
     const rootLabel = isLibraryRootConfigured()
@@ -40,6 +33,12 @@ async function startListening() {
       { host: LISTEN_HOST, port: PORT, musicRoot: rootLabel },
       "RE-KORD server listening",
     );
+    if (isLibraryRootConfigured()) {
+      const root = getMusicRoot();
+      void getLibraryIndex(root).catch((err) => {
+        logger.warn({ err }, "Library warmup failed");
+      });
+    }
     const lanUrls = buildLanAccessUrls(PORT);
     if (lanUrls.length) {
       logger.info({ lanUrls }, "LAN access URLs");

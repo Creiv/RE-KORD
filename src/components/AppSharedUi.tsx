@@ -21,7 +21,12 @@ import { createPortal } from "react-dom";
 import { usePlayer, useTrackRowPlayer } from "../context/PlayerContext";
 import { useTrackCoverDisplay } from "../context/LibraryArtworkContext";
 import { useStudioNavigation } from "../context/StudioNavigationContext";
-import { useTrackRowUserState, useUserState } from "../context/UserStateContext";
+import {
+  useTrackRowUserState,
+  useUserPlaylistsSlice,
+  useUserShuffleSlice,
+  useUserStateSelector,
+} from "../context/UserStateContext";
 import { useI18n } from "../i18n/useI18n";
 import {
   artworkUrl,
@@ -313,7 +318,8 @@ const TrackRowPlaylistPopover = memo(function TrackRowPlaylistPopover({
   onRequestClose: () => void;
   anchorRef: RefObject<HTMLDivElement | null>;
 }) {
-  const user = useUserState();
+  const { playlists, addTrackToPlaylist, removeTrackFromPlaylist } =
+    useUserPlaylistsSlice();
   const { t } = useI18n();
   const panelRef = useRef<HTMLDivElement | null>(null);
   const placement = usePopoverLayerAnchored(
@@ -323,7 +329,6 @@ const TrackRowPlaylistPopover = memo(function TrackRowPlaylistPopover({
     panelRef,
     TRACK_ROW_PLAYLIST_POPOVER_OPTS
   );
-  const playlists = user.state.playlists;
 
   if (!open) return null;
 
@@ -362,8 +367,8 @@ const TrackRowPlaylistPopover = memo(function TrackRowPlaylistPopover({
                   }
                   onClick={() =>
                     inPl
-                      ? user.removeTrackFromPlaylist(pl.id, track.relPath)
-                      : user.addTrackToPlaylist(pl.id, track)
+                      ? removeTrackFromPlaylist(pl.id, track.relPath)
+                      : addTrackToPlaylist(pl.id, track)
                   }
                 >
                   <span className="track-row__playlist-popover-item__name">
@@ -1163,14 +1168,17 @@ export function LibraryGenreExcludeChips({
   index: LibraryIndex;
 }) {
   const { t } = useI18n();
-  const user = useUserState();
+  const {
+    shuffleExcludedAlbumIds,
+    shuffleExcludedTrackRelPaths,
+  } = useUserShuffleSlice();
   const excludedAlbums = useMemo(
-    () => new Set(user.state.shuffleExcludedAlbumIds),
-    [user.state.shuffleExcludedAlbumIds]
+    () => new Set(shuffleExcludedAlbumIds),
+    [shuffleExcludedAlbumIds]
   );
   const excludedTracks = useMemo(
-    () => new Set(user.state.shuffleExcludedTrackRelPaths),
-    [user.state.shuffleExcludedTrackRelPaths]
+    () => new Set(shuffleExcludedTrackRelPaths),
+    [shuffleExcludedTrackRelPaths]
   );
   const tracks = tracksInGenreByKey(libraryIndex, genreKey);
   const albumIds = new Set(tracks.map((t) => t.albumId));
@@ -1222,7 +1230,7 @@ export function LibraryGenreFavoriteChips({
   index: LibraryIndex;
 }) {
   const { t } = useI18n();
-  const { favorites } = useUserState();
+  const favorites = useUserStateSelector((s) => s.favorites);
   const n = useMemo(() => {
     let c = 0;
     for (const t of tracksInGenreByKey(libraryIndex, genreKey)) {
@@ -1262,14 +1270,17 @@ export function LibraryArtistExcludeChips({
   index: LibraryIndex;
 }) {
   const { t } = useI18n();
-  const user = useUserState();
+  const {
+    shuffleExcludedAlbumIds,
+    shuffleExcludedTrackRelPaths,
+  } = useUserShuffleSlice();
   const excludedAlbums = useMemo(
-    () => new Set(user.state.shuffleExcludedAlbumIds),
-    [user.state.shuffleExcludedAlbumIds]
+    () => new Set(shuffleExcludedAlbumIds),
+    [shuffleExcludedAlbumIds]
   );
   const excludedTracks = useMemo(
-    () => new Set(user.state.shuffleExcludedTrackRelPaths),
-    [user.state.shuffleExcludedTrackRelPaths]
+    () => new Set(shuffleExcludedTrackRelPaths),
+    [shuffleExcludedTrackRelPaths]
   );
   let nAl = 0;
   for (const aid of artist.albums) {
@@ -1328,7 +1339,7 @@ export function LibraryArtistFavoriteChips({
   index: LibraryIndex;
 }) {
   const { t } = useI18n();
-  const { favorites } = useUserState();
+  const favorites = useUserStateSelector((s) => s.favorites);
   const n = useMemo(() => {
     let c = 0;
     for (const t of libraryIndex.tracks) {
@@ -1368,7 +1379,7 @@ export function LibraryAlbumFavoriteChips({
   variant?: "card" | "hero";
 }) {
   const { t } = useI18n();
-  const { favorites } = useUserState();
+  const favorites = useUserStateSelector((s) => s.favorites);
   const n = useMemo(
     () => album.tracks.filter((rel) => isFavoriteRelPath(favorites, rel)).length,
     [album.tracks, favorites]
@@ -1406,14 +1417,17 @@ export function LibraryAlbumExcludeChips({
   variant?: "card" | "hero";
 }) {
   const { t } = useI18n();
-  const user = useUserState();
+  const {
+    shuffleExcludedAlbumIds,
+    shuffleExcludedTrackRelPaths,
+  } = useUserShuffleSlice();
   const excludedAlbums = useMemo(
-    () => new Set(user.state.shuffleExcludedAlbumIds),
-    [user.state.shuffleExcludedAlbumIds]
+    () => new Set(shuffleExcludedAlbumIds),
+    [shuffleExcludedAlbumIds]
   );
   const excludedTracks = useMemo(
-    () => new Set(user.state.shuffleExcludedTrackRelPaths),
-    [user.state.shuffleExcludedTrackRelPaths]
+    () => new Set(shuffleExcludedTrackRelPaths),
+    [shuffleExcludedTrackRelPaths]
   );
   const key = albumExclusionKey(album);
   const fullAl = excludedAlbums.has(key);

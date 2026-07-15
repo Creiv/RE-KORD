@@ -164,6 +164,15 @@ function setMediaSessionPlaybackState(
   navigator.mediaSession.playbackState = state
 }
 
+/** Segnale DOM per QA/automation: playback nativo o HTML attivo. */
+function syncNativePlayingDataset(
+  playbackState: "none" | "paused" | "playing",
+): void {
+  if (typeof document === "undefined") return;
+  document.documentElement.dataset.rekordNativePlaying =
+    playbackState === "playing" ? "1" : "0";
+}
+
 function setMediaSessionPosition(
   duration: number,
   position: number,
@@ -204,6 +213,9 @@ export type MediaSessionSync = {
 }
 
 export function syncMediaSessionState(sync: MediaSessionSync): void {
+  const playbackState = sync.track ? sync.playbackState : "none"
+  syncNativePlayingDataset(playbackState)
+
   const native = rekordMediaNative()
   if (native) {
     try {

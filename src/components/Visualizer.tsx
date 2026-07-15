@@ -7,7 +7,13 @@ import {
   shouldPauseBackgroundVisualizersForPlectr,
   subscribeRhythmModeOpen,
 } from "../hooks/useRhythmModeOpen";
+import {
+  shouldPauseListenStageVisualizers,
+  subscribeVisualSurfaceActive,
+} from "../hooks/useVisualSurfaceActive";
+import { subscribeAppForeground } from "../hooks/useAppForeground";
 import { MOBILE_LAYOUT_MQ } from "../lib/breakpoints";
+import { canvasDprCap, vizLoopCadence } from "../lib/renderQuality";
 import { parseLrcLyrics, resolveKaraokeLines } from "../lib/karaokeLyrics";
 import { VizCanvasEngine } from "../lib/vizCanvasEngine";
 import type { VizMode } from "../types";
@@ -61,6 +67,8 @@ export function Visualizer({
   const visibleRef = useRef(
     typeof document !== "undefined" ? !document.hidden : true,
   );
+  const inViewRef = useRef(true);
+  const lastDrawRef = useRef(0);
 
   const collapse = useCallback(() => {
     if (fullscreenOnly) onExitFullscreen?.();
@@ -103,8 +111,27 @@ export function Visualizer({
     const ctx = c.getContext("2d");
     if (!ctx) return;
     let raf = 0;
+    let timerId = 0;
     let backingScale = typeof window !== "undefined" ? window.devicePixelRatio || 1 : 1;
     const dpr = () => (typeof window !== "undefined" ? window.devicePixelRatio || 1 : 1);
+
+    const clearLoop = () => {
+      cancelAnimationFrame(raf);
+      window.clearTimeout(timerId);
+      raf = 0;
+      timerId = 0;
+    };
+
+    const scheduleNext = (delayMs: number) => {
+      if (delayMs <= 4) {
+        raf = requestAnimationFrame(step);
+        return;
+      }
+      timerId = window.setTimeout(() => {
+        timerId = 0;
+        raf = requestAnimationFrame(step);
+      }, delayMs);
+    };
 
     const size = () => {
       const p = c.parentElement;
@@ -113,6 +140,8 @@ export function Visualizer({
       let s = dpr();
       if (expanded) {
         s = Math.min(s, mode === "signals" ? 1.38 : 1.52);
+      } else {
+        s = canvasDprCap({ lite: true });
       }
       backingScale = s;
       c.width = lw * s;
@@ -125,60 +154,93 @@ export function Visualizer({
     const ro = new ResizeObserver(size);
     if (c.parentElement) ro.observe(c.parentElement);
 
-    const onVis = () => {
-      visibleRef.current = !document.hidden;
-      if (
-        visibleRef.current &&
-        !shouldPauseBackgroundVisualizersForPlectr() &&
-        raf === 0
-      ) {
-        raf = requestAnimationFrame(step);
-      }
-    };
-    document.addEventListener("visibilitychange", onVis);
+    const shouldPauseLoop = () =>
+      shouldPauseBackgroundVisualizersForPlectr() ||
+      shouldPauseListenStageVisualizers();
 
-    const syncRhythmPause = () => {
-      if (shouldPauseBackgroundVisualizersForPlectr()) {
-        cancelAnimationFrame(raf);
-        raf = 0;
+    const step = (t: number) => {
+      raf = 0;
+      if (
+        !visibleRef.current ||
+        !inViewRef.current ||
+        shouldPauseLoop()
+      ) {
         return;
       }
-      if (visibleRef.current && raf === 0) {
-        raf = requestAnimationFrame(step);
+      const cadence = vizLoopCadence({ expanded, isPlaying });
+      if (t - lastDrawRef.current >= cadence.minFrameIntervalMs) {
+        lastDrawRef.current = t;
+        const w = c.width / backingScale;
+        const h = c.height / backingScale;
+        engineRef.current.drawFrame(ctx, {
+          width: w,
+          height: h,
+          mode,
+          analyser: isPlaying ? getAnalyser() : null,
+          isPlaying,
+          expanded,
+        });
+      }
+      const wait = Math.max(
+        1,
+        cadence.minFrameIntervalMs - (performance.now() - lastDrawRef.current),
+      );
+      scheduleNext(wait);
+    };
+
+    const syncRhythmPause = () => {
+      if (shouldPauseLoop()) {
+        clearLoop();
+        return;
+      }
+      if (visibleRef.current && inViewRef.current && raf === 0 && timerId === 0) {
+        scheduleNext(0);
       }
     };
 
+    const io =
+      typeof IntersectionObserver !== "undefined" && wrapRef.current
+        ? new IntersectionObserver(
+            ([entry]) => {
+              inViewRef.current = Boolean(entry?.isIntersecting);
+              syncRhythmPause();
+            },
+            { rootMargin: "40px" },
+          )
+        : null;
+    if (io && wrapRef.current) io.observe(wrapRef.current);
+
+    const onVis = () => {
+      visibleRef.current = !document.hidden;
+      syncRhythmPause();
+    };
+    document.addEventListener("visibilitychange", onVis);
+    const unsubForeground = subscribeAppForeground((fg) => {
+      visibleRef.current = fg;
+      syncRhythmPause();
+    });
+
     const unsubRhythm = subscribeRhythmModeOpen(syncRhythmPause);
+    const unsubSurface = subscribeVisualSurfaceActive(syncRhythmPause);
     const layoutMq = window.matchMedia(MOBILE_LAYOUT_MQ);
     layoutMq.addEventListener("change", syncRhythmPause);
 
-    const step = () => {
-      if (!visibleRef.current || shouldPauseBackgroundVisualizersForPlectr()) {
-        raf = 0;
-        return;
-      }
-      raf = requestAnimationFrame(step);
-      const w = c.width / backingScale;
-      const h = c.height / backingScale;
-      engineRef.current.drawFrame(ctx, {
-        width: w,
-        height: h,
-        mode,
-        analyser: getAnalyser(),
-        isPlaying,
-        expanded,
-      });
-    };
-
     visibleRef.current = !document.hidden;
-    if (visibleRef.current && !shouldPauseBackgroundVisualizersForPlectr()) {
-      raf = requestAnimationFrame(step);
+    if (
+      visibleRef.current &&
+      inViewRef.current &&
+      !shouldPauseLoop()
+    ) {
+      scheduleNext(0);
     }
     return () => {
-      cancelAnimationFrame(raf);
+      clearLoop();
       document.removeEventListener("visibilitychange", onVis);
+      unsubForeground();
       unsubRhythm();
+      unsubSurface();
       layoutMq.removeEventListener("change", syncRhythmPause);
+      io?.disconnect();
       ro.disconnect();
     };
   }, [getAnalyser, isPlaying, mode, expanded]);

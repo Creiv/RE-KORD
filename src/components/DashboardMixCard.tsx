@@ -1,6 +1,9 @@
 import { useCallback, useMemo, useState, type CSSProperties } from "react";
 import { usePlayer } from "../context/PlayerContext";
-import { useUserState } from "../context/UserStateContext";
+import {
+  useUserShuffleSlice,
+  useUserStateSelector,
+} from "../context/UserStateContext";
 import { useI18n } from "../i18n/useI18n";
 import { trackBelongsToGenreKey, parseTrackGenres } from "../lib/genres";
 import {
@@ -47,18 +50,20 @@ export function DashboardMixCard({
 }: DashboardMixCardProps) {
   const { t, sortLocale } = useI18n();
   const p = usePlayer();
-  const user = useUserState();
+  const { shuffleExcludedAlbumIds, shuffleExcludedTrackRelPaths } =
+    useUserShuffleSlice();
+  const recent = useUserStateSelector((s) => s.state.recent);
   const [genreKey, setGenreKey] = useState<string | null>(null);
   const [moodFilterIds, setMoodFilterIds] = useState<TrackMoodId[]>([]);
   const [moodMatchMode, setMoodMatchMode] = useState<"any" | "all">("any");
 
   const exAlbums = useMemo(
-    () => new Set(user.state.shuffleExcludedAlbumIds),
-    [user.state.shuffleExcludedAlbumIds]
+    () => new Set(shuffleExcludedAlbumIds),
+    [shuffleExcludedAlbumIds]
   );
   const exTracks = useMemo(
-    () => new Set(user.state.shuffleExcludedTrackRelPaths),
-    [user.state.shuffleExcludedTrackRelPaths]
+    () => new Set(shuffleExcludedTrackRelPaths),
+    [shuffleExcludedTrackRelPaths]
   );
 
   const shufflePool = useMemo(
@@ -128,7 +133,7 @@ export function DashboardMixCard({
   const playMixShuffle = useCallback(() => {
     if (!shuffleEligible.length) return;
     const recentRelPaths = new Set(
-      user.state.recent.slice(0, 48).map((tr) => tr.relPath)
+      recent.slice(0, 48).map((tr) => tr.relPath)
     );
     const shuffled = buildSmartRandomQueue(shuffleEligible, {
       currentRelPath: p.current?.relPath,
@@ -141,7 +146,7 @@ export function DashboardMixCard({
       preserveQueueOrder: true,
       refillRemainder: remainder,
     });
-  }, [shuffleEligible, user.state.recent, p]);
+  }, [shuffleEligible, recent, p]);
 
   return (
     <section className="surface-card dashboard-session-card dashboard-mix-card dashboard-page__mix">

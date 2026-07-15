@@ -1,6 +1,6 @@
 import { useMemo, useState } from "react";
 import { usePlayer } from "../context/PlayerContext";
-import { useUserState } from "../context/UserStateContext";
+import { useUserPlaylistsSlice } from "../context/UserStateContext";
 import { useAppConfirm } from "../context/AppConfirmContext";
 import { useI18n } from "../i18n/useI18n";
 import { SectionHeadLead } from "../components/SectionHeadLead";
@@ -40,7 +40,15 @@ function PlaylistsViewNew({
   onPickPlaylist: (playlist: string | null) => void;
 }) {
   const p = usePlayer();
-  const user = useUserState();
+  const {
+    playlists,
+    selectedPlaylist,
+    createPlaylist,
+    deletePlaylist,
+    renamePlaylist,
+    addTrackToPlaylist,
+    removeTrackFromPlaylist,
+  } = useUserPlaylistsSlice();
   const { t } = useI18n();
   const { confirm: appConfirm } = useAppConfirm();
   const [name, setName] = useState("");
@@ -51,10 +59,9 @@ function PlaylistsViewNew({
         : null,
     [index]
   );
-  const playlists = user.state.playlists;
   const activePlaylist =
     playlists.find(
-      (item) => item.id === (route.playlist || user.selectedPlaylist || "")
+      (item) => item.id === (route.playlist || selectedPlaylist || "")
     ) || null;
 
   return (
@@ -79,7 +86,7 @@ function PlaylistsViewNew({
               <button
                 type="button"
                 className="primary-btn"
-                onClick={() => user.createPlaylist(name)}
+                onClick={() => createPlaylist(name)}
               >
                 {t("playlists.create")}
               </button>
@@ -135,7 +142,7 @@ function PlaylistsViewNew({
                       aria-disabled={!p.current}
                       onClick={() =>
                         p.current &&
-                        user.addTrackToPlaylist(playlist.id, p.current)
+                        addTrackToPlaylist(playlist.id, p.current)
                       }
                     >
                       {t("playlists.addCurrent")}
@@ -151,7 +158,7 @@ function PlaylistsViewNew({
                             }),
                             variant: "danger",
                           });
-                          if (ok) user.deletePlaylist(playlist.id);
+                          if (ok) deletePlaylist(playlist.id);
                         })()
                       }
                     >
@@ -180,7 +187,7 @@ function PlaylistsViewNew({
                       className="ghost-input compact playlist-rename-input"
                       defaultValue={activePlaylist.name}
                       onBlur={(event) =>
-                        user.renamePlaylist(
+                        renamePlaylist(
                           activePlaylist.id,
                           event.target.value
                         )
@@ -218,7 +225,7 @@ function PlaylistsViewNew({
                               title={t("playlists.removeFromPlTitle")}
                               aria-label={t("playlists.removeFromPlAria")}
                               onClick={() =>
-                                user.removeTrackFromPlaylist(
+                                removeTrackFromPlaylist(
                                   activePlaylist.id,
                                   track.relPath
                                 )

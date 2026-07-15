@@ -9,7 +9,12 @@ import {
   type ChangeEvent,
 } from "react";
 import { useAppConfirm } from "../../context/AppConfirmContext";
-import { useUserState } from "../../context/UserStateContext";
+import {
+  useUserSettingsSlice,
+  useUserStateActions,
+  useUserStateSelector,
+  useUserStateStatus,
+} from "../../context/UserStateContext";
 import { useI18n } from "../../i18n/useI18n";
 import {
   clearYoutubeCookies,
@@ -62,7 +67,10 @@ function SectionFallback() {
 }
 
 export default function SettingsView({ index }: SettingsViewProps) {
-  const user = useUserState();
+  const { settings, updateSettings } = useUserSettingsSlice();
+  const { flushUserStateNow } = useUserStateActions();
+  const { ready: userReady } = useUserStateStatus();
+  const userState = useUserStateSelector((s) => s.state);
   const { t, locale, setLocale } = useI18n();
   const { confirm: appConfirm, alert: appAlert } = useAppConfirm();
   const [libLocked, setLibLocked] = useState(false);
@@ -104,38 +112,26 @@ export default function SettingsView({ index }: SettingsViewProps) {
   const [discogsOk, setDiscogsOk] = useState<string | null>(null);
   const [customThemeDialogOpen, setCustomThemeDialogOpen] = useState(false);
   const [glassOpacityDraft, setGlassOpacityDraft] = useState(
-    user.state.settings.glassOpacity
+    settings.glassOpacity
   );
   const glassOpacitySaveTimer = useRef<ReturnType<typeof setTimeout> | null>(
     null
   );
+  const glassOpacityPendingRef = useRef<number | null>(null);
 
   const [prevGlassOpacity, setPrevGlassOpacity] = useState(
-    user.state.settings.glassOpacity
+    settings.glassOpacity
   );
-  if (prevGlassOpacity !== user.state.settings.glassOpacity) {
-    setPrevGlassOpacity(user.state.settings.glassOpacity);
-    setGlassOpacityDraft(user.state.settings.glassOpacity);
+  if (prevGlassOpacity !== settings.glassOpacity) {
+    setPrevGlassOpacity(settings.glassOpacity);
+    setGlassOpacityDraft(settings.glassOpacity);
+    glassOpacityPendingRef.current = null;
+    if (glassOpacitySaveTimer.current) {
+      window.clearTimeout(glassOpacitySaveTimer.current);
+      glassOpacitySaveTimer.current = null;
+    }
+    document.documentElement.style.removeProperty("--glass-user-opacity");
   }
-
-  const glassOpacityPendingRef = useRef<number | null>(null);
-  const updateSettingsRef = useRef(user.updateSettings);
-  useEffect(() => {
-    updateSettingsRef.current = user.updateSettings;
-  }, [user.updateSettings]);
-
-  useEffect(
-    () => () => {
-      if (glassOpacitySaveTimer.current) {
-        clearTimeout(glassOpacitySaveTimer.current);
-        const pending = glassOpacityPendingRef.current;
-        if (pending != null) {
-          updateSettingsRef.current({ glassOpacity: pending });
-        }
-      }
-    },
-    []
-  );
 
   const onGlassOpacityChange = useCallback(
     (value: number) => {
@@ -151,10 +147,10 @@ export default function SettingsView({ index }: SettingsViewProps) {
       glassOpacityPendingRef.current = v;
       glassOpacitySaveTimer.current = setTimeout(() => {
         glassOpacityPendingRef.current = null;
-        user.updateSettings({ glassOpacity: v });
+        updateSettings({ glassOpacity: v });
       }, 500);
     },
-    [user]
+    [updateSettings]
   );
   const [lanAccessUrl, setLanAccessUrl] = useState<string | null>(null);
   const [publicIp, setPublicIp] = useState<string | null>(null);
@@ -272,9 +268,9 @@ export default function SettingsView({ index }: SettingsViewProps) {
   }, [accounts]);
 
   const selectedAccountLevel = useMemo(() => {
-    if (!user.ready || !selectedAccountId || !index) return null;
-    return buildAchievementsSnapshot(user.state, index).level.level;
-  }, [user.ready, user.state, selectedAccountId, index]);
+    if (!userReady || !selectedAccountId || !index) return null;
+    return buildAchievementsSnapshot(userState, index).level.level;
+  }, [userReady, userState, selectedAccountId, index]);
 
   const otherAccounts = useMemo(
     () =>
@@ -344,7 +340,7 @@ export default function SettingsView({ index }: SettingsViewProps) {
 
   const selectSessionAccount = (id: string) => {
     if (!id || id === selectedAccountId) return;
-    user.flushUserStateNow({ silent: true });
+    flushUserStateNow({ silent: true });
     setSelectedAccountId(id);
     setSelectedAccountIdState(id);
     const url = new URL("/", window.location.href);
@@ -735,8 +731,8 @@ export default function SettingsView({ index }: SettingsViewProps) {
           t={t}
           locale={locale}
           setLocale={setLocale}
-          settings={user.state.settings}
-          updateSettings={user.updateSettings}
+          settings={settings}
+          updateSettings={updateSettings}
           glassOpacityDraft={glassOpacityDraft}
           onGlassOpacityChange={onGlassOpacityChange}
           customThemeDialogOpen={customThemeDialogOpen}
