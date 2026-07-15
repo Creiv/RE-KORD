@@ -566,7 +566,7 @@ export const IT: Record<string, string> = {
   "settings.remoteShared": "Server condiviso",
   "settings.remoteStopSharing": "Ferma condivisione",
   "settings.remoteStartingHint":
-    "Preparazione tunnel Cloudflare… il QR compare quando il link è pronto.",
+    "Connessione a Cloudflare in corso… il QR compare appena cloudflared restituisce l’URL.",
   "settings.remoteUrl": "URL pubblico: {{url}}",
   "settings.remoteNotShared": "Non condiviso online.",
   "settings.remoteQrAlt": "QR code per aprire {{url}}",

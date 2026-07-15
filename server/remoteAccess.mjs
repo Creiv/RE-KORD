@@ -3,6 +3,7 @@
  * Estratto da index.mjs (Fase 6). Stato condiviso: remoteAccessState.
  */
 import path from "path";
+import dns from "node:dns/promises";
 import { existsSync } from "fs";
 import { spawn } from "child_process";
 import { fileURLToPath } from "url";
@@ -18,14 +19,17 @@ import { pathLooksLikeAsarArchive } from "./bundledBin.mjs";
 import {
   getCloudflareLoggedIn,
   getCloudflareTunnelEnabled,
+  getListenHost,
   setCloudflareTunnelEnabled,
 } from "./musicRootConfig.mjs";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const CF_URL_REGEX = /https:\/\/[a-z0-9-]+\.trycloudflare\.com/i;
 const TUNNEL_START_TIMEOUT_MS = 90_000;
-const TUNNEL_REACHABILITY_TIMEOUT_MS = 60_000;
+const TUNNEL_REACHABILITY_TIMEOUT_MS = 90_000;
 const TUNNEL_REACHABILITY_INTERVAL_MS = 2_000;
+const TUNNEL_FETCH_TIMEOUT_MS = 8_000;
+const TUNNEL_LOCAL_FETCH_TIMEOUT_MS = 5_000;
 const OUTPUT_BUFFER_MAX = 64 * 1024;
 
 export const remoteAccessState = {
@@ -40,7 +44,6 @@ export const remoteAccessState = {
 };
 let cloudflaredChild = null;
 let startTimeoutHandle = null;
-let verifyTimeoutHandle = null;
 let reachabilityGeneration = 0;
 let pendingTunnelUrl = null;
 
@@ -70,9 +73,27 @@ function sleep(ms) {
   return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
+/** Host locale verso cui cloudflared inoltra (allineato a getListenHost). */
+export function resolveCloudflaredTarget() {
+  const listenHost = getListenHost();
+  const host =
+    listenHost === "0.0.0.0" || !listenHost ? "127.0.0.1" : listenHost;
+  return `http://${host}:${PORT}`;
+}
+
+async function fetchHealthOk(fetchImpl, url, timeoutMs) {
+  const res = await fetchImpl(url, {
+    signal: AbortSignal.timeout(timeoutMs),
+    headers: { Accept: "application/json" },
+  });
+  if (res.ok) return true;
+  throw new Error(`HTTP ${res.status}`);
+}
+
 /**
- * Cloudflared stampa l'URL prima che il DNS sia risolvibile dal client.
- * Attendiamo /api/health via HTTPS prima di segnare il tunnel attivo.
+ * Cloudflared stampa l'URL prima che il tunnel sia raggiungibile dall'esterno.
+ * Verifichiamo /api/health via HTTPS; se il loopback verso l'URL pubblico fallisce
+ * (hairpin NAT, proxy, DNS lento) accettiamo DNS risolto + backend locale ok.
  */
 export async function waitForTunnelReachable(
   publicUrl,
@@ -80,27 +101,49 @@ export async function waitForTunnelReachable(
     timeoutMs = TUNNEL_REACHABILITY_TIMEOUT_MS,
     intervalMs = TUNNEL_REACHABILITY_INTERVAL_MS,
     fetchImpl = globalThis.fetch,
+    dnsLookupImpl = (hostname) => dns.lookup(hostname),
+    localHealthUrl = `${resolveCloudflaredTarget()}/api/health`,
     isAlive = () => Boolean(cloudflaredChild && !cloudflaredChild.killed),
   } = {},
 ) {
   const base = normalizeRemoteClientBaseUrl(publicUrl);
   if (!base) throw new Error("URL tunnel Cloudflare non valido");
-  const healthUrl = `${base}/api/health`;
+  const hostname = new URL(base).hostname;
+  const publicHealthUrl = `${base}/api/health`;
   const deadline = Date.now() + timeoutMs;
   let lastErr = null;
+  let dnsReady = false;
+  let localReady = false;
   while (Date.now() < deadline) {
     if (!isAlive()) {
       throw new Error("Tunnel terminato durante la verifica");
     }
+    if (!dnsReady) {
+      try {
+        await dnsLookupImpl(hostname);
+        dnsReady = true;
+      } catch (err) {
+        lastErr = err instanceof Error ? err : new Error(String(err));
+      }
+    }
+    if (!localReady) {
+      try {
+        await fetchHealthOk(
+          fetchImpl,
+          localHealthUrl,
+          TUNNEL_LOCAL_FETCH_TIMEOUT_MS,
+        );
+        localReady = true;
+      } catch (err) {
+        lastErr = err instanceof Error ? err : new Error(String(err));
+      }
+    }
     try {
-      const res = await fetchImpl(healthUrl, {
-        signal: AbortSignal.timeout(8000),
-        headers: { Accept: "application/json" },
-      });
-      if (res.ok) return base;
-      lastErr = new Error(`HTTP ${res.status}`);
+      await fetchHealthOk(fetchImpl, publicHealthUrl, TUNNEL_FETCH_TIMEOUT_MS);
+      return base;
     } catch (err) {
       lastErr = err instanceof Error ? err : new Error(String(err));
+      if (dnsReady && localReady) return base;
     }
     await sleep(intervalMs);
   }
@@ -133,16 +176,8 @@ function clearStartTimeout() {
   }
 }
 
-function clearVerifyTimeout() {
-  if (verifyTimeoutHandle != null) {
-    clearTimeout(verifyTimeoutHandle);
-    verifyTimeoutHandle = null;
-  }
-}
-
 function clearRemoteTimeouts() {
   clearStartTimeout();
-  clearVerifyTimeout();
 }
 
 function killCloudflaredChild() {
@@ -198,7 +233,7 @@ export function markRemoteError(err) {
   }
   if (/Tunnel URL non raggiungibile|Tunnel terminato durante la verifica/i.test(msg)) {
     remoteAccessState.error =
-      "Il tunnel Cloudflare non è ancora raggiungibile. Ferma e riavvia la condivisione, poi attendi che lo stato diventi attivo prima di connetterti.";
+      "Il tunnel Cloudflare non è ancora raggiungibile. Ferma e riavvia la condivisione, poi attendi qualche secondo prima di connetterti.";
     return;
   }
   remoteAccessState.error = msg;
@@ -246,7 +281,7 @@ export function startRemoteAccess() {
     remoteAccessState.publicUrl = null;
     return;
   }
-  const target = `http://127.0.0.1:${PORT}`;
+  const target = resolveCloudflaredTarget();
   const args = ["tunnel", "--url", target, "--no-autoupdate"];
   logger.info({ cloudflaredPath, target }, "Avvio tunnel Cloudflare quick");
   const child = spawn(cloudflaredPath, args, {
@@ -261,35 +296,26 @@ export function startRemoteAccess() {
     if (remoteAccessState.status !== "starting") return;
     pendingTunnelUrl = normalized;
     clearStartTimeout();
+    remoteAccessState.status = "running";
+    remoteAccessState.publicUrl = normalized;
     remoteAccessState.error = null;
+    logger.info({ publicUrl: normalized }, "Tunnel Cloudflare URL disponibile");
     const generation = ++reachabilityGeneration;
-    clearVerifyTimeout();
-    verifyTimeoutHandle = setTimeout(() => {
-      if (generation !== reachabilityGeneration) return;
-      if (remoteAccessState.status !== "starting") return;
-      markRemoteError("Timeout verifica tunnel: URL Cloudflare non ancora raggiungibile.");
-      killCloudflaredChild();
-    }, TUNNEL_REACHABILITY_TIMEOUT_MS);
-    verifyTimeoutHandle.unref?.();
     void (async () => {
       try {
         await waitForTunnelReachable(normalized, {
           timeoutMs: TUNNEL_REACHABILITY_TIMEOUT_MS,
         });
         if (generation !== reachabilityGeneration) return;
-        if (remoteAccessState.status !== "starting") return;
-        clearVerifyTimeout();
-        remoteAccessState.status = "running";
-        remoteAccessState.publicUrl = normalized;
+        if (remoteAccessState.status !== "running") return;
         remoteAccessState.error = null;
-        logger.info({ publicUrl: normalized }, "Tunnel Cloudflare attivo");
+        logger.info({ publicUrl: normalized }, "Tunnel Cloudflare verificato");
       } catch (err) {
         if (generation !== reachabilityGeneration) return;
-        if (remoteAccessState.status !== "starting") return;
-        clearVerifyTimeout();
-        logger.warn({ err, publicUrl: normalized }, "Tunnel Cloudflare non raggiungibile");
-        markRemoteError(err);
-        killCloudflaredChild();
+        if (remoteAccessState.status !== "running") return;
+        logger.warn({ err, publicUrl: normalized }, "Verifica tunnel Cloudflare non riuscita");
+        remoteAccessState.error =
+          "Il tunnel potrebbe non essere ancora raggiungibile dall'esterno. Attendi qualche secondo e riprova la connessione.";
       }
     })();
   };

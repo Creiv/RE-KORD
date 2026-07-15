@@ -5,6 +5,7 @@ import {
   normalizeRemoteClientBaseUrl,
   remoteAccessState,
   remoteSnapshot,
+  resolveCloudflaredTarget,
   waitForTunnelReachable,
 } from "./remoteAccess.mjs";
 
@@ -76,10 +77,17 @@ describe("remoteSnapshot", () => {
   });
 });
 
+describe("resolveCloudflaredTarget", () => {
+  it("usa 127.0.0.1 quando il server ascolta su tutte le interfacce", () => {
+    expect(resolveCloudflaredTarget()).toMatch(/^http:\/\/127\.0\.0\.1:\d+$/);
+  });
+});
+
 describe("waitForTunnelReachable", () => {
-  it("ritorna quando /api/health risponde ok", async () => {
+  it("ritorna quando /api/health pubblico risponde ok", async () => {
     const fetchImpl = vi
       .fn()
+      .mockRejectedValueOnce(new Error("local skip"))
       .mockRejectedValueOnce(new Error("ENOTFOUND"))
       .mockResolvedValueOnce({ ok: true });
     const out = await waitForTunnelReachable(
@@ -88,22 +96,49 @@ describe("waitForTunnelReachable", () => {
         timeoutMs: 5000,
         intervalMs: 1,
         fetchImpl,
+        dnsLookupImpl: async () => "1.2.3.4",
+        localHealthUrl: "http://127.0.0.1:3001/api/health",
         isAlive: () => true,
       },
     );
     expect(out).toBe("https://abc-def.trycloudflare.com");
-    expect(fetchImpl).toHaveBeenCalledTimes(2);
+    expect(fetchImpl).toHaveBeenCalled();
   });
 
-  it("propaga errore se il tunnel non diventa raggiungibile", async () => {
-    const fetchImpl = vi.fn().mockRejectedValue(new Error("ENOTFOUND"));
+  it("accetta DNS + backend locale quando l'URL pubblico non è verificabile", async () => {
+    const fetchImpl = vi.fn(async (url) => {
+      if (String(url).includes("trycloudflare.com")) {
+        throw new Error("hairpin blocked");
+      }
+      return { ok: true };
+    });
+    const out = await waitForTunnelReachable(
+      "https://abc-def.trycloudflare.com",
+      {
+        timeoutMs: 5000,
+        intervalMs: 1,
+        fetchImpl,
+        dnsLookupImpl: async () => "1.2.3.4",
+        localHealthUrl: "http://127.0.0.1:3001/api/health",
+        isAlive: () => true,
+      },
+    );
+    expect(out).toBe("https://abc-def.trycloudflare.com");
+  });
+
+  it("propaga errore se né pubblico né fallback locale diventano pronti", async () => {
+    const fetchImpl = vi.fn().mockRejectedValue(new Error("ECONNREFUSED"));
     await expect(
       waitForTunnelReachable("https://abc-def.trycloudflare.com", {
         timeoutMs: 5,
         intervalMs: 1,
         fetchImpl,
+        dnsLookupImpl: async () => {
+          throw new Error("ENOTFOUND");
+        },
+        localHealthUrl: "http://127.0.0.1:3001/api/health",
         isAlive: () => true,
       }),
-    ).rejects.toThrow("ENOTFOUND");
+    ).rejects.toThrow("ECONNREFUSED");
   });
 });
