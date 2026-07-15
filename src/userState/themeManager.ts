@@ -455,6 +455,7 @@ export function useThemeDomEffects(settings: UserSettings) {
     applyGlass();
     requestAnimationFrame(applyGlass);
   }, [
+    settings,
     settings.customTheme,
     settings.theme,
     settings.glassSurfaces,
@@ -489,12 +490,13 @@ export function useThemeDomEffects(settings: UserSettings) {
     clearCustomThemeBgImageCssVars(root);
     clearAnimatedCustomThemeBg(root);
     delete root.dataset.customBgImage;
-  }, [settings.customTheme, settings.theme]);
+  }, [settings, settings.customTheme, settings.theme]);
 
   useEffect(() => {
     const root = document.documentElement;
     syncGlassSurfaceDom(root, settings);
   }, [
+    settings,
     settings.glassSurfaces,
     settings.glassOpacity,
     settings.theme,
@@ -513,7 +515,7 @@ export function useThemeDomEffects(settings: UserSettings) {
     return () => {
       cancelled = true;
     };
-  }, [settings.glassSurfaces, settings.glassOpacity, settings.theme, settings.customTheme]);
+  }, [settings]);
 
   useEffect(() => {
     document.documentElement.lang =

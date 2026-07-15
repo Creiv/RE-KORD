@@ -1,6 +1,6 @@
 /**
  * Validazione ADB + CDP WebView Android per RE-KORD.
- * Uso: node scripts/adb-webview-cdp-validate.mjs
+ * Uso: node scripts/optional/mobile-qa/adb-webview-cdp-validate.mjs
  */
 import { execSync, spawnSync } from "node:child_process";
 import { chromium } from "@playwright/test";

@@ -3,12 +3,12 @@
  * QA mobile RE-KORD via ADB + CDP WebView.
  *
  * Uso:
- *   node scripts/adb-mobile-qa.mjs              # matrice completa
- *   node scripts/adb-mobile-qa.mjs --only studio
- *   node scripts/adb-mobile-qa.mjs --perf
- *   node scripts/adb-mobile-qa.mjs --with-perf
+ *   node scripts/optional/mobile-qa/adb-mobile-qa.mjs              # matrice completa
+ *   node scripts/optional/mobile-qa/adb-mobile-qa.mjs --only studio
+ *   node scripts/optional/mobile-qa/adb-mobile-qa.mjs --perf
+ *   node scripts/optional/mobile-qa/adb-mobile-qa.mjs --with-perf
  */
-import { runMatrix } from "./mobile-qa/matrix.mjs";
+import { runMatrix } from "./matrix.mjs";
 
 const args = process.argv.slice(2);
 const opts = {

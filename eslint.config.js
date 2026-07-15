@@ -45,9 +45,7 @@ export default defineConfig([
   },
   {
     files: [
-      'scripts/mobile-qa/**/*.mjs',
-      'scripts/adb-mobile-qa.mjs',
-      'scripts/adb-webview-cdp-validate.mjs',
+      'scripts/optional/mobile-qa/**/*.mjs',
     ],
     extends: [js.configs.recommended],
     languageOptions: {

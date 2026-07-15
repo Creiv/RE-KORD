@@ -59,6 +59,15 @@ export default defineConfig({
   server: {
     port: 5173,
     host: exposeLan ? true : undefined,
+    watch: {
+      ignored: [
+        "**/android/**/build/**",
+        "**/android/.gradle/**",
+        "**/release/**",
+        "**/dist/**",
+        "**/test-results/**",
+      ],
+    },
     proxy: {
       "/api": {
         target: "http://127.0.0.1:3001",

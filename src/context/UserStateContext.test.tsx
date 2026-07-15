@@ -133,6 +133,49 @@ function EarlyRehydrateProbe() {
   return <span data-testid="early-playlists">{user.state.playlists.length}</span>
 }
 
+function QueuePlaylistRaceProbe() {
+  const user = useUserState()
+  const { ready, state, syncUserStateFromServer, enqueueQueuePatch, createPlaylist } =
+    user
+  useEffect(() => {
+    const started = window.sessionStorage.getItem("queue-playlist-race-started")
+    if (!ready || started) return
+    window.sessionStorage.setItem("queue-playlist-race-started", "1")
+    enqueueQueuePatch({
+      tracks: [
+        {
+          id: "Artist One/Album One/02 New Song.mp3",
+          relPath: "Artist One/Album One/02 New Song.mp3",
+          title: "New Song",
+          artist: "Artist One",
+          album: "Album One",
+        },
+      ],
+      currentIndex: 0,
+    })
+    createPlaylist("Local Mix")
+  }, [ready, enqueueQueuePatch, createPlaylist])
+  useEffect(() => {
+    const synced = window.sessionStorage.getItem("queue-playlist-race-synced")
+    if (!ready || synced || state.playlists.length === 0) return
+    if (state.queue.tracks.length === 0) return
+    window.sessionStorage.setItem("queue-playlist-race-synced", "1")
+    void syncUserStateFromServer()
+  }, [
+    ready,
+    state.playlists.length,
+    state.queue.tracks.length,
+    syncUserStateFromServer,
+  ])
+  if (!ready) return <div>loading</div>
+  return (
+    <div>
+      <span data-testid="race-queue">{state.queue.tracks[0]?.relPath ?? "none"}</span>
+      <span data-testid="race-playlist">{state.playlists[0]?.name ?? "none"}</span>
+    </div>
+  )
+}
+
 describe("UserStateProvider", () => {
   beforeEach(() => {
     window.localStorage.clear()
@@ -668,5 +711,101 @@ describe("UserStateProvider", () => {
       { timeout: 2500 },
     )
     expect(fetchMock.mock.calls.some(([, init]) => init?.method === "PATCH")).toBe(false)
+  })
+
+  it("non perde coda e playlist locali quando un sync riceve stato server vecchio", async () => {
+    window.sessionStorage.clear()
+    const remoteState = {
+      version: 1,
+      revision: 2,
+      favorites: [],
+      recent: [],
+      playlists: [],
+      queue: { tracks: [], currentIndex: 0 },
+      shuffleExcludedAlbumIds: [],
+      shuffleExcludedTrackRelPaths: [],
+      trackPlayCounts: {},
+      settings: {
+        theme: "midnight",
+        vizMode: "bars",
+        restoreSession: true,
+        defaultTab: "dashboard",
+        locale: "en",
+        libBrowse: "artists",
+        libOverviewSort: "name",
+        artistAlbumSort: "date",
+      },
+      migratedLegacy: true,
+    }
+    const savedState = {
+      ...remoteState,
+      revision: 4,
+      playlists: [
+        {
+          id: "pl-local",
+          name: "Local Mix",
+          tracks: [],
+        },
+      ],
+      queue: {
+        tracks: [
+          {
+            id: "Artist One/Album One/02 New Song.mp3",
+            relPath: "Artist One/Album One/02 New Song.mp3",
+            title: "New Song",
+            artist: "Artist One",
+            album: "Album One",
+          },
+        ],
+        currentIndex: 0,
+      },
+    }
+    const fetchMock = vi.fn((input: RequestInfo | URL, init?: RequestInit) => {
+      const url = String(input)
+      if (url === "/api/accounts") {
+        return Promise.resolve(
+          new Response(
+            JSON.stringify({
+              ok: true,
+              data: {
+                defaultAccountId: "default",
+                accounts: [{ id: "default", name: "Default" }],
+                lockedByEnv: false,
+              },
+              error: null,
+            }),
+          ),
+        )
+      }
+      if (url.startsWith("/api/user-state") && init?.method === "PATCH") {
+        return Promise.resolve(
+          new Response(JSON.stringify({ ok: true, data: savedState, error: null })),
+        )
+      }
+      if (url.startsWith("/api/user-state")) {
+        return Promise.resolve(
+          new Response(JSON.stringify({ ok: true, data: remoteState, error: null })),
+        )
+      }
+      return Promise.reject(new Error(`Unexpected request: ${url}`))
+    })
+    globalThis.fetch = fetchMock as typeof fetch
+
+    render(
+      <LibrarySyncActivityProvider>
+        <UserStateProvider>
+          <QueuePlaylistRaceProbe />
+        </UserStateProvider>
+      </LibrarySyncActivityProvider>,
+    )
+
+    await waitFor(() =>
+      expect(screen.getByTestId("race-queue")).toHaveTextContent(
+        "Artist One/Album One/02 New Song.mp3",
+      ),
+    )
+    await waitFor(() =>
+      expect(screen.getByTestId("race-playlist")).toHaveTextContent("Local Mix"),
+    )
   })
 })

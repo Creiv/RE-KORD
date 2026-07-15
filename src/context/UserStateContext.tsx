@@ -555,13 +555,16 @@ export function UserStateProvider({ children }: { children: React.ReactNode }) {
         if (pendingPatchRef.current.settings?.glassOpacity != null) {
           const ps = { ...pendingPatchRef.current.settings };
           delete ps.glassOpacity;
-          pendingPatchRef.current =
-            Object.keys(ps).length > 0
-              ? { ...pendingPatchRef.current, settings: ps }
-              : (() => {
-                  const { settings: _s, ...pRest } = pendingPatchRef.current;
-                  return pRest;
-                })();
+          if (Object.keys(ps).length > 0) {
+            pendingPatchRef.current = {
+              ...pendingPatchRef.current,
+              settings: ps,
+            };
+          } else {
+            const rest = { ...pendingPatchRef.current };
+            delete rest.settings;
+            pendingPatchRef.current = rest;
+          }
         }
       }
       const hasLocalUnsaved = Object.keys(localUnsaved).length > 0;
@@ -651,6 +654,8 @@ export function UserStateProvider({ children }: { children: React.ReactNode }) {
       active = false;
       clearRetry();
     };
+    // Mount-only bootstrap: refs and sync helpers are stable; re-running would duplicate fetch.
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- intentional once on mount
   }, []);
 
   useEffect(() => {
@@ -802,7 +807,7 @@ export function UserStateProvider({ children }: { children: React.ReactNode }) {
         return { recent: next.recent, playlists: next.playlists };
       } });
     },
-    [commit]
+    [commit, hydratedRef]
   );
 
   const rehydrateShuffleExclusionsFromIndex = useCallback(
@@ -823,7 +828,7 @@ export function UserStateProvider({ children }: { children: React.ReactNode }) {
         { patch: (next) => ({ shuffleExcludedAlbumIds: next.shuffleExcludedAlbumIds }) }
       );
     },
-    [commit]
+    [commit, hydratedRef]
   );
 
   const toggleShuffleExcludedAlbum = useCallback(
@@ -944,7 +949,7 @@ export function UserStateProvider({ children }: { children: React.ReactNode }) {
         }
       );
     },
-    [commit]
+    [commit, playlistDirtyRef, queueStateRef]
   );
 
   const {

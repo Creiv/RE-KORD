@@ -250,11 +250,11 @@ once in Studio → Maintenance to migrate legacy JSON sidecars.
 ### Packaging 5.0
 
 ```bash
-npm run pack:linux:server -- 5.0.0   # → release/RE-KORD-Server-5.0.0-linux-x86_64.AppImage
-npm run pack:win:server  -- 5.0.0    # Windows server (NSIS on Windows hosts, .7z from Linux)
+npm run pack:linux:server -- 5.0.0   # → release/RE-KORD-Server-5.0.1-linux-x86_64.AppImage
+npm run pack:win:server  -- 5.0.1    # Windows server (NSIS on Windows hosts, .7z from Linux)
 npm run pack:linux:client -- 5.0.0   # thin desktop client
-npm run pack:win:client  -- 5.0.0
-npm run pack:android:client -- 5.0.0 # → release/RE-KORD-Client-5.0.0-android.apk
+npm run pack:win:client  -- 5.0.1
+npm run pack:android:client -- 5.0.0 # → release/RE-KORD-Client-5.0.1-android.apk
 npm run sync:version                 # propagate version from package.json
 ```
 

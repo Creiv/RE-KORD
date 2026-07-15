@@ -1,5 +1,7 @@
 # QA mobile RE-KORD (ADB + CDP)
 
+Script opt-in in `scripts/optional/mobile-qa/` — non fanno parte del gate CI (`npm run verify`).
+
 Test funzionali e benchmark prestazioni su dispositivo Android reale.
 
 ## Prerequisiti
