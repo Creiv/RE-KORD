@@ -1,5 +1,6 @@
 use anyhow::Result;
 use clap::Parser;
+use rekord_core::backup;
 use rekord_core::modules::{load_registry, write_default_manifest};
 use rekord_core::{serve, AppConfig, AppState};
 use std::net::SocketAddr;
@@ -28,6 +29,14 @@ struct Args {
     /// Directory with built admin UI (server-ui dist)
     #[arg(long, env = "REKORD_ADMIN_UI")]
     admin_ui: Option<PathBuf>,
+
+    /// Restore a backup ZIP (v2/v3) from disk before serving
+    #[arg(long, env = "REKORD_RESTORE_ZIP")]
+    restore_zip: Option<PathBuf>,
+
+    /// Exit after --restore-zip instead of serving
+    #[arg(long, default_value_t = false)]
+    restore_exit: bool,
 }
 
 #[tokio::main]
@@ -68,6 +77,25 @@ async fn main() -> Result<()> {
 
     let bind = config.bind;
     let state = AppState::new(config, modules)?;
+
+    if let Some(zip_path) = args.restore_zip {
+        info!(path = %zip_path.display(), "restoring backup zip from disk");
+        let bytes = std::fs::read(&zip_path)?;
+        let report = backup::restore_backup_zip(&state, bytes).await?;
+        info!(
+            version = report.version,
+            favorites = report.favorites,
+            playlists = report.playlists,
+            playlist_tracks = report.playlist_tracks,
+            library_files = report.library_files,
+            scanned_tracks = report.scanned_tracks,
+            "restore finished"
+        );
+        if args.restore_exit {
+            return Ok(());
+        }
+    }
+
     serve(state, bind, admin_ui).await?;
     Ok(())
 }

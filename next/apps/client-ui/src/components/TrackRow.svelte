@@ -19,7 +19,7 @@
   import { albumCoverUrl, type Track } from "../lib/api";
   import { formatTime, player } from "../lib/player";
   import { session } from "../lib/session.svelte";
-  import { previewGenre, resolveTrackMoods } from "../lib/trackMoods";
+  import { lyricsKind, resolveTrackMoods, trackGenre } from "../lib/trackMoods";
   import { loadUserPrefs } from "../lib/userPrefs";
   import GraphicEq from "./icons/GraphicEq.svelte";
   import UiIcon from "./icons/UiIcon.svelte";
@@ -94,27 +94,12 @@
     revision;
     return resolveTrackMoods(track.id, track.rel_path, loadUserPrefs().trackMoods);
   });
-  const genre = $derived(previewGenre(track.rel_path));
+  const genre = $derived(trackGenre(track));
   /** Come old: EQ se riga attiva; animazione solo in play. */
   const showStudio = $derived(active);
-  const lyricsKind = $derived(
-    (hashSeed(track.rel_path) % 5 === 0
-      ? "lrc"
-      : hashSeed(track.rel_path) % 3 === 0
-        ? "plain"
-        : "off") as "off" | "plain" | "lrc",
-  );
+  const trackLyricsKind = $derived(lyricsKind(track.lyrics));
   /** Come old: icona lyrics anche in stato off (ghost); nascosta solo se kind=hidden. */
   const showLyricsIcon = true;
-
-  function hashSeed(s: string) {
-    let h = 2166136261;
-    for (let i = 0; i < s.length; i++) {
-      h ^= s.charCodeAt(i);
-      h = Math.imul(h, 16777619);
-    }
-    return h >>> 0;
-  }
 
   onMount(() => {
     if (!rowEl) return;
@@ -250,14 +235,14 @@
         <span class="track-row__duration">{formatTime(track.duration_ms / 1000)}</span>
         <span class="track-row__plays">({plays})</span>
         <MetaBadgeCluster missingMeta={!genre} {moods} variant="inline" />
-        <TrackLyricsIcon kind={lyricsKind} class="track-row__lyrics-inline--stats" />
+        <TrackLyricsIcon kind={trackLyricsKind} class="track-row__lyrics-inline--stats" />
       </span>
     </span>
     <span class="track-row__meta">
       <span class="track-row__meta-text">{track.artist_name} · {track.album_name}</span>
       {#if showLyricsIcon}
         <span class="track-row__meta-sep" aria-hidden="true">{" "}·{" "}</span>
-        <TrackLyricsIcon kind={lyricsKind} class="track-row__lyrics-inline--meta" />
+        <TrackLyricsIcon kind={trackLyricsKind} class="track-row__lyrics-inline--meta" />
       {/if}
     </span>
   </button>

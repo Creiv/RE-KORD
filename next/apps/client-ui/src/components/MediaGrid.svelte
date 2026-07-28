@@ -13,6 +13,7 @@
     favoriteCount?: number;
     albumsMissingMetaCount?: number;
     tracksMissingMetaCount?: number;
+    genreMissing?: boolean;
     albumExcluded?: boolean;
     albumsExcludedCount?: number;
     tracksExcludedCount?: number;
@@ -50,6 +51,7 @@
         favoriteCount={item.favoriteCount ?? 0}
         albumsMissingMetaCount={item.albumsMissingMetaCount ?? 0}
         tracksMissingMetaCount={item.tracksMissingMetaCount ?? 0}
+        genreMissing={item.genreMissing ?? false}
         albumExcluded={item.albumExcluded ?? false}
         albumsExcludedCount={item.albumsExcludedCount ?? 0}
         tracksExcludedCount={item.tracksExcludedCount ?? 0}

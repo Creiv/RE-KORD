@@ -19,10 +19,11 @@
     TRACK_MOOD_COLORS,
     TRACK_MOOD_IDS,
     TRACK_MOOD_LABELS,
-    previewGenre,
-    previewYear,
+    albumGenre,
     resolveTrackMoods,
+    trackGenre,
     trackMatchesMoodFilter,
+    trackYear,
     type TrackMoodId,
   } from "../lib/trackMoods";
   import { loadUserPrefs } from "../lib/userPrefs";
@@ -255,9 +256,7 @@
     if (mixGenres.length) {
       const set = new Set(mixGenres);
       list = list.filter((t) => {
-        const g =
-          previewGenre(t.rel_path) ??
-          previewGenre(`${t.artist_name}/${t.album_name}`);
+        const g = trackGenre(t);
         return g != null && set.has(g);
       });
     }
@@ -298,16 +297,8 @@
   const qualityAlerts = $derived.by(() => {
     session.catalogTracks;
     const albumsNoCover = session.albumsWithoutCover;
-    const albumsNoMeta = session.allAlbums.filter(
-      (a) => !previewGenre(`${a.artist_name}/${a.name}`),
-    ).length;
-    const tracksNoMeta = session.catalogTracks.filter((t) => {
-      const prefs = loadUserPrefs().trackMoods;
-      return (
-        resolveTrackMoods(t.id, t.rel_path, prefs).length === 0 &&
-        !previewGenre(t.rel_path)
-      );
-    }).length;
+    const albumsNoMeta = session.allAlbums.filter((a) => !albumGenre(a)).length;
+    const tracksNoMeta = session.catalogTracks.filter((t) => !trackGenre(t)).length;
     const loose = session.allAlbums.filter((a) => a.loose).length;
     return [
       {
@@ -363,7 +354,7 @@
     if (mixGenres.length) {
       const set = new Set(mixGenres);
       list = list.filter((t) => {
-        const g = previewGenre(t.rel_path) ?? previewGenre(`${t.artist_name}/${t.album_name}`);
+        const g = trackGenre(t);
         return g != null && set.has(g);
       });
     }
@@ -397,12 +388,12 @@
     if (session.catalogTracks.length) {
       for (const t of session.catalogTracks) {
         if (player.isTrackExcluded(t)) continue;
-        const g = previewGenre(t.rel_path) ?? "Senza genere";
+        const g = trackGenre(t) ?? "Senza genere";
         map.set(g, (map.get(g) ?? 0) + 1);
       }
     } else {
       for (const a of session.allAlbums) {
-        const g = previewGenre(`${a.artist_name}/${a.name}`) ?? "Senza genere";
+        const g = albumGenre(a) ?? "Senza genere";
         map.set(g, (map.get(g) ?? 0) + a.track_count);
       }
     }
@@ -454,12 +445,12 @@
   }
 
   function playRadioFrom(track: Track) {
-    const pool = session.favorites.length
-      ? session.favorites
-      : session.catalogTracks.length
-        ? session.catalogTracks
+    const library = session.catalogTracks.length
+      ? session.catalogTracks
+      : session.favorites.length
+        ? session.favorites
         : [track];
-    session.playShuffled(pool, track);
+    player.playRadioFromSeed(track, library);
     session.studioPane = "listen";
     session.navigate("studio");
   }
@@ -796,7 +787,7 @@
           const albumEx = player.isAlbumExcluded(a.id);
           const excludedPaths = player.getExcludedRelPaths();
           const trackEx = tracks.filter((t) => excludedPaths.has(t.rel_path)).length;
-          const year = previewYear(`${a.artist_name}/${a.name}`);
+          const year = trackYear(null, a);
           return {
             id: a.id,
             title: a.name,
@@ -805,7 +796,8 @@
             coverSrc: a.has_cover ? albumCoverUrl(a.id) : "",
             coverSeed: `${a.artist_name}/${a.name}`,
             favoriteCount: session.favorites.filter((t) => t.album_id === a.id).length,
-            tracksMissingMetaCount: tracks.filter((t) => !previewGenre(t.rel_path)).length,
+            tracksMissingMetaCount: tracks.filter((t) => !trackGenre(t)).length,
+            genreMissing: !albumGenre(a),
             albumExcluded: albumEx,
             tracksExcludedCount: albumEx ? a.track_count : trackEx,
             loose: a.loose,

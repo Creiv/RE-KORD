@@ -7,7 +7,7 @@
   } from "../lib/achievements";
   import { player } from "../lib/player";
   import { session } from "../lib/session.svelte";
-  import { previewGenre } from "../lib/trackMoods";
+  import { trackGenre } from "../lib/trackMoods";
 
   let bootstrapped = $state(false);
 
@@ -68,9 +68,7 @@
         session.stats?.track_count ?? session.catalogTracks.length,
       shuffleBlocks:
         player.getExcludedRelPaths().size + player.getExcludedAlbumIds().size,
-      genreForTrack: (t) =>
-        previewGenre(t.rel_path) ??
-        previewGenre(`${t.artist_name}/${t.album_name}`),
+      genreForTrack: (t) => trackGenre(t),
       plectrTracksPlayed: 0,
     });
   });

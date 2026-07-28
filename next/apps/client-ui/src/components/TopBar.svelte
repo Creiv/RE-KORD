@@ -19,8 +19,13 @@
         openSearch();
       }
     };
+    const onFocusSearch = () => openSearch();
     window.addEventListener("keydown", onKey);
-    return () => window.removeEventListener("keydown", onKey);
+    window.addEventListener("rekord:focus-search", onFocusSearch);
+    return () => {
+      window.removeEventListener("keydown", onKey);
+      window.removeEventListener("rekord:focus-search", onFocusSearch);
+    };
   });
 
   function openSearch() {

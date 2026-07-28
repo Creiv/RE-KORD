@@ -21,6 +21,12 @@ pub struct Track {
     pub track_number: Option<i64>,
     pub album_id: Option<i64>,
     pub artist_id: Option<i64>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub genre: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub release_date: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub lyrics: Option<String>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -33,6 +39,14 @@ pub struct Album {
     pub folder_key: String,
     pub has_cover: bool,
     pub loose: bool,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub genre: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub release_date: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub label: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub expected_track_count: Option<i64>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -122,6 +136,12 @@ pub struct LibraryStats {
     /// True while a library scan is running (filled by API layer).
     #[serde(default)]
     pub scanning: bool,
+    /// Filesystem total capacity for the music_root volume (API layer).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub disk_total_bytes: Option<u64>,
+    /// Filesystem available bytes for the music_root volume (API layer).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub disk_available_bytes: Option<u64>,
 }
 
 impl Db {
@@ -518,14 +538,17 @@ impl Db {
         artist_id: Option<i64>,
         size: u64,
         mtime: i64,
+        genre: Option<&str>,
+        release_date: Option<&str>,
+        lyrics: Option<&str>,
     ) -> Result<i64> {
         let conn = self.conn.lock().unwrap();
         conn.execute(
             r#"
             INSERT INTO tracks(
               rel_path, file_path, album_id, artist_id, title, artist_name, album_name,
-              duration_ms, track_number, size, mtime
-            ) VALUES (?1,?2,?3,?4,?5,?6,?7,?8,?9,?10,?11)
+              duration_ms, track_number, size, mtime, genre, release_date, lyrics
+            ) VALUES (?1,?2,?3,?4,?5,?6,?7,?8,?9,?10,?11,?12,?13,?14)
             ON CONFLICT(rel_path) DO UPDATE SET
               file_path=excluded.file_path,
               album_id=excluded.album_id,
@@ -536,7 +559,10 @@ impl Db {
               duration_ms=excluded.duration_ms,
               track_number=excluded.track_number,
               size=excluded.size,
-              mtime=excluded.mtime
+              mtime=excluded.mtime,
+              genre=COALESCE(excluded.genre, tracks.genre),
+              release_date=COALESCE(excluded.release_date, tracks.release_date),
+              lyrics=COALESCE(excluded.lyrics, tracks.lyrics)
             "#,
             params![
                 rel_path,
@@ -549,7 +575,10 @@ impl Db {
                 duration_ms,
                 track_number,
                 size as i64,
-                mtime
+                mtime,
+                genre,
+                release_date,
+                lyrics
             ],
         )?;
         let id: i64 = conn.query_row(
@@ -636,8 +665,15 @@ impl Db {
             music_root,
             last_scan_at,
             scanning: false,
+            disk_total_bytes: None,
+            disk_available_bytes: None,
         })
     }
+
+    const TRACK_COLS: &'static str = "id, rel_path, title, artist_name, album_name, duration_ms, \
+         track_number, album_id, artist_id, genre, release_date, lyrics";
+    const TRACK_COLS_T: &'static str = "t.id, t.rel_path, t.title, t.artist_name, t.album_name, t.duration_ms, \
+         t.track_number, t.album_id, t.artist_id, t.genre, t.release_date, t.lyrics";
 
     fn map_track(row: &rusqlite::Row<'_>) -> rusqlite::Result<Track> {
         Ok(Track {
@@ -650,6 +686,11 @@ impl Db {
             track_number: row.get(6)?,
             album_id: row.get(7)?,
             artist_id: row.get(8)?,
+            genre: row.get::<_, Option<String>>(9)?.filter(|s| !s.trim().is_empty()),
+            release_date: row
+                .get::<_, Option<String>>(10)?
+                .filter(|s| !s.trim().is_empty()),
+            lyrics: row.get::<_, Option<String>>(11)?.filter(|s| !s.trim().is_empty()),
         })
     }
 
@@ -663,11 +704,17 @@ impl Db {
             folder_key: row.get(5)?,
             has_cover: row.get::<_, i64>(6)? != 0,
             loose: row.get::<_, i64>(7)? != 0,
+            genre: row.get::<_, Option<String>>(8)?.filter(|s| !s.trim().is_empty()),
+            release_date: row
+                .get::<_, Option<String>>(9)?
+                .filter(|s| !s.trim().is_empty()),
+            label: row.get::<_, Option<String>>(10)?.filter(|s| !s.trim().is_empty()),
+            expected_track_count: row.get(11)?,
         })
     }
 
-    const ALBUM_COLS: &'static str =
-        "id, name, artist_name, track_count, artist_id, folder_key, has_cover, loose";
+    const ALBUM_COLS: &'static str = "id, name, artist_name, track_count, artist_id, folder_key, \
+         has_cover, loose, genre, release_date, label, expected_track_count";
 
     pub fn album_cover_path(&self, album_id: i64) -> Result<Option<PathBuf>> {
         let conn = self.conn.lock().unwrap();
@@ -700,16 +747,14 @@ impl Db {
 
     pub fn list_tracks(&self, limit: i64, offset: i64) -> Result<Vec<Track>> {
         let conn = self.conn.lock().unwrap();
-        let mut stmt = conn.prepare(
-            r#"
-            SELECT id, rel_path, title, artist_name, album_name, duration_ms,
-                   track_number, album_id, artist_id
-            FROM tracks
-            ORDER BY artist_name COLLATE NOCASE, album_name COLLATE NOCASE,
-                     track_number, title COLLATE NOCASE
-            LIMIT ?1 OFFSET ?2
-            "#,
-        )?;
+        let sql = format!(
+            "SELECT {} FROM tracks
+             ORDER BY artist_name COLLATE NOCASE, album_name COLLATE NOCASE,
+                      track_number, title COLLATE NOCASE
+             LIMIT ?1 OFFSET ?2",
+            Self::TRACK_COLS
+        );
+        let mut stmt = conn.prepare(&sql)?;
         let rows = stmt.query_map(params![limit, offset], Self::map_track)?;
         Ok(rows.filter_map(|r| r.ok()).collect())
     }
@@ -717,32 +762,24 @@ impl Db {
     pub fn search_tracks(&self, q: &str, limit: i64) -> Result<Vec<Track>> {
         let conn = self.conn.lock().unwrap();
         let pattern = format!("%{q}%");
-        let mut stmt = conn.prepare(
-            r#"
-            SELECT id, rel_path, title, artist_name, album_name, duration_ms,
-                   track_number, album_id, artist_id
-            FROM tracks
-            WHERE title LIKE ?1 OR artist_name LIKE ?1 OR album_name LIKE ?1 OR rel_path LIKE ?1
-            ORDER BY title COLLATE NOCASE
-            LIMIT ?2
-            "#,
-        )?;
+        let sql = format!(
+            "SELECT {} FROM tracks
+             WHERE title LIKE ?1 OR artist_name LIKE ?1 OR album_name LIKE ?1
+                OR rel_path LIKE ?1 OR IFNULL(genre,'') LIKE ?1
+             ORDER BY title COLLATE NOCASE
+             LIMIT ?2",
+            Self::TRACK_COLS
+        );
+        let mut stmt = conn.prepare(&sql)?;
         let rows = stmt.query_map(params![pattern, limit], Self::map_track)?;
         Ok(rows.filter_map(|r| r.ok()).collect())
     }
 
     pub fn get_track(&self, id: i64) -> Result<Option<Track>> {
         let conn = self.conn.lock().unwrap();
+        let sql = format!("SELECT {} FROM tracks WHERE id = ?1", Self::TRACK_COLS);
         let t = conn
-            .query_row(
-                r#"
-                SELECT id, rel_path, title, artist_name, album_name, duration_ms,
-                       track_number, album_id, artist_id
-                FROM tracks WHERE id = ?1
-                "#,
-                params![id],
-                Self::map_track,
-            )
+            .query_row(&sql, params![id], Self::map_track)
             .optional()?;
         Ok(t)
     }
@@ -784,13 +821,8 @@ impl Db {
 
     pub fn album_tracks(&self, album_id: i64) -> Result<Vec<Track>> {
         let conn = self.conn.lock().unwrap();
-        let mut stmt = conn.prepare(
-            r#"
-            SELECT id, rel_path, title, artist_name, album_name, duration_ms,
-                   track_number, album_id, artist_id
-            FROM tracks WHERE album_id = ?1
-            "#,
-        )?;
+        let sql = format!("SELECT {} FROM tracks WHERE album_id = ?1", Self::TRACK_COLS);
+        let mut stmt = conn.prepare(&sql)?;
         let rows = stmt.query_map(params![album_id], Self::map_track)?;
         let mut tracks: Vec<Track> = rows.filter_map(|r| r.ok()).collect();
         // Parity with old RE-KORD: order by on-disk filename (numeric), not ID3 track_number.
@@ -918,16 +950,14 @@ impl Db {
 
     pub fn list_favorites(&self, account_id: &str) -> Result<Vec<Track>> {
         let conn = self.conn.lock().unwrap();
-        let mut stmt = conn.prepare(
-            r#"
-            SELECT t.id, t.rel_path, t.title, t.artist_name, t.album_name, t.duration_ms,
-                   t.track_number, t.album_id, t.artist_id
-            FROM favorites f
-            JOIN tracks t ON t.id = f.track_id
-            WHERE f.account_id = ?1
-            ORDER BY f.created_at DESC
-            "#,
-        )?;
+        let sql = format!(
+            "SELECT {} FROM favorites f
+             JOIN tracks t ON t.id = f.track_id
+             WHERE f.account_id = ?1
+             ORDER BY f.created_at DESC",
+            Self::TRACK_COLS_T
+        );
+        let mut stmt = conn.prepare(&sql)?;
         let rows = stmt.query_map(params![account_id], Self::map_track)?;
         Ok(rows.filter_map(|r| r.ok()).collect())
     }
@@ -1161,16 +1191,14 @@ impl Db {
             return Ok(Vec::new());
         }
         let conn = self.conn.lock().unwrap();
-        let mut stmt = conn.prepare(
-            r#"
-            SELECT t.id, t.rel_path, t.title, t.artist_name, t.album_name, t.duration_ms,
-                   t.track_number, t.album_id, t.artist_id
-            FROM playlist_tracks pt
-            JOIN tracks t ON t.id = pt.track_id
-            WHERE pt.playlist_id = ?1
-            ORDER BY pt.position
-            "#,
-        )?;
+        let sql = format!(
+            "SELECT {} FROM playlist_tracks pt
+             JOIN tracks t ON t.id = pt.track_id
+             WHERE pt.playlist_id = ?1
+             ORDER BY pt.position",
+            Self::TRACK_COLS_T
+        );
+        let mut stmt = conn.prepare(&sql)?;
         let rows = stmt.query_map(params![id], Self::map_track)?;
         Ok(rows.filter_map(|r| r.ok()).collect())
     }
@@ -1218,34 +1246,121 @@ impl Db {
 
     pub fn track_by_rel(&self, rel: &str) -> Result<Option<Track>> {
         let conn = self.conn.lock().unwrap();
+        let sql = format!("SELECT {} FROM tracks WHERE rel_path = ?1", Self::TRACK_COLS);
         let row = conn
-            .query_row(
-                r#"
-                SELECT id, rel_path, title, artist_name, album_name, duration_ms,
-                       track_number, album_id, artist_id
-                FROM tracks WHERE rel_path = ?1
-                "#,
-                params![rel],
-                Self::map_track,
-            )
+            .query_row(&sql, params![rel], Self::map_track)
             .optional()?;
         Ok(row)
     }
 
     pub fn tracks_by_album_folder(&self, folder_key: &str) -> Result<Vec<Track>> {
         let conn = self.conn.lock().unwrap();
-        let mut stmt = conn.prepare(
-            r#"
-            SELECT t.id, t.rel_path, t.title, t.artist_name, t.album_name, t.duration_ms,
-                   t.track_number, t.album_id, t.artist_id
-            FROM tracks t
-            JOIN albums a ON a.id = t.album_id
-            WHERE a.folder_key = ?1
-            ORDER BY t.track_number, t.rel_path
-            "#,
-        )?;
+        let sql = format!(
+            "SELECT {} FROM tracks t
+             JOIN albums a ON a.id = t.album_id
+             WHERE a.folder_key = ?1
+             ORDER BY t.track_number, t.rel_path",
+            Self::TRACK_COLS_T
+        );
+        let mut stmt = conn.prepare(&sql)?;
         let rows = stmt.query_map(params![folder_key], Self::map_track)?;
         Ok(rows.filter_map(|r| r.ok()).collect())
+    }
+
+    /// Fill album genre/release_date from track tags when album meta is empty.
+    pub fn backfill_album_meta_from_tracks(&self, album_id: i64) -> Result<()> {
+        let conn = self.conn.lock().unwrap();
+        conn.execute(
+            r#"
+            UPDATE albums SET
+              genre = COALESCE(
+                NULLIF(TRIM(genre), ''),
+                (SELECT genre FROM tracks
+                 WHERE album_id = albums.id AND genre IS NOT NULL AND TRIM(genre) != ''
+                 LIMIT 1)
+              ),
+              release_date = COALESCE(
+                NULLIF(TRIM(release_date), ''),
+                (SELECT release_date FROM tracks
+                 WHERE album_id = albums.id AND release_date IS NOT NULL AND TRIM(release_date) != ''
+                 LIMIT 1)
+              )
+            WHERE id = ?1
+            "#,
+            params![album_id],
+        )?;
+        Ok(())
+    }
+
+    pub fn save_track_fields(
+        &self,
+        rel_path: &str,
+        title: Option<&str>,
+        genre: Option<&str>,
+        release_date: Option<&str>,
+        lyrics: Option<&str>,
+    ) -> Result<()> {
+        let conn = self.conn.lock().unwrap();
+        conn.execute(
+            r#"
+            UPDATE tracks SET
+              title = COALESCE(?2, title),
+              genre = CASE WHEN ?3 IS NOT NULL THEN ?3 ELSE genre END,
+              release_date = CASE WHEN ?4 IS NOT NULL THEN ?4 ELSE release_date END,
+              lyrics = CASE WHEN ?5 IS NOT NULL THEN ?5 ELSE lyrics END
+            WHERE rel_path = ?1
+            "#,
+            params![rel_path, title, genre, release_date, lyrics],
+        )?;
+        Ok(())
+    }
+
+    pub fn save_album_fields(
+        &self,
+        folder_key: &str,
+        name: Option<&str>,
+        genre: Option<&str>,
+        release_date: Option<&str>,
+        label: Option<&str>,
+    ) -> Result<()> {
+        let conn = self.conn.lock().unwrap();
+        conn.execute(
+            r#"
+            UPDATE albums SET
+              name = COALESCE(?2, name),
+              genre = CASE WHEN ?3 IS NOT NULL THEN ?3 ELSE genre END,
+              release_date = CASE WHEN ?4 IS NOT NULL THEN ?4 ELSE release_date END,
+              label = CASE WHEN ?5 IS NOT NULL THEN ?5 ELSE label END,
+              has_album_meta = 1
+            WHERE folder_key = ?1
+            "#,
+            params![folder_key, name, genre, release_date, label],
+        )?;
+        Ok(())
+    }
+
+    pub fn delete_track_by_rel(&self, rel_path: &str) -> Result<bool> {
+        let conn = self.conn.lock().unwrap();
+        let n = conn.execute("DELETE FROM tracks WHERE rel_path = ?1", params![rel_path])?;
+        let _ = conn.execute("DELETE FROM files WHERE rel_path = ?1", params![rel_path]);
+        Ok(n > 0)
+    }
+
+    pub fn delete_album_by_folder(&self, folder_key: &str) -> Result<bool> {
+        let conn = self.conn.lock().unwrap();
+        let album_id: Option<i64> = conn
+            .query_row(
+                "SELECT id FROM albums WHERE folder_key = ?1",
+                params![folder_key],
+                |r| r.get(0),
+            )
+            .optional()?;
+        let Some(id) = album_id else {
+            return Ok(false);
+        };
+        conn.execute("DELETE FROM tracks WHERE album_id = ?1", params![id])?;
+        let n = conn.execute("DELETE FROM albums WHERE id = ?1", params![id])?;
+        Ok(n > 0)
     }
 
     pub fn apply_album_meta(

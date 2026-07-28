@@ -32,6 +32,57 @@ body {
   scrollbar-gutter: stable;
 }
 
+/* Custom theme background image / animated GIF (parity with legacy). */
+html[data-custom-bg-image="1"] {
+  isolation: isolate;
+}
+
+html[data-custom-bg-image="1"] body {
+  background: transparent;
+}
+
+html[data-custom-bg-image="1"]::before {
+  content: "";
+  position: fixed;
+  inset: 0;
+  z-index: -2;
+  pointer-events: none;
+  background-color: var(--rk-bg);
+  background-image: var(--page-bg-image);
+  background-size: var(--page-bg-size, cover);
+  background-position: var(--page-bg-position, center);
+  background-repeat: var(--page-bg-repeat, no-repeat);
+}
+
+.rekord-custom-theme-bg-img {
+  position: fixed;
+  inset: 0;
+  z-index: -2;
+  pointer-events: none;
+  width: 100%;
+  height: 100%;
+  background-color: var(--rk-bg);
+  object-fit: var(--page-bg-object-fit, cover);
+  object-position: var(--page-bg-object-position, center);
+}
+
+html[data-custom-bg-gif="1"]:not([data-custom-bg-gif-repeat="1"])::before {
+  background-image: none;
+}
+
+html[data-custom-bg-image="1"]::after {
+  content: "";
+  position: fixed;
+  inset: 0;
+  z-index: -1;
+  pointer-events: none;
+  background: linear-gradient(
+    180deg,
+    color-mix(in srgb, var(--rk-page-glow-1) 55%, transparent) 0%,
+    color-mix(in srgb, var(--rk-page-glow-2) 45%, transparent) 100%
+  );
+}
+
 button,
 input,
 select {

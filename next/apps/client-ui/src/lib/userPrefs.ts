@@ -1,6 +1,24 @@
-export type CrossfadeSec = 0 | 3 | 5;
+import {
+  applyCustomThemeBgImageCssVars,
+  clearCustomThemeBgImageCssVars,
+} from "./customThemeBgFit";
+import {
+  applyAnimatedCustomThemeBg,
+  clearAnimatedCustomThemeBg,
+} from "./customThemeBgLayer";
+import { customThemeBgImageUrl } from "./customThemeBgUrl";
+import {
+  applyCustomThemeCss,
+  clearCustomThemeCss,
+  DEFAULT_CUSTOM_THEME,
+  normalizeCustomTheme,
+  type CustomThemeSettings,
+} from "./themeCatalog";
 
-/** Named UI themes (parity with old catalog minus `custom` / glass). Midnight = :root. */
+export type CrossfadeSec = 0 | 3 | 5;
+export type { CustomThemeSettings };
+
+/** Named UI themes (parity with legacy catalog, including custom). Midnight = :root. */
 export const UI_THEMES = [
   "midnight",
   "sunset",
@@ -19,11 +37,25 @@ export const UI_THEMES = [
   "aubergine-light",
   "tangerine-light",
   "carmine-light",
+  "custom",
 ] as const;
 
 export type UiTheme = (typeof UI_THEMES)[number];
 
 export type AppLocale = "it" | "en";
+
+/** Classic visualizers (DiscoWall deferred). */
+export const VISUALIZER_MODES = [
+  "bars",
+  "mirror",
+  "wave",
+  "smooth",
+  "hmb",
+  "signals",
+  "karaoke",
+] as const;
+
+export type VisualizerMode = (typeof VISUALIZER_MODES)[number];
 
 export type UserPrefs = {
   crossfadeSec: CrossfadeSec;
@@ -46,7 +78,9 @@ export type UserPrefs = {
    */
   restoreSession: boolean;
   theme: UiTheme;
+  customTheme: CustomThemeSettings;
   locale: AppLocale;
+  visualizerMode: VisualizerMode;
 };
 
 const LEGACY_GLOBAL_KEY = "rekord.next.userPrefs";
@@ -95,7 +129,9 @@ const DEFAULTS: UserPrefs = {
   trackMoods: {},
   restoreSession: true,
   theme: "midnight",
+  customTheme: { ...DEFAULT_CUSTOM_THEME },
   locale: "it",
+  visualizerMode: "bars",
 };
 
 export function normalizeTheme(raw: unknown): UiTheme {
@@ -107,11 +143,54 @@ export function normalizeLocale(raw: unknown): AppLocale {
   return raw === "en" ? "en" : "it";
 }
 
-export function applyTheme(theme: UiTheme) {
+function applyCustomThemeBackground(
+  theme: CustomThemeSettings | null | undefined,
+  activeThemeIsCustom: boolean,
+  root: HTMLElement = document.documentElement,
+) {
+  const custom = theme ? normalizeCustomTheme(theme) : null;
+  const useBgImage =
+    activeThemeIsCustom &&
+    custom?.bgMode === "image" &&
+    Boolean(custom.bgImage);
+  if (useBgImage && custom) {
+    const url = customThemeBgImageUrl(custom.bgImageRev ?? undefined);
+    applyCustomThemeBgImageCssVars(root, custom.bgImageFit);
+    root.dataset.customBgImage = "1";
+    if (custom.bgImage === "gif") {
+      applyAnimatedCustomThemeBg(root, url, custom.bgImageFit);
+      if (root.dataset.customBgGifRepeat === "1") {
+        root.style.setProperty("--page-bg-image", `url("${url}")`);
+      } else {
+        root.style.removeProperty("--page-bg-image");
+      }
+    } else {
+      clearAnimatedCustomThemeBg(root);
+      root.style.setProperty("--page-bg-image", `url("${url}")`);
+    }
+    return;
+  }
+  root.style.removeProperty("--page-bg-image");
+  clearCustomThemeBgImageCssVars(root);
+  clearAnimatedCustomThemeBg(root);
+  delete root.dataset.customBgImage;
+}
+
+export function applyTheme(
+  theme: UiTheme,
+  customTheme?: CustomThemeSettings | null,
+) {
   const root = document.documentElement;
   const t = normalizeTheme(theme);
+  clearCustomThemeCss(root);
   if (t === "midnight") root.removeAttribute("data-theme");
   else root.setAttribute("data-theme", t);
+  const resolvedCustom =
+    t === "custom"
+      ? normalizeCustomTheme(customTheme ?? loadUserPrefs().customTheme)
+      : null;
+  if (resolvedCustom) applyCustomThemeCss(resolvedCustom, root);
+  applyCustomThemeBackground(resolvedCustom, t === "custom", root);
 }
 
 function normalizeCrossfade(v: unknown): CrossfadeSec {
@@ -158,7 +237,17 @@ export function loadUserPrefs(accountId?: string | null): UserPrefs {
           : {},
       restoreSession: parsed.restoreSession !== false,
       theme: normalizeTheme(parsed.theme),
+      customTheme: normalizeCustomTheme(
+        parsed.customTheme && typeof parsed.customTheme === "object"
+          ? (parsed.customTheme as Partial<CustomThemeSettings>)
+          : undefined,
+      ),
       locale: normalizeLocale(parsed.locale),
+      visualizerMode: (VISUALIZER_MODES as readonly string[]).includes(
+        String(parsed.visualizerMode),
+      )
+        ? (parsed.visualizerMode as VisualizerMode)
+        : "bars",
     };
   } catch {
     return {
@@ -168,6 +257,7 @@ export function loadUserPrefs(accountId?: string | null): UserPrefs {
       recentTrackIds: [],
       trackMoods: {},
       excludedRelPaths: [],
+      customTheme: { ...DEFAULT_CUSTOM_THEME },
     };
   }
 }
@@ -177,12 +267,48 @@ export function saveUserPrefs(prefs: UserPrefs, accountId?: string | null) {
   localStorage.setItem(prefsKey(id), JSON.stringify(prefs));
 }
 
+type PrefsChangeListener = (
+  prefs: UserPrefs,
+  patch: Partial<UserPrefs>,
+  accountId: string,
+) => void;
+
+let prefsChangeListener: PrefsChangeListener | null = null;
+
+/** Session registers this to debounce-push user-state after local edits. */
+export function setUserPrefsChangeListener(fn: PrefsChangeListener | null) {
+  prefsChangeListener = fn;
+}
+
+/**
+ * When the real account id is first assigned, copy prefs that were saved under
+ * `default` (or the legacy global key) so UI choices aren't orphaned.
+ */
+export function adoptPrefsForAccount(accountId: string) {
+  const id = (accountId || "").trim();
+  if (!id || id === "default") return;
+  try {
+    if (localStorage.getItem(prefsKey(id))) return;
+    const fromDefault = localStorage.getItem(prefsKey("default"));
+    if (fromDefault) {
+      localStorage.setItem(prefsKey(id), fromDefault);
+      return;
+    }
+    const legacy = localStorage.getItem(LEGACY_GLOBAL_KEY);
+    if (legacy) localStorage.setItem(prefsKey(id), legacy);
+  } catch {
+    /* ignore */
+  }
+}
+
 export function patchUserPrefs(
   patch: Partial<UserPrefs>,
   accountId?: string | null,
 ): UserPrefs {
-  const next = { ...loadUserPrefs(accountId), ...patch };
-  saveUserPrefs(next, accountId);
+  const id = (accountId || "").trim() || activeAccountId();
+  const next = { ...loadUserPrefs(id), ...patch };
+  saveUserPrefs(next, id);
+  prefsChangeListener?.(next, patch, id);
   return next;
 }
 

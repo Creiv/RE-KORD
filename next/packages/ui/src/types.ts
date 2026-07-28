@@ -6,4 +6,5 @@ export type StatItem = {
 export type SelectOption = {
   value: string;
   label: string;
+  disabled?: boolean;
 };

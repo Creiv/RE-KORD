@@ -1,6 +1,6 @@
 <script lang="ts">
   import { Button, Field, Modal, TextInput } from "@rekord/ui";
-  import { albumCoverUrl } from "../lib/api";
+  import { albumCoverUrl, api } from "../lib/api";
   import { session } from "../lib/session.svelte";
   import TrackMoodGlyph from "./TrackMoodGlyph.svelte";
   import UiIcon from "./icons/UiIcon.svelte";
@@ -9,10 +9,9 @@
     TRACK_MOOD_COLORS,
     TRACK_MOOD_IDS,
     TRACK_MOOD_LABELS,
-    previewGenre,
-    previewLabel,
-    previewYear,
     resolveTrackMoods,
+    trackGenre,
+    trackYear,
     type TrackMoodId,
   } from "../lib/trackMoods";
   import { loadUserPrefs, patchUserPrefs } from "../lib/userPrefs";
@@ -21,19 +20,41 @@
   let draftMoods = $state<TrackMoodId[]>([]);
   let draftGenres = $state<string[]>([]);
   let draftRelease = $state("");
+  let draftLyrics = $state("");
   let genreQuery = $state("");
   let genreListOpen = $state(false);
+  let busy = $state(false);
+  let editError = $state("");
+  let draftAlbumTitle = $state("");
+  let draftAlbumGenre = $state("");
+  let draftAlbumRelease = $state("");
+  let draftAlbumLabel = $state("");
+  let coverFile = $state<File | null>(null);
 
   $effect(() => {
     if (session.editDialog === "track" && session.editTrack) {
       const t = session.editTrack;
       draftTitle = t.title;
       draftMoods = resolveTrackMoods(t.id, t.rel_path, loadUserPrefs().trackMoods);
-      const g = previewGenre(t.rel_path);
+      const g = trackGenre(t);
       draftGenres = g ? [g] : [];
-      draftRelease = "";
+      draftRelease = trackYear(t) ?? t.release_date ?? "";
+      draftLyrics = t.lyrics ?? "";
       genreQuery = "";
       genreListOpen = false;
+      editError = "";
+    }
+    if (session.editDialog === "album" && session.selectedAlbum) {
+      const a = session.selectedAlbum;
+      draftAlbumTitle = a.name;
+      draftAlbumGenre = a.genre ?? "";
+      draftAlbumRelease = a.release_date ?? "";
+      draftAlbumLabel = a.label ?? "";
+      editError = "";
+    }
+    if (session.editDialog === "cover") {
+      coverFile = null;
+      editError = "";
     }
   });
 
@@ -79,13 +100,91 @@
     draftMoods = [...draftMoods, id];
   }
 
-  function saveTrackMoods() {
+  async function saveTrack() {
     const t = session.editTrack;
-    if (!t) return;
-    const trackMoods = { ...loadUserPrefs().trackMoods, [String(t.id)]: draftMoods };
-    patchUserPrefs({ trackMoods });
-    session.bumpMoodPrefs();
-    session.closeEdit();
+    if (!t || busy) return;
+    busy = true;
+    editError = "";
+    try {
+      const genre = draftGenres[0] ?? "";
+      await api.trackInfoSave(t.rel_path, {
+        title: draftTitle.trim() || t.title,
+        genre,
+        releaseDate: draftRelease.trim() || undefined,
+        lyrics: draftLyrics,
+      });
+      const trackMoods = { ...loadUserPrefs().trackMoods, [String(t.id)]: draftMoods };
+      patchUserPrefs({ trackMoods });
+      session.bumpMoodPrefs();
+      t.title = draftTitle.trim() || t.title;
+      t.genre = genre || null;
+      t.release_date = draftRelease.trim() || null;
+      t.lyrics = draftLyrics || null;
+      session.closeEdit();
+    } catch (e) {
+      editError = e instanceof Error ? e.message : String(e);
+    } finally {
+      busy = false;
+    }
+  }
+
+  async function fetchLyricsAuto() {
+    const t = session.editTrack;
+    if (!t || busy) return;
+    busy = true;
+    editError = "";
+    try {
+      const res = await api.trackInfoFetch(t.rel_path);
+      const lyrics =
+        (typeof res.lyrics === "string" && res.lyrics) ||
+        (typeof res.meta?.lyrics === "string" ? (res.meta.lyrics as string) : "");
+      if (lyrics) draftLyrics = lyrics;
+      else editError = "Nessun lyric trovato dai provider.";
+    } catch (e) {
+      editError = e instanceof Error ? e.message : String(e);
+    } finally {
+      busy = false;
+    }
+  }
+
+  async function saveAlbum() {
+    const a = session.selectedAlbum;
+    if (!a || busy) return;
+    busy = true;
+    editError = "";
+    try {
+      await api.albumInfoSave(a.folder_key, {
+        title: draftAlbumTitle.trim() || a.name,
+        genre: draftAlbumGenre.trim() || undefined,
+        releaseDate: draftAlbumRelease.trim() || undefined,
+        label: draftAlbumLabel.trim() || undefined,
+      });
+      a.name = draftAlbumTitle.trim() || a.name;
+      a.genre = draftAlbumGenre.trim() || null;
+      a.release_date = draftAlbumRelease.trim() || null;
+      a.label = draftAlbumLabel.trim() || null;
+      session.closeEdit();
+    } catch (e) {
+      editError = e instanceof Error ? e.message : String(e);
+    } finally {
+      busy = false;
+    }
+  }
+
+  async function uploadCover() {
+    const a = session.selectedAlbum;
+    if (!a || !coverFile || busy) return;
+    busy = true;
+    editError = "";
+    try {
+      await api.artworkUpload(a.folder_key, coverFile);
+      a.has_cover = true;
+      session.closeEdit();
+    } catch (e) {
+      editError = e instanceof Error ? e.message : String(e);
+    } finally {
+      busy = false;
+    }
   }
 
   const albumSeed = $derived(
@@ -205,21 +304,26 @@
     <div class="meta-field lyrics-row">
       <span class="meta-label">Lyrics</span>
       <div class="lyrics-actions">
-        <Button variant="ghost" class="lyrics-btn" disabled>Modifica</Button>
-        <Button variant="ghost" class="lyrics-btn" disabled>Auto LRC</Button>
-        <span
-          class="lyrics-dot lyrics-dot--idle"
-          title="AUTO LRC non eseguito"
-          aria-label="AUTO LRC non eseguito"
-        ></span>
+        <Button
+          variant="ghost"
+          class="lyrics-btn"
+          disabled={busy}
+          onclick={() => {
+            draftLyrics = draftLyrics || " ";
+          }}>Modifica</Button
+        >
+        <Button variant="ghost" class="lyrics-btn" disabled={busy} onclick={() => void fetchLyricsAuto()}
+          >Auto LRC</Button
+        >
       </div>
+      <textarea class="lyrics-editor" rows="6" bind:value={draftLyrics} placeholder="Testo / LRC…"></textarea>
     </div>
+    {#if editError}<p class="warnline" role="alert">{editError}</p>{/if}
   {/if}
   {#snippet footer()}
-    <Button variant="ghost" class="danger" disabled>Elimina file</Button>
     <span class="rk-modal-foot-spacer" aria-hidden="true"></span>
     <Button variant="ghost" onclick={() => session.closeEdit()}>Annulla</Button>
-    <Button onclick={saveTrackMoods}>Salva</Button>
+    <Button disabled={busy} onclick={() => void saveTrack()}>Salva</Button>
   {/snippet}
 </Modal>
 
@@ -233,32 +337,29 @@
   {#if session.selectedAlbum}
     {@const a = session.selectedAlbum}
     <Field label="Titolo">
-      <TextInput value={a.name} readonly />
+      <TextInput bind:value={draftAlbumTitle} />
     </Field>
     <Field label="Artista">
       <TextInput value={a.artist_name} readonly />
     </Field>
+    <Field label="Genere">
+      <TextInput bind:value={draftAlbumGenre} />
+    </Field>
     <Field label="Data rilascio">
-      <TextInput value={previewYear(albumSeed) ?? "—"} readonly />
+      <TextInput bind:value={draftAlbumRelease} />
     </Field>
     <Field label="Label">
-      <TextInput value={previewLabel(albumSeed) ?? "—"} readonly />
-    </Field>
-    <Field label="Paese">
-      <TextInput value="—" readonly />
-    </Field>
-    <Field label="Discogs">
-      <TextInput value="— (in arrivo)" readonly />
+      <TextInput bind:value={draftAlbumLabel} />
     </Field>
     <Field label="Brani">
       <TextInput value={String(a.track_count)} readonly />
     </Field>
+    {#if editError}<p class="warnline" role="alert">{editError}</p>{/if}
   {/if}
   {#snippet footer()}
-    <Button variant="ghost" disabled>Elimina cartella</Button>
     <span class="rk-modal-foot-spacer" aria-hidden="true"></span>
     <Button variant="ghost" onclick={() => session.closeEdit()}>Chiudi</Button>
-    <Button disabled>Salva</Button>
+    <Button disabled={busy} onclick={() => void saveAlbum()}>Salva</Button>
   {/snippet}
 </Modal>
 
@@ -276,14 +377,20 @@
         <div class="ph">Nessuna cover su disco</div>
       {/if}
     </div>
-    <p class="hint">
-      Upload e modifica cover arriveranno senza Studio download. Dropzone disabilitata.
-    </p>
-    <div class="drop" aria-disabled="true">Trascina cover.jpg qui…</div>
+    <p class="hint">Carica un JPEG/PNG/WebP come cover.jpg nella cartella album.</p>
+    <input
+      type="file"
+      accept="image/jpeg,image/png,image/webp,image/gif"
+      onchange={(e) => {
+        const f = (e.currentTarget as HTMLInputElement).files?.[0] ?? null;
+        coverFile = f;
+      }}
+    />
+    {#if editError}<p class="warnline" role="alert">{editError}</p>{/if}
   {/if}
   {#snippet footer()}
     <Button variant="ghost" onclick={() => session.closeEdit()}>Chiudi</Button>
-    <Button disabled>Carica</Button>
+    <Button disabled={busy || !coverFile} onclick={() => void uploadCover()}>Carica</Button>
   {/snippet}
 </Modal>
 
@@ -579,6 +686,23 @@
     text-align: center;
     color: var(--rk-muted);
     opacity: 0.65;
+  }
+
+  .lyrics-editor {
+    width: 100%;
+    min-height: 7rem;
+    border: 1px solid var(--rk-line);
+    border-radius: var(--rk-radius);
+    background: var(--rk-surface-3);
+    color: var(--rk-ink);
+    font: inherit;
+    padding: 0.5rem 0.65rem;
+    resize: vertical;
+  }
+
+  .warnline {
+    color: var(--rk-warn, #f59e0b);
+    font-size: 0.85rem;
   }
 
   @media (max-width: 560px) {

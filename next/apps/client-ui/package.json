@@ -9,10 +9,12 @@
     "preview": "vite preview"
   },
   "dependencies": {
-    "@rekord/ui": "workspace:*"
+    "@rekord/ui": "workspace:*",
+    "qrcode": "^1.5.4"
   },
   "devDependencies": {
     "@sveltejs/vite-plugin-svelte": "^5.0.3",
+    "@types/qrcode": "^1.5.5",
     "svelte": "^5.19.0",
     "typescript": "^5.7.3",
     "vite": "^6.0.7"

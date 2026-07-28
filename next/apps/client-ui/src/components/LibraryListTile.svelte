@@ -3,8 +3,6 @@
   import MetaBadgeCluster from "./MetaBadgeCluster.svelte";
   import UiIcon from "./icons/UiIcon.svelte";
   import { initials } from "../lib/initials";
-  import { previewGenre } from "../lib/trackMoods";
-
   let {
     kind = "artist" as "artist" | "album",
     title,
@@ -15,6 +13,7 @@
     favoriteCount = 0,
     albumsMissingMetaCount = 0,
     tracksMissingMetaCount = 0,
+    genreMissing = false,
     albumExcluded = false,
     albumsExcludedCount = 0,
     tracksExcludedCount = 0,
@@ -31,6 +30,8 @@
     favoriteCount?: number;
     albumsMissingMetaCount?: number;
     tracksMissingMetaCount?: number;
+    /** True when album/track genre is missing from DB. */
+    genreMissing?: boolean;
     albumExcluded?: boolean;
     albumsExcludedCount?: number;
     tracksExcludedCount?: number;
@@ -39,10 +40,8 @@
     onclick?: () => void;
   } = $props();
 
-  const metaSeed = $derived(coverSeed || (subtitle ? `${subtitle}/${title}` : title));
-  const albumMetaMissing = $derived(
-    kind === "album" ? !previewGenre(metaSeed) : false,
-  );
+  void coverSeed;
+  const albumMetaMissing = $derived(kind === "album" ? genreMissing : false);
   const badge = $derived(initials(title) || title.charAt(0).toUpperCase());
   const useBadge = $derived(kind === "artist" && showInitialsFallback && !coverSrc);
 </script>

@@ -5,3 +5,180 @@
   gap: var(--rk-section-gap);
   min-width: 0;
 }
+
+.settings-ui-section :global(.rk-field:last-child),
+.settings-player-section :global(.rk-field:last-child) {
+  margin-bottom: 0;
+}
+
+.settings-player-section .hint {
+  margin-top: 0.15rem;
+}
+
+/* Theme picker — grouped dropdown with color strips (ThemePicker.svelte) */
+.theme-picker {
+  position: relative;
+  width: 100%;
+}
+
+.theme-picker.is-open {
+  z-index: 40;
+}
+
+.rk-panel:has(.theme-picker.is-open) {
+  overflow: visible;
+  position: relative;
+  z-index: 30;
+}
+
+.theme-picker__btn {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+  width: 100%;
+  min-height: 2.6rem;
+  padding: 0.7rem 0.85rem;
+  border-radius: var(--rk-radius-lg);
+  background: color-mix(in srgb, var(--rk-surface-2) 78%, transparent);
+  border: 1px solid var(--rk-line);
+  color: var(--rk-ink);
+  cursor: pointer;
+  font: inherit;
+  font-size: 0.92rem;
+  text-align: left;
+  box-sizing: border-box;
+}
+
+.theme-picker__btn:hover {
+  border-color: color-mix(in srgb, var(--rk-accent) 28%, var(--rk-line) 72%);
+}
+
+.theme-picker__btn:focus-visible {
+  outline: 2px solid var(--rk-focus);
+  outline-offset: 2px;
+}
+
+.theme-picker__label {
+  min-width: 0;
+  flex: 1;
+  font-weight: 700;
+  letter-spacing: -0.015em;
+}
+
+.theme-picker__strip {
+  display: inline-flex;
+  flex-shrink: 0;
+  height: 12px;
+  min-width: 3.4rem;
+  max-width: 5rem;
+  border-radius: 999px;
+  overflow: hidden;
+  box-shadow:
+    0 0 0 1px color-mix(in srgb, var(--rk-ink) 16%, transparent),
+    inset 0 0 0 1px rgba(255, 255, 255, 0.08);
+}
+
+.theme-picker__strip-seg {
+  flex: 1;
+  min-width: 0;
+}
+
+.theme-picker__strip-seg--bg {
+  background-size: cover;
+  background-position: center;
+  background-repeat: no-repeat;
+  object-fit: cover;
+}
+
+.theme-picker__menu {
+  position: absolute;
+  z-index: 50;
+  left: 0;
+  right: 0;
+  top: calc(100% + 4px);
+  margin: 0;
+  padding: 0.35rem 0;
+  list-style: none;
+  border-radius: var(--rk-radius-lg);
+  border: 1px solid var(--rk-line);
+  background: var(--rk-surface-2);
+  box-shadow: var(--rk-shadow-2);
+  max-height: min(22rem, 55vh);
+  overflow-y: auto;
+}
+
+.theme-picker__group + .theme-picker__group {
+  border-top: 1px solid color-mix(in srgb, var(--rk-line) 74%, transparent);
+  margin-top: 0.25rem;
+  padding-top: 0.25rem;
+}
+
+.theme-picker__group-label {
+  padding: 0.35rem 0.85rem 0.25rem;
+  color: var(--rk-muted-strong);
+  font-size: 0.72rem;
+  font-weight: 800;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.theme-picker__group-list {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.theme-picker__opt {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+  width: 100%;
+  padding: 0.55rem 0.85rem;
+  border: none;
+  background: transparent;
+  color: var(--rk-ink);
+  cursor: pointer;
+  font: inherit;
+  font-size: 0.9rem;
+  text-align: left;
+  box-sizing: border-box;
+}
+
+.theme-picker__opt:hover {
+  background: color-mix(in srgb, var(--rk-ink) 6%, transparent);
+}
+
+.theme-picker__opt.is-active {
+  background: color-mix(in srgb, var(--rk-accent) 12%, transparent);
+}
+
+.theme-picker__name {
+  min-width: 0;
+  flex: 1;
+  font-weight: 600;
+}
+
+.theme-picker__customize-btn {
+  margin-top: 0.45rem;
+  width: 100%;
+  min-height: 2.2rem;
+  padding: 0.45rem 0.85rem;
+  border-radius: var(--rk-radius-lg);
+  border: 1px solid var(--rk-line);
+  background: color-mix(in srgb, var(--rk-surface-3) 86%, transparent);
+  color: var(--rk-ink);
+  font: inherit;
+  font-size: 0.88rem;
+  font-weight: 650;
+  cursor: pointer;
+}
+
+.theme-picker__customize-btn:hover {
+  border-color: color-mix(in srgb, var(--rk-accent) 28%, var(--rk-line) 72%);
+}
+
+.settings-integrations-footnote {
+  margin-top: 0.85rem;
+}

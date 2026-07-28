@@ -1,5 +1,7 @@
 /** Local multi-account session (parity with old `rekord-session-account-id`). */
 
+import { adoptPrefsForAccount } from "./userPrefs";
+
 const SESSION_KEY = "rekord.next.sessionAccountId";
 const LEGACY_KEYS = [
   "rekord-session-account-id",
@@ -24,6 +26,7 @@ export function getSelectedAccountId(): string | null {
       const v = localStorage.getItem(k);
       if (v) {
         localStorage.setItem(SESSION_KEY, v);
+        adoptPrefsForAccount(v);
         return v;
       }
     }
@@ -35,10 +38,15 @@ export function getSelectedAccountId(): string | null {
 
 export function setSelectedAccountId(id: string) {
   try {
-    localStorage.setItem(SESSION_KEY, id);
+    const next = id.trim();
+    if (!next) return;
+    localStorage.setItem(SESSION_KEY, next);
     for (const k of LEGACY_KEYS) localStorage.removeItem(k);
+    adoptPrefsForAccount(next);
     window.dispatchEvent(
-      new CustomEvent("rekord-account-session-changed", { detail: { accountId: id } }),
+      new CustomEvent("rekord-account-session-changed", {
+        detail: { accountId: next },
+      }),
     );
   } catch {
     /* ignore */

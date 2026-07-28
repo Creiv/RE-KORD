@@ -4,6 +4,7 @@ use anyhow::{bail, Context, Result};
 use lofty::file::AudioFile;
 use lofty::prelude::*;
 use lofty::probe::Probe;
+use lofty::tag::ItemKey;
 use std::fs;
 use std::path::{Path, PathBuf};
 use std::time::SystemTime;
@@ -271,27 +272,47 @@ fn index_audio_file(
         .unwrap_or("Unknown")
         .to_string();
 
-    let (title, track_number, duration_ms) = read_audio_meta(path, &file_stem);
+    let meta = read_audio_meta(path, &file_stem);
 
     db.upsert_track(
         rel,
         path,
-        &title,
+        &meta.title,
         artist_name,
         album_name,
-        duration_ms,
-        track_number,
+        meta.duration_ms,
+        meta.track_number,
         Some(album_id),
         Some(artist_id),
         size,
         mtime,
+        meta.genre.as_deref(),
+        meta.release_date.as_deref(),
+        meta.lyrics.as_deref(),
     )?;
+    let _ = db.backfill_album_meta_from_tracks(album_id);
     Ok(true)
 }
 
-fn read_audio_meta(path: &Path, fallback_title: &str) -> (String, Option<i64>, i64) {
+struct AudioMeta {
+    title: String,
+    track_number: Option<i64>,
+    duration_ms: i64,
+    genre: Option<String>,
+    release_date: Option<String>,
+    lyrics: Option<String>,
+}
+
+fn read_audio_meta(path: &Path, fallback_title: &str) -> AudioMeta {
     let Ok(tagged) = Probe::open(path).and_then(|p| p.read()) else {
-        return (fallback_title.to_string(), None, 0);
+        return AudioMeta {
+            title: fallback_title.to_string(),
+            track_number: None,
+            duration_ms: 0,
+            genre: None,
+            release_date: None,
+            lyrics: None,
+        };
     };
     let tag = tagged.primary_tag().or_else(|| tagged.first_tag());
     let duration_ms = tagged.properties().duration().as_millis() as i64;
@@ -300,7 +321,26 @@ fn read_audio_meta(path: &Path, fallback_title: &str) -> (String, Option<i64>, i
         .filter(|s| !s.trim().is_empty())
         .unwrap_or_else(|| fallback_title.to_string());
     let track_number = tag.and_then(|t| t.track()).map(|n| n as i64);
-    (title, track_number, duration_ms)
+    let genre = tag
+        .and_then(|t| t.genre().map(|s| s.to_string()))
+        .map(|s| s.trim().to_string())
+        .filter(|s| !s.is_empty());
+    let release_date = tag
+        .and_then(|t| t.year().map(|y| y.to_string()))
+        .map(|s| s.trim().to_string())
+        .filter(|s| !s.is_empty());
+    let lyrics = tag
+        .and_then(|t| t.get_string(&ItemKey::Lyrics).map(|s| s.to_string()))
+        .map(|s| s.trim().to_string())
+        .filter(|s| !s.is_empty());
+    AudioMeta {
+        title,
+        track_number,
+        duration_ms,
+        genre,
+        release_date,
+        lyrics,
+    }
 }
 
 fn is_audio(path: &Path) -> bool {

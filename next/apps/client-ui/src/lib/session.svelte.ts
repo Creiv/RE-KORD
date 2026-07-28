@@ -13,11 +13,17 @@ import {
 import { getServerBaseUrl, setServerBaseUrl } from "./config";
 import { i18n } from "./i18n.svelte";
 import { player } from "./player";
+import { normalizeCustomTheme } from "./themeCatalog";
 import {
   applyTheme,
   loadUserPrefs,
   migratePrefsToRelPaths,
+  normalizeLocale,
+  normalizeTheme,
+  patchUserPrefs,
+  setUserPrefsChangeListener,
   type CrossfadeSec,
+  type VisualizerMode,
 } from "./userPrefs";
 
 export type ViewId =
@@ -164,16 +170,191 @@ class ClientSession {
   });
 
 
+  private pushTimer: ReturnType<typeof setTimeout> | null = null;
+  private pushInFlight = false;
+  private pushAgain = false;
+  private userStateDirty = false;
+  private suppressUserStatePush = false;
+  private prefsListenerBound = false;
+
+  private ensurePrefsSync() {
+    if (this.prefsListenerBound) return;
+    this.prefsListenerBound = true;
+    setUserPrefsChangeListener(() => {
+      if (this.suppressUserStatePush) return;
+      this.userStateDirty = true;
+      this.pushUserStateDebounced();
+    });
+  }
+
   bindPlayer() {
-    return player.subscribe(() => {
+    this.ensurePrefsSync();
+    const flush = () => {
+      void this.flushUserStatePush();
+    };
+    window.addEventListener("pagehide", flush);
+    window.addEventListener("beforeunload", flush);
+    const unsub = player.subscribe(() => {
       this.tick += 1;
       this.crossfadeSec = player.crossfadeSec;
     });
+    return () => {
+      window.removeEventListener("pagehide", flush);
+      window.removeEventListener("beforeunload", flush);
+      unsub();
+    };
   }
 
   readonly albumsWithoutCover = $derived(
     this.allAlbums.filter((a) => !a.has_cover).length,
   );
+
+  async pullUserState() {
+    this.ensurePrefsSync();
+    // Flush only pending local edits — never push pristine defaults over remote.
+    if (this.userStateDirty || this.pushTimer != null) {
+      await this.flushUserStatePush();
+    }
+    this.suppressUserStatePush = true;
+    try {
+      const remote = await api.getUserState();
+      const local = loadUserPrefs();
+      const settings = (remote.settings ?? {}) as Record<string, unknown>;
+      const themeRaw = settings.theme;
+      const crossfadeRaw =
+        settings.crossfadeSec ?? settings.audioCrossfadeSec;
+      const vizRaw = settings.visualizerMode ?? settings.vizMode;
+      const localeRaw = settings.locale;
+
+      const patch: Parameters<typeof patchUserPrefs>[0] = {
+        playCounts: {
+          ...local.playCounts,
+          ...(remote.playCounts as Record<string, number>),
+        },
+        recentRelPaths: remote.recentRelPaths?.length
+          ? remote.recentRelPaths
+          : local.recentRelPaths,
+        trackMoods: {
+          ...local.trackMoods,
+          ...(remote.trackMoods as Record<string, string[]>),
+        },
+        excludedRelPaths: remote.excludedRelPaths?.length
+          ? remote.excludedRelPaths
+          : local.excludedRelPaths,
+        excludedAlbumIds: remote.excludedAlbumIds?.length
+          ? remote.excludedAlbumIds
+          : local.excludedAlbumIds,
+      };
+      if (typeof themeRaw === "string" && themeRaw.trim()) {
+        patch.theme = normalizeTheme(themeRaw);
+      }
+      if (settings.customTheme && typeof settings.customTheme === "object") {
+        patch.customTheme = normalizeCustomTheme(
+          settings.customTheme as Record<string, unknown>,
+        );
+      }
+      if (localeRaw === "en" || localeRaw === "it") {
+        patch.locale = normalizeLocale(localeRaw);
+      }
+      if (
+        crossfadeRaw === 0 ||
+        crossfadeRaw === 3 ||
+        crossfadeRaw === 5 ||
+        crossfadeRaw === 8 ||
+        crossfadeRaw === 12
+      ) {
+        patch.crossfadeSec = (
+          crossfadeRaw === 8 || crossfadeRaw === 12 ? 5 : crossfadeRaw
+        ) as CrossfadeSec;
+        this.crossfadeSec = patch.crossfadeSec;
+        player.setCrossfadeSec(patch.crossfadeSec);
+      }
+      if (typeof vizRaw === "string" && vizRaw.trim()) {
+        patch.visualizerMode = vizRaw as VisualizerMode;
+      }
+      patchUserPrefs(patch);
+      applyTheme(
+        patch.theme ?? local.theme,
+        patch.customTheme ?? local.customTheme,
+      );
+      i18n.applySaved();
+      player.reloadExclusionsFromPrefs();
+      this.pendingLegacyQueue = settings.legacyQueue as
+        | { relPaths?: string[]; currentIndex?: number }
+        | null;
+      this.moodPrefsTick += 1;
+    } catch {
+      /* server may be older / offline */
+    } finally {
+      this.suppressUserStatePush = false;
+    }
+  }
+
+  private pendingLegacyQueue: {
+    relPaths?: string[];
+    currentIndex?: number;
+  } | null = null;
+
+  private applyPendingLegacyQueue() {
+    const q = this.pendingLegacyQueue;
+    if (!q?.relPaths?.length || !this.catalogTracks.length) return;
+    player.hydrateQueueFromRelPaths(
+      q.relPaths.filter((p): p is string => typeof p === "string" && !!p),
+      typeof q.currentIndex === "number" ? q.currentIndex : 0,
+      this.catalogTracks,
+    );
+    this.pendingLegacyQueue = null;
+  }
+
+  pushUserStateDebounced() {
+    this.ensurePrefsSync();
+    if (this.suppressUserStatePush) return;
+    if (this.pushTimer != null) clearTimeout(this.pushTimer);
+    this.pushTimer = setTimeout(() => {
+      this.pushTimer = null;
+      void this.flushUserStatePush();
+    }, 350);
+  }
+
+  async flushUserStatePush() {
+    if (this.pushTimer != null) {
+      clearTimeout(this.pushTimer);
+      this.pushTimer = null;
+    }
+    if (this.suppressUserStatePush) return;
+    if (!this.userStateDirty && !this.pushAgain) return;
+    if (this.pushInFlight) {
+      this.pushAgain = true;
+      return;
+    }
+    this.pushInFlight = true;
+    try {
+      const p = loadUserPrefs();
+      await api.patchUserState({
+        playCounts: p.playCounts,
+        recentRelPaths: p.recentRelPaths,
+        trackMoods: p.trackMoods,
+        excludedRelPaths: p.excludedRelPaths,
+        excludedAlbumIds: p.excludedAlbumIds,
+        settings: {
+          crossfadeSec: p.crossfadeSec,
+          theme: p.theme,
+          customTheme: p.customTheme,
+          locale: p.locale,
+          visualizerMode: p.visualizerMode,
+        },
+      });
+      this.userStateDirty = false;
+    } catch {
+      /* keep dirty so a later flush/retry can sync */
+    } finally {
+      this.pushInFlight = false;
+      if (this.pushAgain) {
+        this.pushAgain = false;
+        void this.flushUserStatePush();
+      }
+    }
+  }
 
   async refreshAll() {
     this.status = "…";
@@ -187,11 +368,13 @@ class ClientSession {
         this.loadFavorites(),
         this.loadPlaylists(),
         this.loadCatalogTracks(),
+        this.pullUserState(),
       ]);
       // Remap prefs that used SQLite ids before the last catalog wipe/rescan.
       if (this.catalogTracks.length) {
         migratePrefsToRelPaths(this.catalogTracks);
         player.reloadExclusionsFromPrefs();
+        this.applyPendingLegacyQueue();
       }
       this.status = this.stats?.scanning ? "indexing" : "online";
     } catch (e) {
@@ -203,9 +386,13 @@ class ClientSession {
   /** Soft switch: no full page reload — reload selection, prefs, favorites/playlists. */
   async switchAccount(accountId: string) {
     if (!accountId || accountId === getSelectedAccountId()) return;
+    // Persist the outgoing account before the storage key changes.
+    if (this.userStateDirty || this.pushTimer != null) {
+      await this.flushUserStatePush();
+    }
     setSelectedAccountId(accountId);
     const prefs = loadUserPrefs(accountId);
-    applyTheme(prefs.theme);
+    applyTheme(prefs.theme, prefs.customTheme);
     this.crossfadeSec = prefs.crossfadeSec;
     player.setCrossfadeSec(prefs.crossfadeSec);
     player.reloadExclusionsFromPrefs();
@@ -225,6 +412,7 @@ class ClientSession {
    * Session queue restore is always on (queue + currentIndex only).
    */
   async bootstrap(maxWaitMs = 90_000) {
+    this.ensurePrefsSync();
     try {
       await api.ensureAccountSession();
     } catch {
@@ -588,10 +776,9 @@ class ClientSession {
 
   async radioFromCurrent() {
     const cur = this.current;
-    if (!cur?.artist_id) return;
-    const albums = await api.artistAlbums(cur.artist_id);
-    const lists = await Promise.all(albums.map((a) => api.albumTracks(a.id)));
-    this.playShuffled(lists.flat(), cur);
+    if (!cur) return;
+    const library = await this.ensureCatalogTracks();
+    player.playRadioFromSeed(cur, library);
   }
 }
 

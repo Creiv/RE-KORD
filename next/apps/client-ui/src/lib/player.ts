@@ -2,6 +2,11 @@ import { mediaUrl } from "./config";
 import type { Track } from "./api";
 import { touchListeningActivity } from "./achievements";
 import {
+  buildRadioFromSeed,
+  buildSmartRandomQueue,
+  CARD_QUEUE_CAP,
+} from "./smartShuffle";
+import {
   loadUserPrefs,
   patchUserPrefs,
   playCountFor,
@@ -100,6 +105,11 @@ class PlayerController {
   private graphReady = false;
   private crossfadeBusy = false;
   private crossfadeTimer = 0;
+  private crossfadeGen = 0;
+  private crossfadeOutIx: DeckIx | null = null;
+  private crossfadeInIx: DeckIx | null = null;
+  private crossfadeNextIdx: number | null = null;
+  private prefetchedRelPath: string | null = null;
   private listeners = new Set<Listener>();
 
   queue: Track[] = [];
@@ -142,17 +152,38 @@ class PlayerController {
 
   private bindDeck(audio: HTMLAudioElement, ix: DeckIx) {
     audio.addEventListener("timeupdate", () => {
-      if (ix !== this.active || this.crossfadeBusy) return;
+      if (this.crossfadeBusy) {
+        // Keep UI moving during fade (outgoing until swap).
+        if (this.crossfadeOutIx === ix) {
+          this.currentTime = audio.currentTime;
+          this.emit();
+        }
+        return;
+      }
+      if (ix !== this.active) return;
       this.currentTime = audio.currentTime;
+      this.prefetchNextDeck();
       this.maybeStartCrossfade();
       this.emit();
     });
     audio.addEventListener("durationchange", () => {
+      if (this.crossfadeBusy && this.crossfadeInIx === ix) {
+        this.duration = Number.isFinite(audio.duration) ? audio.duration : 0;
+        this.emit();
+        return;
+      }
       if (ix !== this.active) return;
       this.duration = Number.isFinite(audio.duration) ? audio.duration : 0;
       this.emit();
     });
     audio.addEventListener("play", () => {
+      if (this.crossfadeBusy) {
+        if (this.crossfadeInIx === ix || this.crossfadeOutIx === ix) {
+          this.playing = true;
+          this.emit();
+        }
+        return;
+      }
       if (ix !== this.active) return;
       this.playing = true;
       this.emit();
@@ -163,7 +194,11 @@ class PlayerController {
       this.emit();
     });
     audio.addEventListener("ended", () => {
-      if (ix !== this.active || this.crossfadeBusy) return;
+      if (this.crossfadeBusy) {
+        if (ix === this.crossfadeOutIx) this.finalizeCrossfade();
+        return;
+      }
+      if (ix !== this.active) return;
       void this.onEnded();
     });
   }
@@ -220,13 +255,40 @@ class PlayerController {
       return false;
     }
     this.sessionRestored = true;
+    return this.hydrateQueueSnapshot(persisted.tracks, persisted.currentIndex, catalog);
+  }
 
+  /** Restore queue from rel paths (backup/user-state) without autoplay. */
+  hydrateQueueFromRelPaths(
+    relPaths: string[],
+    currentIndex: number,
+    catalog: Track[] = [],
+  ): boolean {
+    if (!relPaths.length) return false;
+    const tracks = relPaths.map((rel_path, i) => ({
+      id: -1 - i,
+      rel_path,
+      title: rel_path.split("/").pop() || rel_path,
+      artist_name: "",
+      album_name: "",
+      duration_ms: 0,
+      track_number: null,
+      album_id: null,
+      artist_id: null,
+    })) satisfies Track[];
+    this.sessionRestored = true;
+    return this.hydrateQueueSnapshot(tracks, currentIndex, catalog);
+  }
+
+  private hydrateQueueSnapshot(
+    snapshot: Track[],
+    currentIndex: number,
+    catalog: Track[] = [],
+  ): boolean {
+    if (!snapshot.length) return false;
     const byPath = new Map(catalog.map((t) => [t.rel_path, t]));
-    const tracks = persisted.tracks.map((t) => byPath.get(t.rel_path) ?? t);
-    const index = Math.max(
-      0,
-      Math.min(persisted.currentIndex, tracks.length - 1),
-    );
+    const tracks = snapshot.map((t) => byPath.get(t.rel_path) ?? t);
+    const index = Math.max(0, Math.min(currentIndex, tracks.length - 1));
 
     this.restoringSession = true;
     try {
@@ -245,6 +307,7 @@ class PlayerController {
         this.updateMediaSession(track);
       }
       this.lastQueuePersistSig = this.queuePersistSig();
+      savePersistedSessionQueue(this.queue, this.index);
       this.emit();
     } finally {
       this.restoringSession = false;
@@ -443,7 +506,29 @@ class PlayerController {
     const rest = pool.filter((t) => t.id !== first.id);
     this.shuffle = true;
     this.privateQueue = [...tracks];
-    this.queue = [first, ...this.shuffled(rest)];
+    const recent = new Set(loadUserPrefs().recentRelPaths);
+    const smartRest = buildSmartRandomQueue(rest, {
+      currentRelPath: first.rel_path,
+      currentArtist: first.artist_name,
+      recentRelPaths: recent,
+    });
+    this.queue = [first, ...smartRest].slice(0, CARD_QUEUE_CAP);
+    this.index = 0;
+    void this.loadCurrent(true);
+  }
+
+  /** Smart radio from a seed track across a library pool. */
+  playRadioFromSeed(seed: Track, library: Track[]) {
+    const pool = this.filterShufflePool(library);
+    const recent = new Set(loadUserPrefs().recentRelPaths);
+    const queue = buildRadioFromSeed(seed, pool, {
+      maxLength: CARD_QUEUE_CAP,
+      recentRelPaths: recent,
+    });
+    if (!queue.length) return;
+    this.shuffle = true;
+    this.privateQueue = [...queue];
+    this.queue = queue;
     this.index = 0;
     void this.loadCurrent(true);
   }
@@ -636,16 +721,119 @@ class PlayerController {
     return null;
   }
 
+  private audioReadyEnough(audio: HTMLAudioElement) {
+    return audio.readyState >= HTMLMediaElement.HAVE_FUTURE_DATA;
+  }
+
+  private waitForAudioReady(audio: HTMLAudioElement, timeoutMs = 4000) {
+    return new Promise<boolean>((resolve) => {
+      if (this.audioReadyEnough(audio)) {
+        resolve(true);
+        return;
+      }
+      let settled = false;
+      const finish = (ok: boolean) => {
+        if (settled) return;
+        settled = true;
+        window.clearTimeout(timer);
+        audio.removeEventListener("canplay", onReady);
+        audio.removeEventListener("canplaythrough", onReady);
+        audio.removeEventListener("loadeddata", onReady);
+        audio.removeEventListener("error", onFail);
+        resolve(ok);
+      };
+      const onReady = () => finish(true);
+      const onFail = () => finish(false);
+      const timer = window.setTimeout(() => finish(this.audioReadyEnough(audio)), timeoutMs);
+      audio.addEventListener("canplay", onReady, { once: true });
+      audio.addEventListener("canplaythrough", onReady, { once: true });
+      audio.addEventListener("loadeddata", onReady, { once: true });
+      audio.addEventListener("error", onFail, { once: true });
+    });
+  }
+
+  private inactiveDeck(): HTMLAudioElement {
+    return this.active === 0 ? this.deck1 : this.deck0;
+  }
+
+  private prefetchNextDeck() {
+    if (!this.crossfadeSec || this.repeat === "one" || this.crossfadeBusy) return;
+    const nextIdx = this.resolveNextIndex();
+    if (nextIdx == null || nextIdx === this.index) return;
+    const nextTr = this.queue[nextIdx];
+    if (!nextTr) return;
+    const out = this.activeAudio();
+    const d = out.duration;
+    if (!Number.isFinite(d) || d <= 0) return;
+    const remain = d - out.currentTime;
+    // Warm the next deck a bit before the fade window.
+    if (remain > this.crossfadeSec + 10 || remain < 0.2) return;
+    const path = nextTr.rel_path;
+    const inEl = this.inactiveDeck();
+    if (this.prefetchedRelPath === path && this.audioReadyEnough(inEl)) return;
+    if (this.prefetchedRelPath !== path) {
+      this.prefetchedRelPath = path;
+      inEl.src = mediaUrl(path);
+      inEl.load();
+    }
+  }
+
   private abortCrossfade() {
-    if (!this.crossfadeBusy) return;
+    this.crossfadeGen += 1;
     window.clearTimeout(this.crossfadeTimer);
     this.crossfadeTimer = 0;
+    const wasBusy = this.crossfadeBusy;
     this.crossfadeBusy = false;
+    this.crossfadeOutIx = null;
+    this.crossfadeInIx = null;
+    this.crossfadeNextIdx = null;
+    this.prefetchedRelPath = null;
+    if (!wasBusy) return;
     this.snapSolo(this.active);
-    const inactive = this.active === 0 ? this.deck1 : this.deck0;
+    const inactive = this.inactiveDeck();
     inactive.pause();
     inactive.removeAttribute("src");
     void inactive.load();
+  }
+
+  private finalizeCrossfade() {
+    if (!this.crossfadeBusy) return;
+    window.clearTimeout(this.crossfadeTimer);
+    this.crossfadeTimer = 0;
+
+    const outIx = this.crossfadeOutIx;
+    const inIx = this.crossfadeInIx;
+    const nextIdx = this.crossfadeNextIdx;
+    this.crossfadeBusy = false;
+    this.crossfadeOutIx = null;
+    this.crossfadeInIx = null;
+    this.crossfadeNextIdx = null;
+
+    if (outIx == null || inIx == null || nextIdx == null) {
+      this.snapSolo(this.active);
+      return;
+    }
+
+    const nextTr = this.queue[nextIdx];
+    const outEl = outIx === 0 ? this.deck0 : this.deck1;
+    const inEl = inIx === 0 ? this.deck0 : this.deck1;
+
+    outEl.pause();
+    outEl.removeAttribute("src");
+    void outEl.load();
+    this.prefetchedRelPath = nextTr?.rel_path ?? null;
+
+    this.active = inIx;
+    this.snapSolo(inIx);
+    if (nextTr) {
+      this.index = nextIdx;
+      this.duration = Number.isFinite(inEl.duration) ? inEl.duration : 0;
+      this.currentTime = inEl.currentTime;
+      this.playing = !inEl.paused;
+      this.bumpPlayCount(nextTr);
+      this.updateMediaSession(nextTr);
+    }
+    this.emit();
   }
 
   private maybeStartCrossfade() {
@@ -667,9 +855,9 @@ class PlayerController {
 
     this.ensureGraph();
     if (!this.ctx || !this.gain0 || !this.gain1) {
+      // No Web Audio graph → skip fade (avoid mute/stuck), natural advance on ended.
       return;
     }
-    if (this.ctx.state === "suspended") await this.ctx.resume();
 
     const outIx = this.active;
     const inIx: DeckIx = outIx === 0 ? 1 : 0;
@@ -677,46 +865,71 @@ class PlayerController {
     const inEl = inIx === 0 ? this.deck0 : this.deck1;
     const gOut = outIx === 0 ? this.gain0 : this.gain1;
     const gIn = inIx === 0 ? this.gain0 : this.gain1;
-    const remain = outEl.duration - outEl.currentTime;
+
+    const d = outEl.duration;
+    if (!Number.isFinite(d) || d <= 0) return;
+    let remain = d - outEl.currentTime;
     if (remain < 0.08) return;
 
+    const token = ++this.crossfadeGen;
     this.crossfadeBusy = true;
-    inEl.src = mediaUrl(nextTr.rel_path);
-    inEl.load();
+    this.crossfadeOutIx = outIx;
+    this.crossfadeInIx = inIx;
+    this.crossfadeNextIdx = nextIdx;
+
+    const path = nextTr.rel_path;
+    const url = mediaUrl(path);
+    if (this.prefetchedRelPath !== path || !inEl.src) {
+      inEl.src = url;
+      inEl.load();
+      this.prefetchedRelPath = path;
+    }
+
     try {
-      inEl.currentTime = 0;
+      if (this.ctx.state === "suspended") await this.ctx.resume();
+      if (token !== this.crossfadeGen) return;
+      const ready = await this.waitForAudioReady(inEl);
+      if (token !== this.crossfadeGen) return;
+      if (!ready) throw new Error("incoming deck not ready");
+      try {
+        inEl.currentTime = 0;
+      } catch {
+        /* ignore seek errors before metadata */
+      }
       await inEl.play();
     } catch {
+      if (token !== this.crossfadeGen) return;
       this.crossfadeBusy = false;
+      this.crossfadeOutIx = null;
+      this.crossfadeInIx = null;
+      this.crossfadeNextIdx = null;
       this.snapSolo(outIx);
       inEl.pause();
       return;
     }
 
-    const fadeLen = Math.min(this.crossfadeSec, Math.max(remain, 0.05));
+    if (token !== this.crossfadeGen || !this.crossfadeBusy) return;
+
+    // Recompute with live clock — avoid scheduling a long fade after the out deck already ended.
+    remain = Math.max(0.05, outEl.duration - outEl.currentTime);
+    if (!Number.isFinite(remain) || outEl.ended || remain < 0.05) {
+      this.finalizeCrossfade();
+      return;
+    }
+    const fadeLen = Math.min(this.crossfadeSec, remain);
+
     const now = this.ctx.currentTime;
     gOut.gain.cancelScheduledValues(now);
     gIn.gain.cancelScheduledValues(now);
-    gOut.gain.setValueAtTime(gOut.gain.value, now);
-    gIn.gain.setValueAtTime(gIn.gain.value, now);
+    gOut.gain.setValueAtTime(1, now);
+    gIn.gain.setValueAtTime(0, now);
     gOut.gain.linearRampToValueAtTime(0, now + fadeLen);
     gIn.gain.linearRampToValueAtTime(1, now + fadeLen);
 
     this.crossfadeTimer = window.setTimeout(() => {
-      outEl.pause();
-      outEl.removeAttribute("src");
-      void outEl.load();
-      this.active = inIx;
-      this.index = nextIdx;
-      this.snapSolo(inIx);
-      this.crossfadeBusy = false;
-      this.duration = Number.isFinite(inEl.duration) ? inEl.duration : 0;
-      this.currentTime = inEl.currentTime;
-      this.playing = !inEl.paused;
-      this.bumpPlayCount(nextTr);
-      this.updateMediaSession(nextTr);
-      this.emit();
-    }, fadeLen * 1000);
+      if (token !== this.crossfadeGen) return;
+      this.finalizeCrossfade();
+    }, fadeLen * 1000 + 40);
   }
 
   private async loadCurrent(autoplay: boolean) {
@@ -751,25 +964,49 @@ class PlayerController {
   }
 
   private shuffled(list: Track[]) {
-    const arr = [...list];
-    for (let i = arr.length - 1; i > 0; i--) {
-      const j = Math.floor(Math.random() * (i + 1));
-      [arr[i], arr[j]] = [arr[j], arr[i]];
+    return buildSmartRandomQueue(list, {
+      recentRelPaths: new Set(loadUserPrefs().recentRelPaths),
+    });
+  }
+
+  private prefetchQueueCovers() {
+    for (const t of this.queue.slice(this.index + 1, this.index + 6)) {
+      if (t.album_id == null) continue;
+      const img = new Image();
+      img.src = `/api/v1/covers/album/${t.album_id}`;
     }
-    return arr;
   }
 
   private updateMediaSession(track: Track) {
     if (!("mediaSession" in navigator)) return;
+    const artwork =
+      track.album_id != null
+        ? [
+            {
+              src: `/api/v1/covers/album/${track.album_id}`,
+              sizes: "512x512",
+              type: "image/jpeg",
+            },
+          ]
+        : [];
     navigator.mediaSession.metadata = new MediaMetadata({
       title: track.title,
       artist: track.artist_name,
       album: track.album_name,
+      artwork,
     });
     navigator.mediaSession.setActionHandler("play", () => void this.activeAudio().play());
     navigator.mediaSession.setActionHandler("pause", () => this.activeAudio().pause());
     navigator.mediaSession.setActionHandler("previoustrack", () => void this.prev());
     navigator.mediaSession.setActionHandler("nexttrack", () => void this.next());
+    try {
+      navigator.mediaSession.setActionHandler("seekto", (d) => {
+        if (d.seekTime != null) this.seek(d.seekTime);
+      });
+    } catch {
+      /* unsupported */
+    }
+    this.prefetchQueueCovers();
   }
 }
 

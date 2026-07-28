@@ -8,12 +8,12 @@
   import SectionNavTabs from "../components/SectionNavTabs.svelte";
   import TrackList from "../components/TrackList.svelte";
   import TrackLyricsIcon from "../components/TrackLyricsIcon.svelte";
-  import GraphicEq from "../components/icons/GraphicEq.svelte";
   import UiIcon from "../components/icons/UiIcon.svelte";
   import StudioCatalogPane from "../components/studio/StudioCatalogPane.svelte";
   import StudioCoversPane from "../components/studio/StudioCoversPane.svelte";
   import StudioDownloadPane from "../components/studio/StudioDownloadPane.svelte";
   import StudioMetaPane from "../components/studio/StudioMetaPane.svelte";
+  import ListenVisualizer from "../components/visualizer/ListenVisualizer.svelte";
   import {
     albumCoverUrl,
     api,
@@ -22,7 +22,7 @@
   } from "../lib/api";
   import { formatTime, player } from "../lib/player";
   import { session, type StudioPane } from "../lib/session.svelte";
-  import { previewGenre, resolveTrackMoods } from "../lib/trackMoods";
+  import { lyricsKind, resolveTrackMoods, trackGenre } from "../lib/trackMoods";
   import { loadUserPrefs } from "../lib/userPrefs";
 
   const tabs = [
@@ -60,7 +60,7 @@
   const currentMissingMeta = $derived.by(() => {
     const t = session.current;
     if (!t) return false;
-    return !previewGenre(t.rel_path);
+    return !trackGenre(t);
   });
 
   const listenQueueStart = $derived(Math.max(0, session.currentIndex - 1));
@@ -259,7 +259,10 @@
                             <span class="listen-stage__sub-lead">
                               {session.current.artist_name} · {session.current.album_name}
                               <span class="track-row__meta-sep" aria-hidden="true"> · </span>
-                              <TrackLyricsIcon kind="off" class="listen-stage__lyrics-inline" />
+                              <TrackLyricsIcon
+                                kind={lyricsKind(session.current?.lyrics)}
+                                class="listen-stage__lyrics-inline"
+                              />
                               {#if durationLabel}
                                 {" "}· {durationLabel}
                               {/if}
@@ -285,9 +288,16 @@
               </div>
 
               <div class="listen-stage__viz" aria-hidden="true">
-                <div class="listen-stage__viz-placeholder">
-                  <GraphicEq animated={session.playing} />
-                </div>
+                {#if loadUserPrefs().visualizerMode === "karaoke" && session.current?.lyrics}
+                  <pre class="listen-karaoke">{session.current.lyrics}</pre>
+                {:else}
+                  <ListenVisualizer
+                    playing={session.playing}
+                    mode={loadUserPrefs().visualizerMode === "karaoke"
+                      ? "bars"
+                      : loadUserPrefs().visualizerMode}
+                  />
+                {/if}
               </div>
 
               <ListenSleepTimer />
@@ -374,20 +384,25 @@
                       <button
                         type="button"
                         class="listen-recent-panel__karaoke-btn"
-                        disabled
+                        disabled={lyricsKind(session.current?.lyrics) !== "lrc"}
                         title="Karaoke"
                         aria-label="Apri karaoke"
+                        onclick={() => {
+                          /* karaoke mode uses visualizer preference */
+                        }}
                       >
                         <UiIcon name="music" />
                         <span>KARAOKE</span>
                       </button>
                       <span
                         class="listen-recent-panel__lrc-state"
-                        title="Testo LRC non disponibile"
-                        aria-label="Testo LRC non disponibile"
+                        title={lyricsKind(session.current?.lyrics) === "lrc"
+                          ? "LRC disponibile"
+                          : "Testo LRC non disponibile"}
                       >
                         <span
-                          class="listen-recent-panel__lrc-dot is-missing"
+                          class="listen-recent-panel__lrc-dot"
+                          class:is-missing={lyricsKind(session.current?.lyrics) !== "lrc"}
                           aria-hidden="true"
                         ></span>
                         LRC
@@ -415,11 +430,18 @@
                         La cronologia si popolerà dopo i primi ascolti.
                       </p>
                     {/if}
+                  {:else if session.current?.lyrics?.trim()}
+                    <pre class="listen-lyrics-body">{session.current.lyrics}</pre>
                   {:else}
                     <div class="panel-empty panel-empty--actions listen-recent-lyrics__empty">
                       <p>Nessun testo per questo brano.</p>
-                      <button type="button" class="ghost-btn ghost-btn--sm" disabled>
-                        Cerca LRC
+                      <button
+                        type="button"
+                        class="ghost-btn ghost-btn--sm"
+                        onclick={() => session.openTrackEdit(session.current!)}
+                        disabled={!session.current}
+                      >
+                        Modifica / Auto LRC
                       </button>
                     </div>
                   {/if}

@@ -1,13 +1,15 @@
 //! Backup / restore ZIP for the next hub (kordBackup: 3) + restore of legacy v2 ZIPs.
 
-use crate::accounts::{self, DEFAULT_ACCOUNT_ID};
+use crate::accounts::{self, Account, DEFAULT_ACCOUNT_ID};
 use crate::db::{PlaylistBackup, PlaylistBackupTrack};
 use crate::scan;
 use crate::selection;
 use crate::state::AppState;
+use crate::user_state::{self, UserStateV1};
 use anyhow::{bail, Context, Result};
 use serde::{Deserialize, Serialize};
 use serde_json::json;
+use std::collections::BTreeMap;
 use std::fs::{self, File};
 use std::io::{Cursor, Read, Write};
 use std::path::{Component, Path, PathBuf};
@@ -207,6 +209,7 @@ pub fn build_backup_zip(state: &AppState) -> Result<(Vec<u8>, String)> {
             let fav = state.db.export_favorite_rel_paths(&acc.id)?;
             let pls = state.db.export_playlists_backup(&acc.id)?;
             let sel = selection::read_library_selection(&data_dir, &acc.id)?;
+            let ustate = user_state::load_user_state(&data_dir, &acc.id);
             add_bytes(
                 &mut zip,
                 &format!("hub/accounts/{}/favorites.json", acc.id),
@@ -222,6 +225,39 @@ pub fn build_backup_zip(state: &AppState) -> Result<(Vec<u8>, String)> {
                 &format!("hub/accounts/{}/library-selection.json", acc.id),
                 serde_json::to_string_pretty(&sel)?.as_bytes(),
             )?;
+            add_bytes(
+                &mut zip,
+                &format!("hub/accounts/{}/user-state.json", acc.id),
+                serde_json::to_string_pretty(&ustate)?.as_bytes(),
+            )?;
+            if let Some(theme_bg) = user_state::find_theme_bg_path(&data_dir, &acc.id) {
+                let file_name = theme_bg
+                    .file_name()
+                    .and_then(|n| n.to_str())
+                    .unwrap_or("theme-bg.jpg");
+                if let Err(e) = add_file_path(
+                    &mut zip,
+                    &theme_bg,
+                    &format!("hub/accounts/{}/{}", acc.id, file_name),
+                ) {
+                    warn!(error = %e, account = %acc.id, "skip theme-bg in backup");
+                }
+            }
+        }
+
+        // Cookies + activity (shared hub data).
+        let cookies = {
+            let cfg = state.config.lock().unwrap();
+            cfg.youtube_cookies_path
+                .clone()
+                .unwrap_or_else(|| cfg.default_youtube_cookies_path())
+        };
+        if cookies.is_file() {
+            let _ = add_file_path(&mut zip, &cookies, "config/youtube-cookies.txt");
+        }
+        let activity = data_dir.join("activity.jsonl");
+        if activity.is_file() {
+            let _ = add_file_path(&mut zip, &activity, "config/kord-activity.log.jsonl");
         }
 
         if let Some(root) = &music_root {
@@ -299,6 +335,15 @@ fn extract_prefix(
     Ok(n)
 }
 
+#[derive(Default)]
+struct AccountRestoreBundle {
+    favorites: Vec<String>,
+    playlists: Vec<PlaylistBackup>,
+    selection: Option<selection::LibrarySelection>,
+    user_state: Option<UserStateV1>,
+    theme_bg: Option<PathBuf>,
+}
+
 fn playlists_from_legacy_user_state(raw: &str) -> Result<(Vec<String>, Vec<PlaylistBackup>)> {
     let v: serde_json::Value = serde_json::from_str(raw)?;
     let favorites = v
@@ -359,6 +404,118 @@ fn playlists_from_legacy_user_state(raw: &str) -> Result<(Vec<String>, Vec<Playl
     Ok((favorites, playlists))
 }
 
+fn account_id_from_info_dir_name(name: &str) -> Option<String> {
+    let id = name.strip_suffix("_info")?;
+    if id.is_empty() || id == "global" {
+        return None;
+    }
+    Some(id.to_string())
+}
+
+fn legacy_album_key_to_folder(key: &str) -> String {
+    if key.contains("::") {
+        key.replacen("::", "/", 1).replace('\\', "/")
+    } else {
+        key.replace('\\', "/")
+    }
+}
+
+fn remap_legacy_excluded_albums(state: &mut UserStateV1, album_folder_to_id: &BTreeMap<String, i64>) {
+    let Some(keys_val) = state.settings.remove("legacyExcludedAlbumKeys") else {
+        return;
+    };
+    let Some(arr) = keys_val.as_array() else {
+        return;
+    };
+    let mut seen: std::collections::HashSet<i64> =
+        state.excluded_album_ids.iter().copied().collect();
+    for item in arr {
+        let Some(key) = item.as_str() else { continue };
+        let folder = legacy_album_key_to_folder(key);
+        if let Some(id) = album_folder_to_id.get(&folder) {
+            if seen.insert(*id) {
+                state.excluded_album_ids.push(*id);
+            }
+        }
+    }
+}
+
+fn merge_account_bundle(
+    map: &mut BTreeMap<String, AccountRestoreBundle>,
+    acc_id: &str,
+    mut patch: AccountRestoreBundle,
+) {
+    let entry = map.entry(acc_id.to_string()).or_default();
+    if !patch.favorites.is_empty() {
+        entry.favorites = patch.favorites;
+    }
+    if !patch.playlists.is_empty() {
+        entry.playlists = patch.playlists;
+    }
+    if patch.selection.is_some() {
+        entry.selection = patch.selection.take();
+    }
+    if patch.user_state.is_some() {
+        entry.user_state = patch.user_state.take();
+    }
+    if patch.theme_bg.is_some() {
+        entry.theme_bg = patch.theme_bg.take();
+    }
+}
+
+fn ingest_legacy_info_dir(
+    map: &mut BTreeMap<String, AccountRestoreBundle>,
+    acc_id: &str,
+    info_dir: &Path,
+) {
+    let mut bundle = AccountRestoreBundle::default();
+    let us_path = info_dir.join("user-state.json");
+    let us_v1 = info_dir.join("user-state.v1.json");
+    let raw = if us_path.is_file() {
+        fs::read_to_string(&us_path).ok()
+    } else if us_v1.is_file() {
+        fs::read_to_string(&us_v1).ok()
+    } else {
+        None
+    };
+    if let Some(raw) = raw {
+        if let Ok((fav, pls)) = playlists_from_legacy_user_state(&raw) {
+            bundle.favorites = fav;
+            bundle.playlists = pls;
+        }
+        if let Ok(ustate) = user_state::user_state_from_legacy_json(&raw) {
+            bundle.user_state = Some(ustate);
+        }
+    }
+    let sel_path = info_dir.join("library-selection.json");
+    if sel_path.is_file() {
+        if let Ok(raw) = fs::read_to_string(&sel_path) {
+            bundle.selection = serde_json::from_str(&raw).ok();
+        }
+    }
+    for name in [
+        "theme-bg.jpg",
+        "theme-bg.jpeg",
+        "theme-bg.png",
+        "theme-bg.webp",
+        "theme-bg.gif",
+    ] {
+        let p = info_dir.join(name);
+        if p.is_file() {
+            bundle.theme_bg = Some(p);
+            break;
+        }
+    }
+    merge_account_bundle(map, acc_id, bundle);
+}
+
+fn collect_manifest_accounts(manifest_raw: &str) -> Vec<Account> {
+    let Ok(v) = serde_json::from_str::<serde_json::Value>(manifest_raw) else {
+        return Vec::new();
+    };
+    accounts::accounts_from_json_value(&v)
+}
+
 /// Restore from ZIP bytes (next v3 or legacy v2).
 pub async fn restore_backup_zip(state: &AppState, zip_bytes: Vec<u8>) -> Result<RestoreReport> {
     if state.is_scanning() {
@@ -370,33 +527,32 @@ pub async fn restore_backup_zip(state: &AppState, zip_bytes: Vec<u8>) -> Result<
 
     let manifest_raw = read_zip_string(&mut archive, "config/manifest.json")?
         .context("missing config/manifest.json")?;
-    let manifest: BackupManifest = serde_json::from_str(&manifest_raw)
-        .or_else(|_| {
-            // legacy used createdAt camelCase without serde rename on all fields
-            let v: serde_json::Value = serde_json::from_str(&manifest_raw)?;
-            Ok::<_, anyhow::Error>(BackupManifest {
-                kord_backup: v
-                    .get("kordBackup")
-                    .or_else(|| v.get("rekordBackup"))
-                    .and_then(|x| x.as_u64())
-                    .unwrap_or(0) as u32,
-                created_at: v
-                    .get("createdAt")
-                    .or_else(|| v.get("created_at"))
-                    .and_then(|x| x.as_str())
-                    .unwrap_or("")
-                    .to_string(),
-                library_root: v
-                    .get("libraryRoot")
-                    .or_else(|| v.get("library_root"))
-                    .and_then(|x| x.as_str())
-                    .map(|s| s.to_string()),
-                kind: v
-                    .get("kind")
-                    .and_then(|x| x.as_str())
-                    .map(|s| s.to_string()),
-            })
-        })?;
+    let manifest_accounts = collect_manifest_accounts(&manifest_raw);
+    let manifest: BackupManifest = serde_json::from_str(&manifest_raw).or_else(|_| {
+        let v: serde_json::Value = serde_json::from_str(&manifest_raw)?;
+        Ok::<_, anyhow::Error>(BackupManifest {
+            kord_backup: v
+                .get("kordBackup")
+                .or_else(|| v.get("rekordBackup"))
+                .and_then(|x| x.as_u64())
+                .unwrap_or(0) as u32,
+            created_at: v
+                .get("createdAt")
+                .or_else(|| v.get("created_at"))
+                .and_then(|x| x.as_str())
+                .unwrap_or("")
+                .to_string(),
+            library_root: v
+                .get("libraryRoot")
+                .or_else(|| v.get("library_root"))
+                .and_then(|x| x.as_str())
+                .map(|s| s.to_string()),
+            kind: v
+                .get("kind")
+                .and_then(|x| x.as_str())
+                .map(|s| s.to_string()),
+        })
+    })?;
 
     if manifest.kord_backup != 2 && manifest.kord_backup != 3 {
         bail!(
@@ -405,7 +561,6 @@ pub async fn restore_backup_zip(state: &AppState, zip_bytes: Vec<u8>) -> Result<
         );
     }
 
-    // Resolve music root from settings (v3) or music-root.config.json (v2) or manifest.
     let mut music_root: Option<PathBuf> = None;
     if let Some(settings) = read_zip_string(&mut archive, "config/settings.json")? {
         if let Ok(v) = serde_json::from_str::<serde_json::Value>(&settings) {
@@ -413,12 +568,10 @@ pub async fn restore_backup_zip(state: &AppState, zip_bytes: Vec<u8>) -> Result<
                 music_root = Some(PathBuf::from(r));
             }
         }
-        // Persist settings file into data_dir
         let dest = state.config.lock().unwrap().settings_path();
         if let Some(parent) = dest.parent() {
             fs::create_dir_all(parent)?;
         }
-        // backup current
         if dest.is_file() {
             let bak = dest.with_extension(format!(
                 "json.pre-restore.{}",
@@ -468,24 +621,45 @@ pub async fn restore_backup_zip(state: &AppState, zip_bytes: Vec<u8>) -> Result<
     }
 
     let data_dir = state.config.lock().unwrap().data_dir.clone();
-    if let Some(acc_raw) = read_zip_string(&mut archive, "config/accounts.json")? {
-        let dest = accounts::accounts_registry_path(&data_dir);
-        if let Some(parent) = dest.parent() {
-            fs::create_dir_all(parent)?;
+
+    // Shared config extras (cookies / activity).
+    if let Some(cookies) = read_zip_string(&mut archive, "config/youtube-cookies.txt")? {
+        if !cookies.trim().is_empty() {
+            let dest = state
+                .config
+                .lock()
+                .unwrap()
+                .default_youtube_cookies_path();
+            if let Some(parent) = dest.parent() {
+                let _ = fs::create_dir_all(parent);
+            }
+            let _ = fs::write(&dest, cookies.as_bytes());
+            let mut cfg = state.config.lock().unwrap();
+            if !cfg.youtube_cookies_from_env {
+                cfg.youtube_cookies_path = Some(dest);
+            }
         }
-        fs::write(&dest, acc_raw.as_bytes())?;
     }
-    let _ = accounts::ensure_accounts(&data_dir)?;
+    for act_name in [
+        "config/kord-activity.log.jsonl",
+        "config/rekord-activity.log.jsonl",
+    ] {
+        if let Some(raw) = read_zip_string(&mut archive, act_name)? {
+            if !raw.trim().is_empty() {
+                let dest = data_dir.join("activity.jsonl");
+                let _ = fs::write(dest, raw.as_bytes());
+                break;
+            }
+        }
+    }
 
     let mut library_files = 0u32;
     library_files += extract_prefix(&mut archive, "libraries/shared/", &music_root)?;
-    // legacy v1 tags: libraries/<anything>/
     let lib_names: Vec<String> = (0..archive.len())
         .filter_map(|i| archive.by_index(i).ok().map(|f| f.name().to_string()))
         .filter(|n| n.starts_with("libraries/") && !n.starts_with("libraries/shared/"))
         .collect();
     for name in lib_names {
-        // libraries/<tag>/<rel>
         let rest = &name["libraries/".len()..];
         if let Some((_, rel)) = rest.split_once('/') {
             if rel.is_empty() || name.ends_with('/') {
@@ -507,12 +681,30 @@ pub async fn restore_backup_zip(state: &AppState, zip_bytes: Vec<u8>) -> Result<
     let n_rekord = extract_prefix(&mut archive, "rekord-db/", &kord_dest)?;
     library_files += n_kord + n_rekord;
 
-    // Per-account hub data: hub/accounts/{id}/… plus flat hub/* → default.
-    let mut per_account: std::collections::BTreeMap<
-        String,
-        (Vec<String>, Vec<PlaylistBackup>, Option<selection::LibrarySelection>),
-    > = std::collections::BTreeMap::new();
+    // Registry: config/accounts.json → global_info → manifest.accounts
+    let mut registry: Vec<Account> = Vec::new();
+    if let Some(acc_raw) = read_zip_string(&mut archive, "config/accounts.json")? {
+        if let Ok(v) = serde_json::from_str::<serde_json::Value>(&acc_raw) {
+            registry = accounts::accounts_from_json_value(&v);
+        }
+    }
+    if registry.is_empty() {
+        let global = kord_dest.join("global_info").join("accounts.json");
+        if global.is_file() {
+            if let Ok(raw) = fs::read_to_string(&global) {
+                if let Ok(v) = serde_json::from_str::<serde_json::Value>(&raw) {
+                    registry = accounts::accounts_from_json_value(&v);
+                }
+            }
+        }
+    }
+    if registry.is_empty() {
+        registry = manifest_accounts;
+    }
 
+    let mut per_account: BTreeMap<String, AccountRestoreBundle> = BTreeMap::new();
+
+    // Next v3 hub/accounts/{id}/…
     let zip_names: Vec<String> = (0..archive.len())
         .filter_map(|i| archive.by_index(i).ok().map(|f| f.name().to_string()))
         .collect();
@@ -526,70 +718,195 @@ pub async fn restore_backup_zip(state: &AppState, zip_bytes: Vec<u8>) -> Result<
         if acc_id.is_empty() {
             continue;
         }
-        let entry = per_account
-            .entry(acc_id.to_string())
-            .or_insert_with(|| (Vec::new(), Vec::new(), None));
-        if let Some(raw) = read_zip_string(&mut archive, name)? {
-            match file {
-                "favorites.json" => {
-                    entry.0 = serde_json::from_str(&raw).unwrap_or_default();
+        let mut patch = AccountRestoreBundle::default();
+        match file {
+            "favorites.json" => {
+                if let Some(raw) = read_zip_string(&mut archive, name)? {
+                    patch.favorites = serde_json::from_str(&raw).unwrap_or_default();
                 }
-                "playlists.json" => {
-                    entry.1 = serde_json::from_str(&raw).unwrap_or_default();
-                }
-                "library-selection.json" => {
-                    entry.2 = serde_json::from_str(&raw).ok();
-                }
-                _ => {}
             }
-        }
-    }
-
-    let mut favorites: Vec<String> = Vec::new();
-    let mut playlists: Vec<PlaylistBackup> = Vec::new();
-    if let Some(raw) = read_zip_string(&mut archive, "hub/favorites.json")? {
-        favorites = serde_json::from_str(&raw).unwrap_or_default();
-    }
-    if let Some(raw) = read_zip_string(&mut archive, "hub/playlists.json")? {
-        playlists = serde_json::from_str(&raw).unwrap_or_default();
-    }
-
-    if per_account.is_empty() && favorites.is_empty() && playlists.is_empty() {
-        // Probe extracted .kord for user-state.json
-        if kord_dest.is_dir() {
-            for entry in WalkDir::new(&kord_dest).into_iter().filter_map(|e| e.ok()) {
-                let name = entry.file_name().to_string_lossy();
-                if name != "user-state.json" && name != "user-state.v1.json" {
-                    continue;
+            "playlists.json" => {
+                if let Some(raw) = read_zip_string(&mut archive, name)? {
+                    patch.playlists = serde_json::from_str(&raw).unwrap_or_default();
                 }
-                if let Ok(raw) = fs::read_to_string(entry.path()) {
-                    if let Ok((fav, pls)) = playlists_from_legacy_user_state(&raw) {
-                        if favorites.is_empty() {
-                            favorites = fav;
+            }
+            "library-selection.json" => {
+                if let Some(raw) = read_zip_string(&mut archive, name)? {
+                    patch.selection = serde_json::from_str(&raw).ok();
+                }
+            }
+            "user-state.json" => {
+                if let Some(raw) = read_zip_string(&mut archive, name)? {
+                    // Prefer next-shaped user-state; fall back to legacy converter.
+                    if let Ok(ustate) = serde_json::from_str::<UserStateV1>(&raw) {
+                        if ustate.version > 0
+                            || !ustate.play_counts.is_empty()
+                            || !ustate.settings.is_empty()
+                        {
+                            patch.user_state = Some(ustate);
+                        } else if let Ok(ustate) = user_state::user_state_from_legacy_json(&raw) {
+                            patch.user_state = Some(ustate);
                         }
-                        if playlists.is_empty() {
-                            playlists = pls;
-                        }
-                        break;
+                    } else if let Ok(ustate) = user_state::user_state_from_legacy_json(&raw) {
+                        patch.user_state = Some(ustate);
                     }
                 }
             }
+            "theme-bg.jpg" | "theme-bg.jpeg" | "theme-bg.png" | "theme-bg.webp" | "theme-bg.gif" => {
+                if let Ok(mut zf) = archive.by_name(name) {
+                    let tmp = data_dir
+                        .join("accounts")
+                        .join(format!("{acc_id}_info"))
+                        .join(format!(".restore-{file}"));
+                    if let Some(parent) = tmp.parent() {
+                        let _ = fs::create_dir_all(parent);
+                    }
+                    if let Ok(mut out) = File::create(&tmp) {
+                        if std::io::copy(&mut zf, &mut out).is_ok() {
+                            patch.theme_bg = Some(tmp);
+                        }
+                    }
+                }
+            }
+            _ => {}
+        }
+        merge_account_bundle(&mut per_account, acc_id, patch);
+    }
+
+    // Flat hub/* → default (v3 compat)
+    {
+        let mut patch = AccountRestoreBundle::default();
+        if let Some(raw) = read_zip_string(&mut archive, "hub/favorites.json")? {
+            patch.favorites = serde_json::from_str(&raw).unwrap_or_default();
+        }
+        if let Some(raw) = read_zip_string(&mut archive, "hub/playlists.json")? {
+            patch.playlists = serde_json::from_str(&raw).unwrap_or_default();
+        }
+        if !patch.favorites.is_empty() || !patch.playlists.is_empty() {
+            merge_account_bundle(&mut per_account, DEFAULT_ACCOUNT_ID, patch);
         }
     }
 
-    if !per_account.contains_key(DEFAULT_ACCOUNT_ID)
-        && (!favorites.is_empty() || !playlists.is_empty())
-    {
-        per_account.insert(
-            DEFAULT_ACCOUNT_ID.to_string(),
-            (favorites, playlists, None),
-        );
-    } else if per_account.is_empty() {
-        per_account.insert(
-            DEFAULT_ACCOUNT_ID.to_string(),
-            (favorites, playlists, None),
-        );
+    // Legacy: every .kord/{id}_info/
+    if kord_dest.is_dir() {
+        if let Ok(entries) = fs::read_dir(&kord_dest) {
+            for ent in entries.flatten() {
+                let name = ent.file_name().to_string_lossy().to_string();
+                let Some(acc_id) = account_id_from_info_dir_name(&name) else {
+                    continue;
+                };
+                if !ent.path().is_dir() {
+                    continue;
+                }
+                // Fill gaps from legacy *_info without clobbering richer hub/ v3 data.
+                let existing = per_account.get(&acc_id);
+                let need_core = existing
+                    .map(|e| e.favorites.is_empty() && e.playlists.is_empty() && e.user_state.is_none())
+                    .unwrap_or(true);
+                let need_state = existing.map(|e| e.user_state.is_none()).unwrap_or(true);
+                let need_sel = existing.map(|e| e.selection.is_none()).unwrap_or(true);
+                let need_bg = existing.map(|e| e.theme_bg.is_none()).unwrap_or(true);
+                if need_core {
+                    ingest_legacy_info_dir(&mut per_account, &acc_id, &ent.path());
+                } else {
+                    let mut patch = AccountRestoreBundle::default();
+                    if need_state {
+                        let us_path = ent.path().join("user-state.json");
+                        let us_v1 = ent.path().join("user-state.v1.json");
+                        let raw = if us_path.is_file() {
+                            fs::read_to_string(&us_path).ok()
+                        } else if us_v1.is_file() {
+                            fs::read_to_string(&us_v1).ok()
+                        } else {
+                            None
+                        };
+                        if let Some(raw) = raw {
+                            if let Ok(ustate) = user_state::user_state_from_legacy_json(&raw) {
+                                patch.user_state = Some(ustate);
+                            }
+                        }
+                    }
+                    if need_sel {
+                        let sel_path = ent.path().join("library-selection.json");
+                        if sel_path.is_file() {
+                            if let Ok(raw) = fs::read_to_string(&sel_path) {
+                                patch.selection = serde_json::from_str(&raw).ok();
+                            }
+                        }
+                    }
+                    if need_bg {
+                        for bg in [
+                            "theme-bg.jpg",
+                            "theme-bg.jpeg",
+                            "theme-bg.png",
+                            "theme-bg.webp",
+                            "theme-bg.gif",
+                        ] {
+                            let p = ent.path().join(bg);
+                            if p.is_file() {
+                                patch.theme_bg = Some(p);
+                                break;
+                            }
+                        }
+                    }
+                    merge_account_bundle(&mut per_account, &acc_id, patch);
+                }
+            }
+        }
     }
+
+    // Fallback: user-state/legacy-config/{id}/user-state.v1.json inside zip
+    for name in &zip_names {
+        let Some(rest) = name
+            .strip_prefix("user-state/legacy-config/")
+            .or_else(|| name.strip_prefix("user-state/accounts/"))
+        else {
+            continue;
+        };
+        let Some((acc_id, file)) = rest.split_once('/') else {
+            continue;
+        };
+        if !(file == "user-state.json" || file == "user-state.v1.json") {
+            continue;
+        }
+        let existing = per_account.get(acc_id);
+        if existing.map(|e| e.user_state.is_some()).unwrap_or(false) {
+            continue;
+        }
+        if let Some(raw) = read_zip_string(&mut archive, name)? {
+            let mut patch = AccountRestoreBundle::default();
+            if let Ok((fav, pls)) = playlists_from_legacy_user_state(&raw) {
+                patch.favorites = fav;
+                patch.playlists = pls;
+            }
+            if let Ok(ustate) = user_state::user_state_from_legacy_json(&raw) {
+                patch.user_state = Some(ustate);
+            }
+            merge_account_bundle(&mut per_account, acc_id, patch);
+        }
+    }
+
+    // Keep explicit registry accounts; only promote orphans that have real library links
+    // (favorites/playlists). Other *_info dirs still get user-state files on disk.
+    let mut seen: std::collections::HashSet<String> =
+        registry.iter().map(|a| a.id.clone()).collect();
+    for (acc_id, bundle) in &per_account {
+        if seen.contains(acc_id) {
+            continue;
+        }
+        if acc_id == "route-test" {
+            continue;
+        }
+        if bundle.favorites.is_empty() && bundle.playlists.is_empty() {
+            continue;
+        }
+        seen.insert(acc_id.clone());
+        registry.push(Account {
+            id: acc_id.clone(),
+            name: "Imported".to_string(),
+        });
+    }
+    let registry = accounts::replace_accounts_registry(&data_dir, &registry)?;
 
     // Full library scan then re-link favorites/playlists
     info!(root = %music_root.display(), "restore: scanning library");
@@ -606,25 +923,81 @@ pub async fn restore_backup_zip(state: &AppState, zip_bytes: Vec<u8>) -> Result<
         Err(e) => bail!("scan join error: {e}"),
     };
 
+    let album_folder_to_id: BTreeMap<String, i64> = state
+        .db
+        .list_albums()
+        .unwrap_or_default()
+        .into_iter()
+        .map(|a| (a.folder_key.replace('\\', "/"), a.id))
+        .collect();
+
     let mut fav_n = 0u32;
     let mut pl_n = 0u32;
     let mut tr_n = 0u32;
-    for (acc_id, (favs, pls, sel)) in &per_account {
+    for (acc_id, bundle) in &per_account {
         let _ = accounts::ensure_accounts(&data_dir);
-        // Ensure account dir exists even if not in registry (edge case).
         if let Some(dir) = accounts::account_dir(&data_dir, acc_id) {
-            let _ = fs::create_dir_all(dir);
+            let _ = fs::create_dir_all(&dir);
         }
-        fav_n += state.db.replace_favorites_by_rel_paths(acc_id, favs)?;
-        let (p, t) = state.db.replace_playlists_backup(acc_id, pls)?;
+        fav_n += state
+            .db
+            .replace_favorites_by_rel_paths(acc_id, &bundle.favorites)?;
+        let (p, t) = state
+            .db
+            .replace_playlists_backup(acc_id, &bundle.playlists)?;
         pl_n += p;
         tr_n += t;
-        if let Some(sel) = sel {
+        if let Some(sel) = &bundle.selection {
             let _ = selection::write_library_selection(&data_dir, acc_id, sel);
+        }
+        if let Some(mut ustate) = bundle.user_state.clone() {
+            remap_legacy_excluded_albums(&mut ustate, &album_folder_to_id);
+            if let Err(e) = user_state::save_user_state(&data_dir, acc_id, &ustate) {
+                warn!(error = %e, account = %acc_id, "failed to save restored user-state");
+            }
+        }
+        if let Some(src) = &bundle.theme_bg {
+            let ext = src
+                .file_name()
+                .and_then(|n| n.to_str())
+                .map(|n| n.strip_prefix(".restore-").unwrap_or(n))
+                .and_then(|n| Path::new(n).extension())
+                .and_then(|e| e.to_str())
+                .unwrap_or("jpg");
+            let dest = user_state::theme_bg_path_for_ext(&data_dir, acc_id, ext);
+            if let Some(parent) = dest.parent() {
+                let _ = fs::create_dir_all(parent);
+            }
+            let _ = user_state::delete_theme_bg(&data_dir, acc_id);
+            if let Err(e) = fs::copy(src, &dest) {
+                warn!(error = %e, account = %acc_id, "failed to copy theme-bg");
+            } else if src
+                .file_name()
+                .and_then(|n| n.to_str())
+                .map(|n| n.starts_with(".restore-"))
+                .unwrap_or(false)
+            {
+                let _ = fs::remove_file(src);
+            }
+        }
+    }
+
+    // Activity from extracted .kord if hub config lacked it.
+    let activity_dest = data_dir.join("activity.jsonl");
+    if !activity_dest.is_file() {
+        for cand in [
+            kord_dest.join("global_info").join("kord-activity.log.jsonl"),
+            kord_dest.join("global_info").join("rekord-activity.log.jsonl"),
+        ] {
+            if cand.is_file() {
+                let _ = fs::copy(cand, &activity_dest);
+                break;
+            }
         }
     }
 
     info!(
+        accounts = registry.len(),
         favorites = fav_n,
         playlists = pl_n,
         playlist_tracks = tr_n,

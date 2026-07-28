@@ -7,27 +7,51 @@
     Select,
     TextInput,
   } from "@rekord/ui";
+  import AccountList from "../components/AccountList.svelte";
+  import AccountRow from "../components/AccountRow.svelte";
+  import DiskSpaceMeter from "../components/DiskSpaceMeter.svelte";
+  import IntegrationList from "../components/IntegrationList.svelte";
+  import IntegrationRow from "../components/IntegrationRow.svelte";
+  import RemoteAccessPanel from "../components/RemoteAccessPanel.svelte";
   import SectionNavTabs from "../components/SectionNavTabs.svelte";
+  import SettingsFieldsGrid from "../components/SettingsFieldsGrid.svelte";
+  import ShortcutList from "../components/ShortcutList.svelte";
+  import ThemePicker from "../components/ThemePicker.svelte";
   import UiIcon from "../components/icons/UiIcon.svelte";
   import {
     getSelectedAccountId,
     type AccountsResponse,
   } from "../lib/account";
+  import type { ShortcutItem } from "../lib/shortcutList";
   import { session } from "../lib/session.svelte";
-  import { api, type HubConfig, type Track } from "../lib/api";
+  import {
+    api,
+    formatBytes,
+    type HubConfig,
+    type RemoteAccessState,
+    type Track,
+  } from "../lib/api";
+  import {
+    buildAchievementsSnapshot,
+    titleForNumericLevel,
+  } from "../lib/achievements";
   import {
     applyLegacyUserState,
     pickUserStateFromKordFolder,
     type LegacyImportReport,
   } from "../lib/legacyImport";
   import { i18n, t } from "../lib/i18n.svelte";
+  import { trackGenre } from "../lib/trackMoods";
   import {
-    UI_THEMES,
+    VISUALIZER_MODES,
     applyTheme,
     loadUserPrefs,
     normalizeTheme,
     patchUserPrefs,
     type CrossfadeSec,
+    type CustomThemeSettings,
+    type UiTheme,
+    type VisualizerMode,
   } from "../lib/userPrefs";
   import { APP_VERSION } from "../lib/version";
 
@@ -42,19 +66,13 @@
     { value: "en", label: t("settings.langEn") },
   ]);
 
-  const themeOptions = $derived(
-    UI_THEMES.map((id) => ({
-      value: id,
-      label:
-        id === "midnight"
-          ? `${t(`theme.${id}`)} (${t("settings.themeDefault")})`
-          : t(`theme.${id}`),
-    })),
-  );
-
   const glassOptions = $derived([
     { value: "off", label: t("settings.glassOff") },
-    { value: "soft", label: t("settings.glassSoftSoon") },
+    {
+      value: "soft",
+      label: t("settings.glassSoftSoon"),
+      disabled: true,
+    },
   ]);
 
   // Stable section ids (Italian) — labels are translated.
@@ -69,25 +87,17 @@
   let fadeValue = $state(String(session.crossfadeSec));
   let localeValue = $state(i18n.locale);
   let themeValue = $state(loadUserPrefs().theme);
+  let customThemeValue = $state(loadUserPrefs().customTheme);
   let section = $state("Interfaccia");
 
   let accounts = $state<AccountsResponse | null>(null);
   let selectedAccountId = $state(getSelectedAccountId() || "default");
   let newAccountName = $state("");
-  let renameDraft = $state("");
   let accountBusy = $state(false);
   let accountErr = $state("");
   let accountOk = $state("");
-
-  const accountOptions = $derived(
-    (accounts?.accounts || []).map((a) => ({
-      value: a.id,
-      label:
-        a.id === accounts?.defaultAccountId
-          ? `${a.name} (${t("settings.accountDefaultBadge")})`
-          : a.name,
-    })),
-  );
+  /** accountId → numeric level (legacy account-row pill) */
+  let accountLevels = $state<Record<string, number>>({});
 
   let importBusy = $state(false);
   let importPhase = $state("");
@@ -110,6 +120,67 @@
   let integOk = $state("");
   let discogsDraft = $state("");
   let cookiesInput: HTMLInputElement | undefined = $state();
+  let vizValue = $state(loadUserPrefs().visualizerMode);
+  let remoteBusy = $state(false);
+  let remoteInfo = $state<RemoteAccessState | null>(null);
+  let remoteErr = $state("");
+  let remoteUrlCopyOk = $state("");
+  let remoteUrlCopyTimer: number | null = null;
+  let remotePollTimer: number | null = null;
+  let diag = $state<Awaited<ReturnType<typeof api.diagnostics>> | null>(null);
+  let activityEntries = $state<Array<{ ts: string; kind: string; message: string }>>([]);
+
+  const vizLabelKeys: Record<(typeof VISUALIZER_MODES)[number], string> = {
+    bars: "settings.vizBars",
+    mirror: "settings.vizMirror",
+    wave: "settings.vizOsc",
+    smooth: "settings.vizOscSoft",
+    hmb: "settings.vizHmb",
+    signals: "settings.vizSignals",
+    karaoke: "settings.vizKaraoke",
+  };
+
+  const vizOptions = $derived(
+    VISUALIZER_MODES.map((id) => ({
+      value: id,
+      label: t(vizLabelKeys[id]),
+    })),
+  );
+
+  const shortcutItems = $derived<ShortcutItem[]>([
+    {
+      id: "search",
+      keys: [
+        { text: "/", size: "solo" },
+        { text: t("settings.kbdCtrlK") },
+      ],
+      keySep: t("settings.shortcutOr"),
+      description: t("settings.shortcutSearchDesc"),
+    },
+    {
+      id: "play",
+      keys: [{ text: t("settings.kbdSpace"), size: "wide" }],
+      description: t("settings.shortcutPlayDesc"),
+    },
+    {
+      id: "seek",
+      keys: [
+        { text: t("settings.kbdArrowLeft"), size: "solo" },
+        { text: t("settings.kbdArrowRight"), size: "solo" },
+      ],
+      keySep: "/",
+      description: t("settings.shortcutSeekDesc"),
+    },
+    {
+      id: "listen",
+      keys: [{ text: t("settings.kbdI"), size: "solo" }],
+      description: t("settings.shortcutListenDesc"),
+    },
+  ]);
+
+  function selectValue(ev: Event): string {
+    return (ev.currentTarget as HTMLSelectElement).value;
+  }
 
   async function loadHubConfig() {
     try {
@@ -119,8 +190,140 @@
     }
   }
 
+  async function loadRemote() {
+    try {
+      remoteInfo = await api.remoteAccess();
+      if (remoteInfo.status !== "error") remoteErr = "";
+      else if (remoteInfo.error) remoteErr = remoteInfo.error;
+    } catch (e) {
+      remoteInfo = null;
+      remoteErr = e instanceof Error ? e.message : String(e);
+    }
+  }
+
+  async function remoteLogin() {
+    remoteBusy = true;
+    remoteErr = "";
+    try {
+      const d = await api.remoteLogin();
+      if (d.loginUrl) window.open(d.loginUrl, "_blank", "noopener,noreferrer");
+      await loadRemote();
+    } catch (e) {
+      remoteErr = e instanceof Error ? e.message : String(e);
+    } finally {
+      remoteBusy = false;
+    }
+  }
+
+  async function remoteLogout() {
+    remoteBusy = true;
+    remoteErr = "";
+    try {
+      remoteInfo = await api.remoteLogout();
+    } catch (e) {
+      remoteErr = e instanceof Error ? e.message : String(e);
+    } finally {
+      remoteBusy = false;
+    }
+  }
+
+  async function remoteToggleShare() {
+    remoteBusy = true;
+    remoteErr = "";
+    try {
+      const running =
+        remoteInfo?.status === "running" || remoteInfo?.status === "starting";
+      remoteInfo = running ? await api.remoteStop() : await api.remoteStart();
+      if (remoteInfo.error) remoteErr = remoteInfo.error;
+    } catch (e) {
+      remoteErr = e instanceof Error ? e.message : String(e);
+      await loadRemote();
+    } finally {
+      remoteBusy = false;
+    }
+  }
+
+  async function copyRemoteUrl(url: string) {
+    const value = url.trim();
+    if (!value) return;
+    try {
+      if (navigator.clipboard?.writeText) {
+        await navigator.clipboard.writeText(value);
+      } else {
+        const ta = document.createElement("textarea");
+        ta.value = value;
+        ta.setAttribute("readonly", "");
+        ta.style.position = "fixed";
+        ta.style.left = "-9999px";
+        document.body.appendChild(ta);
+        ta.select();
+        const ok = document.execCommand("copy");
+        document.body.removeChild(ta);
+        if (!ok) throw new Error("copy failed");
+      }
+      if (remoteUrlCopyTimer != null) window.clearTimeout(remoteUrlCopyTimer);
+      remoteUrlCopyOk = t("settings.remoteUrlCopied");
+      remoteUrlCopyTimer = window.setTimeout(() => {
+        remoteUrlCopyOk = "";
+        remoteUrlCopyTimer = null;
+      }, 4000);
+    } catch {
+      remoteErr = t("settings.remoteUrlCopyFailed");
+    }
+  }
+
+  async function loadDiag() {
+    try {
+      diag = await api.diagnostics();
+    } catch {
+      diag = null;
+    }
+  }
+
+  async function loadActivity() {
+    try {
+      const res = await api.activityLog();
+      activityEntries = res.entries || [];
+    } catch {
+      activityEntries = [];
+    }
+  }
+
+  function onVizChange(next: string) {
+    const mode = next as VisualizerMode;
+    if ((VISUALIZER_MODES as readonly string[]).includes(mode)) {
+      vizValue = mode;
+      patchUserPrefs({ visualizerMode: mode });
+    }
+  }
+
   $effect(() => {
     if (section === "Libreria") void loadHubConfig();
+    if (section === "Sistema") {
+      void loadDiag();
+      void loadActivity();
+    }
+  });
+
+  $effect(() => {
+    if (section !== "Rete") {
+      if (remotePollTimer != null) {
+        window.clearInterval(remotePollTimer);
+        remotePollTimer = null;
+      }
+      return;
+    }
+    void loadRemote();
+    if (remotePollTimer != null) window.clearInterval(remotePollTimer);
+    remotePollTimer = window.setInterval(() => {
+      void loadRemote();
+    }, 5000);
+    return () => {
+      if (remotePollTimer != null) {
+        window.clearInterval(remotePollTimer);
+        remotePollTimer = null;
+      }
+    };
   });
 
   async function onCookiesPicked(ev: Event) {
@@ -133,7 +336,7 @@
     integOk = "";
     try {
       hubConfig = await api.uploadYoutubeCookies(file);
-      integOk = "Cookie YouTube caricati.";
+      integOk = t("settings.youtubeCookiesSaved");
     } catch (e) {
       integErr = e instanceof Error ? e.message : String(e);
     } finally {
@@ -147,7 +350,7 @@
     integOk = "";
     try {
       hubConfig = await api.clearYoutubeCookies();
-      integOk = "Cookie YouTube rimossi.";
+      integOk = t("settings.youtubeCookiesCleared");
     } catch (e) {
       integErr = e instanceof Error ? e.message : String(e);
     } finally {
@@ -162,7 +365,7 @@
     try {
       hubConfig = await api.setDiscogsToken(discogsDraft);
       discogsDraft = "";
-      integOk = "Token Discogs salvato.";
+      integOk = t("settings.discogsTokenSaved");
     } catch (e) {
       integErr = e instanceof Error ? e.message : String(e);
     } finally {
@@ -176,7 +379,7 @@
     integOk = "";
     try {
       hubConfig = await api.clearDiscogsToken();
-      integOk = "Token Discogs rimosso.";
+      integOk = t("settings.discogsTokenCleared");
     } catch (e) {
       integErr = e instanceof Error ? e.message : String(e);
     } finally {
@@ -198,27 +401,93 @@
       const data = await api.ensureAccountSession();
       accounts = data;
       selectedAccountId = getSelectedAccountId() || data.defaultAccountId;
-      const cur = data.accounts.find((a) => a.id === selectedAccountId);
-      renameDraft = cur?.name || "";
+      await loadAccountLevels(data);
     } catch (e) {
       accountErr = e instanceof Error ? e.message : String(e);
     }
   }
 
-  async function onActiveAccountChange() {
-    if (!selectedAccountId || selectedAccountId === getSelectedAccountId()) return;
+  async function levelForAccountId(accountId: string): Promise<number | null> {
+    try {
+      await session.ensureCatalogTracks();
+      const tracks = session.catalogTracks;
+      const libraryTrackCount =
+        session.stats?.track_count ?? tracks.length;
+      if (accountId === getSelectedAccountId()) {
+        const prefs = loadUserPrefs();
+        const playlists = session.playlists;
+        const playlistTrackCount = playlists.reduce(
+          (s, p) => s + (p.track_count ?? 0),
+          0,
+        );
+        return buildAchievementsSnapshot({
+          playCounts: prefs.playCounts,
+          tracks,
+          favoritesCount: session.favorites.length,
+          playlistsCount: playlists.length,
+          playlistTrackCount,
+          libraryTrackCount,
+          shuffleBlocks:
+            prefs.excludedRelPaths.length + prefs.excludedAlbumIds.length,
+          genreForTrack: (tr) => trackGenre(tr),
+        }).level.level;
+      }
+      const [state, favorites, playlists] = await Promise.all([
+        api.getUserStateForAccount(accountId),
+        api.favoritesForAccount(accountId),
+        api.playlistsForAccount(accountId),
+      ]);
+      const playlistTrackCount = playlists.reduce(
+        (s, p) => s + (p.track_count ?? 0),
+        0,
+      );
+      return buildAchievementsSnapshot({
+        playCounts: state.playCounts ?? {},
+        tracks,
+        favoritesCount: favorites.length,
+        playlistsCount: playlists.length,
+        playlistTrackCount,
+        libraryTrackCount,
+        shuffleBlocks:
+          (state.excludedRelPaths?.length ?? 0) +
+          (state.excludedAlbumIds?.length ?? 0),
+        genreForTrack: (tr) => trackGenre(tr),
+      }).level.level;
+    } catch {
+      return null;
+    }
+  }
+
+  async function loadAccountLevels(snap: AccountsResponse) {
+    const entries = await Promise.all(
+      snap.accounts.map(async (a) => {
+        const level = await levelForAccountId(a.id);
+        return level != null ? ([a.id, level] as const) : null;
+      }),
+    );
+    const next: Record<string, number> = {};
+    for (const e of entries) {
+      if (e) next[e[0]] = e[1];
+    }
+    accountLevels = next;
+  }
+
+  async function selectAccount(id: string) {
+    if (!id || id === getSelectedAccountId()) return;
     accountBusy = true;
     accountErr = "";
     accountOk = "";
     try {
-      await session.switchAccount(selectedAccountId);
+      selectedAccountId = id;
+      await session.switchAccount(id);
       themeValue = loadUserPrefs().theme;
+      customThemeValue = loadUserPrefs().customTheme;
       localeValue = i18n.locale;
       fadeValue = String(session.crossfadeSec);
-      const cur = accounts?.accounts.find((a) => a.id === selectedAccountId);
-      renameDraft = cur?.name || "";
+      vizValue = loadUserPrefs().visualizerMode;
       accountOk = t("settings.accountSwitched");
       window.setTimeout(() => (accountOk = ""), 3000);
+      if (accounts) void loadAccountLevels(accounts);
     } catch (e) {
       accountErr = e instanceof Error ? e.message : String(e);
       selectedAccountId = getSelectedAccountId() || "default";
@@ -242,10 +511,13 @@
         selectedAccountId = created;
         await session.switchAccount(created);
         themeValue = loadUserPrefs().theme;
+        customThemeValue = loadUserPrefs().customTheme;
         localeValue = i18n.locale;
+        vizValue = loadUserPrefs().visualizerMode;
       }
       accountOk = t("settings.accountCreated");
       window.setTimeout(() => (accountOk = ""), 3000);
+      void loadAccountLevels(next);
     } catch (e) {
       accountErr = e instanceof Error ? e.message : String(e);
     } finally {
@@ -253,39 +525,29 @@
     }
   }
 
-  async function renameAccount() {
-    const name = renameDraft.trim();
-    if (!name || !selectedAccountId) return;
-    accountBusy = true;
-    accountErr = "";
-    try {
-      accounts = await api.renameAccount(selectedAccountId, name);
-      accountOk = t("settings.accountRenamed");
-      window.setTimeout(() => (accountOk = ""), 3000);
-    } catch (e) {
-      accountErr = e instanceof Error ? e.message : String(e);
-    } finally {
-      accountBusy = false;
-    }
-  }
-
-  async function removeAccount() {
-    if (!accounts || selectedAccountId === accounts.defaultAccountId) return;
-    const acc = accounts.accounts.find((a) => a.id === selectedAccountId);
-    const name = acc?.name || selectedAccountId;
+  async function removeAccount(id: string) {
+    if (!accounts || id === accounts.defaultAccountId) return;
+    const acc = accounts.accounts.find((a) => a.id === id);
+    const name = acc?.name || id;
     if (!confirm(t("settings.accountRemoveConfirm", { name }))) return;
     accountBusy = true;
     accountErr = "";
     try {
-      const next = await api.deleteAccount(selectedAccountId);
+      const next = await api.deleteAccount(id);
       accounts = next;
-      const fallback = next.defaultAccountId || next.accounts[0]?.id || "default";
-      selectedAccountId = fallback;
-      await session.switchAccount(fallback);
-      themeValue = loadUserPrefs().theme;
-      localeValue = i18n.locale;
+      const current = getSelectedAccountId();
+      if (current === id) {
+        const fallback = next.defaultAccountId || next.accounts[0]?.id || "default";
+        selectedAccountId = fallback;
+        await session.switchAccount(fallback);
+        themeValue = loadUserPrefs().theme;
+        localeValue = i18n.locale;
+      } else {
+        selectedAccountId = current || next.defaultAccountId;
+      }
       accountOk = t("settings.accountRemoved");
       window.setTimeout(() => (accountOk = ""), 3000);
+      void loadAccountLevels(next);
     } catch (e) {
       accountErr = e instanceof Error ? e.message : String(e);
     } finally {
@@ -309,21 +571,29 @@
     }
   }
 
-  function onFadeChange() {
-    const n = Number(fadeValue) as CrossfadeSec;
+  function onFadeChange(next: string) {
+    fadeValue = next;
+    const n = Number(next) as CrossfadeSec;
     if (n === 0 || n === 3 || n === 5) session.setCrossfade(n);
   }
 
-  function onLocaleChange() {
-    i18n.setLocale(localeValue === "en" ? "en" : "it");
+  function onLocaleChange(next: string) {
+    i18n.setLocale(next === "en" ? "en" : "it");
     localeValue = i18n.locale;
   }
 
-  function onThemeChange() {
-    const next = normalizeTheme(themeValue);
-    themeValue = next;
-    patchUserPrefs({ theme: next });
-    applyTheme(next);
+  function onThemeChange(next: UiTheme) {
+    const theme = normalizeTheme(next);
+    themeValue = theme;
+    patchUserPrefs({ theme });
+    applyTheme(theme, customThemeValue);
+  }
+
+  function onCustomThemeChange(next: CustomThemeSettings) {
+    customThemeValue = next;
+    themeValue = "custom";
+    patchUserPrefs({ theme: "custom", customTheme: next });
+    applyTheme("custom", next);
   }
 
   async function runLegacyImport(state: Parameters<typeof applyLegacyUserState>[0]) {
@@ -358,7 +628,9 @@
       });
       importReport = report;
       themeValue = report.theme;
+      customThemeValue = loadUserPrefs().customTheme;
       fadeValue = String(loadUserPrefs().crossfadeSec);
+      vizValue = loadUserPrefs().visualizerMode;
       importPhase = "Completato";
       await session.refreshAll();
     } catch (e) {
@@ -467,38 +739,34 @@
         {#if accountOk}
           <p class="hint ok">{accountOk}</p>
         {/if}
-        <Field label={t("settings.accountActive")}>
-          <Select
-            options={accountOptions.length
-              ? accountOptions
-              : [{ value: "default", label: t("settings.accountLocal") }]}
-            bind:value={selectedAccountId}
-            onchange={onActiveAccountChange}
-            disabled={accountBusy || !accountOptions.length}
-            aria-label={t("settings.accountActive")}
-          />
-        </Field>
-        <Field label={t("settings.accountRename")}>
-          <TextInput
-            bind:value={renameDraft}
-            placeholder={t("settings.accountRenamePh")}
-            disabled={accountBusy}
-          />
-        </Field>
-        <ActionRow>
-          <Button disabled={accountBusy || !renameDraft.trim()} onclick={renameAccount}>
-            {t("settings.accountRenameCta")}
-          </Button>
-          <Button
-            variant="ghost"
-            disabled={accountBusy ||
-              !accounts ||
-              selectedAccountId === accounts.defaultAccountId}
-            onclick={removeAccount}
-          >
-            {t("settings.accountRemove")}
-          </Button>
-        </ActionRow>
+        {#if accounts}
+          <AccountList>
+            {#each accounts.accounts as account (account.id)}
+              {@const level = accountLevels[account.id]}
+              {@const isDefault = account.id === accounts.defaultAccountId}
+              <AccountRow
+                name={account.name}
+                selected={account.id === selectedAccountId}
+                busy={accountBusy}
+                level={level ?? null}
+                levelTitle={level != null ? titleForNumericLevel(level) : ""}
+                levelLabel={level != null
+                  ? t("achievements.levelBadge", { n: level })
+                  : ""}
+                defaultBadge={isDefault && level == null
+                  ? t("settings.accountDefaultBadge")
+                  : ""}
+                removeLabel={t("settings.accountRemove")}
+                removeDisabled={isDefault}
+                removeTitle={isDefault
+                  ? t("settings.accountRemoveDisabledDefault")
+                  : undefined}
+                onselect={() => void selectAccount(account.id)}
+                onremove={() => void removeAccount(account.id)}
+              />
+            {/each}
+          </AccountList>
+        {/if}
         <Field label={t("settings.accountNewName")}>
           <TextInput
             bind:value={newAccountName}
@@ -516,51 +784,127 @@
         </ActionRow>
       </Panel>
     {:else if section === "Interfaccia"}
-      <Panel title={t("settings.panel.ui")}>
-        <Field label={t("settings.language")}>
-          <Select
-            options={languageOptions}
-            bind:value={localeValue}
-            onchange={onLocaleChange}
-            aria-label={t("settings.language")}
-          />
-        </Field>
-        <Field label={t("settings.theme")}>
-          <Select
-            options={themeOptions}
-            bind:value={themeValue}
-            onchange={onThemeChange}
-            aria-label={t("settings.themeAria")}
-          />
-        </Field>
-        <Field label={t("settings.glass")}>
-          <Select options={glassOptions} value="off" disabled />
-        </Field>
+      <Panel title={t("settings.panel.ui")} class="settings-ui-section">
+        <SettingsFieldsGrid>
+          <Field label={t("settings.language")}>
+            <Select
+              options={languageOptions}
+              bind:value={localeValue}
+              aria-label={t("settings.language")}
+              onchange={(ev) => onLocaleChange(selectValue(ev))}
+            />
+          </Field>
+          <Field label={t("settings.glass")}>
+            <Select
+              options={glassOptions}
+              value="off"
+              aria-label={t("settings.glass")}
+              onchange={() => {}}
+            />
+          </Field>
+          <div class="settings-fields-grid__span">
+            <Field label={t("settings.theme")}>
+              <ThemePicker
+                value={themeValue}
+                customTheme={customThemeValue}
+                onchange={onThemeChange}
+                onCustomThemeChange={onCustomThemeChange}
+                ariaLabel={t("settings.themeAria")}
+              />
+            </Field>
+          </div>
+        </SettingsFieldsGrid>
       </Panel>
-      <Panel title={t("settings.panel.player")}>
-        <Field label={t("settings.crossfade")}>
-          <Select
-            options={fadeOptions}
-            bind:value={fadeValue}
-            onchange={onFadeChange}
-            aria-label={t("settings.crossfadeAria")}
-          />
-        </Field>
+      <Panel title={t("settings.panel.player")} class="settings-player-section">
+        <SettingsFieldsGrid>
+          <Field label={t("settings.crossfade")}>
+            <Select
+              options={fadeOptions}
+              bind:value={fadeValue}
+              aria-label={t("settings.crossfadeAria")}
+              onchange={(ev) => onFadeChange(selectValue(ev))}
+            />
+          </Field>
+          <Field label={t("settings.visualizer")}>
+            <Select
+              options={vizOptions}
+              bind:value={vizValue}
+              aria-label={t("settings.visualizerAria")}
+              onchange={(ev) => onVizChange(selectValue(ev))}
+            />
+          </Field>
+        </SettingsFieldsGrid>
         <p class="hint">{t("settings.playerHint")}</p>
       </Panel>
-      <Panel title={t("settings.panel.shortcuts")}>
-        <ul class="keys">
-          <li><kbd>Ctrl</kbd>+<kbd>K</kbd> {t("settings.shortcut.search")}</li>
-          <li><kbd>Space</kbd> {t("settings.shortcut.playPause")}</li>
-          <li><kbd>←</kbd> / <kbd>→</kbd> {t("settings.shortcut.prevNext")}</li>
-          <li><kbd>S</kbd> {t("settings.shortcut.shuffle")}</li>
-        </ul>
+      <Panel title={t("settings.panel.shortcuts")} class="settings-shortcuts-section">
+        <ShortcutList items={shortcutItems} />
       </Panel>
     {:else if section === "Libreria"}
+      {@const ytActionsOpen =
+        !hubConfig?.youtubeCookiesLockedByEnv &&
+        hubConfig?.youtubeCookiesWritable !== false}
+      {@const discogsActionsOpen = !hubConfig?.discogsLockedByEnv}
+      {#snippet youtubeActions()}
+        <input
+          bind:this={cookiesInput}
+          class="sr-only"
+          type="file"
+          accept=".txt,text/plain"
+          onchange={(e) => void onCookiesPicked(e)}
+        />
+        <Button disabled={integBusy} onclick={() => cookiesInput?.click()}>
+          {integBusy ? t("settings.saving") : t("settings.youtubeCookiesChoose")}
+        </Button>
+        <Button
+          variant="ghost"
+          disabled={integBusy || !hubConfig?.youtubeCookiesConfigured}
+          onclick={() => void clearCookies()}
+        >
+          {t("settings.youtubeCookiesClear")}
+        </Button>
+      {/snippet}
+      {#snippet discogsActions()}
+        <TextInput
+          type="password"
+          bind:value={discogsDraft}
+          placeholder={t("settings.discogsTokenPh")}
+          autocomplete="off"
+          aria-label={t("settings.discogsTokenAria")}
+          disabled={integBusy}
+        />
+        <div class="integration-row__btn-row">
+          <Button
+            disabled={integBusy || !discogsDraft.trim()}
+            onclick={() => void saveDiscogs()}
+          >
+            {integBusy ? t("settings.saving") : t("settings.discogsSave")}
+          </Button>
+          <Button
+            variant="ghost"
+            disabled={integBusy || !hubConfig?.discogsTokenConfigured}
+            onclick={() => void clearDiscogs()}
+          >
+            {t("settings.discogsClear")}
+          </Button>
+        </div>
+      {/snippet}
       <Panel title={t("settings.panel.library")}>
         <Field label={t("settings.libraryPath")}>
           <TextInput value={session.stats?.music_root ?? "—"} readonly />
         </Field>
+        {#if session.stats?.disk_total_bytes != null && session.stats?.disk_available_bytes != null}
+          <Field label={t("settings.libraryDisk")}>
+            <DiskSpaceMeter
+              freeBytes={session.stats.disk_available_bytes}
+              totalBytes={session.stats.disk_total_bytes}
+              label={t("settings.libraryDisk")}
+              valueText={t("settings.libraryDiskValue", {
+                free: formatBytes(session.stats.disk_available_bytes),
+                total: formatBytes(session.stats.disk_total_bytes),
+              })}
+            />
+          </Field>
+        {/if}
         <p class="hint">
           {t("settings.libraryHint", { at: session.stats?.last_scan_at ?? "—" })}
         </p>
@@ -570,79 +914,83 @@
           >
         </ActionRow>
       </Panel>
-      <Panel title={t("settings.panel.integrations")}>
-        <Field label={t("settings.youtubeCookies")}>
-          <TextInput
-            value={hubConfig?.youtubeCookiesConfigured
-              ? hubConfig.youtubeCookiesLabel || "cookies.txt"
-              : "Non configurati"}
-            readonly
-          />
-        </Field>
-        {#if hubConfig?.youtubeCookiesLockedByEnv}
-          <p class="hint">Bloccati da variabile d’ambiente (REKORD_YTDLP_COOKIES).</p>
-        {:else}
-          <ActionRow>
-            <Button
-              disabled={integBusy || hubConfig?.youtubeCookiesWritable === false}
-              onclick={() => cookiesInput?.click()}
-            >
-              {integBusy ? "…" : "Carica cookies.txt"}
-            </Button>
-            <Button
-              variant="ghost"
-              disabled={integBusy || !hubConfig?.youtubeCookiesConfigured}
-              onclick={() => void clearCookies()}
-            >
-              Rimuovi
-            </Button>
-          </ActionRow>
-          <input
-            bind:this={cookiesInput}
-            class="sr-only"
-            type="file"
-            accept=".txt,text/plain"
-            onchange={(e) => void onCookiesPicked(e)}
-          />
-        {/if}
+      <Panel title={t("settings.panel.integrations")} class="settings-integrations-section">
+        <IntegrationList>
+          <IntegrationRow
+            title={t("settings.youtubeCookiesHeading")}
+            statusOn={!!hubConfig?.youtubeCookiesConfigured}
+            stretchActions
+            actions={ytActionsOpen ? youtubeActions : undefined}
+          >
+            {#snippet children()}
+              <p class="integration-row__lead">
+                {t("settings.youtubeCookiesLead")}
+              </p>
+            {/snippet}
+            {#snippet status()}
+              {#if hubConfig?.youtubeCookiesConfigured}
+                {t("settings.youtubeCookiesActive", {
+                  name: hubConfig.youtubeCookiesLabel || "cookies.txt",
+                })}
+              {:else}
+                {t("settings.youtubeCookiesMissing")}
+              {/if}
+            {/snippet}
+            {#snippet aside()}
+              {#if hubConfig?.youtubeCookiesLockedByEnv}
+                <p class="integration-row__warn">
+                  {t("settings.youtubeCookiesEnvLocked")}
+                </p>
+              {:else if hubConfig?.youtubeCookiesWritable === false}
+                <p class="integration-row__lead">
+                  {t("settings.integrationsReadOnly")}
+                </p>
+              {/if}
+            {/snippet}
+          </IntegrationRow>
 
-        <Field label={t("settings.discogsToken")}>
-          <TextInput
-            bind:value={discogsDraft}
-            placeholder={hubConfig?.discogsTokenConfigured
-              ? "Token configurato — inserisci per sostituire"
-              : "Token Discogs (opzionale)"}
-            disabled={integBusy || hubConfig?.discogsLockedByEnv}
-          />
-        </Field>
-        {#if hubConfig?.discogsLockedByEnv}
-          <p class="hint">Bloccato da variabile d’ambiente (REKORD_DISCOGS_TOKEN).</p>
-        {:else}
-          <ActionRow>
-            <Button
-              disabled={integBusy || !discogsDraft.trim()}
-              onclick={() => void saveDiscogs()}
-            >
-              Salva token
-            </Button>
-            <Button
-              variant="ghost"
-              disabled={integBusy || !hubConfig?.discogsTokenConfigured}
-              onclick={() => void clearDiscogs()}
-            >
-              Rimuovi
-            </Button>
-          </ActionRow>
-        {/if}
+          <IntegrationRow
+            title={t("settings.discogsHeading")}
+            statusOn={!!hubConfig?.discogsTokenConfigured}
+            stackedActions
+            actions={discogsActionsOpen ? discogsActions : undefined}
+          >
+            {#snippet children()}
+              <p class="integration-row__lead">{t("settings.discogsLead")}</p>
+            {/snippet}
+            {#snippet status()}
+              {#if hubConfig?.discogsTokenConfigured}
+                {t("settings.discogsHintWithToken")}
+              {:else}
+                {t("settings.discogsHintNoToken")}
+              {/if}
+              {" · "}
+              <a
+                class="integration-row__link"
+                href="https://www.discogs.com/settings/developers"
+                target="_blank"
+                rel="noopener noreferrer"
+              >
+                {t("settings.discogsDevLink")}
+              </a>
+            {/snippet}
+            {#snippet aside()}
+              {#if hubConfig?.discogsLockedByEnv}
+                <p class="integration-row__warn">
+                  {t("settings.discogsEnvLocked")}
+                </p>
+              {/if}
+            {/snippet}
+          </IntegrationRow>
+        </IntegrationList>
         {#if integOk}
           <p class="hint import-status">{integOk}</p>
         {/if}
         {#if integErr}
           <p class="import-error" role="alert">{integErr}</p>
         {/if}
-        <p class="hint">
-          Cookie Netscape per yt-dlp e token Discogs sono salvati in data_dir del server.
-          yt-dlp deve essere installato sul PATH (o YTDLP_PATH).
+        <p class="hint settings-integrations-footnote">
+          {t("settings.integrationsFootnote")}
         </p>
       </Panel>
     {:else if section === "Rete"}
@@ -662,11 +1010,17 @@
         </p>
       </Panel>
       <Panel title={t("settings.panel.remote")}>
-        <p class="hint">{t("settings.remoteHint")}</p>
-        <ActionRow>
-          <Button disabled>{t("settings.remoteStart")}</Button>
-          <Button variant="ghost" disabled>{t("settings.remoteQr")}</Button>
-        </ActionRow>
+        <RemoteAccessPanel
+          remote={remoteInfo}
+          busy={remoteBusy}
+          error={remoteErr}
+          copyOk={remoteUrlCopyOk}
+          onLogin={() => void remoteLogin()}
+          onLogout={() => void remoteLogout()}
+          onToggleShare={() => void remoteToggleShare()}
+          onCopyUrl={(url) => void copyRemoteUrl(url)}
+          onRefresh={() => void loadRemote()}
+        />
       </Panel>
     {:else}
       <Panel title={t("settings.panel.backup")}>
@@ -764,25 +1118,51 @@
         {/if}
       </Panel>
       <Panel title={t("settings.panel.activity")}>
-        <p class="hint">{t("settings.activityStub")}</p>
+        <ActionRow>
+          <Button variant="ghost" onclick={() => void loadActivity()}>Aggiorna log</Button>
+        </ActionRow>
         <ul class="log">
           <li><span>info</span> Hub online · {session.status || "—"}</li>
           <li><span>scan</span> Ultimo scan · {session.stats?.last_scan_at ?? "—"}</li>
+          {#each activityEntries.slice(0, 40) as e}
+            <li><span>{e.kind}</span> {e.ts} · {e.message}</li>
+          {/each}
         </ul>
       </Panel>
       <Panel title={t("settings.panel.diagnostics")}>
         <p class="hint">
           {t("settings.diagHint", {
-            version: APP_VERSION,
-            tracks: session.stats?.track_count ?? "—",
-            albums: session.stats?.album_count ?? "—",
+            version: diag?.version ?? APP_VERSION,
+            tracks: diag?.db.trackCount ?? session.stats?.track_count ?? "—",
+            albums: diag?.db.albumCount ?? session.stats?.album_count ?? "—",
           })}
         </p>
+        {#if diag}
+          <p class="hint">
+            Uptime {diag.uptimeSecs}s · scanning {diag.scanning ? "sì" : "no"} · download attivi
+            {diag.activeDownloads}
+          </p>
+        {/if}
         <ActionRow>
-          <Button variant="ghost" onclick={() => void session.refreshAll()}
-            >{t("settings.healthCheck")}</Button
+          <Button
+            variant="ghost"
+            onclick={() =>
+              void (async () => {
+                await session.refreshAll();
+                await loadDiag();
+              })()}>{t("settings.healthCheck")}</Button
           >
-          <Button variant="ghost" disabled>{t("settings.copyReport")}</Button>
+          <Button
+            variant="ghost"
+            onclick={() => {
+              const report = JSON.stringify(
+                { app: APP_VERSION, diag, stats: session.stats, remote: remoteInfo },
+                null,
+                2,
+              );
+              void navigator.clipboard.writeText(report);
+            }}>{t("settings.copyReport")}</Button
+          >
         </ActionRow>
       </Panel>
     {/if}
@@ -803,7 +1183,6 @@
     color: var(--rk-accent-2, #6bcf8e);
   }
 
-  .keys,
   .log {
     list-style: none;
     margin: 0;
@@ -812,11 +1191,6 @@
     gap: 0.55rem;
   }
 
-  .keys {
-    grid-template-columns: repeat(2, minmax(0, 1fr));
-  }
-
-  .keys li,
   .log li {
     display: flex;
     gap: 0.45rem;
@@ -824,21 +1198,6 @@
     flex-wrap: wrap;
     color: var(--rk-muted-strong);
     font-size: 0.88rem;
-  }
-
-  @media (max-width: 720px) {
-    .keys {
-      grid-template-columns: minmax(0, 1fr);
-    }
-  }
-
-  kbd {
-    font-family: var(--rk-mono);
-    font-size: 0.72rem;
-    border: 1px solid var(--rk-line);
-    border-radius: 4px;
-    padding: 0.1rem 0.35rem;
-    background: var(--rk-surface);
   }
 
   .log span {

@@ -13,15 +13,14 @@
   import { initials } from "../lib/initials";
   import { player } from "../lib/player";
   import { session } from "../lib/session.svelte";
-  import { previewGenre } from "../lib/trackMoods";
+  import { trackGenre } from "../lib/trackMoods";
 
-  type MetricMode = "plays" | "favorites" | "blocked" | "plectr";
+  type MetricMode = "plays" | "favorites" | "blocked";
 
   const TOP_N = 3;
-  const METRIC_TABS = [
+  const METRIC_TABS: { id: MetricMode; label: string }[] = [
     { id: "plays", label: "Ascolti" },
     { id: "favorites", label: "Preferiti" },
-    { id: "plectr", label: "Plectr" },
     { id: "blocked", label: "Bloccati" },
   ];
 
@@ -164,9 +163,7 @@
     for (const tr of tracks) {
       const n = score.get(tr.id) ?? 0;
       if (n <= 0) continue;
-      const label =
-        previewGenre(tr.rel_path) ??
-        previewGenre(`${tr.artist_name}/${tr.album_name}`);
+      const label = trackGenre(tr);
       if (!label || label === "Senza genere") continue;
       const key = label.toLowerCase();
       const prev = genreMap.get(key);
@@ -217,12 +214,11 @@
     session.tick;
     return tracks.filter((tr) => player.isTrackExcluded(tr)).length;
   });
-  const totalPlectrTracks = 0;
 
   function formatMetricValue(n: number): string {
     if (metricMode === "plays") return `Ascolti: ${fmtN(n)}`;
     if (metricMode === "favorites") return `${fmtN(n)} preferiti`;
-    if (metricMode === "plectr") return fmtN(n);
+    if (false as boolean) return fmtN(n);
     return `${fmtN(n)} bloccati`;
   }
 
@@ -524,10 +520,6 @@
             <div class="metric-card">
               <span>Totale esclusi (random)</span>
               <strong>{fmtN(totalShuffleBlocks)}</strong>
-            </div>
-            <div class="metric-card">
-              <span>Brani giocati su Plectr</span>
-              <strong>{fmtN(totalPlectrTracks)}</strong>
             </div>
           </div>
         </div>

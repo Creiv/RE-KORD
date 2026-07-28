@@ -74,6 +74,10 @@ impl AppState {
         if !self.try_begin_scan() {
             anyhow::bail!("scan already in progress");
         }
+        {
+            let data_dir = self.config.lock().unwrap().data_dir.clone();
+            crate::diagnostics::append_activity(&data_dir, "scan", "library scan started");
+        }
         let root = {
             let cfg = self.config.lock().unwrap();
             cfg.music_root.clone()

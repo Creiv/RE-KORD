@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { onMount } from "svelte";
   import { Banner } from "@rekord/ui";
   import { player } from "../lib/player";
   import { session } from "../lib/session.svelte";
@@ -18,6 +19,58 @@
   import MobileBottomNav from "./MobileBottomNav.svelte";
   import PlayerDock from "./PlayerDock.svelte";
   import TopBar from "./TopBar.svelte";
+
+  function isTypingTarget(el: EventTarget | null): boolean {
+    if (!(el instanceof HTMLElement)) return false;
+    const tag = el.tagName;
+    if (tag === "INPUT" || tag === "TEXTAREA" || tag === "SELECT") return true;
+    return el.isContentEditable;
+  }
+
+  onMount(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if (isTypingTarget(e.target)) return;
+      if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === "k") {
+        e.preventDefault();
+        session.navigate("library");
+        window.dispatchEvent(new CustomEvent("rekord:focus-search"));
+        return;
+      }
+      if (e.key === "/" && !e.ctrlKey && !e.metaKey && !e.altKey) {
+        e.preventDefault();
+        session.navigate("library");
+        window.dispatchEvent(new CustomEvent("rekord:focus-search"));
+        return;
+      }
+      if (e.key === " " || e.code === "Space") {
+        e.preventDefault();
+        void player.toggle();
+        return;
+      }
+      if (e.key === "ArrowRight" || e.key === "ArrowLeft") {
+        if (!player.current) return;
+        e.preventDefault();
+        const at = player.currentTime;
+        const dur = player.duration;
+        const delta = e.key === "ArrowLeft" ? -15 : 15;
+        const max = dur > 0 ? Math.max(0, dur - 0.5) : Number.POSITIVE_INFINITY;
+        player.seek(Math.min(max, Math.max(0, at + delta)));
+        return;
+      }
+      if (e.key.toLowerCase() === "i") {
+        e.preventDefault();
+        session.studioPane = "listen";
+        session.navigate("studio");
+        return;
+      }
+      if (e.key.toLowerCase() === "s") {
+        e.preventDefault();
+        player.toggleShuffle();
+      }
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  });
 </script>
 
 <div class="shell" class:has-dock={session.hasQueue}>

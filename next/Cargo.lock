@@ -2948,6 +2948,7 @@ dependencies = [
  "dirs",
  "futures",
  "http-range-header",
+ "libc",
  "lofty",
  "mime_guess",
  "rekord-plugin-api",

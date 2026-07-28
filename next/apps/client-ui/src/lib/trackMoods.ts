@@ -122,21 +122,56 @@ export function trackMatchesMoodFilter(
   return moods.some((m) => need.has(m));
 }
 
-export function previewGenre(seed: string): string | null {
-  const h = hashSeed(seed);
-  if (h % 4 === 0) return null;
-  return GENRE_POOL[h % GENRE_POOL.length];
+/** Real genre from track/album API fields (no hash preview). */
+export function trackGenre(
+  track: { genre?: string | null } | null | undefined,
+  album?: { genre?: string | null } | null,
+): string | null {
+  const g = track?.genre?.trim() || album?.genre?.trim() || "";
+  return g || null;
 }
 
-export function previewYear(seed: string): string | null {
-  const h = hashSeed(seed);
-  if (h % 3 === 0) return null;
-  return String(2005 + (h % 20));
+export function albumGenre(album: { genre?: string | null } | null | undefined): string | null {
+  const g = album?.genre?.trim() || "";
+  return g || null;
+}
+
+/** Year from release_date (`YYYY…` or full date). */
+export function releaseYear(
+  releaseDate: string | null | undefined,
+): string | null {
+  if (!releaseDate) return null;
+  const m = String(releaseDate).trim().match(/^(\d{4})/);
+  return m ? m[1] : null;
+}
+
+export function trackYear(
+  track: { release_date?: string | null } | null | undefined,
+  album?: { release_date?: string | null } | null,
+): string | null {
+  return releaseYear(track?.release_date) || releaseYear(album?.release_date);
+}
+
+/** @deprecated Use trackGenre / albumGenre — kept for call-site migration. */
+export function previewGenre(_seed: string): string | null {
+  return null;
+}
+
+/** @deprecated Use trackYear / releaseYear. */
+export function previewYear(_seed: string): string | null {
+  return null;
 }
 
 export function previewLabel(seed: string): string | null {
-  const h = hashSeed(seed + ":label");
-  if (h % 3 === 0) return null;
-  const labels = ["Universal", "Sony", "Warner", "Independent", "Virgin"];
-  return labels[h % labels.length];
+  void seed;
+  return null;
+}
+
+export function lyricsKind(
+  lyrics: string | null | undefined,
+): "off" | "plain" | "lrc" {
+  const t = lyrics?.trim() ?? "";
+  if (!t) return "off";
+  if (/\[\d{1,2}:\d{2}/.test(t)) return "lrc";
+  return "plain";
 }

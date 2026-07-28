@@ -5,8 +5,10 @@ import {
   type AccountsResponse,
 } from "./account";
 import { apiUrl } from "./config";
+import { customThemeBgImageUrl } from "./customThemeBgUrl";
 
 export type { Account, AccountsResponse } from "./account";
+export { customThemeBgImageUrl };
 
 export function albumCoverUrl(albumId: number): string {
   return apiUrl(`/api/v1/covers/album/${albumId}`);
@@ -28,6 +30,9 @@ export type Track = {
   track_number: number | null;
   album_id: number | null;
   artist_id: number | null;
+  genre?: string | null;
+  release_date?: string | null;
+  lyrics?: string | null;
 };
 
 export type Album = {
@@ -39,6 +44,9 @@ export type Album = {
   folder_key: string;
   has_cover: boolean;
   loose: boolean;
+  genre?: string | null;
+  release_date?: string | null;
+  label?: string | null;
   /** Tracce attese da catalogo/Discogs (come `expectedTrackCount` React). */
   expected_track_count?: number | null;
 };
@@ -66,7 +74,23 @@ export type LibraryStats = {
   last_scan_at: string | null;
   /** True while the server is indexing the library. */
   scanning?: boolean;
+  /** Filesystem total bytes for the music_root volume. */
+  disk_total_bytes?: number | null;
+  /** Filesystem available bytes for the music_root volume. */
+  disk_available_bytes?: number | null;
 };
+
+/** Human-readable byte size (binary GB/MB). */
+export function formatBytes(n: number | null | undefined): string {
+  if (n == null || !Number.isFinite(n) || n < 0) return "—";
+  const gb = n / 1024 ** 3;
+  if (gb >= 100) return `${Math.round(gb)} GB`;
+  if (gb >= 10) return `${gb.toFixed(1)} GB`;
+  if (gb >= 1) return `${gb.toFixed(2)} GB`;
+  const mb = n / 1024 ** 2;
+  if (mb >= 1) return `${Math.round(mb)} MB`;
+  return `${Math.round(n / 1024)} KB`;
+}
 
 /** Stable keys: artist = name, album = folder_key. */
 export type LibrarySelectionV1 = {
@@ -230,6 +254,46 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
   }
   return body.data as T;
 }
+
+/** Request with an explicit account id (does not use the session account). */
+async function requestAsAccount<T>(
+  accountId: string,
+  path: string,
+  init?: RequestInit,
+): Promise<T> {
+  const id = accountId.trim();
+  const sep = path.includes("?") ? "&" : "?";
+  const url = apiUrl(
+    id ? `${path}${sep}accountId=${encodeURIComponent(id)}` : path,
+  );
+  const headers: HeadersInit = {
+    "Content-Type": "application/json",
+    ...(id
+      ? {
+          "X-Rekord-Account-Id": id,
+          "X-KORD-Account-Id": id,
+        }
+      : {}),
+    ...(init?.headers || {}),
+  };
+  const res = await fetch(url, { ...init, headers });
+  const body = (await res.json()) as Envelope<T>;
+  if (!res.ok || !body.ok) {
+    throw new Error(body.error || res.statusText);
+  }
+  return body.data as T;
+}
+
+export type UserStatePayload = {
+  version: number;
+  revision: number;
+  playCounts: Record<string, number>;
+  recentRelPaths: string[];
+  trackMoods: Record<string, string[]>;
+  excludedRelPaths: string[];
+  excludedAlbumIds: number[];
+  settings: Record<string, unknown>;
+};
 
 export const api = {
   health: () => fetch(apiUrl("/api/v1/health")).then((r) => r.json()),
@@ -620,4 +684,165 @@ export const api = {
       method: "POST",
       body: JSON.stringify(body),
     }),
+
+  trackInfoSave: (
+    relPath: string,
+    patch: {
+      title?: string;
+      genre?: string;
+      releaseDate?: string;
+      lyrics?: string;
+    },
+  ) =>
+    request<{ saved?: boolean }>("/api/v1/track-info/save", {
+      method: "POST",
+      body: JSON.stringify({ relPath, patch }),
+    }),
+
+  trackInfoFetch: (relPath: string) =>
+    fetch(apiUrl("/api/v1/track-info/fetch"), {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ relPath }),
+    }).then(async (res) => {
+      const body = await res.json();
+      if (!res.ok || body.ok === false) throw new Error(body.error || res.statusText);
+      return body as { meta?: Record<string, unknown>; lyrics?: string };
+    }),
+
+  albumInfoSave: (
+    albumPath: string,
+    patch: {
+      title?: string;
+      genre?: string;
+      releaseDate?: string;
+      label?: string;
+      country?: string;
+    },
+  ) =>
+    request<{ saved?: boolean }>("/api/v1/album-info/save", {
+      method: "POST",
+      body: JSON.stringify({ albumPath, patch }),
+    }),
+
+  artworkUpload: (albumPath: string, file: File) => {
+    const fd = new FormData();
+    fd.append("albumPath", albumPath);
+    fd.append("file", file);
+    return fetch(apiUrl("/api/v1/artwork/upload"), {
+      method: "POST",
+      body: fd,
+    }).then(async (res) => {
+      const body = (await res.json()) as Envelope<{ saved?: boolean; coverRelPath?: string }>;
+      if (!res.ok || !body.ok) throw new Error(body.error || res.statusText);
+      return body.data!;
+    });
+  },
+
+  getUserState: () => request<UserStatePayload>("/api/v1/user-state"),
+
+  getUserStateForAccount: (accountId: string) =>
+    requestAsAccount<UserStatePayload>(accountId, "/api/v1/user-state"),
+
+  favoritesForAccount: (accountId: string) =>
+    requestAsAccount<Track[]>(accountId, "/api/v1/favorites"),
+
+  playlistsForAccount: (accountId: string) =>
+    requestAsAccount<Playlist[]>(accountId, "/api/v1/playlists"),
+
+  patchUserState: (body: Record<string, unknown>) =>
+    request<{ revision: number }>("/api/v1/user-state", {
+      method: "PATCH",
+      body: JSON.stringify(body),
+    }),
+
+  uploadCustomThemeBg: (file: File) => {
+    const fd = new FormData();
+    fd.append("file", file);
+    const url = apiUrl(withAccountQuery("/api/v1/user-state/custom-theme-bg"));
+    return fetch(url, {
+      method: "POST",
+      headers: accountHeaders(),
+      body: fd,
+    }).then(async (res) => {
+      const body = (await res.json()) as Envelope<{
+        bgImage: string;
+        bgImageRev: number;
+      }>;
+      if (!res.ok || !body.ok) throw new Error(body.error || res.statusText);
+      return body.data!;
+    });
+  },
+
+  clearCustomThemeBg: async () => {
+    const url = apiUrl(withAccountQuery("/api/v1/user-state/custom-theme-bg"));
+    const res = await fetch(url, {
+      method: "DELETE",
+      headers: accountHeaders(),
+    });
+    const body = (await res.json()) as Envelope<null>;
+    if (!res.ok || !body.ok) throw new Error(body.error || res.statusText);
+  },
+
+  diagnostics: () =>
+    request<{
+      version: string;
+      uptimeSecs: number;
+      musicRoot: string | null;
+      scanning: boolean;
+      db: {
+        trackCount: number;
+        albumCount: number;
+        artistCount: number;
+        lastScanAt: string | null;
+      };
+      activeDownloads: number;
+    }>("/api/v1/diagnostics"),
+
+  activityLog: () =>
+    request<{ entries: Array<{ ts: string; kind: string; message: string }> }>(
+      "/api/v1/activity-log",
+    ),
+
+  remoteAccess: () => request<RemoteAccessState>("/api/v1/remote-access"),
+
+  remoteStart: () =>
+    request<RemoteAccessState>("/api/v1/remote-access/start", {
+      method: "POST",
+      body: "{}",
+    }),
+
+  remoteStop: () =>
+    request<RemoteAccessState>("/api/v1/remote-access/stop", {
+      method: "POST",
+      body: "{}",
+    }),
+
+  remoteLogin: () =>
+    request<{ loginUrl: string; note: string; cloudflareLoggedIn: boolean }>(
+      "/api/v1/remote-access/login",
+      { method: "POST", body: "{}" },
+    ),
+
+  remoteLogout: () =>
+    request<RemoteAccessState>("/api/v1/remote-access/logout", {
+      method: "POST",
+      body: "{}",
+    }),
+};
+
+export type RemoteAccessStatus = "stopped" | "starting" | "running" | "error";
+
+export type RemoteAccessState = {
+  enabled: boolean;
+  status: RemoteAccessStatus;
+  provider: string;
+  publicUrl: string | null;
+  error: string | null;
+  startedAt: string | null;
+  cloudflaredPath: string | null;
+  cloudflareLoggedIn: boolean;
+  lanUrl: string | null;
+  bind: string;
+  cloudflaredAvailable: boolean;
 };

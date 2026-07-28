@@ -5,7 +5,7 @@ use crate::selection::{
     self, CatalogKeys, LibrarySelection, SelectionFilterMode, SelectionPatch,
 };
 use crate::state::AppState;
-use axum::extract::{Multipart, Path, Query, State};
+use axum::extract::{DefaultBodyLimit, Multipart, Path, Query, State};
 use axum::http::{header, HeaderMap, HeaderValue, StatusCode};
 use axum::response::{IntoResponse, Response};
 use axum::routing::{delete, get, post, put};
@@ -52,9 +52,18 @@ pub fn routes() -> Router<AppState> {
         .route("/api/v1/backup/kord-data", get(download_backup))
         .route("/api/backup/kord-data", get(download_backup))
         .route("/api/backup/rekord-data", get(download_backup))
-        .route("/api/v1/backup/kord-restore", post(upload_restore))
-        .route("/api/backup/kord-restore", post(upload_restore))
-        .route("/api/backup/rekord-restore", post(upload_restore))
+        .route(
+            "/api/v1/backup/kord-restore",
+            post(upload_restore).layer(DefaultBodyLimit::max(512 * 1024 * 1024)),
+        )
+        .route(
+            "/api/backup/kord-restore",
+            post(upload_restore).layer(DefaultBodyLimit::max(512 * 1024 * 1024)),
+        )
+        .route(
+            "/api/backup/rekord-restore",
+            post(upload_restore).layer(DefaultBodyLimit::max(512 * 1024 * 1024)),
+        )
         .route(
             "/api/v1/my-library-selection",
             get(get_my_library_selection).patch(patch_my_library_selection),
@@ -193,16 +202,19 @@ async fn library_index(
 }
 
 async fn library_stats(State(state): State<AppState>) -> impl IntoResponse {
-    let music_root = state
-        .config
-        .lock()
-        .unwrap()
-        .music_root
+    let music_root_path = state.config.lock().unwrap().music_root.clone();
+    let music_root = music_root_path
         .as_ref()
         .map(|p| p.to_string_lossy().into_owned());
     match state.db.stats(music_root) {
         Ok(mut stats) => {
             stats.scanning = state.is_scanning();
+            if let Some(root) = music_root_path.as_ref() {
+                if let Some(space) = crate::disk_space::volume_space(root) {
+                    stats.disk_total_bytes = Some(space.total_bytes);
+                    stats.disk_available_bytes = Some(space.available_bytes);
+                }
+            }
             ok(stats).into_response()
         }
         Err(e) => err(StatusCode::INTERNAL_SERVER_ERROR, e.to_string()),

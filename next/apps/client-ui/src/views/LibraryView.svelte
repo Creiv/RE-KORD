@@ -19,12 +19,12 @@
     TRACK_MOOD_COLORS,
     TRACK_MOOD_IDS,
     TRACK_MOOD_LABELS,
-    previewGenre,
-    previewLabel,
+    albumGenre,
     previewMoods,
-    previewYear,
     resolveTrackMoods,
+    trackGenre,
     trackMatchesMoodFilter,
+    trackYear,
     type TrackMoodId,
   } from "../lib/trackMoods";
   import { loadUserPrefs } from "../lib/userPrefs";
@@ -50,17 +50,41 @@
     { id: "artists", label: "Artisti" },
     { id: "genres", label: "Generi" },
     { id: "moods", label: "Mood" },
-    { id: "nebula", label: "Nebula" },
   ];
 
   const genreBuckets = $derived.by(() => {
     const map = new Map<string, { albums: typeof session.allAlbums; count: number }>();
-    for (const a of session.allAlbums) {
-      const g = previewGenre(`${a.artist_name}/${a.name}`) ?? "Senza genere";
-      const cur = map.get(g) ?? { albums: [], count: 0 };
-      cur.albums.push(a);
-      cur.count += a.track_count;
-      map.set(g, cur);
+    if (!session.catalogTracks.length) {
+      for (const a of session.allAlbums) {
+        const g = albumGenre(a) ?? "Senza genere";
+        const cur = map.get(g) ?? { albums: [], count: 0 };
+        cur.albums.push(a);
+        cur.count += a.track_count;
+        map.set(g, cur);
+      }
+    } else {
+      const albumIdsByGenre = new Map<string, Set<number>>();
+      const trackCountByGenre = new Map<string, number>();
+      for (const t of session.catalogTracks) {
+        const g = trackGenre(t) ?? albumGenre(
+          t.album_id != null
+            ? session.allAlbums.find((a) => a.id === t.album_id) ?? null
+            : null,
+        ) ?? "Senza genere";
+        trackCountByGenre.set(g, (trackCountByGenre.get(g) ?? 0) + 1);
+        if (t.album_id != null) {
+          const set = albumIdsByGenre.get(g) ?? new Set();
+          set.add(t.album_id);
+          albumIdsByGenre.set(g, set);
+        }
+      }
+      for (const [g, ids] of albumIdsByGenre) {
+        const albums = session.allAlbums.filter((a) => ids.has(a.id));
+        map.set(g, {
+          albums,
+          count: trackCountByGenre.get(g) ?? 0,
+        });
+      }
     }
     return [...map.entries()].map(([name, v]) => ({
       name,
@@ -77,17 +101,17 @@
     session.tick;
     session.catalogTracks;
     session.allAlbums;
-    const albumGenre = new Map<number, string>();
+    const albumGenreMap = new Map<number, string>();
     for (const a of session.allAlbums) {
-      albumGenre.set(a.id, previewGenre(`${a.artist_name}/${a.name}`) ?? "Senza genere");
+      albumGenreMap.set(a.id, albumGenre(a) ?? "Senza genere");
     }
     const m = new Map<string, number>();
     for (const t of session.catalogTracks) {
       const play = player.playCount(t);
       if (!play) continue;
       const g =
-        (t.album_id != null ? albumGenre.get(t.album_id) : undefined) ??
-        previewGenre(t.rel_path) ??
+        trackGenre(t) ??
+        (t.album_id != null ? albumGenreMap.get(t.album_id) : undefined) ??
         "Senza genere";
       m.set(g, (m.get(g) ?? 0) + play);
     }
@@ -125,15 +149,15 @@
     session.selectedGenre;
     overviewSort;
     if (!session.selectedGenre) return [];
-    const albumGenre = new Map<number, string>();
+    const albumGenreMap = new Map<number, string>();
     for (const a of session.allAlbums) {
-      albumGenre.set(a.id, previewGenre(`${a.artist_name}/${a.name}`) ?? "Senza genere");
+      albumGenreMap.set(a.id, albumGenre(a) ?? "Senza genere");
     }
     const genre = session.selectedGenre;
     const base = session.catalogTracks.filter((t) => {
       const g =
-        (t.album_id != null ? albumGenre.get(t.album_id) : undefined) ??
-        previewGenre(t.rel_path) ??
+        trackGenre(t) ??
+        (t.album_id != null ? albumGenreMap.get(t.album_id) : undefined) ??
         "Senza genere";
       return g === genre;
     });
@@ -243,9 +267,9 @@
       ? `${session.selectedAlbum.artist_name}/${session.selectedAlbum.name}`
       : "",
   );
-  const albumYear = $derived(albumSeed ? previewYear(albumSeed) : null);
-  const albumLabel = $derived(albumSeed ? previewLabel(albumSeed) : null);
-  const albumGenre = $derived(albumSeed ? previewGenre(albumSeed) : null);
+  const albumYear = $derived(trackYear(null, session.selectedAlbum));
+  const albumLabel = $derived(session.selectedAlbum?.label?.trim() || null);
+  const selectedAlbumGenre = $derived(albumGenre(session.selectedAlbum));
   /** Come React `AlbumTracklistExpectedMeta`: solo se c’è un conteggio atteso. */
   const albumExpectedTrackCount = $derived.by(() => {
     const n = session.selectedAlbum?.expected_track_count;
@@ -258,9 +282,7 @@
       ? "person"
       : session.libraryBrowse === "genres"
         ? "style"
-        : session.libraryBrowse === "nebula"
-          ? "sparkle"
-          : "palette",
+        : "palette",
   );
 
   const sortedArtists = $derived.by(() => {
@@ -289,8 +311,8 @@
     const list = [...session.albums];
     if (artistAlbumSort === "date") {
       list.sort((a, b) => {
-        const da = previewYear(`${a.artist_name}/${a.name}`) ?? "";
-        const db = previewYear(`${b.artist_name}/${b.name}`) ?? "";
+        const da = trackYear(null, a) ?? "";
+        const db = trackYear(null, b) ?? "";
         if (!da && !db) return a.name.localeCompare(b.name, undefined, { numeric: true });
         if (!da) return 1;
         if (!db) return -1;
@@ -372,7 +394,6 @@
 
   <section
     class="rk-surface-card library-page-body"
-    class:surface-card--nebula={session.libraryBrowse === "nebula"}
   >
     {#if session.libraryBrowse === "genres" && session.selectedGenre}
       <div class="library-filter-panel library-filter-panel--tight library-sort-panel library-genre-tracklist-toolbar">
@@ -484,10 +505,8 @@
             coverSrc: coverAlbumId != null ? albumCoverUrl(coverAlbumId) : "",
             coverSeed: a.name,
             favoriteCount: session.favorites.filter((t) => t.artist_id === a.id).length,
-            albumsMissingMetaCount: albums.filter(
-              (al) => !previewGenre(`${al.artist_name}/${al.name}`),
-            ).length,
-            tracksMissingMetaCount: tracks.filter((t) => !previewGenre(t.rel_path)).length,
+            albumsMissingMetaCount: albums.filter((al) => !albumGenre(al)).length,
+            tracksMissingMetaCount: tracks.filter((t) => !trackGenre(t)).length,
             albumsExcludedCount: albumsEx,
             tracksExcludedCount: trackEx,
           };
@@ -617,26 +636,6 @@
           <p class="mood-pick-hint">Seleziona almeno un mood per vedere i brani.</p>
         {/if}
       </div>
-    {:else}
-      <div class="nebula">
-        <header class="nebula-head">
-          <UiIcon name="sparkle" />
-          <div>
-            <p class="rk-eyebrow">Nebula</p>
-            <h3>L'universo della tua musica</h3>
-          </div>
-        </header>
-        <div class="nebula-canvas" aria-hidden="true">
-          {#each Array(48) as _, i}
-            <span
-              class="star"
-              style="--x:{(i * 37) % 100}%; --y:{(i * 53) % 100}%; --s:{3 + (i % 5)}px; --c:{TRACK_MOOD_COLORS[TRACK_MOOD_IDS[i % TRACK_MOOD_IDS.length]]}; --d:{i * 0.04}s"
-            ></span>
-          {/each}
-          <div class="nebula-core"></div>
-        </div>
-        <p class="mood-hint">Mappa sonora interattiva — modulo Nebula in arrivo.</p>
-      </div>
     {/if}
   </section>
 {:else if session.libraryLevel === "artist" && session.selectedArtist}
@@ -727,7 +726,7 @@
         const albumEx = player.isAlbumExcluded(a.id);
         const excludedPaths = player.getExcludedRelPaths();
         const trackEx = tracks.filter((t) => excludedPaths.has(t.rel_path)).length;
-        const year = previewYear(`${a.artist_name}/${a.name}`);
+        const year = trackYear(null, a);
         return {
           id: a.id,
           title: a.name,
@@ -736,7 +735,8 @@
           coverSrc: a.has_cover ? albumCoverUrl(a.id) : "",
           coverSeed: `${session.selectedArtist?.name}/${a.name}`,
           favoriteCount: session.favorites.filter((t) => t.album_id === a.id).length,
-          tracksMissingMetaCount: tracks.filter((t) => !previewGenre(t.rel_path)).length,
+          tracksMissingMetaCount: tracks.filter((t) => !trackGenre(t)).length,
+          genreMissing: !albumGenre(a),
           albumExcluded: albumEx,
           tracksExcludedCount: albumEx ? a.track_count : trackEx,
           loose: a.loose,
@@ -788,10 +788,8 @@
                 <p class="rk-eyebrow">Dettaglio album</p>
                 <MetaBadgeCluster
                   variant="hero"
-                  missingMeta={!albumGenre}
-                  tracksMissingMetaCount={session.tracks.filter(
-                    (t) => !previewGenre(t.rel_path),
-                  ).length}
+                  missingMeta={!selectedAlbumGenre}
+                  tracksMissingMetaCount={session.tracks.filter((t) => !trackGenre(t)).length}
                   favoriteCount={albumFavCount}
                   albumExcluded={albumExcluded}
                   tracksExcludedCount={albumExcluded
@@ -841,8 +839,8 @@
           {#if albumLabel}<span>· {albumLabel}</span>{/if}
         </p>
         <div class="album-hero__genres" role="list">
-          {#if albumGenre}
-            <span class="album-hero__genre-chip" role="listitem">{albumGenre}</span>
+          {#if selectedAlbumGenre}
+            <span class="album-hero__genre-chip" role="listitem">{selectedAlbumGenre}</span>
           {/if}
           <button type="button" class="album-hero__genre-add" disabled title="In arrivo">
             +

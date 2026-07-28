@@ -7,6 +7,10 @@ import { api, type Album, type Track } from "./api";
 import { writeStreakState } from "./achievements";
 import { player } from "./player";
 import {
+  normalizeCustomTheme,
+  type CustomThemeSettings,
+} from "./themeCatalog";
+import {
   applyTheme,
   loadUserPrefs,
   normalizeTheme,
@@ -56,6 +60,7 @@ type LegacySettings = {
   theme?: string;
   restoreSession?: boolean;
   audioCrossfadeSec?: number;
+  customTheme?: Partial<CustomThemeSettings>;
 };
 
 /** Subset of old UserStateV1 we understand. */
@@ -143,6 +148,8 @@ function mapTheme(theme: string | undefined): UiTheme {
   if (t.includes("tangerine")) return "tangerine";
   if (t.includes("carmine")) return "carmine";
   if (t.includes("slate")) return "slate";
+  if (t === "custom" || t.includes("custom") || t.includes("personalizz"))
+    return "custom";
   return "midnight";
 }
 
@@ -381,8 +388,15 @@ export async function applyLegacyUserState(
     report.moods += 1;
   }
 
+  const customTheme: CustomThemeSettings = normalizeCustomTheme(
+    settings.customTheme && typeof settings.customTheme === "object"
+      ? (settings.customTheme as Partial<CustomThemeSettings>)
+      : undefined,
+  );
+
   const nextPrefs: Partial<UserPrefs> = {
     theme: report.theme,
+    customTheme,
     crossfadeSec: crossfade,
     restoreSession,
     playCounts,
@@ -394,7 +408,7 @@ export async function applyLegacyUserState(
     trackMoods,
   };
   patchUserPrefs(nextPrefs);
-  applyTheme(report.theme);
+  applyTheme(report.theme, customTheme);
   player.setCrossfadeSec(crossfade);
   player.reloadExclusionsFromPrefs();
 

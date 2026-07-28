@@ -235,6 +235,58 @@ pub fn get_accounts_snapshot(data_dir: &Path) -> Result<AccountsSnapshot> {
     })
 }
 
+/// Replace the accounts registry (used by backup restore). Always keeps `default`.
+pub fn replace_accounts_registry(data_dir: &Path, accounts: &[Account]) -> Result<Vec<Account>> {
+    let mut list = normalize_accounts(accounts);
+    if list.is_empty() {
+        list.push(Account {
+            id: DEFAULT_ACCOUNT_ID.to_string(),
+            name: DEFAULT_ACCOUNT_NAME.to_string(),
+        });
+    } else if !list.iter().any(|a| a.id == DEFAULT_ACCOUNT_ID) {
+        list.insert(
+            0,
+            Account {
+                id: DEFAULT_ACCOUNT_ID.to_string(),
+                name: DEFAULT_ACCOUNT_NAME.to_string(),
+            },
+        );
+    }
+    write_accounts_file(data_dir, &list)?;
+    for acc in &list {
+        ensure_account_layout(data_dir, &acc.id, acc.id == DEFAULT_ACCOUNT_ID)?;
+    }
+    Ok(list)
+}
+
+/// Parse accounts list from legacy/next JSON (`{ accounts: [...] }` or bare array).
+pub fn accounts_from_json_value(v: &serde_json::Value) -> Vec<Account> {
+    let arr = v
+        .get("accounts")
+        .and_then(|x| x.as_array())
+        .cloned()
+        .or_else(|| v.as_array().cloned())
+        .unwrap_or_default();
+    let mut raw = Vec::new();
+    for item in arr {
+        let id = item
+            .get("id")
+            .and_then(|x| x.as_str())
+            .unwrap_or("")
+            .to_string();
+        let name = item
+            .get("name")
+            .and_then(|x| x.as_str())
+            .unwrap_or("Account")
+            .to_string();
+        if id.trim().is_empty() {
+            continue;
+        }
+        raw.push(Account { id, name });
+    }
+    normalize_accounts(&raw)
+}
+
 pub fn resolve_account_id(data_dir: &Path, requested: Option<&str>) -> Result<String> {
     let accounts = ensure_accounts(data_dir)?;
     let req = requested.map(str::trim).filter(|s| !s.is_empty());
