@@ -1,0 +1,7 @@
+/* Impostazioni — chrome allineato a view-page / section-head--page-toolbar */
+
+.settings-page__body {
+  display: grid;
+  gap: var(--rk-section-gap);
+  min-width: 0;
+}

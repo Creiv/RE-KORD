@@ -1,0 +1,5 @@
+packages:
+  - "apps/server-ui"
+  - "apps/client-ui"
+  - "apps/client-shell"
+  - "packages/ui"

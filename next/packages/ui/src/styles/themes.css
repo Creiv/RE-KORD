@@ -1,0 +1,534 @@
+/* Auto-ported from old src/index.css theme blocks — glass vars omitted */
+
+:root[data-theme="sunset"],
+[data-theme="sunset"] {
+  --rk-bg: #141018;
+  --rk-bg-deep: #141018;
+  --rk-surface: rgba(40, 24, 36, 0.88);
+  --rk-surface-2: rgba(52, 30, 44, 0.94);
+  --rk-surface-3: rgba(64, 38, 52, 0.96);
+  --rk-muted: #c8b4c4;
+  --rk-muted-strong: #e6d4df;
+  --rk-accent: #ff9b5d;
+  --rk-accent-2: #ffd16f;
+  --rk-accent-ink: #1a0c10;
+  --rk-accent-soft: color-mix(in srgb, var(--rk-accent) 16%, transparent);
+  --rk-accent2-soft: color-mix(in srgb, var(--rk-accent-2) 16%, transparent);
+  --rk-line: rgba(210, 150, 170, 0.2);
+  --rk-line-strong: rgba(230, 170, 190, 0.34);
+  --rk-focus: color-mix(in srgb, var(--rk-accent-2) 65%, white 20%);
+  --rk-shadow: 0 4px 28px rgba(20, 6, 14, 0.38);
+  --rk-shadow-2: 0 22px 56px rgba(12, 4, 10, 0.52);
+  --rk-page-glow-1: rgba(255, 130, 88, 0.22);
+  --rk-page-glow-2: rgba(200, 110, 180, 0.14);
+  --rk-album-fb-1: rgba(255, 150, 100, 0.3);
+  --rk-album-fb-2: rgba(200, 120, 200, 0.22);
+  --rk-art-empty-1: rgba(255, 150, 100, 0.22);
+  --rk-art-empty-2: rgba(200, 130, 190, 0.16);
+  --rk-badge-1: rgba(255, 150, 100, 0.28);
+  --rk-badge-2: rgba(200, 120, 200, 0.2);
+  --rk-topbar-bg: rgba(28, 16, 24, 0.9);
+  --rk-sidebar-bg: color-mix(in srgb, var(--rk-surface-2) 95%, var(--rk-bg) 5%);
+  --rk-cta: linear-gradient(135deg, var(--rk-accent), color-mix(in srgb, var(--rk-accent-2) 80%, white 4%));
+}
+
+:root[data-theme="aurora"],
+[data-theme="aurora"] {
+  --rk-bg: #071116;
+  --rk-bg-deep: #071116;
+  --rk-surface: rgba(12, 32, 40, 0.88);
+  --rk-surface-2: rgba(16, 40, 48, 0.94);
+  --rk-surface-3: rgba(20, 52, 62, 0.96);
+  --rk-muted: #9ec8d0;
+  --rk-muted-strong: #c8e8f0;
+  --rk-accent: #4fd4c4;
+  --rk-accent-2: #78b4ff;
+  --rk-accent-ink: #031018;
+  --rk-accent-soft: color-mix(in srgb, var(--rk-accent) 16%, transparent);
+  --rk-accent2-soft: color-mix(in srgb, var(--rk-accent-2) 16%, transparent);
+  --rk-line: rgba(120, 200, 210, 0.2);
+  --rk-line-strong: rgba(150, 220, 230, 0.36);
+  --rk-focus: color-mix(in srgb, var(--rk-accent-2) 65%, white 20%);
+  --rk-shadow: 0 4px 28px rgba(2, 12, 18, 0.36);
+  --rk-shadow-2: 0 22px 56px rgba(0, 8, 16, 0.48);
+  --rk-page-glow-1: rgba(80, 220, 200, 0.14);
+  --rk-page-glow-2: rgba(100, 170, 255, 0.16);
+  --rk-album-fb-1: rgba(80, 220, 200, 0.28);
+  --rk-album-fb-2: rgba(100, 180, 255, 0.22);
+  --rk-art-empty-1: rgba(80, 220, 200, 0.18);
+  --rk-art-empty-2: rgba(100, 180, 255, 0.12);
+  --rk-badge-1: rgba(80, 220, 200, 0.24);
+  --rk-badge-2: rgba(100, 180, 255, 0.2);
+  --rk-topbar-bg: rgba(6, 20, 28, 0.9);
+  --rk-sidebar-bg: color-mix(in srgb, var(--rk-surface-2) 95%, var(--rk-bg) 5%);
+  --rk-cta: linear-gradient(135deg, var(--rk-accent), color-mix(in srgb, var(--rk-accent-2) 80%, white 4%));
+}
+
+:root[data-theme="ember"],
+[data-theme="ember"] {
+  --rk-bg: #120b08;
+  --rk-bg-deep: #120b08;
+  --rk-surface: rgba(46, 22, 16, 0.88);
+  --rk-surface-2: rgba(58, 26, 18, 0.94);
+  --rk-surface-3: rgba(70, 32, 22, 0.96);
+  --rk-muted: #d4b0a0;
+  --rk-muted-strong: #f0d4c4;
+  --rk-accent: #ff7a4a;
+  --rk-accent-2: #ffbe5c;
+  --rk-accent-ink: #1a0c04;
+  --rk-accent-soft: color-mix(in srgb, var(--rk-accent) 16%, transparent);
+  --rk-accent2-soft: color-mix(in srgb, var(--rk-accent-2) 16%, transparent);
+  --rk-line: rgba(230, 140, 100, 0.2);
+  --rk-line-strong: rgba(255, 170, 120, 0.34);
+  --rk-focus: color-mix(in srgb, var(--rk-accent-2) 65%, white 20%);
+  --rk-shadow: 0 4px 28px rgba(20, 4, 0, 0.4);
+  --rk-shadow-2: 0 22px 56px rgba(12, 2, 0, 0.55);
+  --rk-page-glow-1: rgba(255, 100, 50, 0.18);
+  --rk-page-glow-2: rgba(255, 160, 60, 0.12);
+  --rk-album-fb-1: rgba(255, 120, 60, 0.32);
+  --rk-album-fb-2: rgba(255, 80, 40, 0.24);
+  --rk-art-empty-1: rgba(255, 120, 60, 0.24);
+  --rk-art-empty-2: rgba(255, 80, 40, 0.14);
+  --rk-badge-1: rgba(255, 120, 60, 0.3);
+  --rk-badge-2: rgba(255, 90, 50, 0.22);
+  --rk-topbar-bg: rgba(28, 14, 10, 0.92);
+  --rk-sidebar-bg: color-mix(in srgb, var(--rk-surface-2) 95%, var(--rk-bg) 5%);
+  --rk-cta: linear-gradient(135deg, var(--rk-accent), color-mix(in srgb, var(--rk-accent-2) 80%, white 4%));
+}
+
+:root[data-theme="forest"],
+[data-theme="forest"] {
+  --rk-bg: #080f0a;
+  --rk-bg-deep: #080f0a;
+  --rk-surface: rgba(16, 36, 28, 0.88);
+  --rk-surface-2: rgba(20, 48, 36, 0.94);
+  --rk-surface-3: rgba(24, 58, 44, 0.96);
+  --rk-muted: #9cc4ac;
+  --rk-muted-strong: #c8e8d4;
+  --rk-accent: #5ed494;
+  --rk-accent-2: #9ee8b8;
+  --rk-accent-ink: #041208;
+  --rk-accent-soft: color-mix(in srgb, var(--rk-accent) 16%, transparent);
+  --rk-accent2-soft: color-mix(in srgb, var(--rk-accent-2) 16%, transparent);
+  --rk-line: rgba(120, 200, 150, 0.2);
+  --rk-line-strong: rgba(150, 220, 170, 0.34);
+  --rk-focus: color-mix(in srgb, var(--rk-accent-2) 65%, white 20%);
+  --rk-shadow: 0 4px 28px rgba(0, 10, 6, 0.38);
+  --rk-shadow-2: 0 22px 56px rgba(0, 6, 4, 0.52);
+  --rk-page-glow-1: rgba(80, 200, 120, 0.12);
+  --rk-page-glow-2: rgba(100, 220, 160, 0.1);
+  --rk-album-fb-1: rgba(90, 220, 150, 0.26);
+  --rk-album-fb-2: rgba(100, 200, 160, 0.2);
+  --rk-art-empty-1: rgba(90, 220, 150, 0.16);
+  --rk-art-empty-2: rgba(100, 200, 160, 0.12);
+  --rk-badge-1: rgba(90, 220, 140, 0.22);
+  --rk-badge-2: rgba(100, 200, 160, 0.18);
+  --rk-topbar-bg: rgba(8, 24, 16, 0.9);
+  --rk-sidebar-bg: color-mix(in srgb, var(--rk-surface-2) 95%, var(--rk-bg) 5%);
+  --rk-cta: linear-gradient(135deg, var(--rk-accent), color-mix(in srgb, var(--rk-accent-2) 80%, white 4%));
+}
+
+:root[data-theme="neon"],
+[data-theme="neon"] {
+  --rk-bg: #0a0618;
+  --rk-bg-deep: #0a0618;
+  --rk-surface: rgba(36, 20, 58, 0.88);
+  --rk-surface-2: rgba(48, 24, 78, 0.94);
+  --rk-surface-3: rgba(60, 28, 98, 0.96);
+  --rk-ink: #f2ecff;
+  --rk-muted: #b8a8d8;
+  --rk-muted-strong: #dcd0f4;
+  --rk-accent: #c45cff;
+  --rk-accent-2: #3dc8ff;
+  --rk-accent-ink: #0a0318;
+  --rk-accent-soft: color-mix(in srgb, var(--rk-accent) 16%, transparent);
+  --rk-accent2-soft: color-mix(in srgb, var(--rk-accent-2) 16%, transparent);
+  --rk-line: rgba(160, 120, 255, 0.24);
+  --rk-line-strong: rgba(180, 150, 255, 0.4);
+  --rk-focus: color-mix(in srgb, var(--rk-accent-2) 65%, var(--rk-accent) 35%);
+  --rk-shadow: 0 4px 32px rgba(30, 0, 60, 0.45);
+  --rk-shadow-2: 0 22px 60px rgba(20, 0, 50, 0.55);
+  --rk-page-glow-1: rgba(196, 92, 255, 0.2);
+  --rk-page-glow-2: rgba(61, 200, 255, 0.16);
+  --rk-album-fb-1: rgba(200, 100, 255, 0.3);
+  --rk-album-fb-2: rgba(100, 180, 255, 0.22);
+  --rk-art-empty-1: rgba(200, 100, 255, 0.2);
+  --rk-art-empty-2: rgba(80, 200, 255, 0.14);
+  --rk-badge-1: rgba(200, 100, 255, 0.28);
+  --rk-badge-2: rgba(100, 180, 255, 0.2);
+  --rk-topbar-bg: rgba(14, 8, 32, 0.92);
+  --rk-sidebar-bg: color-mix(in srgb, var(--rk-surface-2) 95%, var(--rk-bg) 5%);
+  --rk-cta: linear-gradient(135deg, var(--rk-accent), color-mix(in srgb, var(--rk-accent-2) 80%, white 4%));
+}
+
+:root[data-theme="ocean"],
+[data-theme="ocean"] {
+  --rk-bg: #051a1e;
+  --rk-bg-deep: #051a1e;
+  --rk-surface: rgba(10, 42, 52, 0.9);
+  --rk-surface-2: rgba(12, 58, 68, 0.94);
+  --rk-surface-3: rgba(14, 72, 84, 0.96);
+  --rk-ink: #e8fbfc;
+  --rk-muted: #8ec4c8;
+  --rk-muted-strong: #c2eef0;
+  --rk-accent: #2dd4bf;
+  --rk-accent-2: #38bdf8;
+  --rk-accent-ink: #021a1c;
+  --rk-accent-soft: color-mix(in srgb, var(--rk-accent) 16%, transparent);
+  --rk-accent2-soft: color-mix(in srgb, var(--rk-accent-2) 16%, transparent);
+  --rk-line: rgba(80, 200, 210, 0.22);
+  --rk-line-strong: rgba(120, 220, 230, 0.4);
+  --rk-focus: color-mix(in srgb, var(--rk-accent-2) 55%, var(--rk-accent) 45%);
+  --rk-shadow: 0 4px 28px rgba(0, 30, 40, 0.42);
+  --rk-shadow-2: 0 22px 56px rgba(0, 20, 30, 0.52);
+  --rk-page-glow-1: rgba(45, 212, 191, 0.14);
+  --rk-page-glow-2: rgba(56, 189, 248, 0.12);
+  --rk-album-fb-1: rgba(45, 200, 190, 0.28);
+  --rk-album-fb-2: rgba(80, 180, 240, 0.22);
+  --rk-art-empty-1: rgba(45, 212, 191, 0.18);
+  --rk-art-empty-2: rgba(56, 189, 248, 0.12);
+  --rk-badge-1: rgba(45, 200, 190, 0.26);
+  --rk-badge-2: rgba(80, 180, 240, 0.2);
+  --rk-topbar-bg: rgba(6, 36, 44, 0.9);
+  --rk-sidebar-bg: color-mix(in srgb, var(--rk-surface-2) 95%, var(--rk-bg) 5%);
+  --rk-cta: linear-gradient(135deg, var(--rk-accent), color-mix(in srgb, var(--rk-accent-2) 80%, white 4%));
+}
+
+:root[data-theme="rose"],
+[data-theme="rose"] {
+  --rk-bg: #170f14;
+  --rk-bg-deep: #170f14;
+  --rk-surface: rgba(48, 28, 40, 0.88);
+  --rk-surface-2: rgba(60, 32, 48, 0.94);
+  --rk-surface-3: rgba(72, 38, 58, 0.96);
+  --rk-ink: #fff1f5;
+  --rk-muted: #d4a8b8;
+  --rk-muted-strong: #f0c8d4;
+  --rk-accent: #f472b6;
+  --rk-accent-2: #fda4af;
+  --rk-accent-ink: #1a0810;
+  --rk-accent-soft: color-mix(in srgb, var(--rk-accent) 16%, transparent);
+  --rk-accent2-soft: color-mix(in srgb, var(--rk-accent-2) 16%, transparent);
+  --rk-line: rgba(244, 160, 190, 0.22);
+  --rk-line-strong: rgba(255, 180, 200, 0.38);
+  --rk-focus: color-mix(in srgb, var(--rk-accent) 50%, var(--rk-accent-2) 50%);
+  --rk-shadow: 0 4px 28px rgba(40, 10, 30, 0.38);
+  --rk-shadow-2: 0 22px 56px rgba(30, 8, 22, 0.5);
+  --rk-page-glow-1: rgba(244, 114, 182, 0.14);
+  --rk-page-glow-2: rgba(253, 164, 175, 0.1);
+  --rk-album-fb-1: rgba(244, 120, 180, 0.28);
+  --rk-album-fb-2: rgba(253, 150, 190, 0.2);
+  --rk-art-empty-1: rgba(244, 120, 180, 0.18);
+  --rk-art-empty-2: rgba(253, 160, 180, 0.12);
+  --rk-badge-1: rgba(244, 120, 180, 0.26);
+  --rk-badge-2: rgba(253, 150, 190, 0.18);
+  --rk-topbar-bg: rgba(36, 20, 30, 0.9);
+  --rk-sidebar-bg: color-mix(in srgb, var(--rk-surface-2) 95%, var(--rk-bg) 5%);
+  --rk-cta: linear-gradient(135deg, var(--rk-accent), color-mix(in srgb, var(--rk-accent-2) 80%, white 4%));
+}
+
+:root[data-theme="slate"],
+[data-theme="slate"] {
+  --rk-bg: #0b0f14;
+  --rk-bg-deep: #0b0f14;
+  --rk-surface: rgba(22, 30, 42, 0.9);
+  --rk-surface-2: rgba(30, 40, 56, 0.94);
+  --rk-surface-3: rgba(40, 52, 72, 0.96);
+  --rk-ink: #e8eaef;
+  --rk-muted: #8b9aaf;
+  --rk-muted-strong: #b8c4d4;
+  --rk-accent: #3b82f6;
+  --rk-accent-2: #94a3b8;
+  --rk-accent-ink: #0a0e14;
+  --rk-accent-soft: color-mix(in srgb, var(--rk-accent) 16%, transparent);
+  --rk-accent2-soft: color-mix(in srgb, var(--rk-accent-2) 16%, transparent);
+  --rk-line: rgba(120, 140, 170, 0.22);
+  --rk-line-strong: rgba(150, 165, 195, 0.38);
+  --rk-focus: color-mix(in srgb, var(--rk-accent) 60%, var(--rk-accent-2) 40%);
+  --rk-shadow: 0 4px 28px rgba(0, 8, 20, 0.45);
+  --rk-shadow-2: 0 22px 56px rgba(0, 4, 12, 0.55);
+  --rk-page-glow-1: rgba(80, 140, 220, 0.1);
+  --rk-page-glow-2: rgba(120, 150, 180, 0.08);
+  --rk-album-fb-1: rgba(80, 130, 220, 0.24);
+  --rk-album-fb-2: rgba(120, 150, 180, 0.18);
+  --rk-art-empty-1: rgba(80, 130, 220, 0.16);
+  --rk-art-empty-2: rgba(120, 150, 190, 0.1);
+  --rk-badge-1: rgba(80, 130, 220, 0.22);
+  --rk-badge-2: rgba(120, 150, 180, 0.16);
+  --rk-topbar-bg: rgba(12, 18, 28, 0.92);
+  --rk-sidebar-bg: color-mix(in srgb, var(--rk-surface-2) 95%, var(--rk-bg) 5%);
+  --rk-cta: linear-gradient(135deg, var(--rk-accent), color-mix(in srgb, var(--rk-accent-2) 80%, white 4%));
+}
+
+:root[data-theme="aubergine"],
+[data-theme="aubergine"] {
+  --rk-bg: #0e0e11;
+  --rk-bg-deep: #0e0e11;
+  --rk-surface: rgba(30, 30, 38, 0.9);
+  --rk-surface-2: rgba(38, 38, 48, 0.94);
+  --rk-surface-3: rgba(50, 50, 62, 0.96);
+  --rk-ink: #ececf0;
+  --rk-muted: #a8a0b8;
+  --rk-muted-strong: #d4d0e4;
+  --rk-accent: #8b5cf6;
+  --rk-accent-2: #c4b5fd;
+  --rk-accent-ink: #0c0618;
+  --rk-accent-soft: color-mix(in srgb, var(--rk-accent) 16%, transparent);
+  --rk-accent2-soft: color-mix(in srgb, var(--rk-accent-2) 16%, transparent);
+  --rk-line: rgba(130, 100, 190, 0.22);
+  --rk-line-strong: rgba(160, 130, 210, 0.4);
+  --rk-focus: color-mix(in srgb, var(--rk-accent) 55%, var(--rk-accent-2) 45%);
+  --rk-shadow: 0 4px 28px rgba(0, 0, 0, 0.45);
+  --rk-shadow-2: 0 22px 56px rgba(0, 0, 0, 0.55);
+  --rk-page-glow-1: rgba(139, 92, 246, 0.12);
+  --rk-page-glow-2: rgba(180, 140, 255, 0.1);
+  --rk-album-fb-1: rgba(139, 100, 230, 0.26);
+  --rk-album-fb-2: rgba(180, 150, 250, 0.18);
+  --rk-art-empty-1: rgba(139, 92, 246, 0.18);
+  --rk-art-empty-2: rgba(196, 181, 253, 0.12);
+  --rk-badge-1: rgba(139, 100, 230, 0.24);
+  --rk-badge-2: rgba(180, 150, 250, 0.16);
+  --rk-topbar-bg: rgba(16, 16, 22, 0.92);
+  --rk-sidebar-bg: color-mix(in srgb, var(--rk-surface-2) 95%, var(--rk-bg) 5%);
+  --rk-cta: linear-gradient(135deg, var(--rk-accent), color-mix(in srgb, var(--rk-accent-2) 80%, white 4%));
+}
+
+:root[data-theme="tangerine"],
+[data-theme="tangerine"] {
+  --rk-bg: #0e0e11;
+  --rk-bg-deep: #0e0e11;
+  --rk-surface: rgba(30, 30, 38, 0.9);
+  --rk-surface-2: rgba(38, 38, 48, 0.94);
+  --rk-surface-3: rgba(50, 50, 62, 0.96);
+  --rk-ink: #ececf0;
+  --rk-muted: #b8a898;
+  --rk-muted-strong: #e0d8cc;
+  --rk-accent: #f97316;
+  --rk-accent-2: #fbbf24;
+  --rk-accent-ink: #160804;
+  --rk-accent-soft: color-mix(in srgb, var(--rk-accent) 16%, transparent);
+  --rk-accent2-soft: color-mix(in srgb, var(--rk-accent-2) 16%, transparent);
+  --rk-line: rgba(200, 110, 50, 0.22);
+  --rk-line-strong: rgba(230, 140, 80, 0.4);
+  --rk-focus: color-mix(in srgb, var(--rk-accent) 55%, var(--rk-accent-2) 45%);
+  --rk-shadow: 0 4px 28px rgba(0, 0, 0, 0.45);
+  --rk-shadow-2: 0 22px 56px rgba(0, 0, 0, 0.55);
+  --rk-page-glow-1: rgba(249, 115, 22, 0.12);
+  --rk-page-glow-2: rgba(251, 191, 36, 0.1);
+  --rk-album-fb-1: rgba(240, 120, 50, 0.26);
+  --rk-album-fb-2: rgba(250, 200, 100, 0.18);
+  --rk-art-empty-1: rgba(249, 115, 22, 0.18);
+  --rk-art-empty-2: rgba(251, 191, 36, 0.12);
+  --rk-badge-1: rgba(240, 120, 50, 0.24);
+  --rk-badge-2: rgba(250, 200, 100, 0.16);
+  --rk-topbar-bg: rgba(16, 16, 22, 0.92);
+  --rk-sidebar-bg: color-mix(in srgb, var(--rk-surface-2) 95%, var(--rk-bg) 5%);
+  --rk-cta: linear-gradient(135deg, var(--rk-accent), color-mix(in srgb, var(--rk-accent-2) 80%, white 4%));
+}
+
+:root[data-theme="carmine"],
+[data-theme="carmine"] {
+  --rk-bg: #0e0e11;
+  --rk-bg-deep: #0e0e11;
+  --rk-surface: rgba(30, 30, 38, 0.9);
+  --rk-surface-2: rgba(38, 38, 48, 0.94);
+  --rk-surface-3: rgba(50, 50, 62, 0.96);
+  --rk-ink: #ececf0;
+  --rk-muted: #b8a0a8;
+  --rk-muted-strong: #e4d0d4;
+  --rk-accent: #e11d48;
+  --rk-accent-2: #fb7185;
+  --rk-accent-ink: #140204;
+  --rk-accent-soft: color-mix(in srgb, var(--rk-accent) 16%, transparent);
+  --rk-accent2-soft: color-mix(in srgb, var(--rk-accent-2) 16%, transparent);
+  --rk-line: rgba(200, 70, 100, 0.22);
+  --rk-line-strong: rgba(230, 100, 120, 0.4);
+  --rk-focus: color-mix(in srgb, var(--rk-accent) 55%, var(--rk-accent-2) 45%);
+  --rk-shadow: 0 4px 28px rgba(0, 0, 0, 0.45);
+  --rk-shadow-2: 0 22px 56px rgba(0, 0, 0, 0.55);
+  --rk-page-glow-1: rgba(225, 29, 72, 0.12);
+  --rk-page-glow-2: rgba(251, 113, 133, 0.1);
+  --rk-album-fb-1: rgba(230, 60, 100, 0.26);
+  --rk-album-fb-2: rgba(250, 150, 160, 0.18);
+  --rk-art-empty-1: rgba(225, 29, 72, 0.18);
+  --rk-art-empty-2: rgba(251, 113, 133, 0.12);
+  --rk-badge-1: rgba(230, 60, 100, 0.24);
+  --rk-badge-2: rgba(250, 150, 160, 0.16);
+  --rk-topbar-bg: rgba(16, 16, 22, 0.92);
+  --rk-sidebar-bg: color-mix(in srgb, var(--rk-surface-2) 95%, var(--rk-bg) 5%);
+  --rk-cta: linear-gradient(135deg, var(--rk-accent), color-mix(in srgb, var(--rk-accent-2) 80%, white 4%));
+}
+
+:root[data-theme="prism"],
+[data-theme="prism"] {
+  --rk-bg: #07090b;
+  --rk-bg-deep: #07090b;
+  --rk-surface: rgba(16, 22, 22, 0.9);
+  --rk-surface-2: rgba(22, 32, 34, 0.94);
+  --rk-surface-3: rgba(31, 42, 44, 0.96);
+  --rk-ink: #f4f7f1;
+  --rk-muted: #aab7ae;
+  --rk-muted-strong: #d9e6da;
+  --rk-accent: #a3ff3f;
+  --rk-accent-2: #ff4fd8;
+  --rk-accent-ink: #071005;
+  --rk-accent-soft: color-mix(in srgb, var(--rk-accent) 16%, transparent);
+  --rk-accent2-soft: color-mix(in srgb, var(--rk-accent-2) 16%, transparent);
+  --rk-line: rgba(160, 255, 95, 0.18);
+  --rk-line-strong: rgba(255, 79, 216, 0.36);
+  --rk-focus: color-mix(in srgb, var(--rk-accent) 54%, var(--rk-accent-2) 46%);
+  --rk-shadow: 0 4px 28px rgba(0, 0, 0, 0.44);
+  --rk-shadow-2: 0 22px 56px rgba(0, 0, 0, 0.56);
+  --rk-page-glow-1: rgba(163, 255, 63, 0.12);
+  --rk-page-glow-2: rgba(255, 79, 216, 0.1);
+  --rk-album-fb-1: rgba(163, 255, 63, 0.24);
+  --rk-album-fb-2: rgba(255, 79, 216, 0.18);
+  --rk-art-empty-1: rgba(163, 255, 63, 0.16);
+  --rk-art-empty-2: rgba(255, 79, 216, 0.12);
+  --rk-badge-1: rgba(163, 255, 63, 0.22);
+  --rk-badge-2: rgba(255, 79, 216, 0.16);
+  --rk-topbar-bg: rgba(10, 13, 14, 0.92);
+  --rk-sidebar-bg: color-mix(in srgb, var(--rk-surface-2) 95%, var(--rk-bg) 5%);
+  --rk-cta: linear-gradient(135deg, var(--rk-accent), color-mix(in srgb, var(--rk-accent-2) 80%, white 4%));
+}
+
+:root[data-theme="slate-light"],
+[data-theme="slate-light"] {
+  color-scheme: light;
+  --rk-bg: #f4f6f9;
+  --rk-bg-deep: #f4f6f9;
+  --rk-surface: rgba(226, 232, 242, 0.92);
+  --rk-surface-2: rgba(216, 226, 240, 0.96);
+  --rk-surface-3: rgba(200, 214, 234, 0.97);
+  --rk-ink: #0f141c;
+  --rk-muted: #57667f;
+  --rk-muted-strong: #1e293b;
+  --rk-accent: #3b82f6;
+  --rk-accent-2: #64748b;
+  --rk-accent-ink: #0a0e14;
+  --rk-accent-soft: color-mix(in srgb, var(--rk-accent) 16%, transparent);
+  --rk-accent2-soft: color-mix(in srgb, var(--rk-accent-2) 16%, transparent);
+  --rk-line: rgba(50, 70, 100, 0.14);
+  --rk-line-strong: rgba(35, 55, 85, 0.24);
+  --rk-focus: color-mix(in srgb, var(--rk-accent) 60%, var(--rk-accent-2) 40%);
+  --rk-danger: #c53030;
+  --rk-shadow: 0 4px 24px rgba(15, 23, 42, 0.07);
+  --rk-shadow-2: 0 22px 48px rgba(15, 23, 42, 0.11);
+  --rk-page-glow-1: rgba(80, 140, 220, 0.08);
+  --rk-page-glow-2: rgba(120, 150, 180, 0.07);
+  --rk-album-fb-1: rgba(80, 130, 220, 0.18);
+  --rk-album-fb-2: rgba(120, 150, 180, 0.12);
+  --rk-art-empty-1: rgba(80, 130, 220, 0.12);
+  --rk-art-empty-2: rgba(120, 150, 190, 0.09);
+  --rk-badge-1: rgba(80, 130, 220, 0.16);
+  --rk-badge-2: rgba(120, 150, 180, 0.12);
+  --rk-topbar-bg: rgba(232, 236, 244, 0.92);
+  --rk-sidebar-bg: color-mix(in srgb, var(--rk-surface-2) 95%, var(--rk-bg) 5%);
+  --rk-cta: linear-gradient(135deg, var(--rk-accent), color-mix(in srgb, var(--rk-accent-2) 80%, white 4%));
+}
+
+:root[data-theme="aubergine-light"],
+[data-theme="aubergine-light"] {
+  color-scheme: light;
+  --rk-bg: #f7f5fc;
+  --rk-bg-deep: #f7f5fc;
+  --rk-surface: rgba(236, 232, 250, 0.92);
+  --rk-surface-2: rgba(228, 222, 248, 0.96);
+  --rk-surface-3: rgba(214, 206, 244, 0.97);
+  --rk-ink: #14101c;
+  --rk-muted: #6a6088;
+  --rk-muted-strong: #2e2448;
+  --rk-accent: #8b5cf6;
+  --rk-accent-2: #a78bfa;
+  --rk-accent-ink: #0c0618;
+  --rk-accent-soft: color-mix(in srgb, var(--rk-accent) 16%, transparent);
+  --rk-accent2-soft: color-mix(in srgb, var(--rk-accent-2) 16%, transparent);
+  --rk-line: rgba(90, 60, 140, 0.14);
+  --rk-line-strong: rgba(70, 45, 115, 0.26);
+  --rk-focus: color-mix(in srgb, var(--rk-accent) 55%, var(--rk-accent-2) 45%);
+  --rk-danger: #c53030;
+  --rk-shadow: 0 4px 24px rgba(40, 20, 80, 0.07);
+  --rk-shadow-2: 0 22px 48px rgba(30, 14, 60, 0.11);
+  --rk-page-glow-1: rgba(139, 92, 246, 0.1);
+  --rk-page-glow-2: rgba(180, 140, 255, 0.08);
+  --rk-album-fb-1: rgba(139, 100, 230, 0.18);
+  --rk-album-fb-2: rgba(180, 150, 250, 0.12);
+  --rk-art-empty-1: rgba(139, 92, 246, 0.14);
+  --rk-art-empty-2: rgba(196, 181, 253, 0.1);
+  --rk-badge-1: rgba(139, 100, 230, 0.16);
+  --rk-badge-2: rgba(180, 150, 250, 0.12);
+  --rk-topbar-bg: rgba(238, 234, 250, 0.92);
+  --rk-sidebar-bg: color-mix(in srgb, var(--rk-surface-2) 95%, var(--rk-bg) 5%);
+  --rk-cta: linear-gradient(135deg, var(--rk-accent), color-mix(in srgb, var(--rk-accent-2) 80%, white 4%));
+}
+
+:root[data-theme="tangerine-light"],
+[data-theme="tangerine-light"] {
+  color-scheme: light;
+  --rk-bg: #fdfaf5;
+  --rk-bg-deep: #fdfaf5;
+  --rk-surface: rgba(252, 238, 222, 0.92);
+  --rk-surface-2: rgba(248, 230, 210, 0.96);
+  --rk-surface-3: rgba(244, 220, 196, 0.97);
+  --rk-ink: #1a120a;
+  --rk-muted: #826858;
+  --rk-muted-strong: #3d2814;
+  --rk-accent: #f97316;
+  --rk-accent-2: #d9a321;
+  --rk-accent-ink: #160804;
+  --rk-accent-soft: color-mix(in srgb, var(--rk-accent) 16%, transparent);
+  --rk-accent2-soft: color-mix(in srgb, var(--rk-accent-2) 16%, transparent);
+  --rk-line: rgba(160, 90, 40, 0.14);
+  --rk-line-strong: rgba(120, 65, 28, 0.26);
+  --rk-focus: color-mix(in srgb, var(--rk-accent) 55%, var(--rk-accent-2) 45%);
+  --rk-danger: #c53030;
+  --rk-shadow: 0 4px 24px rgba(80, 40, 10, 0.07);
+  --rk-shadow-2: 0 22px 48px rgba(60, 28, 8, 0.1);
+  --rk-page-glow-1: rgba(249, 115, 22, 0.1);
+  --rk-page-glow-2: rgba(251, 191, 36, 0.08);
+  --rk-album-fb-1: rgba(240, 120, 50, 0.18);
+  --rk-album-fb-2: rgba(250, 200, 100, 0.12);
+  --rk-art-empty-1: rgba(249, 115, 22, 0.14);
+  --rk-art-empty-2: rgba(251, 191, 36, 0.1);
+  --rk-badge-1: rgba(240, 120, 50, 0.16);
+  --rk-badge-2: rgba(250, 200, 100, 0.12);
+  --rk-topbar-bg: rgba(250, 240, 228, 0.92);
+  --rk-sidebar-bg: color-mix(in srgb, var(--rk-surface-2) 95%, var(--rk-bg) 5%);
+  --rk-cta: linear-gradient(135deg, var(--rk-accent), color-mix(in srgb, var(--rk-accent-2) 80%, white 4%));
+}
+
+:root[data-theme="carmine-light"],
+[data-theme="carmine-light"] {
+  color-scheme: light;
+  --rk-bg: #fdf5f6;
+  --rk-bg-deep: #fdf5f6;
+  --rk-surface: rgba(252, 228, 234, 0.92);
+  --rk-surface-2: rgba(248, 216, 226, 0.96);
+  --rk-surface-3: rgba(244, 200, 216, 0.97);
+  --rk-ink: #1a080e;
+  --rk-muted: #865a68;
+  --rk-muted-strong: #3d1420;
+  --rk-accent: #e11d48;
+  --rk-accent-2: #f47284;
+  --rk-accent-ink: #140204;
+  --rk-accent-soft: color-mix(in srgb, var(--rk-accent) 16%, transparent);
+  --rk-accent2-soft: color-mix(in srgb, var(--rk-accent-2) 16%, transparent);
+  --rk-line: rgba(150, 50, 75, 0.14);
+  --rk-line-strong: rgba(110, 35, 55, 0.26);
+  --rk-focus: color-mix(in srgb, var(--rk-accent) 55%, var(--rk-accent-2) 45%);
+  --rk-danger: #b91c1c;
+  --rk-shadow: 0 4px 24px rgba(80, 20, 36, 0.07);
+  --rk-shadow-2: 0 22px 48px rgba(50, 12, 26, 0.1);
+  --rk-page-glow-1: rgba(225, 29, 72, 0.1);
+  --rk-page-glow-2: rgba(251, 113, 133, 0.08);
+  --rk-album-fb-1: rgba(230, 60, 100, 0.18);
+  --rk-album-fb-2: rgba(250, 150, 160, 0.12);
+  --rk-art-empty-1: rgba(225, 29, 72, 0.14);
+  --rk-art-empty-2: rgba(251, 113, 133, 0.1);
+  --rk-badge-1: rgba(230, 60, 100, 0.16);
+  --rk-badge-2: rgba(250, 150, 160, 0.12);
+  --rk-topbar-bg: rgba(250, 232, 238, 0.92);
+  --rk-sidebar-bg: color-mix(in srgb, var(--rk-surface-2) 95%, var(--rk-bg) 5%);
+  --rk-cta: linear-gradient(135deg, var(--rk-accent), color-mix(in srgb, var(--rk-accent-2) 80%, white 4%));
+}
+

@@ -1,0 +1,27 @@
+@import "@rekord/ui/styles/tokens.css";
+
+* {
+  box-sizing: border-box;
+}
+
+html,
+body {
+  margin: 0;
+  min-height: 100%;
+  font-family: var(--rk-font);
+  font-size: 15px;
+  line-height: 1.45;
+  color: var(--rk-ink);
+  background: linear-gradient(180deg, var(--rk-bg-deep) 0%, var(--rk-bg) 100%);
+  background-attachment: fixed;
+}
+
+button,
+input {
+  font: inherit;
+}
+
+::selection {
+  background: color-mix(in srgb, var(--rk-accent) 35%, transparent);
+  color: var(--rk-ink);
+}

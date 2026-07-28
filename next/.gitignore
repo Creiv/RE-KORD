@@ -1,0 +1,12 @@
+target/
+node_modules/
+dist/
+.DS_Store
+*.db
+*.db-*
+.vite/
+apps/client-shell/src-tauri/gen/
+apps/client-shell/src-tauri/target/
+release/
+.env
+.env.*

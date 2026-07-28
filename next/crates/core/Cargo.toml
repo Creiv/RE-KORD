@@ -1,0 +1,33 @@
+[package]
+name = "rekord-core"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+description = "RE-KORD server core: SQLite, scan, API, media"
+
+[dependencies]
+rekord-plugin-api = { workspace = true }
+anyhow = { workspace = true }
+axum = { workspace = true }
+chrono = { workspace = true }
+dirs = { workspace = true }
+http-range-header = { workspace = true }
+lofty = { workspace = true }
+mime_guess = { workspace = true }
+rusqlite = { workspace = true }
+serde = { workspace = true }
+serde_json = { workspace = true }
+thiserror = { workspace = true }
+tokio = { workspace = true }
+tokio-util = { workspace = true }
+tower = { workspace = true }
+tower-http = { workspace = true }
+tracing = { workspace = true }
+uuid = { workspace = true }
+walkdir = { workspace = true }
+zip = { workspace = true }
+reqwest = { workspace = true }
+futures = { workspace = true }
+bytes = { workspace = true }
+url = { workspace = true }
+tokio-stream = { workspace = true }

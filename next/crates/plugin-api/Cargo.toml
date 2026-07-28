@@ -1,0 +1,10 @@
+[package]
+name = "rekord-plugin-api"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+description = "RE-KORD optional module contract"
+
+[dependencies]
+serde = { workspace = true }
+serde_json = { workspace = true }

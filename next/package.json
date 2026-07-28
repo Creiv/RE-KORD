@@ -1,0 +1,24 @@
+{
+  "name": "rekord",
+  "version": "5.1.0",
+  "private": true,
+  "description": "RE-KORD — modular music hub (server API + client UI)",
+  "scripts": {
+    "dev:server-ui": "pnpm --filter @rekord/server-ui dev",
+    "dev:client-ui": "pnpm --filter @rekord/client-ui dev",
+    "build:server-ui": "pnpm --filter @rekord/server-ui build",
+    "build:client-ui": "pnpm --filter @rekord/client-ui build",
+    "build:ui": "pnpm build:server-ui && pnpm build:client-ui",
+    "dev:client": "pnpm --filter @rekord/client-shell tauri dev",
+    "build:client": "pnpm --filter @rekord/client-shell tauri build",
+    "server": "cargo run -p rekord-server --manifest-path Cargo.toml",
+    "build:server": "cargo build -p rekord-server --release --manifest-path Cargo.toml",
+    "pack:linux": "bash scripts/pack-linux.sh",
+    "pack:windows": "bash scripts/pack-windows.sh",
+    "android:init": "bash scripts/android-init.sh"
+  },
+  "engines": {
+    "node": ">=20"
+  },
+  "packageManager": "pnpm@9.15.0"
+}

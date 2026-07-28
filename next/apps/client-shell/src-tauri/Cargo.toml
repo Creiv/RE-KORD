@@ -1,0 +1,19 @@
+[package]
+name = "rekord-client"
+version.workspace = true
+description = "RE-KORD client shell"
+edition.workspace = true
+license.workspace = true
+
+[build-dependencies]
+tauri-build = { version = "2", features = [] }
+
+[dependencies]
+tauri = { version = "2", features = [] }
+tauri-plugin-shell = "2"
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+
+[lib]
+name = "rekord_client_lib"
+crate-type = ["staticlib", "cdylib", "rlib"]

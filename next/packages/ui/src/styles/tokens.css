@@ -1,0 +1,120 @@
+/* Named themes override Midnight :root (glass opacity stack not included). */
+@import "./themes.css";
+
+/* RE-KORD Midnight tokens — parity with 5.x :root */
+:root {
+  --rk-bg: #0a0e14;
+  --rk-bg-deep: #0a0e14;
+  --rk-surface: #121820;
+  --rk-surface-2: #161d28;
+  --rk-surface-3: #1c2532;
+  --rk-ink: #eef2f7;
+  --rk-muted: #94a3b8;
+  --rk-muted-strong: #cbd5e1;
+  --rk-accent: #f97316;
+  --rk-accent-2: #38bdf8;
+  --rk-accent-ink: #07101b;
+  --rk-accent-soft: color-mix(in srgb, var(--rk-accent) 14%, transparent);
+  --rk-accent2-soft: color-mix(in srgb, var(--rk-accent-2) 14%, transparent);
+  --rk-line: rgba(148, 163, 184, 0.16);
+  --rk-line-strong: rgba(148, 163, 184, 0.28);
+  --rk-focus: color-mix(in srgb, var(--rk-accent-2) 65%, white 20%);
+  --rk-danger: #f87171;
+  --rk-danger-soft: rgba(248, 113, 113, 0.12);
+  --rk-ok: #2e7d32;
+  --rk-ok-soft: rgba(46, 125, 50, 0.14);
+  --rk-glow: rgba(255, 143, 92, 0.08);
+  --rk-page-glow-1: rgba(255, 143, 92, 0.16);
+  --rk-page-glow-2: rgba(100, 212, 255, 0.14);
+  /* Missing-cover / initials placeholders — parity with 5.x album-fb / art-empty / badge */
+  --rk-album-fb-1: color-mix(in srgb, var(--rk-accent) 28%, transparent);
+  --rk-album-fb-2: color-mix(in srgb, var(--rk-accent-2) 18%, transparent);
+  --rk-art-empty-1: color-mix(in srgb, var(--rk-accent) 20%, transparent);
+  --rk-art-empty-2: color-mix(in srgb, var(--rk-accent-2) 12%, transparent);
+  --rk-badge-1: color-mix(in srgb, var(--rk-accent) 26%, transparent);
+  --rk-badge-2: color-mix(in srgb, var(--rk-accent-2) 18%, transparent);
+  --rk-topbar-bg: rgba(6, 13, 22, 0.82);
+  --rk-sidebar-bg: color-mix(in srgb, var(--rk-surface-2) 95%, var(--rk-bg) 5%);
+  --rk-radius-xs: 2px;
+  --rk-radius-sm: 4px;
+  --rk-radius: 6px;
+  --rk-radius-lg: 8px;
+  --rk-radius-xl: 10px;
+  --rk-radius-pill: 6px;
+  /* Cover art — modest radius (parity with 5.x --radius-lg on compact covers) */
+  --rk-radius-cover: 8px;
+  --rk-shadow: 0 1px 0 rgba(0, 0, 0, 0.35), 0 2px 10px rgba(0, 0, 0, 0.22);
+  --rk-shadow-2: 0 4px 18px rgba(0, 0, 0, 0.28);
+  --rk-font: "Inter", system-ui, -apple-system, sans-serif;
+  --rk-display: "Inter", system-ui, -apple-system, sans-serif;
+  --rk-mono: "JetBrains Mono", ui-monospace, monospace;
+  --rk-badge-font: "Space Grotesk", var(--rk-font);
+  /* Player dock bar height — measured at runtime; fallback until first paint */
+  --rk-dock-h: 96px;
+  --rk-mobile-nav-h: 58px;
+  --rk-side-w: 56px;
+  --rk-header-h: 56px;
+  --rk-content-max: 1360px;
+  --rk-space-1: 0.25rem;
+  --rk-space-2: 0.375rem;
+  --rk-space-3: 0.625rem;
+  --rk-space-4: 0.875rem;
+  --rk-space-5: 1.125rem;
+  --rk-space-6: 1.5rem;
+  /* Gap verticale tra schede/sezioni maggiori (hero ↔ body, toolbar ↔ lista, …) */
+  --rk-section-gap: 0.65rem;
+  --rk-cta: linear-gradient(
+    135deg,
+    var(--rk-accent),
+    color-mix(in srgb, var(--rk-accent-2) 80%, white 4%)
+  );
+  --rk-z-sticky: 10;
+  --rk-z-sidebar: 20;
+  --rk-z-player: 25;
+  --rk-z-nav: 35;
+  --rk-z-modal: 120;
+  color-scheme: dark;
+}
+
+[data-theme="server"] {
+  --rk-accent: #38bdf8;
+  --rk-accent-2: #f97316;
+  --rk-accent-ink: #07101b;
+  --rk-accent-soft: color-mix(in srgb, var(--rk-accent) 14%, transparent);
+}
+
+@media (max-width: 1000px) {
+  :root {
+    --rk-side-w: 0px;
+    /* Stacked transport row — parity with 5.x --bar-h: 11rem */
+    --rk-dock-h: 11rem;
+  }
+}
+
+/* Thin dark scrollbar — shared chrome for overflow surfaces (main, modals, panels). */
+.rk-scroll {
+  scrollbar-width: thin;
+  scrollbar-color: color-mix(in srgb, var(--rk-muted) 42%, transparent) transparent;
+}
+
+.rk-scroll::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+
+.rk-scroll::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.rk-scroll::-webkit-scrollbar-thumb {
+  background: color-mix(in srgb, var(--rk-muted) 42%, transparent);
+  border-radius: 999px;
+  border: 2px solid transparent;
+  background-clip: padding-box;
+}
+
+.rk-scroll::-webkit-scrollbar-thumb:hover {
+  background: color-mix(in srgb, var(--rk-muted) 68%, transparent);
+  border: 2px solid transparent;
+  background-clip: padding-box;
+}
