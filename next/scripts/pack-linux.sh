@@ -13,13 +13,19 @@ echo "==> Build server (release)"
 cargo build -p rekord-server --release
 TARGET_DIR="${CARGO_TARGET_DIR:-target}"
 cp -f "$TARGET_DIR/release/rekord-server" "$OUT/server/"
-rm -rf "$OUT/server/admin-ui"
+rm -rf "$OUT/server/client-ui" "$OUT/server/admin-ui"
+cp -a apps/client-ui/dist "$OUT/server/client-ui"
 cp -a apps/server-ui/dist "$OUT/server/admin-ui"
 cp -f modules.manifest.toml "$OUT/server/"
 cat > "$OUT/server/run.sh" <<'EOF'
 #!/usr/bin/env bash
 DIR="$(cd "$(dirname "$0")" && pwd)"
-exec "$DIR/rekord-server" --admin-ui "$DIR/admin-ui" --modules-manifest "$DIR/modules.manifest.toml" "$@"
+# Bind 0.0.0.0 by default (LAN). Override with REKORD_BIND=127.0.0.1:7420 if needed.
+exec "$DIR/rekord-server" \
+  --client-ui "$DIR/client-ui" \
+  --admin-ui "$DIR/admin-ui" \
+  --modules-manifest "$DIR/modules.manifest.toml" \
+  "$@"
 EOF
 chmod +x "$OUT/server/run.sh"
 

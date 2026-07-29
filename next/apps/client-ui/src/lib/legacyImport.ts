@@ -14,6 +14,7 @@ import {
   applyTheme,
   loadUserPrefs,
   normalizeTheme,
+  normalizeVisualizerMode,
   patchUserPrefs,
   type CrossfadeSec,
   type UiTheme,
@@ -60,7 +61,11 @@ type LegacySettings = {
   theme?: string;
   restoreSession?: boolean;
   audioCrossfadeSec?: number;
+  vizMode?: string;
+  visualizerMode?: string;
   customTheme?: Partial<CustomThemeSettings>;
+  glassSurfaces?: boolean;
+  glassOpacity?: number;
 };
 
 /** Subset of old UserStateV1 we understand. */
@@ -394,9 +399,21 @@ export async function applyLegacyUserState(
       : undefined,
   );
 
+  const glassSurfaces = settings.glassSurfaces === true;
+  const glassOpacity =
+    settings.glassOpacity != null && Number.isFinite(Number(settings.glassOpacity))
+      ? Math.min(100, Math.max(0, Math.round(Number(settings.glassOpacity))))
+      : prefs.glassOpacity;
+
+  const vizMode = normalizeVisualizerMode(
+    settings.vizMode ?? settings.visualizerMode,
+  );
+
   const nextPrefs: Partial<UserPrefs> = {
     theme: report.theme,
     customTheme,
+    glassSurfaces,
+    glassOpacity,
     crossfadeSec: crossfade,
     restoreSession,
     playCounts,
@@ -406,9 +423,10 @@ export async function applyLegacyUserState(
     excludedTrackIds: [],
     excludedAlbumIds: [...excludedAlbumIds],
     trackMoods,
+    visualizerMode: vizMode,
   };
   patchUserPrefs(nextPrefs);
-  applyTheme(report.theme, customTheme);
+  applyTheme(report.theme, customTheme, { glassSurfaces, glassOpacity });
   player.setCrossfadeSec(crossfade);
   player.reloadExclusionsFromPrefs();
 

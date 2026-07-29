@@ -26,7 +26,8 @@ else
   echo "==> Skipping Windows native cross-build (set FORCE_WINDOWS_CROSS=1 to enable)."
 fi
 
-rm -rf "$OUT/server/admin-ui"
+rm -rf "$OUT/server/client-ui" "$OUT/server/admin-ui"
+cp -a apps/client-ui/dist "$OUT/server/client-ui"
 cp -a apps/server-ui/dist "$OUT/server/admin-ui"
 cp -f modules.manifest.toml "$OUT/server/"
 rm -rf "$OUT/client/web"
@@ -38,14 +39,17 @@ RE-KORD Windows pack (staging)
 Server
   On Windows with Rust:
     cargo build -p rekord-server --release
-    rekord-server.exe --admin-ui admin-ui
+    rekord-server.exe --client-ui client-ui --admin-ui admin-ui
+
+  Default bind is 0.0.0.0:7420 (LAN). Override with REKORD_BIND=127.0.0.1:7420.
 
   Included here:
-    server/admin-ui/
+    server/client-ui/   full app served at http://<host>:7420/
+    server/admin-ui/    fallback if client-ui missing
     server/modules.manifest.toml
 
 Client
-  client/web/   full client UI — set Server URL to the hub API
+  client/web/   same UI as portable static files (optional; hub already serves it)
 
   Native shell on Windows:
     pnpm --filter @rekord/client-shell tauri build

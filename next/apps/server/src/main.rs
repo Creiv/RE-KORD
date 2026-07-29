@@ -10,8 +10,8 @@ use tracing::info;
 #[derive(Parser, Debug)]
 #[command(name = "rekord-server", about = "RE-KORD server hub")]
 struct Args {
-    /// Bind address
-    #[arg(long, env = "REKORD_BIND", default_value = "127.0.0.1:7420")]
+    /// Bind address (0.0.0.0 for LAN / remote access; use 127.0.0.1 for local-only)
+    #[arg(long, env = "REKORD_BIND", default_value = "0.0.0.0:7420")]
     bind: SocketAddr,
 
     /// Data directory (DB, settings)
@@ -26,7 +26,11 @@ struct Args {
     #[arg(long, env = "REKORD_MODULES_MANIFEST")]
     modules_manifest: Option<PathBuf>,
 
-    /// Directory with built admin UI (server-ui dist)
+    /// Directory with built client UI (served at `/` for LAN / tunnel)
+    #[arg(long, env = "REKORD_CLIENT_UI")]
+    client_ui: Option<PathBuf>,
+
+    /// Directory with built admin UI (used only if client UI is not found)
     #[arg(long, env = "REKORD_ADMIN_UI")]
     admin_ui: Option<PathBuf>,
 
@@ -39,6 +43,41 @@ struct Args {
     restore_exit: bool,
 }
 
+fn resolve_public_ui_dir(args: &Args) -> Option<PathBuf> {
+    if let Some(dir) = args.client_ui.clone().filter(|p| p.is_dir()) {
+        return Some(dir);
+    }
+
+    let mut client_candidates = vec![
+        PathBuf::from("apps/client-ui/dist"),
+        PathBuf::from("next/apps/client-ui/dist"),
+    ];
+    if let Ok(exe) = std::env::current_exe() {
+        if let Some(dir) = exe.parent() {
+            client_candidates.push(dir.join("client-ui"));
+            client_candidates.push(dir.join("web"));
+        }
+    }
+    if let Some(dir) = client_candidates.into_iter().find(|p| p.is_dir()) {
+        return Some(dir);
+    }
+
+    if let Some(dir) = args.admin_ui.clone().filter(|p| p.is_dir()) {
+        return Some(dir);
+    }
+
+    let mut admin_candidates = vec![
+        PathBuf::from("apps/server-ui/dist"),
+        PathBuf::from("next/apps/server-ui/dist"),
+    ];
+    if let Ok(exe) = std::env::current_exe() {
+        if let Some(dir) = exe.parent() {
+            admin_candidates.push(dir.join("admin-ui"));
+        }
+    }
+    admin_candidates.into_iter().find(|p| p.is_dir())
+}
+
 #[tokio::main]
 async fn main() -> Result<()> {
     tracing_subscriber::fmt()
@@ -49,7 +88,7 @@ async fn main() -> Result<()> {
         .init();
 
     let args = Args::parse();
-    let mut config = AppConfig::resolve(args.data_dir, args.bind, args.modules_manifest);
+    let mut config = AppConfig::resolve(args.data_dir.clone(), args.bind, args.modules_manifest.clone());
     config.ensure_dirs()?;
     write_default_manifest(&config.modules_manifest)?;
     config.set_music_root_if_present(args.music_root.as_deref())?;
@@ -62,18 +101,7 @@ async fn main() -> Result<()> {
         "starting RE-KORD server"
     );
 
-    let admin_ui = args.admin_ui.or_else(|| {
-        let mut candidates = vec![
-            PathBuf::from("apps/server-ui/dist"),
-            PathBuf::from("next/apps/server-ui/dist"),
-        ];
-        if let Ok(exe) = std::env::current_exe() {
-            if let Some(dir) = exe.parent() {
-                candidates.push(dir.join("admin-ui"));
-            }
-        }
-        candidates.into_iter().find(|p| p.is_dir())
-    });
+    let public_ui = resolve_public_ui_dir(&args);
 
     let bind = config.bind;
     let state = AppState::new(config, modules)?;
@@ -96,6 +124,6 @@ async fn main() -> Result<()> {
         }
     }
 
-    serve(state, bind, admin_ui).await?;
+    serve(state, bind, public_ui).await?;
     Ok(())
 }

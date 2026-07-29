@@ -44,9 +44,10 @@
   const excludedCurrent = $derived(
     session.current ? player.isTrackExcluded(session.current) : false,
   );
-  const playCount = $derived(
-    session.current ? player.playCount(session.current.id) : 0,
-  );
+  const playCount = $derived.by(() => {
+    session.tick;
+    return session.current ? player.playCount(session.current) : 0;
+  });
   const durationLabel = $derived(
     session.current?.duration_ms
       ? formatTime(session.current.duration_ms / 1000)
@@ -287,17 +288,12 @@
                 </div>
               </div>
 
-              <div class="listen-stage__viz" aria-hidden="true">
-                {#if loadUserPrefs().visualizerMode === "karaoke" && session.current?.lyrics}
-                  <pre class="listen-karaoke">{session.current.lyrics}</pre>
-                {:else}
-                  <ListenVisualizer
-                    playing={session.playing}
-                    mode={loadUserPrefs().visualizerMode === "karaoke"
-                      ? "bars"
-                      : loadUserPrefs().visualizerMode}
-                  />
-                {/if}
+              <div class="listen-stage__viz">
+                <ListenVisualizer
+                  playing={session.playing}
+                  lyrics={session.current?.lyrics ?? ""}
+                  currentTime={session.currentTime}
+                />
               </div>
 
               <ListenSleepTimer />

@@ -46,7 +46,7 @@
 
 </script>
 
-<header class="top">
+<header class="top rekord-context-header">
   <div class="row">
     <div class="start">
       <div class="brand-mobile">
@@ -79,10 +79,14 @@
     position: sticky;
     top: 0;
     z-index: var(--rk-z-sticky);
+    isolation: isolate;
     border-bottom: 1px solid var(--rk-line);
-    background: color-mix(in srgb, var(--rk-topbar-bg) 88%, transparent);
-    backdrop-filter: blur(12px);
-    -webkit-backdrop-filter: blur(12px);
+    /* Opaque when glass is off (same composite as player dock). */
+    background:
+      linear-gradient(var(--rk-surface-2), var(--rk-surface-2)),
+      var(--rk-bg);
+    -webkit-backdrop-filter: none;
+    backdrop-filter: none;
     flex-shrink: 0;
     /* Stesso canale orizzontale di .content → .inner (padding fuori dal max-width + gutter). */
     padding-inline: 1.25rem;

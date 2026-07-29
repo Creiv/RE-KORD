@@ -3,16 +3,26 @@
     title = "",
     class: className = "",
     children,
+    actions,
   }: {
     title?: string;
     class?: string;
     children: import("svelte").Snippet;
+    /** Optional controls aligned to the right of the panel title. */
+    actions?: import("svelte").Snippet;
   } = $props();
 </script>
 
 <section class="rk-panel {className}">
-  {#if title}
-    <h2 class="rk-panel__title">{title}</h2>
+  {#if title || actions}
+    <div class="rk-panel__head">
+      {#if title}
+        <h2 class="rk-panel__title">{title}</h2>
+      {/if}
+      {#if actions}
+        <div class="rk-panel__actions">{@render actions()}</div>
+      {/if}
+    </div>
   {/if}
   {@render children()}
 </section>
@@ -27,18 +37,28 @@
     box-shadow: var(--rk-shadow);
   }
 
+  .rk-panel__head {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 0.75rem;
+    margin: 0 0 0.85rem;
+    padding: 0 0 0.65rem;
+    border-bottom: 1px solid color-mix(in srgb, var(--rk-line) 88%, transparent);
+    min-width: 0;
+  }
+
   .rk-panel__title {
     display: flex;
     align-items: center;
     gap: 0.55rem;
-    margin: 0 0 0.85rem;
-    padding: 0 0 0.65rem;
+    margin: 0;
+    min-width: 0;
     font-size: 1.08rem;
     font-weight: 800;
     letter-spacing: -0.025em;
     line-height: 1.2;
     color: var(--rk-ink);
-    border-bottom: 1px solid color-mix(in srgb, var(--rk-line) 88%, transparent);
   }
 
   .rk-panel__title::before {
@@ -52,5 +72,14 @@
       var(--rk-accent) 0%,
       color-mix(in srgb, var(--rk-accent-2) 82%, var(--rk-accent) 18%) 100%
     );
+  }
+
+  .rk-panel__actions {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    justify-content: flex-end;
+    gap: 0.4rem;
+    flex: 0 0 auto;
   }
 </style>

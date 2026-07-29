@@ -102,6 +102,7 @@ class PlayerController {
   private gain0: GainNode | null = null;
   private gain1: GainNode | null = null;
   private outputGain: GainNode | null = null;
+  private analyser: AnalyserNode | null = null;
   private graphReady = false;
   private crossfadeBusy = false;
   private crossfadeTimer = 0;
@@ -110,7 +111,11 @@ class PlayerController {
   private crossfadeInIx: DeckIx | null = null;
   private crossfadeNextIdx: number | null = null;
   private prefetchedRelPath: string | null = null;
+  /** Cancels in-flight dual-deck loads when the user skips again. */
+  private loadGen = 0;
   private listeners = new Set<Listener>();
+  /** Progress-only listeners (timeupdate) — must not drive full app re-renders. */
+  private progressListeners = new Set<Listener>();
 
   queue: Track[] = [];
   index = -1;
@@ -126,7 +131,9 @@ class PlayerController {
   private sleepFadeInterval = 0;
   private excludedRelPaths = new Set<string>();
   private excludedAlbumIds = new Set<number>();
-  private lastPlayCountPath: string | null = null;
+  /** Legacy half-listen: count once past 50% (reset if seek < 10%). */
+  private halfListenCounted = false;
+  private halfListenPath: string | null = null;
   private persistQueueTimer = 0;
   private lastQueuePersistSig = "";
   private restoringSession = false;
@@ -156,7 +163,7 @@ class PlayerController {
         // Keep UI moving during fade (outgoing until swap).
         if (this.crossfadeOutIx === ix) {
           this.currentTime = audio.currentTime;
-          this.emit();
+          this.emitProgress();
         }
         return;
       }
@@ -164,17 +171,18 @@ class PlayerController {
       this.currentTime = audio.currentTime;
       this.prefetchNextDeck();
       this.maybeStartCrossfade();
-      this.emit();
+      this.maybeCountHalfListen();
+      this.emitProgress();
     });
     audio.addEventListener("durationchange", () => {
       if (this.crossfadeBusy && this.crossfadeInIx === ix) {
         this.duration = Number.isFinite(audio.duration) ? audio.duration : 0;
-        this.emit();
+        this.emitProgress();
         return;
       }
       if (ix !== this.active) return;
       this.duration = Number.isFinite(audio.duration) ? audio.duration : 0;
-      this.emit();
+      this.emitProgress();
     });
     audio.addEventListener("play", () => {
       if (this.crossfadeBusy) {
@@ -203,14 +211,25 @@ class PlayerController {
     });
   }
 
+  /** State changes (track/queue/playing) — safe for full UI refresh. */
   subscribe(fn: Listener) {
     this.listeners.add(fn);
     return () => this.listeners.delete(fn);
   }
 
+  /** Timeline progress only — keep subscribers lightweight (legacy playerProgressStore). */
+  subscribeProgress(fn: Listener) {
+    this.progressListeners.add(fn);
+    return () => this.progressListeners.delete(fn);
+  }
+
   private emit() {
     this.schedulePersistQueue();
     for (const fn of this.listeners) fn();
+  }
+
+  private emitProgress() {
+    for (const fn of this.progressListeners) fn();
   }
 
   private queuePersistSig() {
@@ -292,6 +311,7 @@ class PlayerController {
 
     this.restoringSession = true;
     try {
+      this.cancelPendingLoad();
       this.abortCrossfade();
       this.privateQueue = [...tracks];
       this.queue = [...tracks];
@@ -304,6 +324,7 @@ class PlayerController {
         const audio = this.activeAudio();
         audio.loop = this.repeat === "one";
         audio.src = mediaUrl(track.rel_path);
+        this.prefetchedRelPath = track.rel_path;
         this.updateMediaSession(track);
       }
       this.lastQueuePersistSig = this.queuePersistSig();
@@ -363,22 +384,39 @@ class PlayerController {
       const g0 = ctx.createGain();
       const g1 = ctx.createGain();
       const out = ctx.createGain();
+      const analyser = ctx.createAnalyser();
       g0.gain.value = 1;
       g1.gain.value = 0;
       out.gain.value = 1;
+      analyser.fftSize = 1024;
+      analyser.smoothingTimeConstant = 0.62;
+      analyser.minDecibels = -88;
+      analyser.maxDecibels = -28;
       s0.connect(g0);
       s1.connect(g1);
       g0.connect(out);
       g1.connect(out);
-      out.connect(ctx.destination);
+      // Match legacy: output → analyser → destination
+      out.connect(analyser);
+      analyser.connect(ctx.destination);
       this.ctx = ctx;
       this.gain0 = g0;
       this.gain1 = g1;
       this.outputGain = out;
+      this.analyser = analyser;
       this.graphReady = true;
     } catch {
       this.graphReady = false;
     }
+  }
+
+  /** Web Audio analyser for Listen visualizers (null until graph is ready). */
+  getAnalyser(): AnalyserNode | null {
+    this.ensureGraph();
+    if (this.ctx?.state === "suspended") {
+      void this.ctx.resume();
+    }
+    return this.analyser;
   }
 
   private activeAudio() {
@@ -400,6 +438,12 @@ class PlayerController {
       excludedTrackIds: [],
       excludedAlbumIds: [...this.excludedAlbumIds],
     });
+  }
+
+  /** Apply crossfade without writing prefs (hydrate / account switch). */
+  applyCrossfadeSec(sec: CrossfadeSec) {
+    this.crossfadeSec = sec;
+    this.emit();
   }
 
   setCrossfadeSec(sec: CrossfadeSec) {
@@ -428,24 +472,61 @@ class PlayerController {
     this.emit();
   }
 
+  private resetHalfListen(track: Track | null) {
+    this.halfListenPath = track?.rel_path ?? null;
+    this.halfListenCounted = false;
+  }
+
+  /** Legacy PlayerContext: increment at ≥50% duration; re-arm if seeked <10%. */
+  private maybeCountHalfListen() {
+    const track = this.current;
+    if (!track) return;
+    const path = track.rel_path;
+    if (this.halfListenPath !== path) {
+      this.halfListenPath = path;
+      this.halfListenCounted = false;
+    }
+    const audio = this.activeAudio();
+    const safeDuration =
+      Number.isFinite(audio.duration) && audio.duration > 0
+        ? audio.duration
+        : this.duration > 0
+          ? this.duration
+          : 0;
+    if (!safeDuration) return;
+    if (this.halfListenCounted && audio.currentTime < safeDuration * 0.1) {
+      this.halfListenCounted = false;
+    }
+    if (!this.halfListenCounted && audio.currentTime >= safeDuration * 0.5) {
+      this.halfListenCounted = true;
+      this.bumpPlayCount(track);
+      this.emit();
+    }
+  }
+
   private bumpPlayCount(track: Track) {
-    if (this.lastPlayCountPath === track.rel_path) return;
-    this.lastPlayCountPath = track.rel_path;
     const prefs = loadUserPrefs();
     const key = track.rel_path;
     const prev = playCountFor(prefs, track);
     prefs.playCounts[key] = prev + 1;
     delete prefs.playCounts[String(track.id)];
-    const recent = [
-      key,
-      ...prefs.recentRelPaths.filter((p) => p !== key),
-    ].slice(0, 80);
-    patchUserPrefs({
-      playCounts: prefs.playCounts,
-      recentRelPaths: recent,
-      recentTrackIds: [],
-    });
+    patchUserPrefs({ playCounts: prefs.playCounts });
     touchListeningActivity();
+  }
+
+  /** Recent history on start (legacy pushRecent) — deferred so click stays snappy. */
+  private pushRecentDeferred(track: Track) {
+    const path = track.rel_path;
+    window.setTimeout(() => {
+      if (this.current?.rel_path !== path) return;
+      const prefs = loadUserPrefs();
+      const recent = [
+        path,
+        ...prefs.recentRelPaths.filter((p) => p !== path),
+      ].slice(0, 80);
+      patchUserPrefs({ recentRelPaths: recent, recentTrackIds: [] });
+      this.emit();
+    }, 0);
   }
 
   playCount(track: { id: number; rel_path: string } | number) {
@@ -480,17 +561,30 @@ class PlayerController {
 
   playTracks(tracks: Track[], startIndex = 0) {
     if (!tracks.length) return;
+    this.cancelPendingLoad();
     this.abortCrossfade();
     this.privateQueue = [...tracks];
+    const start = tracks[Math.min(Math.max(0, startIndex), tracks.length - 1)];
     if (this.shuffle) {
-      const start = tracks[Math.min(Math.max(0, startIndex), tracks.length - 1)];
-      const rest = this.filterShufflePool(tracks.filter((t) => t.id !== start.id));
-      this.queue = [start, ...this.shuffled(rest)];
+      // Play immediately; build smart shuffle off the click path.
+      this.queue = [start];
       this.index = 0;
-    } else {
-      this.queue = [...this.privateQueue];
-      this.index = Math.min(Math.max(0, startIndex), this.queue.length - 1);
+      void this.loadCurrent(true);
+      const gen = this.loadGen;
+      const startId = start.id;
+      const all = tracks;
+      window.setTimeout(() => {
+        if (this.loadGen !== gen) return;
+        if (this.current?.id !== startId) return;
+        const rest = this.filterShufflePool(all.filter((t) => t.id !== startId));
+        this.queue = [start, ...this.shuffled(rest)];
+        this.index = 0;
+        this.emit();
+      }, 0);
+      return;
     }
+    this.queue = [...this.privateQueue];
+    this.index = Math.min(Math.max(0, startIndex), this.queue.length - 1);
     void this.loadCurrent(true);
   }
 
@@ -503,34 +597,58 @@ class PlayerController {
     const pool = this.filterShufflePool(tracks);
     if (!pool.length) return;
     const first = start && pool.some((t) => t.id === start.id) ? start : pool[0];
-    const rest = pool.filter((t) => t.id !== first.id);
+    this.cancelPendingLoad();
+    this.abortCrossfade();
     this.shuffle = true;
     this.privateQueue = [...tracks];
-    const recent = new Set(loadUserPrefs().recentRelPaths);
-    const smartRest = buildSmartRandomQueue(rest, {
-      currentRelPath: first.rel_path,
-      currentArtist: first.artist_name,
-      recentRelPaths: recent,
-    });
-    this.queue = [first, ...smartRest].slice(0, CARD_QUEUE_CAP);
+    this.queue = [first];
     this.index = 0;
     void this.loadCurrent(true);
+    const gen = this.loadGen;
+    const firstId = first.id;
+    const restSeed = pool.filter((t) => t.id !== first.id);
+    window.setTimeout(() => {
+      if (this.loadGen !== gen) return;
+      if (this.current?.id !== firstId) return;
+      const recent = new Set(loadUserPrefs().recentRelPaths);
+      const smartRest = buildSmartRandomQueue(restSeed, {
+        currentRelPath: first.rel_path,
+        currentArtist: first.artist_name,
+        recentRelPaths: recent,
+      });
+      this.queue = [first, ...smartRest].slice(0, CARD_QUEUE_CAP);
+      this.index = 0;
+      this.emit();
+    }, 0);
   }
 
   /** Smart radio from a seed track across a library pool. */
   playRadioFromSeed(seed: Track, library: Track[]) {
-    const pool = this.filterShufflePool(library);
-    const recent = new Set(loadUserPrefs().recentRelPaths);
-    const queue = buildRadioFromSeed(seed, pool, {
-      maxLength: CARD_QUEUE_CAP,
-      recentRelPaths: recent,
-    });
-    if (!queue.length) return;
+    this.cancelPendingLoad();
+    this.abortCrossfade();
     this.shuffle = true;
-    this.privateQueue = [...queue];
-    this.queue = queue;
+    // Start audio on the seed immediately; score the library after paint.
+    this.privateQueue = [seed];
+    this.queue = [seed];
     this.index = 0;
     void this.loadCurrent(true);
+    const gen = this.loadGen;
+    const seedPath = seed.rel_path;
+    window.setTimeout(() => {
+      if (this.loadGen !== gen) return;
+      if (this.current?.rel_path !== seedPath) return;
+      const pool = this.filterShufflePool(library);
+      const recent = new Set(loadUserPrefs().recentRelPaths);
+      const queue = buildRadioFromSeed(seed, pool, {
+        maxLength: CARD_QUEUE_CAP,
+        recentRelPaths: recent,
+      });
+      if (!queue.length) return;
+      this.privateQueue = [...queue];
+      this.queue = queue;
+      this.index = 0;
+      this.emit();
+    }, 0);
   }
 
   addToQueue(track: Track | Track[]) {
@@ -560,6 +678,8 @@ class PlayerController {
       return;
     }
     if (removingCurrent) {
+      this.cancelPendingLoad();
+      this.abortCrossfade();
       this.index = Math.min(index, this.queue.length - 1);
       void this.loadCurrent(this.playing);
     } else if (index < this.index) {
@@ -591,6 +711,7 @@ class PlayerController {
   }
 
   clearQueue() {
+    this.cancelPendingLoad();
     this.abortCrossfade();
     this.queue = [];
     this.privateQueue = [];
@@ -622,6 +743,12 @@ class PlayerController {
 
   async next() {
     if (!this.queue.length) return;
+    // During an active crossfade, finish the swap (legacy) instead of skipping ahead.
+    if (this.crossfadeBusy) {
+      this.finalizeCrossfade();
+      return;
+    }
+    this.cancelPendingLoad();
     this.abortCrossfade();
     if (this.index < this.queue.length - 1) this.index += 1;
     else if (this.repeat === "all") this.index = 0;
@@ -631,8 +758,10 @@ class PlayerController {
 
   async prev() {
     if (!this.queue.length) return;
+    const wasFading = this.crossfadeBusy;
+    this.cancelPendingLoad();
     this.abortCrossfade();
-    if (this.activeAudio().currentTime > 3) {
+    if (!wasFading && this.activeAudio().currentTime > 3) {
       this.seek(0);
       return;
     }
@@ -796,6 +925,11 @@ class PlayerController {
     void inactive.load();
   }
 
+  /** Invalidate in-flight dual-deck loads (next/prev/playTracks). */
+  private cancelPendingLoad() {
+    this.loadGen += 1;
+  }
+
   private finalizeCrossfade() {
     if (!this.crossfadeBusy) return;
     window.clearTimeout(this.crossfadeTimer);
@@ -830,7 +964,8 @@ class PlayerController {
       this.duration = Number.isFinite(inEl.duration) ? inEl.duration : 0;
       this.currentTime = inEl.currentTime;
       this.playing = !inEl.paused;
-      this.bumpPlayCount(nextTr);
+      this.resetHalfListen(nextTr);
+      this.pushRecentDeferred(nextTr);
       this.updateMediaSession(nextTr);
     }
     this.emit();
@@ -868,15 +1003,20 @@ class PlayerController {
 
     const d = outEl.duration;
     if (!Number.isFinite(d) || d <= 0) return;
-    let remain = d - outEl.currentTime;
+    const fadeWindow = Math.min(this.crossfadeSec, d);
+    if (outEl.currentTime < d - fadeWindow - 0.02) return;
+    const remain = d - outEl.currentTime;
     if (remain < 0.08) return;
 
-    const token = ++this.crossfadeGen;
+    // Mark busy before any await (legacy-aligned) so timeupdate won't re-enter.
     this.crossfadeBusy = true;
     this.crossfadeOutIx = outIx;
     this.crossfadeInIx = inIx;
     this.crossfadeNextIdx = nextIdx;
+    const token = this.crossfadeGen;
 
+    // Reuse warm inactive deck when possible; otherwise bind now.
+    // Never await canplay here — that ate the fade window and broke seamless.
     const path = nextTr.rel_path;
     const url = mediaUrl(path);
     if (this.prefetchedRelPath !== path || !inEl.src) {
@@ -887,10 +1027,7 @@ class PlayerController {
 
     try {
       if (this.ctx.state === "suspended") await this.ctx.resume();
-      if (token !== this.crossfadeGen) return;
-      const ready = await this.waitForAudioReady(inEl);
-      if (token !== this.crossfadeGen) return;
-      if (!ready) throw new Error("incoming deck not ready");
+      if (token !== this.crossfadeGen || !this.crossfadeBusy) return;
       try {
         inEl.currentTime = 0;
       } catch {
@@ -905,24 +1042,28 @@ class PlayerController {
       this.crossfadeNextIdx = null;
       this.snapSolo(outIx);
       inEl.pause();
+      inEl.removeAttribute("src");
+      void inEl.load();
+      this.prefetchedRelPath = null;
       return;
     }
 
     if (token !== this.crossfadeGen || !this.crossfadeBusy) return;
 
-    // Recompute with live clock — avoid scheduling a long fade after the out deck already ended.
-    remain = Math.max(0.05, outEl.duration - outEl.currentTime);
-    if (!Number.isFinite(remain) || outEl.ended || remain < 0.05) {
+    const liveRemain = Math.max(0.05, outEl.duration - outEl.currentTime);
+    if (!Number.isFinite(liveRemain) || outEl.ended || liveRemain < 0.05) {
       this.finalizeCrossfade();
       return;
     }
-    const fadeLen = Math.min(this.crossfadeSec, remain);
+    const fadeLen = Math.min(this.crossfadeSec, liveRemain);
 
     const now = this.ctx.currentTime;
+    const vOut = gOut.gain.value;
+    const vIn = gIn.gain.value;
     gOut.gain.cancelScheduledValues(now);
     gIn.gain.cancelScheduledValues(now);
-    gOut.gain.setValueAtTime(1, now);
-    gIn.gain.setValueAtTime(0, now);
+    gOut.gain.setValueAtTime(vOut, now);
+    gIn.gain.setValueAtTime(vIn, now);
     gOut.gain.linearRampToValueAtTime(0, now + fadeLen);
     gIn.gain.linearRampToValueAtTime(1, now + fadeLen);
 
@@ -932,25 +1073,120 @@ class PlayerController {
     }, fadeLen * 1000 + 40);
   }
 
+  /**
+   * Dual-deck load (legacy PlayerContext): keep the outgoing deck playing while
+   * the incoming deck buffers, then snap gains / swap. Avoids the silence gap
+   * from setting `src` on the active element and awaiting `play()`.
+   */
   private async loadCurrent(autoplay: boolean) {
     const track = this.current;
     if (!track) return;
-    this.ensureGraph();
-    if (this.ctx?.state === "suspended") await this.ctx.resume();
-    this.snapSolo(this.active);
-    const audio = this.activeAudio();
-    audio.loop = this.repeat === "one";
-    audio.src = mediaUrl(track.rel_path);
-    this.updateMediaSession(track);
-    this.bumpPlayCount(track);
-    if (autoplay) {
-      try {
-        await audio.play();
-      } catch {
-        /* autoplay may be blocked */
+    const gen = ++this.loadGen;
+    this.resetHalfListen(track);
+
+    const outIx = this.active;
+    const inIx: DeckIx = outIx === 0 ? 1 : 0;
+    const outEl = outIx === 0 ? this.deck0 : this.deck1;
+    const inEl = inIx === 0 ? this.deck0 : this.deck1;
+    const url = mediaUrl(track.rel_path);
+    const path = track.rel_path;
+
+    // Kick off buffering before UI/graph work so the click path stays lean.
+    const alreadyBuffered =
+      this.prefetchedRelPath === path && this.audioReadyEnough(inEl);
+    if (!alreadyBuffered) {
+      this.prefetchedRelPath = path;
+      inEl.src = url;
+      inEl.load();
+    }
+
+    this.currentTime = 0;
+    this.duration =
+      track.duration_ms > 0 ? track.duration_ms / 1000 : this.duration;
+    this.emit();
+    this.emitProgress();
+    // Media session + cover prefetch are non-critical for start latency.
+    window.setTimeout(() => {
+      if (gen === this.loadGen) this.updateMediaSession(track);
+    }, 0);
+
+    if (!alreadyBuffered) {
+      const ready = await this.waitForAudioReady(inEl, 8000);
+      if (gen !== this.loadGen) return;
+      if (!ready) {
+        // Last resort: load on the active deck (may gap) so playback isn't stuck.
+        this.ensureGraph();
+        outEl.loop = this.repeat === "one";
+        outEl.src = url;
+        if (autoplay) {
+          try {
+            if (this.ctx?.state === "suspended") await this.ctx.resume();
+            if (gen !== this.loadGen) return;
+            await outEl.play();
+            this.playing = true;
+            this.pushRecentDeferred(track);
+          } catch {
+            this.playing = false;
+          }
+        }
+        this.emit();
+        return;
       }
     }
+
+    if (gen !== this.loadGen) return;
+
+    this.ensureGraph();
+    inEl.loop = this.repeat === "one";
+    try {
+      inEl.currentTime = 0;
+    } catch {
+      /* ignore */
+    }
+
+    if (this.ctx?.state === "suspended") await this.ctx.resume();
+    if (gen !== this.loadGen) return;
+
+    this.snapSolo(inIx);
+    if (!this.graphReady) {
+      inEl.volume = 1;
+      outEl.volume = 0;
+    }
+    this.active = inIx;
+
+    if (Number.isFinite(inEl.duration) && inEl.duration > 0) {
+      this.duration = inEl.duration;
+    }
+    this.currentTime = inEl.currentTime;
+
+    if (autoplay) {
+      try {
+        await inEl.play();
+        if (gen !== this.loadGen) return;
+        outEl.pause();
+        outEl.removeAttribute("src");
+        void outEl.load();
+        if (!this.graphReady) {
+          outEl.volume = 1;
+        }
+        this.playing = true;
+        this.pushRecentDeferred(track);
+        this.updateMediaSession(track);
+      } catch {
+        if (gen !== this.loadGen) return;
+        this.playing = false;
+      }
+    } else {
+      outEl.pause();
+      outEl.removeAttribute("src");
+      void outEl.load();
+      if (!this.graphReady) {
+        outEl.volume = 1;
+      }
+    }
+    this.prefetchedRelPath = path;
     this.emit();
+    this.emitProgress();
   }
 
   private async onEnded() {

@@ -34,8 +34,8 @@ use tower_http::services::ServeDir;
 use tower_http::trace::TraceLayer;
 use tracing::info;
 
-/// Build the HTTP router: API + media + optional admin UI static files.
-pub fn build_router(state: AppState, admin_ui_dir: Option<PathBuf>) -> Router {
+/// Build the HTTP router: API + media + optional static UI (client SPA preferred).
+pub fn build_router(state: AppState, public_ui_dir: Option<PathBuf>) -> Router {
     let cors = CorsLayer::new()
         .allow_origin(Any)
         .allow_methods(Any)
@@ -57,9 +57,10 @@ pub fn build_router(state: AppState, admin_ui_dir: Option<PathBuf>) -> Router {
         .layer(TraceLayer::new_for_http())
         .with_state(state);
 
-    if let Some(dir) = admin_ui_dir {
+    if let Some(dir) = public_ui_dir {
         if dir.is_dir() {
-            info!(path = %dir.display(), "serving admin UI");
+            info!(path = %dir.display(), "serving public UI");
+            // Same-origin SPA for LAN / Cloudflare tunnel (API is relative when base URL empty).
             app = app.fallback_service(ServeDir::new(dir));
         }
     }
@@ -67,12 +68,12 @@ pub fn build_router(state: AppState, admin_ui_dir: Option<PathBuf>) -> Router {
     app
 }
 
-pub async fn serve(state: AppState, addr: SocketAddr, admin_ui_dir: Option<PathBuf>) -> Result<()> {
+pub async fn serve(state: AppState, addr: SocketAddr, public_ui_dir: Option<PathBuf>) -> Result<()> {
     // Index library in the background when music_root is set but never scanned,
     // so client/admin UIs don't open against an empty DB until a manual scan.
     state.spawn_initial_scan_if_needed();
 
-    let app = build_router(state, admin_ui_dir);
+    let app = build_router(state, public_ui_dir);
     info!(%addr, "RE-KORD server listening");
     let listener = tokio::net::TcpListener::bind(addr).await?;
     axum::serve(listener, app).await?;

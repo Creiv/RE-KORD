@@ -8,7 +8,7 @@ use crate::state::AppState;
 use crate::user_state::{self, UserStateV1};
 use anyhow::{bail, Context, Result};
 use serde::{Deserialize, Serialize};
-use serde_json::json;
+use serde_json::{json, Value};
 use std::collections::BTreeMap;
 use std::fs::{self, File};
 use std::io::{Cursor, Read, Write};
@@ -19,6 +19,7 @@ use zip::write::SimpleFileOptions;
 use zip::{CompressionMethod, ZipArchive, ZipWriter};
 
 const BACKUP_VERSION: u32 = 3;
+const THEME_EXPORT_JSON: &str = "rekord-theme.json";
 
 const LIBRARY_SIDECAR_NAMES: &[&str] = &[
     "kord-albuminfo.json",
@@ -56,6 +57,17 @@ pub struct RestoreReport {
     pub playlist_tracks: u32,
     pub library_files: u32,
     pub scanned_tracks: u64,
+}
+
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ThemeImportReport {
+    pub theme_imported: bool,
+    pub theme: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub glass_surfaces: Option<bool>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub glass_opacity: Option<f64>,
 }
 
 fn zip_options() -> SimpleFileOptions {
@@ -281,6 +293,275 @@ pub fn build_backup_zip(state: &AppState) -> Result<(Vec<u8>, String)> {
     let filename = format!("rekord-backup-{stamp}.zip");
     info!(bytes = bytes.len(), %filename, "backup zip built");
     Ok((bytes, filename))
+}
+
+/// Shareable theme package (legacy-compatible): `rekord-theme/rekord-theme.json` + optional background.
+pub fn build_theme_export_zip(state: &AppState, account_id: &str) -> Result<(Vec<u8>, String)> {
+    let data_dir = state.config.lock().unwrap().data_dir.clone();
+    let ustate = user_state::load_user_state(&data_dir, account_id);
+    let settings = &ustate.settings;
+
+    let theme = settings
+        .get("theme")
+        .and_then(|v| v.as_str())
+        .unwrap_or("obsidian")
+        .to_string();
+    let glass_surfaces = settings
+        .get("glassSurfaces")
+        .and_then(|v| v.as_bool())
+        .unwrap_or(false);
+    let glass_opacity = settings.get("glassOpacity").cloned();
+
+    let mut payload = json!({
+        "kind": "rekord-theme",
+        "version": 1,
+        "theme": theme,
+        "glassSurfaces": glass_surfaces,
+    });
+    if let Some(op) = glass_opacity {
+        payload["glassOpacity"] = op;
+    }
+
+    let mut bg_bytes: Option<(Vec<u8>, String)> = None;
+    if theme == "custom" {
+        if let Some(ct) = settings.get("customTheme").cloned() {
+            let mut ct_obj = ct;
+            if let Some(map) = ct_obj.as_object_mut() {
+                map.remove("bgImage");
+                map.remove("bgImageRev");
+                let bg_mode = map
+                    .get("bgMode")
+                    .and_then(|v| v.as_str())
+                    .unwrap_or("color");
+                if bg_mode == "image" {
+                    if let Some(theme_bg) = user_state::find_theme_bg_path(&data_dir, account_id) {
+                        let ext = theme_bg
+                            .extension()
+                            .and_then(|e| e.to_str())
+                            .unwrap_or("jpg");
+                        let name = format!("background.{ext}");
+                        match fs::read(&theme_bg) {
+                            Ok(bytes) => {
+                                payload["backgroundFile"] = json!(name);
+                                bg_bytes = Some((bytes, name));
+                            }
+                            Err(e) => {
+                                warn!(error = %e, "theme export: skip background file");
+                                map.insert("bgMode".into(), json!("color"));
+                            }
+                        }
+                    } else {
+                        map.insert("bgMode".into(), json!("color"));
+                    }
+                }
+            }
+            payload["customTheme"] = ct_obj;
+        }
+    }
+
+    let mut cursor = Cursor::new(Vec::new());
+    {
+        let mut zip = ZipWriter::new(&mut cursor);
+        add_bytes(
+            &mut zip,
+            &format!("rekord-theme/{THEME_EXPORT_JSON}"),
+            serde_json::to_string_pretty(&payload)?.as_bytes(),
+        )?;
+        if let Some((bytes, name)) = bg_bytes {
+            add_bytes(&mut zip, &format!("rekord-theme/{name}"), &bytes)?;
+        }
+        zip.finish()?;
+    }
+
+    let theme_label: String = theme
+        .chars()
+        .map(|c| {
+            if c.is_ascii_alphanumeric() || c == '-' {
+                c.to_ascii_lowercase()
+            } else {
+                '-'
+            }
+        })
+        .collect();
+    let theme_label = if theme_label.is_empty() {
+        "theme".to_string()
+    } else {
+        theme_label
+    };
+    let stamp = chrono::Utc::now().format("%Y-%m-%d");
+    let filename = format!("rekord-theme-{theme_label}-{stamp}.zip");
+    Ok((cursor.into_inner(), filename))
+}
+
+fn find_theme_json_entry(archive: &mut ZipArchive<Cursor<Vec<u8>>>) -> Option<String> {
+    for i in 0..archive.len() {
+        let Ok(f) = archive.by_index(i) else {
+            continue;
+        };
+        if f.is_dir() {
+            continue;
+        }
+        let name = f.name().to_string();
+        let base = Path::new(&name)
+            .file_name()
+            .and_then(|n| n.to_str())
+            .unwrap_or("");
+        if base == THEME_EXPORT_JSON {
+            return Some(name);
+        }
+    }
+    None
+}
+
+fn mime_for_theme_bg_name(name: &str) -> &'static str {
+    match Path::new(name)
+        .extension()
+        .and_then(|e| e.to_str())
+        .unwrap_or("")
+        .to_ascii_lowercase()
+        .as_str()
+    {
+        "jpg" | "jpeg" => "image/jpeg",
+        "png" => "image/png",
+        "webp" => "image/webp",
+        "gif" => "image/gif",
+        _ => "application/octet-stream",
+    }
+}
+
+/// If the zip is a theme package, apply it to `account_id` and return `Some`.
+/// If it is not a theme package, return `Ok(None)` so restore can continue.
+pub fn try_import_theme_zip(
+    state: &AppState,
+    account_id: &str,
+    zip_bytes: Vec<u8>,
+) -> Result<Option<ThemeImportReport>> {
+    let cursor = Cursor::new(zip_bytes);
+    let mut archive = match ZipArchive::new(cursor) {
+        Ok(a) => a,
+        Err(_) => return Ok(None),
+    };
+    let Some(json_name) = find_theme_json_entry(&mut archive) else {
+        return Ok(None);
+    };
+    let raw = {
+        let mut f = archive
+            .by_name(&json_name)
+            .with_context(|| format!("read {json_name}"))?;
+        let mut s = String::new();
+        f.read_to_string(&mut s)?;
+        s
+    };
+    let payload: serde_json::Value =
+        serde_json::from_str(&raw).context("Invalid theme archive: bad rekord-theme.json")?;
+    if payload.get("kind").and_then(|v| v.as_str()) != Some("rekord-theme") {
+        bail!("Invalid theme archive: bad rekord-theme.json");
+    }
+
+    let data_dir = state.config.lock().unwrap().data_dir.clone();
+    let mut ustate = user_state::load_user_state(&data_dir, account_id);
+
+    if let Some(theme) = payload.get("theme").and_then(|v| v.as_str()) {
+        if !theme.trim().is_empty() {
+            ustate
+                .settings
+                .insert("theme".into(), json!(theme.trim()));
+        }
+    }
+    if let Some(gs) = payload.get("glassSurfaces").and_then(|v| v.as_bool()) {
+        ustate.settings.insert("glassSurfaces".into(), json!(gs));
+    }
+    if let Some(op) = payload.get("glassOpacity") {
+        if op.as_f64().is_some() || op.as_u64().is_some() || op.as_i64().is_some() {
+            ustate.settings.insert("glassOpacity".into(), op.clone());
+        }
+    }
+
+    let mut custom_theme = payload.get("customTheme").cloned();
+    if let Some(ct) = custom_theme.as_mut().and_then(|v| v.as_object_mut()) {
+        ct.remove("bgImage");
+        ct.remove("bgImageRev");
+    }
+
+    let bg_file = payload
+        .get("backgroundFile")
+        .and_then(|v| v.as_str())
+        .map(str::trim)
+        .filter(|s| !s.is_empty())
+        .map(|s| Path::new(s).file_name().and_then(|n| n.to_str()).unwrap_or(s).to_string());
+
+    let mut bg_applied = false;
+    if let Some(ref bg_name) = bg_file {
+        let bg_entry = (0..archive.len()).find_map(|i| {
+            let f = archive.by_index(i).ok()?;
+            if f.is_dir() {
+                return None;
+            }
+            let name = f.name().to_string();
+            let base = Path::new(&name)
+                .file_name()
+                .and_then(|n| n.to_str())
+                .unwrap_or("");
+            if base == bg_name {
+                Some(name)
+            } else {
+                None
+            }
+        });
+        if let Some(entry_name) = bg_entry {
+            let mut f = archive.by_name(&entry_name)?;
+            let mut buf = Vec::new();
+            f.read_to_end(&mut buf)?;
+            let mime = mime_for_theme_bg_name(bg_name);
+            let ext = user_state::save_theme_bg(&data_dir, account_id, &buf, mime, bg_name)?;
+            let rev = chrono::Utc::now().timestamp_millis();
+            let mut ct = custom_theme
+                .take()
+                .unwrap_or_else(|| json!({}))
+                .as_object()
+                .cloned()
+                .unwrap_or_default();
+            ct.insert("bgMode".into(), json!("image"));
+            ct.insert("bgImage".into(), json!(ext));
+            ct.insert("bgImageRev".into(), json!(rev));
+            custom_theme = Some(Value::Object(ct));
+            bg_applied = true;
+        }
+    }
+
+    if let Some(mut ct) = custom_theme {
+        if !bg_applied {
+            if let Some(map) = ct.as_object_mut() {
+                if map.get("bgMode").and_then(|v| v.as_str()) == Some("image") {
+                    map.insert("bgMode".into(), json!("color"));
+                }
+            }
+        }
+        ustate.settings.insert("customTheme".into(), ct);
+    }
+
+    ustate.revision = ustate.revision.saturating_add(1);
+    user_state::save_user_state(&data_dir, account_id, &ustate)?;
+
+    let theme_out = ustate
+        .settings
+        .get("theme")
+        .and_then(|v| v.as_str())
+        .map(|s| s.to_string());
+    let glass_surfaces = ustate
+        .settings
+        .get("glassSurfaces")
+        .and_then(|v| v.as_bool());
+    let glass_opacity = ustate
+        .settings
+        .get("glassOpacity")
+        .and_then(|v| v.as_f64().or_else(|| v.as_i64().map(|n| n as f64)));
+    Ok(Some(ThemeImportReport {
+        theme_imported: true,
+        theme: theme_out,
+        glass_surfaces,
+        glass_opacity,
+    }))
 }
 
 fn safe_join(base: &Path, rel: &str) -> Result<PathBuf> {
@@ -1015,4 +1296,104 @@ pub async fn restore_backup_zip(state: &AppState, zip_bytes: Vec<u8>) -> Result<
         library_files,
         scanned_tracks: report.indexed_tracks,
     })
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn parse_theme_zip_payload(zip_bytes: &[u8]) -> Result<Option<serde_json::Value>> {
+        let mut archive = match ZipArchive::new(Cursor::new(zip_bytes.to_vec())) {
+            Ok(a) => a,
+            Err(_) => return Ok(None),
+        };
+        let Some(json_name) = find_theme_json_entry(&mut archive) else {
+            return Ok(None);
+        };
+        let raw = {
+            let mut f = archive
+                .by_name(&json_name)
+                .with_context(|| format!("read {json_name}"))?;
+            let mut s = String::new();
+            f.read_to_string(&mut s)?;
+            s
+        };
+        let payload: serde_json::Value =
+            serde_json::from_str(&raw).context("Invalid theme archive: bad rekord-theme.json")?;
+        if payload.get("kind").and_then(|v| v.as_str()) != Some("rekord-theme") {
+            bail!("Invalid theme archive: bad rekord-theme.json");
+        }
+        Ok(Some(payload))
+    }
+
+    fn build_legacy_theme_zip() -> Vec<u8> {
+        let payload = json!({
+            "kind": "rekord-theme",
+            "version": 1,
+            "theme": "custom",
+            "glassSurfaces": true,
+            "glassOpacity": 100,
+            "customTheme": {
+                "bg": "#181818",
+                "section": "#181818",
+                "accent": "#8b5cf6",
+                "accent2": "#c4b5fd",
+                "bgImageFit": "contain",
+                "bgMode": "image"
+            },
+            "backgroundFile": "background.jpg"
+        });
+        let mut cursor = Cursor::new(Vec::new());
+        {
+            let mut zip = ZipWriter::new(&mut cursor);
+            add_bytes(
+                &mut zip,
+                "rekord-theme/rekord-theme.json",
+                serde_json::to_string_pretty(&payload).unwrap().as_bytes(),
+            )
+            .unwrap();
+            add_bytes(&mut zip, "rekord-theme/background.jpg", b"fake-jpeg").unwrap();
+            zip.finish().unwrap();
+        }
+        cursor.into_inner()
+    }
+
+    #[test]
+    fn detects_legacy_theme_zip_without_manifest() {
+        let bytes = build_legacy_theme_zip();
+        let parsed = parse_theme_zip_payload(&bytes).unwrap().expect("theme zip");
+        assert_eq!(parsed["kind"], "rekord-theme");
+        assert_eq!(parsed["theme"], "custom");
+        assert_eq!(parsed["customTheme"]["accent"], "#8b5cf6");
+        assert_eq!(parsed["backgroundFile"], "background.jpg");
+    }
+
+    #[test]
+    fn non_theme_zip_returns_none() {
+        let mut cursor = Cursor::new(Vec::new());
+        {
+            let mut zip = ZipWriter::new(&mut cursor);
+            add_bytes(&mut zip, "readme.txt", b"hi").unwrap();
+            zip.finish().unwrap();
+        }
+        let bytes = cursor.into_inner();
+        assert!(parse_theme_zip_payload(&bytes).unwrap().is_none());
+    }
+
+    #[test]
+    fn real_legacy_theme_fixture_if_present() {
+        let path = PathBuf::from("/home/diego-ubuntu/Scaricati/rekord-theme-custom-2026-07-09.zip");
+        if !path.is_file() {
+            return;
+        }
+        let bytes = fs::read(&path).unwrap();
+        let parsed = parse_theme_zip_payload(&bytes).unwrap().expect("fixture theme zip");
+        assert_eq!(parsed["kind"], "rekord-theme");
+        assert_eq!(parsed["theme"], "custom");
+        // Must not require config/manifest.json — detection is theme-only.
+        let mut archive = ZipArchive::new(Cursor::new(bytes)).unwrap();
+        assert!(read_zip_string(&mut archive, "config/manifest.json")
+            .unwrap()
+            .is_none());
+    }
 }

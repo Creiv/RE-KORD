@@ -9,14 +9,14 @@
 <style>
   .settings-fields-grid {
     display: grid;
-    gap: 0.15rem 1rem;
+    gap: 0.85rem 1rem;
     grid-template-columns: minmax(0, 1fr);
     width: 100%;
     min-width: 0;
   }
 
   .settings-fields-grid :global(.rk-field) {
-    margin-bottom: 0.55rem;
+    margin-bottom: 0;
   }
 
   .settings-fields-grid :global(.settings-fields-grid__span) {

@@ -46,8 +46,10 @@
     VISUALIZER_MODES,
     applyTheme,
     loadUserPrefs,
+    normalizeGlassOpacity,
     normalizeTheme,
     patchUserPrefs,
+    syncGlassSurfaceDom,
     type CrossfadeSec,
     type CustomThemeSettings,
     type UiTheme,
@@ -66,15 +68,6 @@
     { value: "en", label: t("settings.langEn") },
   ]);
 
-  const glassOptions = $derived([
-    { value: "off", label: t("settings.glassOff") },
-    {
-      value: "soft",
-      label: t("settings.glassSoftSoon"),
-      disabled: true,
-    },
-  ]);
-
   // Stable section ids (Italian) — labels are translated.
   const settingsTabs = $derived([
     { id: "Account", label: t("settings.tab.account") },
@@ -88,6 +81,10 @@
   let localeValue = $state(i18n.locale);
   let themeValue = $state(loadUserPrefs().theme);
   let customThemeValue = $state(loadUserPrefs().customTheme);
+  let glassSurfaces = $state(loadUserPrefs().glassSurfaces);
+  let glassOpacityDraft = $state(loadUserPrefs().glassOpacity);
+  let glassOpacityTimer: ReturnType<typeof setTimeout> | null = null;
+  let customThemeDialogOpen = $state(false);
   let section = $state("Interfaccia");
 
   let accounts = $state<AccountsResponse | null>(null);
@@ -114,6 +111,14 @@
   let restoreErr = $state("");
   let restoreFileInput: HTMLInputElement | undefined = $state();
 
+  let themeImportBusy = $state(false);
+  let themeExportBusy = $state(false);
+  let themeImportOk = $state("");
+  let themeImportErr = $state("");
+  let themeExportOk = $state("");
+  let themeExportErr = $state("");
+  let themeImportInput: HTMLInputElement | undefined = $state();
+
   let hubConfig = $state<HubConfig | null>(null);
   let integBusy = $state(false);
   let integErr = $state("");
@@ -129,12 +134,15 @@
   let remotePollTimer: number | null = null;
   let diag = $state<Awaited<ReturnType<typeof api.diagnostics>> | null>(null);
   let activityEntries = $state<Array<{ ts: string; kind: string; message: string }>>([]);
+  let activityBusy = $state(false);
+  let activityErr = $state("");
+  let activityLoaded = $state(false);
 
   const vizLabelKeys: Record<(typeof VISUALIZER_MODES)[number], string> = {
     bars: "settings.vizBars",
     mirror: "settings.vizMirror",
-    wave: "settings.vizOsc",
-    smooth: "settings.vizOscSoft",
+    osc: "settings.vizOsc",
+    oscSoft: "settings.vizOscSoft",
     hmb: "settings.vizHmb",
     signals: "settings.vizSignals",
     karaoke: "settings.vizKaraoke",
@@ -281,17 +289,41 @@
   }
 
   async function loadActivity() {
+    activityBusy = true;
+    activityErr = "";
     try {
       const res = await api.activityLog();
       activityEntries = res.entries || [];
-    } catch {
+    } catch (e) {
       activityEntries = [];
+      activityErr = e instanceof Error ? e.message : String(e);
+    } finally {
+      activityLoaded = true;
+      activityBusy = false;
     }
   }
 
+  function formatActivityTs(ts: string): string {
+    const d = new Date(ts);
+    if (Number.isNaN(d.getTime())) return ts || "—";
+    return d.toLocaleString(i18n.sortLocale, {
+      dateStyle: "short",
+      timeStyle: "medium",
+    });
+  }
+
+  function activityKindClass(kind: string): string {
+    const k = kind.trim().toLowerCase();
+    if (k === "error" || k === "err" || k === "fail") return "activity-log-kind--err";
+    if (k === "warn" || k === "warning") return "activity-log-kind--warn";
+    if (k === "scan" || k === "download" || k === "remote") return "activity-log-kind--accent";
+    if (k === "info") return "activity-log-kind--info";
+    return "";
+  }
+
   function onVizChange(next: string) {
-    const mode = next as VisualizerMode;
-    if ((VISUALIZER_MODES as readonly string[]).includes(mode)) {
+    if ((VISUALIZER_MODES as readonly string[]).includes(next)) {
+      const mode = next as VisualizerMode;
       vizValue = mode;
       patchUserPrefs({ visualizerMode: mode });
     }
@@ -482,6 +514,7 @@
       await session.switchAccount(id);
       themeValue = loadUserPrefs().theme;
       customThemeValue = loadUserPrefs().customTheme;
+      refreshGlassFromPrefs();
       localeValue = i18n.locale;
       fadeValue = String(session.crossfadeSec);
       vizValue = loadUserPrefs().visualizerMode;
@@ -512,6 +545,7 @@
         await session.switchAccount(created);
         themeValue = loadUserPrefs().theme;
         customThemeValue = loadUserPrefs().customTheme;
+        refreshGlassFromPrefs();
         localeValue = i18n.locale;
         vizValue = loadUserPrefs().visualizerMode;
       }
@@ -586,14 +620,49 @@
     const theme = normalizeTheme(next);
     themeValue = theme;
     patchUserPrefs({ theme });
-    applyTheme(theme, customThemeValue);
+    applyTheme(theme, customThemeValue, {
+      glassSurfaces,
+      glassOpacity: glassOpacityDraft,
+    });
   }
 
   function onCustomThemeChange(next: CustomThemeSettings) {
     customThemeValue = next;
     themeValue = "custom";
     patchUserPrefs({ theme: "custom", customTheme: next });
-    applyTheme("custom", next);
+    applyTheme("custom", next, {
+      glassSurfaces,
+      glassOpacity: glassOpacityDraft,
+    });
+  }
+
+  function onGlassSurfacesChange(checked: boolean) {
+    glassSurfaces = checked;
+    patchUserPrefs({ glassSurfaces: checked });
+    syncGlassSurfaceDom(undefined, {
+      glassSurfaces: checked,
+      glassOpacity: glassOpacityDraft,
+    });
+  }
+
+  function onGlassOpacityChange(raw: number) {
+    const v = normalizeGlassOpacity(raw);
+    glassOpacityDraft = v;
+    if (glassOpacityTimer) clearTimeout(glassOpacityTimer);
+    glassOpacityTimer = setTimeout(() => {
+      glassOpacityTimer = null;
+      patchUserPrefs({ glassOpacity: v });
+      syncGlassSurfaceDom(undefined, {
+        glassSurfaces,
+        glassOpacity: v,
+      });
+    }, 120);
+  }
+
+  function refreshGlassFromPrefs() {
+    const p = loadUserPrefs();
+    glassSurfaces = p.glassSurfaces;
+    glassOpacityDraft = p.glassOpacity;
   }
 
   async function runLegacyImport(state: Parameters<typeof applyLegacyUserState>[0]) {
@@ -631,6 +700,7 @@
       customThemeValue = loadUserPrefs().customTheme;
       fadeValue = String(loadUserPrefs().crossfadeSec);
       vizValue = loadUserPrefs().visualizerMode;
+      refreshGlassFromPrefs();
       importPhase = "Completato";
       await session.refreshAll();
     } catch (e) {
@@ -691,6 +761,15 @@
     restoreOk = "";
     try {
       const data = await api.restoreBackup(file);
+      if (data.themeImported) {
+        await session.pullUserState({ skipFlush: true });
+        refreshGlassFromPrefs();
+        customThemeValue = loadUserPrefs().customTheme;
+        themeValue = loadUserPrefs().theme;
+        restoreOk = t("settings.themeImportSuccess");
+        window.setTimeout(() => window.location.reload(), 1200);
+        return;
+      }
       restoreOk = t("settings.restoreOk", {
         version: data.version ?? "?",
         tracks: data.scanned_tracks ?? 0,
@@ -703,6 +782,57 @@
       restoreErr = e instanceof Error ? e.message : String(e);
     } finally {
       restoreBusy = false;
+    }
+  }
+
+  async function onThemeImportPicked(ev: Event) {
+    const input = ev.currentTarget as HTMLInputElement;
+    const file = input.files?.[0];
+    input.value = "";
+    if (!file) return;
+    if (!/\.zip$/i.test(file.name)) {
+      themeImportErr = t("settings.themeImportZipErr");
+      return;
+    }
+    themeImportBusy = true;
+    themeImportErr = "";
+    themeImportOk = "";
+    themeExportOk = "";
+    themeExportErr = "";
+    try {
+      const data = await api.restoreBackup(file, { themeOnly: true });
+      if (!data.themeImported) {
+        themeImportErr = t("settings.themeImportZipErr");
+        return;
+      }
+      // Server is source of truth (theme + glass + customTheme + bg).
+      await session.pullUserState({ skipFlush: true });
+      refreshGlassFromPrefs();
+      customThemeValue = loadUserPrefs().customTheme;
+      themeValue = loadUserPrefs().theme;
+      themeImportOk = t("settings.themeImportSuccess");
+      window.setTimeout(() => window.location.reload(), 1200);
+    } catch (e) {
+      themeImportErr = e instanceof Error ? e.message : String(e);
+    } finally {
+      themeImportBusy = false;
+    }
+  }
+
+  async function runThemeExport() {
+    themeExportBusy = true;
+    themeExportErr = "";
+    themeExportOk = "";
+    themeImportErr = "";
+    themeImportOk = "";
+    try {
+      const name = await api.downloadThemeExport();
+      themeExportOk = t("settings.themeExportSuccess", { name });
+      window.setTimeout(() => (themeExportOk = ""), 5000);
+    } catch (e) {
+      themeExportErr = e instanceof Error ? e.message : String(e);
+    } finally {
+      themeExportBusy = false;
     }
   }
 </script>
@@ -785,52 +915,154 @@
       </Panel>
     {:else if section === "Interfaccia"}
       <Panel title={t("settings.panel.ui")} class="settings-ui-section">
+        {#snippet actions()}
+          <input
+            bind:this={themeImportInput}
+            class="sr-only"
+            type="file"
+            accept=".zip,application/zip"
+            aria-label={t("settings.themeImportAria")}
+            onchange={(e) => void onThemeImportPicked(e)}
+          />
+          <Button
+            variant="ghost"
+            disabled={themeImportBusy || themeExportBusy || backupBusy || restoreBusy}
+            aria-label={t("settings.themeImportAria")}
+            onclick={() => themeImportInput?.click()}
+          >
+            {themeImportBusy
+              ? t("settings.themeImportRunning")
+              : t("settings.themeImportCta")}
+          </Button>
+          <Button
+            variant="ghost"
+            class="settings-theme-export-btn"
+            disabled={themeExportBusy || themeImportBusy || backupBusy || restoreBusy}
+            aria-label={t("settings.themeExportAria")}
+            title={t("settings.themeExportTitle")}
+            onclick={() => void runThemeExport()}
+          >
+            <UiIcon name="download" class="settings-theme-export-btn__ic" />
+          </Button>
+        {/snippet}
+        {#if themeImportErr}
+          <p class="hint warn settings-theme-import-msg" role="alert">{themeImportErr}</p>
+        {/if}
+        {#if themeImportOk}
+          <p class="hint ok settings-theme-import-msg" aria-live="polite">{themeImportOk}</p>
+        {/if}
+        {#if themeExportErr}
+          <p class="hint warn settings-theme-import-msg" role="alert">{themeExportErr}</p>
+        {/if}
+        {#if themeExportOk}
+          <p class="hint ok settings-theme-import-msg" aria-live="polite">{themeExportOk}</p>
+        {/if}
         <SettingsFieldsGrid>
-          <Field label={t("settings.language")}>
-            <Select
-              options={languageOptions}
-              bind:value={localeValue}
-              aria-label={t("settings.language")}
-              onchange={(ev) => onLocaleChange(selectValue(ev))}
-            />
-          </Field>
-          <Field label={t("settings.glass")}>
-            <Select
-              options={glassOptions}
-              value="off"
-              aria-label={t("settings.glass")}
-              onchange={() => {}}
-            />
-          </Field>
-          <div class="settings-fields-grid__span">
-            <Field label={t("settings.theme")}>
-              <ThemePicker
-                value={themeValue}
-                customTheme={customThemeValue}
-                onchange={onThemeChange}
-                onCustomThemeChange={onCustomThemeChange}
-                ariaLabel={t("settings.themeAria")}
+          <div class="settings-fields-grid__span settings-language-field">
+            <Field label={t("settings.language")}>
+              <Select
+                options={languageOptions}
+                bind:value={localeValue}
+                aria-label={t("settings.language")}
+                onchange={(ev) => onLocaleChange(selectValue(ev))}
               />
             </Field>
+          </div>
+          <div class="settings-theme-glass-block settings-fields-grid__span">
+            <div
+              class="settings-theme-glass-row"
+              class:settings-theme-glass-row--custom={themeValue === "custom"}
+            >
+              <div class="settings-theme-glass-row__theme">
+                <Field label={t("settings.theme")}>
+                  <ThemePicker
+                    value={themeValue}
+                    customTheme={customThemeValue}
+                    onchange={onThemeChange}
+                    onCustomThemeChange={onCustomThemeChange}
+                    ariaLabel={t("settings.themeAria")}
+                    showCustomizeButton={false}
+                    customizeOpen={customThemeDialogOpen}
+                    onCustomizeOpenChange={(open) => (customThemeDialogOpen = open)}
+                  />
+                </Field>
+              </div>
+              {#if themeValue === "custom"}
+                <button
+                  type="button"
+                  class="theme-picker__customize-btn settings-theme-glass-row__customize"
+                  onclick={() => (customThemeDialogOpen = true)}
+                >
+                  {t("themePicker.customEditBtn")}
+                </button>
+              {/if}
+              <div class="settings-glass-opacity settings-theme-glass-row__opacity">
+                <span class="settings-glass-opacity__label">{t("settings.glassOpacity")}</span>
+                <input
+                  type="range"
+                  class="settings-glass-opacity__slider"
+                  min={0}
+                  max={100}
+                  step={1}
+                  disabled={!glassSurfaces}
+                  value={glassOpacityDraft}
+                  oninput={(e) =>
+                    onGlassOpacityChange(
+                      Number((e.currentTarget as HTMLInputElement).value),
+                    )
+                  }
+                  aria-label={t("settings.glassOpacity")}
+                />
+                <input
+                  type="number"
+                  class="settings-glass-opacity__num"
+                  min={0}
+                  max={100}
+                  inputmode="numeric"
+                  disabled={!glassSurfaces}
+                  value={glassOpacityDraft}
+                  oninput={(e) => {
+                    const el = e.currentTarget as HTMLInputElement;
+                    if (el.value === "") return;
+                    onGlassOpacityChange(Number(el.value));
+                  }}
+                  aria-label={t("settings.glassOpacity")}
+                />
+                <span class="settings-glass-opacity__unit" aria-hidden="true">%</span>
+              </div>
+            </div>
+            <label class="settings-glass-toggle">
+              <input
+                type="checkbox"
+                class="settings-checkbox"
+                checked={glassSurfaces}
+                onchange={(e) =>
+                  onGlassSurfacesChange(
+                    (e.currentTarget as HTMLInputElement).checked,
+                  )
+                }
+              />
+              <span>{t("settings.glassSurfaces")}</span>
+            </label>
           </div>
         </SettingsFieldsGrid>
       </Panel>
       <Panel title={t("settings.panel.player")} class="settings-player-section">
         <SettingsFieldsGrid>
-          <Field label={t("settings.crossfade")}>
-            <Select
-              options={fadeOptions}
-              bind:value={fadeValue}
-              aria-label={t("settings.crossfadeAria")}
-              onchange={(ev) => onFadeChange(selectValue(ev))}
-            />
-          </Field>
           <Field label={t("settings.visualizer")}>
             <Select
               options={vizOptions}
               bind:value={vizValue}
               aria-label={t("settings.visualizerAria")}
               onchange={(ev) => onVizChange(selectValue(ev))}
+            />
+          </Field>
+          <Field label={t("settings.crossfade")}>
+            <Select
+              options={fadeOptions}
+              bind:value={fadeValue}
+              aria-label={t("settings.crossfadeAria")}
+              onchange={(ev) => onFadeChange(selectValue(ev))}
             />
           </Field>
         </SettingsFieldsGrid>
@@ -1019,7 +1251,6 @@
           onLogout={() => void remoteLogout()}
           onToggleShare={() => void remoteToggleShare()}
           onCopyUrl={(url) => void copyRemoteUrl(url)}
-          onRefresh={() => void loadRemote()}
         />
       </Panel>
     {:else}
@@ -1117,17 +1348,51 @@
           </ul>
         {/if}
       </Panel>
-      <Panel title={t("settings.panel.activity")}>
-        <ActionRow>
-          <Button variant="ghost" onclick={() => void loadActivity()}>Aggiorna log</Button>
-        </ActionRow>
-        <ul class="log">
-          <li><span>info</span> Hub online · {session.status || "—"}</li>
-          <li><span>scan</span> Ultimo scan · {session.stats?.last_scan_at ?? "—"}</li>
-          {#each activityEntries.slice(0, 40) as e}
-            <li><span>{e.kind}</span> {e.ts} · {e.message}</li>
-          {/each}
-        </ul>
+      {#snippet activityActions()}
+        <Button
+          variant="ghost"
+          disabled={activityBusy}
+          onclick={() => void loadActivity()}
+        >
+          {activityBusy
+            ? t("settings.activityLogReloading")
+            : t("settings.activityLogReload")}
+        </Button>
+      {/snippet}
+      <Panel
+        title={t("settings.panel.activity")}
+        class="settings-activity-section"
+        actions={activityActions}
+      >
+        {#if activityErr}
+          <p class="hint warn">{activityErr}</p>
+        {:else if activityLoaded && activityEntries.length === 0}
+          <p class="hint">{t("settings.activityLogEmpty")}</p>
+        {/if}
+        {#if activityEntries.length > 0}
+          <div class="activity-log-scroll" role="region" aria-label={t("settings.panel.activity")}>
+            <table class="activity-log-table">
+              <thead>
+                <tr>
+                  <th scope="col">{t("settings.activityLogColTime")}</th>
+                  <th scope="col">{t("settings.activityLogColKind")}</th>
+                  <th scope="col">{t("settings.activityLogColDetail")}</th>
+                </tr>
+              </thead>
+              <tbody>
+                {#each activityEntries as e, i (`${e.ts}-${e.kind}-${i}`)}
+                  <tr>
+                    <td class="activity-log-td-time">{formatActivityTs(e.ts)}</td>
+                    <td>
+                      <span class="activity-log-kind {activityKindClass(e.kind)}">{e.kind}</span>
+                    </td>
+                    <td class="activity-log-td-msg" title={e.message}>{e.message || "—"}</td>
+                  </tr>
+                {/each}
+              </tbody>
+            </table>
+          </div>
+        {/if}
       </Panel>
       <Panel title={t("settings.panel.diagnostics")}>
         <p class="hint">
@@ -1181,31 +1446,6 @@
 
   .hint.ok {
     color: var(--rk-accent-2, #6bcf8e);
-  }
-
-  .log {
-    list-style: none;
-    margin: 0;
-    padding: 0;
-    display: grid;
-    gap: 0.55rem;
-  }
-
-  .log li {
-    display: flex;
-    gap: 0.45rem;
-    align-items: center;
-    flex-wrap: wrap;
-    color: var(--rk-muted-strong);
-    font-size: 0.88rem;
-  }
-
-  .log span {
-    font-family: var(--rk-mono);
-    font-size: 0.68rem;
-    text-transform: uppercase;
-    color: var(--rk-accent-2);
-    min-width: 3.2rem;
   }
 
   .hint :global(code) {

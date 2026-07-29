@@ -22,17 +22,29 @@
     onchange,
     onCustomThemeChange,
     ariaLabel = "",
+    showCustomizeButton = true,
+    customizeOpen = undefined,
+    onCustomizeOpenChange = undefined,
   }: {
     value: UiTheme;
     customTheme: CustomThemeSettings;
     onchange: (theme: UiTheme) => void;
     onCustomThemeChange: (theme: CustomThemeSettings) => void;
     ariaLabel?: string;
+    showCustomizeButton?: boolean;
+    customizeOpen?: boolean;
+    onCustomizeOpenChange?: (open: boolean) => void;
   } = $props();
 
   let open = $state(false);
-  let customOpen = $state(false);
+  let internalCustomOpen = $state(false);
   let rootEl: HTMLDivElement | undefined = $state();
+
+  const customOpen = $derived(customizeOpen ?? internalCustomOpen);
+  function setCustomOpen(next: boolean) {
+    if (onCustomizeOpenChange) onCustomizeOpenChange(next);
+    else internalCustomOpen = next;
+  }
 
   const current = $derived.by(() => {
     const base = catalogEntry(value);
@@ -54,7 +66,7 @@
   function pick(id: string) {
     onchange(id as UiTheme);
     open = false;
-    if (id === "custom") customOpen = true;
+    if (id === "custom") setCustomOpen(true);
   }
 
   function onDocPointer(e: PointerEvent) {
@@ -202,11 +214,11 @@
     </ul>
   {/if}
 
-  {#if value === "custom"}
+  {#if value === "custom" && showCustomizeButton}
     <button
       type="button"
       class="theme-picker__customize-btn"
-      onclick={() => (customOpen = true)}
+      onclick={() => setCustomOpen(true)}
     >
       {t("themePicker.customEditBtn")}
     </button>
@@ -216,6 +228,6 @@
 <CustomThemeDialog
   open={customOpen}
   theme={customTheme}
-  onclose={() => (customOpen = false)}
-  onsave={onCustomThemeChange}
+  onclose={() => setCustomOpen(false)}
+  onchange={onCustomThemeChange}
 />

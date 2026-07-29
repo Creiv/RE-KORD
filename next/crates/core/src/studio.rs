@@ -142,28 +142,27 @@ async fn upload_youtube_cookies(
     if bytes.len() > 2 * 1024 * 1024 {
         return err(StatusCode::BAD_REQUEST, "file too large (max 2MB)");
     }
-    match state
-        .config
-        .lock()
-        .unwrap()
-        .set_youtube_cookies_bytes(&bytes)
-    {
-        Ok(_) => {
-            let snap = state.config.lock().unwrap().config_snapshot();
-            ok(snap).into_response()
+    // Snapshot under the same guard: a `match` on `lock().method()` keeps the
+    // MutexGuard alive for the whole match (incl. arms) → re-lock would deadlock.
+    let snap = {
+        let mut cfg = state.config.lock().unwrap();
+        if let Err(e) = cfg.set_youtube_cookies_bytes(&bytes) {
+            return err(StatusCode::BAD_REQUEST, e.to_string());
         }
-        Err(e) => err(StatusCode::BAD_REQUEST, e.to_string()),
-    }
+        cfg.config_snapshot()
+    };
+    ok(snap).into_response()
 }
 
 async fn clear_youtube_cookies(State(state): State<AppState>) -> Response {
-    match state.config.lock().unwrap().clear_youtube_cookies() {
-        Ok(()) => {
-            let snap = state.config.lock().unwrap().config_snapshot();
-            ok(snap).into_response()
+    let snap = {
+        let mut cfg = state.config.lock().unwrap();
+        if let Err(e) = cfg.clear_youtube_cookies() {
+            return err(StatusCode::BAD_REQUEST, e.to_string());
         }
-        Err(e) => err(StatusCode::BAD_REQUEST, e.to_string()),
-    }
+        cfg.config_snapshot()
+    };
+    ok(snap).into_response()
 }
 
 #[derive(Deserialize)]
@@ -175,23 +174,25 @@ async fn set_discogs_token(
     State(state): State<AppState>,
     Json(body): Json<DiscogsTokenBody>,
 ) -> Response {
-    match state.config.lock().unwrap().set_discogs_token(&body.token) {
-        Ok(()) => {
-            let snap = state.config.lock().unwrap().config_snapshot();
-            ok(snap).into_response()
+    let snap = {
+        let mut cfg = state.config.lock().unwrap();
+        if let Err(e) = cfg.set_discogs_token(&body.token) {
+            return err(StatusCode::BAD_REQUEST, e.to_string());
         }
-        Err(e) => err(StatusCode::BAD_REQUEST, e.to_string()),
-    }
+        cfg.config_snapshot()
+    };
+    ok(snap).into_response()
 }
 
 async fn clear_discogs_token(State(state): State<AppState>) -> Response {
-    match state.config.lock().unwrap().clear_discogs_token() {
-        Ok(()) => {
-            let snap = state.config.lock().unwrap().config_snapshot();
-            ok(snap).into_response()
+    let snap = {
+        let mut cfg = state.config.lock().unwrap();
+        if let Err(e) = cfg.clear_discogs_token() {
+            return err(StatusCode::BAD_REQUEST, e.to_string());
         }
-        Err(e) => err(StatusCode::BAD_REQUEST, e.to_string()),
-    }
+        cfg.config_snapshot()
+    };
+    ok(snap).into_response()
 }
 
 #[derive(Deserialize)]

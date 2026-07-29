@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { Modal, Button, ActionRow, Field, Select } from "@rekord/ui";
+  import { Button } from "@rekord/ui";
   import { api } from "../lib/api";
   import {
     CUSTOM_THEME_BG_IMAGE_FITS,
@@ -26,15 +26,16 @@
     open = false,
     theme = DEFAULT_CUSTOM_THEME,
     onclose,
-    onsave,
+    onchange,
   }: {
     open?: boolean;
     theme?: CustomThemeSettings;
     onclose: () => void;
-    onsave: (theme: CustomThemeSettings) => void;
+    /** Live apply (legacy parity) — page updates behind the transparent overlay. */
+    onchange: (theme: CustomThemeSettings) => void;
   } = $props();
 
-  let draft = $state(normalizeCustomTheme(theme));
+  let panelEl: HTMLDivElement | undefined = $state();
   let fileInput: HTMLInputElement | undefined = $state();
   let bgBusy = $state(false);
   let bgError = $state<string | null>(null);
@@ -42,31 +43,39 @@
   let paletteErr = $state<string | null>(null);
 
   const bgMode = $derived<CustomThemeBgMode>(
-    draft.bgMode === "image" ? "image" : "color",
+    theme.bgMode === "image" ? "image" : "color",
   );
   const storedBgImageUrl = $derived(
-    draft.bgImage ? customThemeBgImageUrl(draft.bgImageRev ?? undefined) : null,
+    theme.bgImage ? customThemeBgImageUrl(theme.bgImageRev ?? undefined) : null,
   );
   const bgPreviewUrl = $derived(bgMode === "image" ? storedBgImageUrl : null);
-  const fitOptions = $derived(
-    CUSTOM_THEME_BG_IMAGE_FITS.map((fit) => ({
-      value: fit,
-      label: t(`themePicker.customBgFit.${fit}`),
-    })),
+  const colorKeys = $derived(
+    theme.bgImage
+      ? (["bg", "section", "accent", "accent2"] as const)
+      : (["section", "accent", "accent2"] as const),
   );
 
+  /** Escape stacking contexts (glass panels / settings cards) — legacy createPortal. */
+  function portal(node: HTMLElement) {
+    document.body.appendChild(node);
+    return {
+      destroy() {
+        if (node.parentNode) node.parentNode.removeChild(node);
+      },
+    };
+  }
+
   $effect(() => {
-    if (open) {
-      draft = normalizeCustomTheme(theme);
-      bgError = null;
-      paletteErr = null;
-      bgBusy = false;
-      paletteBusy = false;
-    }
+    if (!open) return;
+    bgError = null;
+    paletteErr = null;
+    bgBusy = false;
+    paletteBusy = false;
+    queueMicrotask(() => panelEl?.focus());
   });
 
-  function patchDraft(patch: Partial<CustomThemeSettings>) {
-    draft = normalizeCustomTheme({ ...draft, ...patch });
+  function patch(patch: Partial<CustomThemeSettings>) {
+    onchange(normalizeCustomTheme({ ...theme, ...patch }));
   }
 
   async function onFileChange(event: Event) {
@@ -88,7 +97,14 @@
     try {
       const { bgImage, bgImageRev } = await api.uploadCustomThemeBg(f);
       paletteErr = null;
-      patchDraft({ bgMode: "image", bgImage, bgImageRev });
+      onchange(
+        normalizeCustomTheme({
+          ...theme,
+          bgMode: "image",
+          bgImage,
+          bgImageRev,
+        }),
+      );
     } catch (e) {
       bgError = e instanceof Error ? e.message : String(e);
     } finally {
@@ -102,11 +118,11 @@
     bgError = null;
     try {
       await api.clearCustomThemeBg();
-      const { bgImage: _b, bgImageRev: _r, ...rest } = draft;
+      const { bgImage: _b, bgImageRev: _r, ...rest } = theme;
       void _b;
       void _r;
       paletteErr = null;
-      draft = normalizeCustomTheme({ ...rest, bgMode: "color" });
+      onchange(normalizeCustomTheme({ ...rest, bgMode: "color" }));
     } catch (e) {
       bgError = e instanceof Error ? e.message : String(e);
     } finally {
@@ -120,7 +136,7 @@
     paletteErr = null;
     try {
       const colors = await extractThemeColorsFromImageUrl(storedBgImageUrl);
-      patchDraft(colors);
+      onchange(normalizeCustomTheme({ ...theme, ...colors }));
     } catch {
       paletteErr = t("themePicker.customBgExtractErr");
     } finally {
@@ -128,13 +144,26 @@
     }
   }
 
-  function save() {
-    onsave(normalizeCustomTheme(draft));
-    onclose();
+  function onBackdropPointer(e: MouseEvent) {
+    if (e.target === e.currentTarget) onclose();
   }
+
+  $effect(() => {
+    if (!open) return;
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape") onclose();
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  });
 </script>
 
-{#snippet bgPreview(url: string, fit: CustomThemeBgImageFit | undefined, ext: string | null | undefined, className: string)}
+{#snippet bgPreview(
+  url: string,
+  fit: CustomThemeBgImageFit | undefined,
+  ext: string | null | undefined,
+  className: string,
+)}
   {@const fitCss = customThemeBgImageCss(fit)}
   {@const obj = objectFitForBgImageFit(fit)}
   {#if ext === "gif"}
@@ -143,14 +172,14 @@
       src={url}
       alt=""
       aria-hidden="true"
-      style:background-color={draft.bg}
+      style:background-color={theme.bg}
       style:object-fit={obj.objectFit}
       style:object-position={obj.objectPosition}
     />
   {:else}
     <span
       class={className}
-      style:background-color={draft.bg}
+      style:background-color={theme.bg}
       style:background-image={`url("${url}")`}
       style:background-size={fitCss.size}
       style:background-position={fitCss.position}
@@ -159,235 +188,411 @@
   {/if}
 {/snippet}
 
-<Modal {open} title={t("themePicker.customDialogTitle")} {onclose}>
-  <div class="custom-theme-dialog__preview" aria-hidden="true">
-    {#if bgPreviewUrl}
-      {@render bgPreview(bgPreviewUrl, draft.bgImageFit, draft.bgImage, "custom-theme-dialog__preview-bg")}
-    {:else}
-      <span style:background={draft.bg}></span>
-    {/if}
-    <span style:background={draft.section}></span>
-    <span style:background={draft.accent}></span>
-    <span style:background={draft.accent2}></span>
-  </div>
-
-  <div class="custom-theme-dialog__section">
-    <span class="custom-theme-dialog__section-label">{t("themePicker.custom.bg")}</span>
+{#if open}
+  <!-- Transparent overlay (legacy custom-theme-dialog-backdrop) — no dim/blur. -->
+  <!-- svelte-ignore a11y_no_noninteractive_element_interactions -->
+  <div
+    class="custom-theme-dialog-backdrop"
+    role="presentation"
+    use:portal
+    onmousedown={onBackdropPointer}
+  >
+    <!-- svelte-ignore a11y_no_noninteractive_element_interactions -->
     <div
-      class="custom-theme-dialog__bg-mode"
-      role="group"
-      aria-label={t("themePicker.customBgModeAria")}
+      bind:this={panelEl}
+      class="custom-theme-dialog rk-scroll"
+      role="dialog"
+      aria-modal="true"
+      aria-labelledby="custom-theme-dialog-title"
+      tabindex="-1"
+      onmousedown={(e) => e.stopPropagation()}
     >
-      <button
-        type="button"
-        class="custom-theme-dialog__bg-mode-opt"
-        class:is-active={bgMode === "color"}
-        aria-pressed={bgMode === "color"}
-        onclick={() => patchDraft({ bgMode: "color" })}
-      >
-        <span
-          class="custom-theme-dialog__bg-mode-swatch"
-          style:background={draft.bg}
-          aria-hidden="true"
-        ></span>
-        <span>{t("themePicker.customBgColor")}</span>
-      </button>
-      <button
-        type="button"
-        class="custom-theme-dialog__bg-mode-opt"
-        class:is-active={bgMode === "image"}
-        aria-pressed={bgMode === "image"}
-        onclick={() => patchDraft({ bgMode: "image" })}
-      >
-        <span
-          class="custom-theme-dialog__bg-mode-swatch custom-theme-dialog__bg-mode-swatch--image"
-          class:has-image={Boolean(storedBgImageUrl)}
-          aria-hidden="true"
-        >
-          {#if storedBgImageUrl}
-            {@render bgPreview(
-              storedBgImageUrl,
-              draft.bgImageFit,
-              draft.bgImage,
-              "custom-theme-dialog__bg-mode-swatch-fill",
-            )}
-          {/if}
-        </span>
-        <span>{t("themePicker.customBgImage")}</span>
-      </button>
-    </div>
-  </div>
-
-  {#if bgMode === "color"}
-    <div class="custom-theme-dialog__section">
-      <Field label={t("themePicker.custom.bg")}>
-        <input class="custom-theme-dialog__color" type="color" bind:value={draft.bg} />
-      </Field>
-    </div>
-  {:else}
-    <div class="custom-theme-dialog__section">
-      <div class="custom-theme-dialog__image-panel">
+      <header class="custom-theme-dialog__head">
+        <div class="custom-theme-dialog__titles">
+          <p class="custom-theme-dialog__eyebrow">{t("settings.panel.ui")}</p>
+          <h2 id="custom-theme-dialog-title" class="custom-theme-dialog__title">
+            {t("themePicker.customDialogTitle")}
+          </h2>
+        </div>
         <button
           type="button"
-          class="custom-theme-dialog__image-drop"
-          disabled={bgBusy}
-          onclick={() => fileInput?.click()}
+          class="custom-theme-dialog__close"
+          onclick={onclose}
+          aria-label={t("nav.close")}
+          title={t("nav.close")}
         >
+          <svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true">
+            <path
+              fill="currentColor"
+              d="M19 6.41L17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z"
+            />
+          </svg>
+        </button>
+      </header>
+
+      <div class="custom-theme-dialog__body">
+        <div class="custom-theme-dialog__preview-strip" aria-hidden="true">
           {#if bgPreviewUrl}
             {@render bgPreview(
               bgPreviewUrl,
-              draft.bgImageFit,
-              draft.bgImage,
-              "custom-theme-dialog__image-preview",
+              theme.bgImageFit,
+              theme.bgImage,
+              "custom-theme-dialog__preview-strip-seg custom-theme-dialog__preview-strip-seg--bg",
             )}
           {:else}
-            <span class="custom-theme-dialog__image-placeholder">
-              {t("themePicker.customBgDropHint")}
-            </span>
+            <span
+              class="custom-theme-dialog__preview-strip-seg custom-theme-dialog__preview-strip-seg--bg"
+              style:background={theme.bg}
+            ></span>
           {/if}
-          <span class="custom-theme-dialog__image-cta">
-            {bgBusy
-              ? t("settings.saving")
-              : draft.bgImage
-                ? t("themePicker.customBgChange")
-                : t("themePicker.customBgChoose")}
-          </span>
-        </button>
-        <div class="custom-theme-dialog__image-toolbar">
-          {#if draft.bgImage}
-            <div class="custom-theme-dialog__image-actions">
-              <Button
-                variant="ghost"
-                disabled={bgBusy || paletteBusy}
-                onclick={() => void onExtractPalette()}
+          <span
+            class="custom-theme-dialog__preview-strip-seg"
+            style:background={theme.section}
+          ></span>
+          <span
+            class="custom-theme-dialog__preview-strip-seg"
+            style:background={theme.accent}
+          ></span>
+          <span
+            class="custom-theme-dialog__preview-strip-seg"
+            style:background={theme.accent2}
+          ></span>
+        </div>
+
+        <div class="custom-theme-dialog__section">
+          <span class="custom-theme-dialog__section-label">{t("themePicker.custom.bg")}</span>
+          <div
+            class="custom-theme-dialog__bg-mode"
+            role="group"
+            aria-label={t("themePicker.customBgModeAria")}
+          >
+            <button
+              type="button"
+              class="custom-theme-dialog__bg-mode-opt"
+              class:is-active={bgMode === "color"}
+              aria-pressed={bgMode === "color"}
+              onclick={() => patch({ bgMode: "color" })}
+            >
+              <span
+                class="custom-theme-dialog__bg-mode-swatch"
+                style:background={theme.bg}
+                aria-hidden="true"
+              ></span>
+              <span>{t("themePicker.customBgColor")}</span>
+            </button>
+            <button
+              type="button"
+              class="custom-theme-dialog__bg-mode-opt"
+              class:is-active={bgMode === "image"}
+              aria-pressed={bgMode === "image"}
+              onclick={() => patch({ bgMode: "image" })}
+            >
+              <span
+                class="custom-theme-dialog__bg-mode-swatch custom-theme-dialog__bg-mode-swatch--image"
+                class:has-image={Boolean(storedBgImageUrl)}
+                aria-hidden="true"
               >
-                {paletteBusy
-                  ? t("themePicker.customBgExtractBusy")
-                  : t("themePicker.customBgExtract")}
-              </Button>
-              <Button
-                variant="ghost"
-                disabled={bgBusy || paletteBusy}
-                onclick={() => void onClearImage()}
+                {#if storedBgImageUrl}
+                  {@render bgPreview(
+                    storedBgImageUrl,
+                    theme.bgImageFit,
+                    theme.bgImage,
+                    "custom-theme-dialog__bg-mode-swatch-fill",
+                  )}
+                {/if}
+              </span>
+              <span>{t("themePicker.customBgImage")}</span>
+            </button>
+          </div>
+        </div>
+
+        {#if bgMode === "color"}
+          <div class="custom-theme-dialog__section">
+            <button
+              type="button"
+              class="custom-theme-dialog__swatch"
+              onclick={(e) =>
+                (e.currentTarget.querySelector("input") as HTMLInputElement | null)?.click()}
+              aria-label={t("themePicker.custom.bg")}
+            >
+              <span
+                class="custom-theme-dialog__swatch-chip"
+                style:background={theme.bg}
+                aria-hidden="true"
+              ></span>
+              <span class="custom-theme-dialog__swatch-label"
+                >{t("themePicker.custom.bg")}</span
               >
-                {t("themePicker.customBgClear")}
-              </Button>
+              <span class="custom-theme-dialog__swatch-hex" aria-hidden="true"
+                >{theme.bg.toUpperCase()}</span
+              >
+              <input
+                class="custom-theme-dialog__swatch-input"
+                type="color"
+                value={theme.bg}
+                tabindex={-1}
+                aria-hidden="true"
+                oninput={(e) =>
+                  patch({ bg: (e.currentTarget as HTMLInputElement).value })}
+              />
+            </button>
+          </div>
+        {:else}
+          <div class="custom-theme-dialog__section">
+            <div class="custom-theme-dialog__image-panel">
+              <button
+                type="button"
+                class="custom-theme-dialog__image-drop"
+                disabled={bgBusy}
+                onclick={() => fileInput?.click()}
+              >
+                {#if bgPreviewUrl}
+                  {@render bgPreview(
+                    bgPreviewUrl,
+                    theme.bgImageFit,
+                    theme.bgImage,
+                    "custom-theme-dialog__image-preview",
+                  )}
+                {:else}
+                  <span class="custom-theme-dialog__image-placeholder">
+                    {t("themePicker.customBgDropHint")}
+                  </span>
+                {/if}
+                <span class="custom-theme-dialog__image-cta">
+                  {bgBusy
+                    ? t("settings.saving")
+                    : theme.bgImage
+                      ? t("themePicker.customBgChange")
+                      : t("themePicker.customBgChoose")}
+                </span>
+              </button>
+              <div class="custom-theme-dialog__image-toolbar">
+                {#if theme.bgImage}
+                  <div class="custom-theme-dialog__image-actions">
+                    <Button
+                      variant="ghost"
+                      disabled={bgBusy || paletteBusy}
+                      onclick={() => void onExtractPalette()}
+                    >
+                      {paletteBusy
+                        ? t("themePicker.customBgExtractBusy")
+                        : t("themePicker.customBgExtract")}
+                    </Button>
+                    <Button
+                      variant="ghost"
+                      disabled={bgBusy || paletteBusy}
+                      onclick={() => void onClearImage()}
+                    >
+                      {t("themePicker.customBgClear")}
+                    </Button>
+                  </div>
+                {:else}
+                  <span
+                    class="custom-theme-dialog__image-toolbar-spacer"
+                    aria-hidden="true"
+                  ></span>
+                {/if}
+                <label class="custom-theme-dialog__fit-control">
+                  <span class="custom-theme-dialog__fit-label">
+                    {t("themePicker.customBgFitLabel")}
+                  </span>
+                  <select
+                    class="custom-theme-dialog__fit-select"
+                    value={theme.bgImageFit ?? "cover"}
+                    disabled={bgBusy}
+                    aria-label={t("themePicker.customBgFitAria")}
+                    onchange={(e) =>
+                      patch({
+                        bgImageFit: (e.currentTarget as HTMLSelectElement)
+                          .value as CustomThemeBgImageFit,
+                      })}
+                  >
+                    {#each CUSTOM_THEME_BG_IMAGE_FITS as fit (fit)}
+                      <option value={fit}>{t(`themePicker.customBgFit.${fit}`)}</option>
+                    {/each}
+                  </select>
+                </label>
+              </div>
             </div>
-          {:else}
-            <span class="custom-theme-dialog__image-toolbar-spacer" aria-hidden="true"></span>
-          {/if}
-          <label class="custom-theme-dialog__fit-control">
-            <span class="custom-theme-dialog__fit-label">
-              {t("themePicker.customBgFitLabel")}
-            </span>
-            <Select
-              options={fitOptions}
-              value={draft.bgImageFit ?? "cover"}
-              disabled={bgBusy}
-              aria-label={t("themePicker.customBgFitAria")}
-              onchange={(event) =>
-                patchDraft({
-                  bgImageFit: (event.currentTarget as HTMLSelectElement)
-                    .value as CustomThemeBgImageFit,
-                })}
+            <input
+              bind:this={fileInput}
+              type="file"
+              accept={themeBgAcceptAttribute()}
+              class="sr-only"
+              onchange={(event) => void onFileChange(event)}
             />
-          </label>
+          </div>
+        {/if}
+
+        {#if bgError}
+          <p class="custom-theme-dialog__err">{bgError}</p>
+        {/if}
+        {#if paletteErr}
+          <p class="custom-theme-dialog__err">{paletteErr}</p>
+        {/if}
+
+        <div class="custom-theme-dialog__section">
+          <span class="custom-theme-dialog__section-label">
+            {t("themePicker.customColorsHeading")}
+          </span>
+          <div
+            class="custom-theme-dialog__swatch-grid"
+            class:custom-theme-dialog__swatch-grid--4={colorKeys.length === 4}
+          >
+            {#each colorKeys as key (key)}
+              <button
+                type="button"
+                class="custom-theme-dialog__swatch"
+                onclick={(e) =>
+                  (e.currentTarget.querySelector("input") as HTMLInputElement | null)?.click()}
+                aria-label={t(`themePicker.custom.${key}`)}
+              >
+                <span
+                  class="custom-theme-dialog__swatch-chip"
+                  style:background={theme[key]}
+                  aria-hidden="true"
+                ></span>
+                <span class="custom-theme-dialog__swatch-label"
+                  >{t(`themePicker.custom.${key}`)}</span
+                >
+                <span class="custom-theme-dialog__swatch-hex" aria-hidden="true"
+                  >{theme[key].toUpperCase()}</span
+                >
+                <input
+                  class="custom-theme-dialog__swatch-input"
+                  type="color"
+                  value={theme[key]}
+                  tabindex={-1}
+                  aria-hidden="true"
+                  oninput={(e) =>
+                    patch({
+                      [key]: (e.currentTarget as HTMLInputElement).value,
+                    } as Partial<CustomThemeSettings>)}
+                />
+              </button>
+            {/each}
+          </div>
         </div>
       </div>
-      <input
-        bind:this={fileInput}
-        type="file"
-        accept={themeBgAcceptAttribute()}
-        class="sr-only"
-        onchange={(event) => void onFileChange(event)}
-      />
     </div>
-  {/if}
-
-  {#if bgError}
-    <p class="custom-theme-dialog__err">{bgError}</p>
-  {/if}
-  {#if paletteErr}
-    <p class="custom-theme-dialog__err">{paletteErr}</p>
-  {/if}
-
-  <p class="custom-theme-dialog__lede">{t("themePicker.customColorsHeading")}</p>
-  <div class="custom-theme-dialog__grid">
-    {#if draft.bgImage}
-      <Field label={t("themePicker.custom.bg")}>
-        <input class="custom-theme-dialog__color" type="color" bind:value={draft.bg} />
-      </Field>
-    {/if}
-    <Field label={t("themePicker.custom.section")}>
-      <input
-        class="custom-theme-dialog__color"
-        type="color"
-        bind:value={draft.section}
-      />
-    </Field>
-    <Field label={t("themePicker.custom.accent")}>
-      <input
-        class="custom-theme-dialog__color"
-        type="color"
-        bind:value={draft.accent}
-      />
-    </Field>
-    <Field label={t("themePicker.custom.accent2")}>
-      <input
-        class="custom-theme-dialog__color"
-        type="color"
-        bind:value={draft.accent2}
-      />
-    </Field>
   </div>
-
-  {#snippet footer()}
-    <ActionRow>
-      <Button variant="ghost" onclick={onclose}>{t("common.cancel")}</Button>
-      <Button onclick={save} disabled={bgBusy}>{t("common.save")}</Button>
-    </ActionRow>
-  {/snippet}
-</Modal>
+{/if}
 
 <style>
-  .custom-theme-dialog__lede {
-    margin: 0.85rem 0 0.75rem;
-    color: var(--rk-muted);
-    font-size: 0.88rem;
+  /* Modal-aligned chrome; backdrop stays transparent (live preview behind). */
+  .custom-theme-dialog-backdrop {
+    position: fixed;
+    inset: 0;
+    z-index: var(--rk-z-modal, 120);
+    background: transparent;
+    backdrop-filter: none;
+    -webkit-backdrop-filter: none;
+    display: grid;
+    place-items: center;
+    padding: 1rem;
+    box-sizing: border-box;
   }
 
-  .custom-theme-dialog__preview {
+  .custom-theme-dialog {
+    width: min(28rem, 100%);
+    max-height: min(90dvh, 900px);
+    overflow: auto;
+    overscroll-behavior: contain;
+    background: var(--rk-surface);
+    border: 1px solid var(--rk-line);
+    border-radius: var(--rk-radius-lg);
+    box-shadow: var(--rk-shadow);
+    color: var(--rk-ink);
+    outline: none;
+  }
+
+  .custom-theme-dialog__head {
     display: flex;
-    height: 14px;
-    border-radius: 999px;
-    overflow: hidden;
-    margin-bottom: 1rem;
-    box-shadow: 0 0 0 1px color-mix(in srgb, var(--rk-ink) 16%, transparent);
+    justify-content: space-between;
+    gap: 0.75rem;
+    align-items: flex-start;
+    padding: 0.7rem 0.85rem 0.55rem;
+    border-bottom: 1px solid var(--rk-line);
   }
 
-  .custom-theme-dialog__preview > :global(*),
-  .custom-theme-dialog__preview span {
+  .custom-theme-dialog__titles {
+    min-width: 0;
+  }
+
+  .custom-theme-dialog__eyebrow {
+    margin: 0;
+    text-transform: uppercase;
+    letter-spacing: 0.12em;
+    font-size: 0.68rem;
+    color: var(--rk-muted);
+    font-weight: 650;
+  }
+
+  .custom-theme-dialog__title {
+    margin: 0.15rem 0 0;
+    font-size: 1.05rem;
+    font-weight: 700;
+    line-height: 1.25;
+  }
+
+  .custom-theme-dialog__close {
+    flex: 0 0 auto;
+    width: 2rem;
+    height: 2rem;
+    display: inline-grid;
+    place-items: center;
+    border: 0;
+    background: transparent;
+    color: var(--rk-muted);
+    cursor: pointer;
+    padding: 0;
+    border-radius: var(--rk-radius-sm);
+  }
+
+  .custom-theme-dialog__close:hover {
+    color: var(--rk-ink);
+    background: var(--rk-surface-3);
+  }
+
+  .custom-theme-dialog__body {
+    padding: 0.7rem 0.85rem;
+    display: grid;
+    gap: 0.7rem;
+  }
+
+  .custom-theme-dialog__preview-strip {
+    display: flex;
+    height: 2.35rem;
+    border-radius: var(--rk-radius);
+    overflow: hidden;
+    box-shadow:
+      0 0 0 1px color-mix(in srgb, var(--rk-ink) 14%, transparent),
+      inset 0 0 0 1px rgba(255, 255, 255, 0.06);
+  }
+
+  .custom-theme-dialog__preview-strip-seg {
     flex: 1;
     min-width: 0;
   }
 
-  .custom-theme-dialog__preview-bg {
+  .custom-theme-dialog__preview-strip-seg--bg {
+    flex: 1.35;
     display: block;
-    width: 100%;
-    height: 100%;
+    background-repeat: no-repeat;
     object-fit: cover;
   }
 
   .custom-theme-dialog__section {
-    margin-bottom: 0.85rem;
+    display: flex;
+    flex-direction: column;
+    gap: 0.45rem;
+    min-width: 0;
   }
 
   .custom-theme-dialog__section-label {
-    display: block;
-    margin-bottom: 0.45rem;
-    font-size: 0.78rem;
-    font-weight: 700;
     color: var(--rk-muted-strong);
+    font-size: 0.72rem;
+    font-weight: 800;
     text-transform: uppercase;
     letter-spacing: 0.04em;
   }
@@ -395,170 +600,240 @@
   .custom-theme-dialog__bg-mode {
     display: grid;
     grid-template-columns: 1fr 1fr;
-    gap: 0.55rem;
+    gap: 0.45rem;
   }
 
   .custom-theme-dialog__bg-mode-opt {
     display: flex;
+    flex-direction: column;
     align-items: center;
-    gap: 0.55rem;
-    min-height: 2.6rem;
-    padding: 0.45rem 0.65rem;
+    gap: 0.4rem;
+    padding: 0.55rem 0.45rem;
     border-radius: var(--rk-radius);
     border: 1px solid var(--rk-line);
     background: var(--rk-surface-3);
     color: var(--rk-ink);
-    font: inherit;
-    font-size: 0.88rem;
     cursor: pointer;
-    text-align: left;
+    font: inherit;
+    font-size: 0.78rem;
+    font-weight: 650;
+  }
+
+  .custom-theme-dialog__bg-mode-opt:hover {
+    border-color: var(--rk-line-strong);
   }
 
   .custom-theme-dialog__bg-mode-opt.is-active {
-    border-color: color-mix(in srgb, var(--rk-accent) 42%, var(--rk-line));
-    box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--rk-accent) 28%, transparent);
+    border-color: color-mix(in srgb, var(--rk-accent) 55%, var(--rk-line) 45%);
+    background: color-mix(in srgb, var(--rk-accent) 10%, var(--rk-surface-3) 90%);
+    box-shadow: 0 0 0 1px color-mix(in srgb, var(--rk-accent) 22%, transparent);
   }
 
   .custom-theme-dialog__bg-mode-swatch {
-    width: 1.55rem;
-    height: 1.55rem;
-    border-radius: 0.4rem;
-    flex-shrink: 0;
-    overflow: hidden;
-    box-shadow: 0 0 0 1px color-mix(in srgb, var(--rk-ink) 14%, transparent);
-    position: relative;
+    width: 100%;
+    height: 2.1rem;
+    border-radius: var(--rk-radius-sm);
+    border: 1px solid color-mix(in srgb, var(--rk-ink) 12%, transparent);
   }
 
-  .custom-theme-dialog__bg-mode-swatch--image:not(.has-image) {
+  .custom-theme-dialog__bg-mode-swatch--image {
     background: repeating-linear-gradient(
-      -45deg,
-      color-mix(in srgb, var(--rk-ink) 12%, transparent),
-      color-mix(in srgb, var(--rk-ink) 12%, transparent) 4px,
-      transparent 4px,
-      transparent 8px
+      135deg,
+      color-mix(in srgb, var(--rk-muted) 18%, transparent) 0 4px,
+      transparent 4px 8px
     );
   }
 
+  .custom-theme-dialog__bg-mode-swatch--image.has-image {
+    padding: 0;
+    overflow: hidden;
+    background: var(--rk-surface-2);
+  }
+
   .custom-theme-dialog__bg-mode-swatch-fill {
-    position: absolute;
-    inset: 0;
+    display: block;
     width: 100%;
     height: 100%;
-    display: block;
+    border-radius: inherit;
     object-fit: cover;
   }
 
   .custom-theme-dialog__image-panel {
     display: flex;
     flex-direction: column;
-    gap: 0.65rem;
+    gap: 0.45rem;
   }
 
   .custom-theme-dialog__image-drop {
-    position: relative;
     display: flex;
-    align-items: flex-end;
-    justify-content: center;
-    min-height: 7.5rem;
-    border-radius: var(--rk-radius-lg);
-    border: 1px dashed color-mix(in srgb, var(--rk-ink) 22%, transparent);
-    background: color-mix(in srgb, var(--rk-surface-3) 86%, transparent);
-    overflow: hidden;
-    cursor: pointer;
+    flex-direction: column;
+    align-items: stretch;
+    gap: 0.45rem;
+    width: 100%;
     padding: 0;
+    border: 1px dashed color-mix(in srgb, var(--rk-line) 88%, var(--rk-accent) 12%);
+    border-radius: var(--rk-radius);
+    background: color-mix(in srgb, var(--rk-surface-3) 92%, transparent);
     color: var(--rk-ink);
+    cursor: pointer;
     font: inherit;
+    overflow: hidden;
+  }
+
+  .custom-theme-dialog__image-drop:hover:not(:disabled) {
+    border-color: color-mix(in srgb, var(--rk-accent) 40%, var(--rk-line) 60%);
   }
 
   .custom-theme-dialog__image-drop:disabled {
-    opacity: 0.6;
+    opacity: 0.65;
     cursor: wait;
   }
 
   .custom-theme-dialog__image-preview {
-    position: absolute;
-    inset: 0;
-    width: 100%;
-    height: 100%;
     display: block;
+    width: 100%;
+    height: 7.5rem;
     object-fit: cover;
+    object-position: center;
   }
 
   .custom-theme-dialog__image-placeholder {
-    padding: 1.2rem;
+    display: grid;
+    place-items: center;
+    min-height: 7.5rem;
+    padding: 1rem;
     color: var(--rk-muted);
-    font-size: 0.9rem;
+    font-size: 0.88rem;
+    text-align: center;
   }
 
   .custom-theme-dialog__image-cta {
-    position: relative;
-    z-index: 1;
-    margin: 0.55rem;
-    padding: 0.35rem 0.7rem;
-    border-radius: 999px;
-    background: color-mix(in srgb, var(--rk-surface-2) 88%, transparent);
-    border: 1px solid var(--rk-line);
-    font-size: 0.82rem;
+    padding: 0.55rem 0.75rem;
+    border-top: 1px solid color-mix(in srgb, var(--rk-line) 80%, transparent);
+    font-size: 0.85rem;
     font-weight: 650;
+    text-align: center;
   }
 
   .custom-theme-dialog__image-toolbar {
     display: flex;
-    flex-wrap: wrap;
-    align-items: flex-end;
+    align-items: center;
     justify-content: space-between;
-    gap: 0.65rem;
+    gap: 0.75rem;
+    width: 100%;
+    flex-wrap: wrap;
   }
 
   .custom-theme-dialog__image-actions {
     display: flex;
     flex-wrap: wrap;
-    gap: 0.4rem;
+    gap: 0.35rem;
+    min-width: 0;
   }
 
   .custom-theme-dialog__image-toolbar-spacer {
-    flex: 1;
+    flex: 0 0 auto;
   }
 
   .custom-theme-dialog__fit-control {
-    display: flex;
-    flex-direction: column;
-    gap: 0.3rem;
-    min-width: min(12rem, 100%);
-  }
-
-  .custom-theme-dialog__fit-label {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.45rem;
+    margin-left: auto;
     font-size: 0.78rem;
-    font-weight: 650;
     color: var(--rk-muted-strong);
   }
 
-  .custom-theme-dialog__err {
-    margin: 0 0 0.65rem;
-    color: color-mix(in srgb, #f87171 70%, var(--rk-ink));
-    font-size: 0.85rem;
+  .custom-theme-dialog__fit-label {
+    font-weight: 600;
+    white-space: nowrap;
   }
 
-  .custom-theme-dialog__grid {
+  .custom-theme-dialog__fit-select {
+    min-width: 8.5rem;
+    padding: 0.28rem 0.45rem;
+    font: inherit;
+    font-size: 0.78rem;
+    color: var(--rk-ink);
+    background: var(--rk-surface-3);
+    border: 1px solid var(--rk-line);
+    border-radius: var(--rk-radius);
+  }
+
+  .custom-theme-dialog__swatch-grid {
     display: grid;
-    grid-template-columns: repeat(2, minmax(0, 1fr));
-    gap: 0.75rem 1rem;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 0.45rem;
   }
 
-  .custom-theme-dialog__color {
-    width: 100%;
-    height: 2.25rem;
-    padding: 0.2rem;
+  .custom-theme-dialog__swatch-grid--4 {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .custom-theme-dialog__swatch {
+    position: relative;
+    display: flex;
+    flex-direction: column;
+    align-items: stretch;
+    gap: 0.35rem;
+    padding: 0.55rem;
     border-radius: var(--rk-radius);
     border: 1px solid var(--rk-line);
     background: var(--rk-surface-3);
+    color: var(--rk-ink);
     cursor: pointer;
+    font: inherit;
+    text-align: left;
   }
 
-  @media (max-width: 520px) {
-    .custom-theme-dialog__grid,
-    .custom-theme-dialog__bg-mode {
-      grid-template-columns: 1fr;
-    }
+  .custom-theme-dialog__swatch:hover {
+    border-color: var(--rk-line-strong);
+  }
+
+  .custom-theme-dialog__swatch-chip {
+    display: block;
+    width: 100%;
+    height: 2.25rem;
+    border-radius: var(--rk-radius-sm);
+    border: 1px solid color-mix(in srgb, var(--rk-ink) 14%, transparent);
+  }
+
+  .custom-theme-dialog__swatch-label {
+    font-size: 0.72rem;
+    font-weight: 700;
+    color: var(--rk-muted-strong);
+  }
+
+  .custom-theme-dialog__swatch-hex {
+    font-size: 0.68rem;
+    font-weight: 600;
+    font-variant-numeric: tabular-nums;
+    color: var(--rk-muted);
+  }
+
+  .custom-theme-dialog__swatch-input {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    opacity: 0;
+    pointer-events: none;
+  }
+
+  .custom-theme-dialog__err {
+    margin: 0;
+    font-size: 0.84rem;
+    color: var(--rk-danger, #e85d5d);
+  }
+
+  .sr-only {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    padding: 0;
+    margin: -1px;
+    overflow: hidden;
+    clip: rect(0, 0, 0, 0);
+    white-space: nowrap;
+    border: 0;
   }
 </style>

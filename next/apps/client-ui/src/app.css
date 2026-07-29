@@ -6,6 +6,7 @@
 @import "./styles/statistics.css";
 @import "./styles/achievements.css";
 @import "./styles/settings.css";
+@import "./styles/glass-surfaces.css";
 
 * {
   box-sizing: border-box;
@@ -70,6 +71,7 @@ html[data-custom-bg-gif="1"]:not([data-custom-bg-gif-repeat="1"])::before {
   background-image: none;
 }
 
+/* Overlay scuro leggero (legacy page-lg), NON wash accent/page-glow. */
 html[data-custom-bg-image="1"]::after {
   content: "";
   position: fixed;
@@ -78,8 +80,8 @@ html[data-custom-bg-image="1"]::after {
   pointer-events: none;
   background: linear-gradient(
     180deg,
-    color-mix(in srgb, var(--rk-page-glow-1) 55%, transparent) 0%,
-    color-mix(in srgb, var(--rk-page-glow-2) 45%, transparent) 100%
+    color-mix(in srgb, var(--rk-page-lg-1) 24%, transparent) 0%,
+    color-mix(in srgb, var(--rk-page-lg-2) 36%, transparent) 100%
   );
 }
 

@@ -277,6 +277,7 @@
   min-width: 0;
   border: 1px solid color-mix(in srgb, var(--rk-accent) 16%, var(--rk-line) 84%);
   border-radius: var(--rk-radius);
+  /* Ultimo layer = bg: opaco anche se --rk-surface-2 è rgba (glass OFF). */
   background:
     radial-gradient(
       ellipse 85% 140% at 0% 50%,
@@ -293,7 +294,8 @@
       color-mix(in srgb, var(--rk-accent) 7%, var(--rk-surface-2)) 0%,
       color-mix(in srgb, var(--rk-accent) 2%, var(--rk-surface-2)) 32%,
       var(--rk-surface-2) 58%
-    );
+    ),
+    var(--rk-bg);
   box-shadow:
     var(--rk-shadow),
     inset 1px 0 0 color-mix(in srgb, var(--rk-accent) 10%, transparent);

@@ -278,6 +278,8 @@ function relativeLuminance(hex: string): number {
 const CUSTOM_RK_VARS = [
   "--rk-bg",
   "--rk-bg-deep",
+  "--rk-page-lg-1",
+  "--rk-page-lg-2",
   "--rk-surface",
   "--rk-surface-2",
   "--rk-surface-3",
@@ -302,6 +304,8 @@ const CUSTOM_RK_VARS = [
   "--rk-art-empty-2",
   "--rk-badge-1",
   "--rk-badge-2",
+  "--glass-1",
+  "--glass-2",
 ] as const;
 
 export function clearCustomThemeCss(root: HTMLElement = document.documentElement) {
@@ -323,6 +327,11 @@ export function applyCustomThemeCss(
 
   root.style.setProperty("--rk-bg", bg);
   root.style.setProperty("--rk-bg-deep", bg);
+  root.style.setProperty(
+    "--rk-page-lg-1",
+    light ? mixHex(bg, "#0f172a", 0.045) : mixHex(bg, "#000000", 0.18),
+  );
+  root.style.setProperty("--rk-page-lg-2", bg);
   root.style.setProperty("--rk-accent", accent);
   root.style.setProperty("--rk-accent-2", accent2);
   root.style.setProperty("--rk-page-glow-1", rgbaFromHex(accent, 0.16));
@@ -373,6 +382,14 @@ export function applyCustomThemeCss(
     );
     root.style.setProperty("--rk-shadow", "0 4px 24px rgba(15, 23, 42, 0.08)");
     root.style.setProperty("--rk-shadow-2", "0 22px 48px rgba(15, 23, 42, 0.12)");
+    root.style.setProperty(
+      "--glass-1",
+      rgbaFromHex(mixHex(section, "#ffffff", 0.22), 0.88),
+    );
+    root.style.setProperty(
+      "--glass-2",
+      rgbaFromHex(mixHex(bg, section, 0.22), 0.92),
+    );
   } else {
     root.style.setProperty("--rk-surface", rgbaFromHex(mixHex(bg, section, 0.55), 0.88));
     root.style.setProperty("--rk-surface-2", rgbaFromHex(section, 0.94));
@@ -404,5 +421,13 @@ export function applyCustomThemeCss(
       "0 1px 0 rgba(0, 0, 0, 0.35), 0 2px 10px rgba(0, 0, 0, 0.22)",
     );
     root.style.setProperty("--rk-shadow-2", "0 4px 18px rgba(0, 0, 0, 0.28)");
+    root.style.setProperty(
+      "--glass-1",
+      rgbaFromHex(mixHex(section, bg, 0.24), 0.9),
+    );
+    root.style.setProperty(
+      "--glass-2",
+      rgbaFromHex(mixHex(bg, section, 0.2), 0.94),
+    );
   }
 }

@@ -1,6 +1,6 @@
 # RE-KORD API (`/api/v1`)
 
-Base URL default: `http://127.0.0.1:7420`
+Base URL default: `http://127.0.0.1:7420` (il processo ascolta su `0.0.0.0:7420` per LAN / tunnel)
 
 Envelope (JSON):
 
@@ -61,7 +61,7 @@ Envelope (JSON):
 | POST | `/api/v1/remote-access/stop` | Stop tunnel / clear public URL |
 | POST | `/api/v1/remote-access/login` | Mark Cloudflare login + return dashboard URL |
 | POST | `/api/v1/remote-access/logout` | Logout flag + stop tunnel |
-| GET | `/api/v1/backup/theme-export` | Theme export template |
+| GET | `/api/v1/backup/theme-export` | Shareable theme ZIP (`rekord-theme/`) for the current account |
 
 Track/Album JSON may include `genre`, `release_date`, `lyrics` (tracks) and `genre`/`label`/`expected_track_count` (albums) from tags or Studio meta.
 
@@ -73,6 +73,7 @@ Library scan is **folder-first**: `Music/Artist/Album/track`. Tags are used only
 
 - **v3 (next):** ZIP includes `config/manifest.json` (`kordBackup: 3`), `config/settings.json`, `config/accounts.json`, `hub/accounts/{id}/favorites.json|playlists.json|library-selection.json|user-state.json` (+ optional `theme-bg.jpg`), library sidecars under `libraries/shared/`, and `kord-db/` (mirror of `music_root/.kord`). Also `config/youtube-cookies.txt` / activity when present.
 - **v2 (legacy):** ZIP from the React hub. Restore reads `config/music-root.config.json` + `config/manifest.json`, extracts `kord-db/` → `music_root/.kord`, imports registry from `kord-db/global_info/accounts.json` (or manifest `accounts`), and for each `{id}_info/user-state.json` migrates favorites/playlists into SQLite **and** full prefs into `{data_dir}/accounts/{id}_info/user-state.json` (playCounts, recent, moods, excludes, settings, optional `legacyQueue`). Audio files are **not** in the ZIP — `libraryRoot` must already exist on disk.
+- **Theme package:** ZIP with `rekord-theme/rekord-theme.json` (`kind: "rekord-theme"`) + optional background image. `POST …/kord-restore` detects it and applies only theme settings (preset/custom, glass, background) to the current account — no user data. `GET …/theme-export` builds the same format.
 - CLI: `rekord-server --restore-zip /path/to.zip [--restore-exit]` restores without HTTP multipart.
 
-The **server** does not serve the client SPA. Clients call this API with their own bundled UI.
+The **server** serves the built **client SPA** from `--client-ui` / `REKORD_CLIENT_UI` (fallback: `--admin-ui`) at `/`, so LAN and Cloudflare tunnel URLs are same-origin for UI + API. Native shells may still bundle the UI and point `Server URL` at the hub.

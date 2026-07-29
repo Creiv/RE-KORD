@@ -1,0 +1,393 @@
+/**
+ * Glass surfaces — Impostazioni → Interfaccia.
+ * Parità legacy src/styles/glass-surfaces.css:
+ * - OFF: schede completamente opache (nessun rgba/blur residuo).
+ * - ON: blur forte su shell + prima scheda/toolbar; blur minimo sul corpo.
+ * I token --glass-* vivono solo sotto [data-glass-surfaces="1"] e non
+ * alterano --rk-surface-* / --rk-bg del tema.
+ */
+
+/* ── Glass OFF: opaco assoluto (composite surface sopra bg) ── */
+:root:not([data-glass-surfaces="1"]) .rk-surface-card,
+:root:not([data-glass-surfaces="1"]) .rk-panel,
+:root:not([data-glass-surfaces="1"]) .rk-metric,
+:root:not([data-glass-surfaces="1"]) .rk-hero,
+:root:not([data-glass-surfaces="1"]) .album-hero,
+:root:not([data-glass-surfaces="1"]) .achievements-hero,
+:root:not([data-glass-surfaces="1"]) .listen-stage,
+:root:not([data-glass-surfaces="1"]) .listen-page__stage {
+  -webkit-backdrop-filter: none;
+  backdrop-filter: none;
+}
+
+:root:not([data-glass-surfaces="1"]) .rk-surface-card,
+:root:not([data-glass-surfaces="1"]) .rk-panel,
+:root:not([data-glass-surfaces="1"]) .rk-metric,
+:root:not([data-glass-surfaces="1"]) .album-hero,
+:root:not([data-glass-surfaces="1"]) .achievements-hero {
+  background:
+    linear-gradient(var(--rk-surface-2), var(--rk-surface-2)),
+    var(--rk-bg);
+}
+
+/* Hero / listen: mantengono la banda accent (flat-modern) ma con base opaca. */
+:root:not([data-glass-surfaces="1"]) .rk-hero {
+  background:
+    radial-gradient(ellipse at 12% 20%, var(--rk-page-glow-1), transparent 55%),
+    radial-gradient(ellipse at 88% 0%, var(--rk-page-glow-2), transparent 45%),
+    linear-gradient(
+      135deg,
+      color-mix(in srgb, var(--rk-accent) 10%, var(--rk-surface-2)),
+      var(--rk-surface-2) 55%
+    ),
+    var(--rk-bg);
+}
+
+:root:not([data-glass-surfaces="1"]) .listen-stage,
+:root:not([data-glass-surfaces="1"]) .listen-page__stage {
+  background:
+    radial-gradient(
+      ellipse 85% 140% at 0% 50%,
+      color-mix(in srgb, var(--rk-accent) 12%, var(--rk-surface-2)) 0%,
+      transparent 52%
+    ),
+    radial-gradient(
+      ellipse 75% 130% at 100% 50%,
+      color-mix(in srgb, var(--rk-accent-2) 8%, var(--rk-surface-2)) 0%,
+      transparent 48%
+    ),
+    linear-gradient(
+      90deg,
+      color-mix(in srgb, var(--rk-accent) 7%, var(--rk-surface-2)) 0%,
+      color-mix(in srgb, var(--rk-accent) 2%, var(--rk-surface-2)) 32%,
+      var(--rk-surface-2) 58%
+    ),
+    var(--rk-bg);
+}
+
+/* Prima scheda toolbar (glass OFF): banda accent come flat-modern legacy. */
+:root:not([data-glass-surfaces="1"]) .view-page__toolbar-band > :first-child,
+:root:not([data-glass-surfaces="1"]) .view-page--studio > .rk-surface-card:first-child,
+:root:not([data-glass-surfaces="1"]) .settings-page > .rk-surface-card:first-child,
+:root:not([data-glass-surfaces="1"]) .surface-card--toolbar-only.lib-chrome,
+:root:not([data-glass-surfaces="1"]) .rk-surface-card.surface-card--toolbar-only:first-child {
+  background:
+    radial-gradient(
+      ellipse 85% 140% at 0% 50%,
+      color-mix(in srgb, var(--rk-accent) 12%, var(--rk-surface-2)) 0%,
+      transparent 52%
+    ),
+    radial-gradient(
+      ellipse 75% 130% at 100% 50%,
+      color-mix(in srgb, var(--rk-accent-2) 8%, var(--rk-surface-2)) 0%,
+      transparent 48%
+    ),
+    linear-gradient(
+      90deg,
+      color-mix(in srgb, var(--rk-accent) 7%, var(--rk-surface-2)) 0%,
+      color-mix(in srgb, var(--rk-accent) 2%, var(--rk-surface-2)) 32%,
+      var(--rk-surface-2) 58%
+    ),
+    var(--rk-bg);
+  border-color: color-mix(in srgb, var(--rk-accent) 16%, var(--rk-line) 84%);
+  box-shadow:
+    var(--rk-shadow),
+    inset 1px 0 0 color-mix(in srgb, var(--rk-accent) 10%, transparent);
+}
+
+/* ── Glass ON: token dedicati (non toccano --rk-surface-*) ── */
+:root[data-glass-surfaces="1"] {
+  /* Midnight defaults — override per-tema sotto. */
+  --glass-1: rgba(18, 30, 46, 0.9);
+  --glass-2: rgba(12, 21, 33, 0.94);
+  --glass-user-opacity: 0.62;
+  --glass-panel: color-mix(
+    in srgb,
+    var(--glass-1) clamp(0%, calc(var(--glass-user-opacity) * 100%), 100%),
+    transparent
+  );
+  --glass-panel-deep: color-mix(
+    in srgb,
+    var(--glass-2) clamp(0%, calc(var(--glass-user-opacity) * 100% - 10%), 100%),
+    transparent
+  );
+  --glass-panel-muted: color-mix(
+    in srgb,
+    var(--glass-1) clamp(0%, calc(var(--glass-user-opacity) * 100% - 14%), 100%),
+    transparent
+  );
+  --glass-shine: color-mix(in srgb, white 22%, transparent);
+  --glass-shine-soft: color-mix(in srgb, white 9%, transparent);
+  --glass-edge: color-mix(in srgb, var(--rk-line) 78%, transparent);
+  --glass-blur: 18px;
+  --glass-blur-soft: 12px;
+  --glass-blur-faint: 0.5px;
+  --glass-filter-main: blur(var(--glass-blur)) saturate(1.45);
+  --glass-filter-soft: blur(var(--glass-blur-soft)) saturate(1.3);
+  --glass-filter-faint: blur(var(--glass-blur-faint)) saturate(1.45);
+  --glass-fill-main: linear-gradient(
+    145deg,
+    color-mix(in srgb, var(--glass-shine) 55%, var(--glass-panel)) 0%,
+    var(--glass-panel) 38%,
+    var(--glass-panel-deep) 100%
+  );
+  --glass-fill-muted: var(--glass-panel-muted);
+  --glass-fill-page: var(--glass-fill-main);
+  --glass-fill-accent-band: radial-gradient(
+      ellipse 85% 140% at 0% 50%,
+      color-mix(in srgb, var(--rk-accent) 14%, var(--glass-panel)) 0%,
+      transparent 52%
+    ),
+    radial-gradient(
+      ellipse 75% 130% at 100% 50%,
+      color-mix(in srgb, var(--rk-accent-2) 10%, var(--glass-panel)) 0%,
+      transparent 48%
+    ),
+    linear-gradient(
+      145deg,
+      color-mix(in srgb, var(--glass-shine) 45%, var(--glass-panel)) 0%,
+      var(--glass-panel) 42%,
+      var(--glass-panel-deep) 100%
+    );
+}
+
+/* Per-tema glass fills (legacy index.css --glass-1/--glass-2). */
+:root[data-glass-surfaces="1"][data-theme="sunset"] {
+  --glass-1: rgba(44, 28, 40, 0.92);
+  --glass-2: rgba(28, 16, 26, 0.95);
+}
+:root[data-glass-surfaces="1"][data-theme="aurora"] {
+  --glass-1: rgba(16, 44, 56, 0.9);
+  --glass-2: rgba(10, 32, 42, 0.94);
+}
+:root[data-glass-surfaces="1"][data-theme="ember"] {
+  --glass-1: rgba(48, 24, 16, 0.92);
+  --glass-2: rgba(32, 16, 10, 0.95);
+}
+:root[data-glass-surfaces="1"][data-theme="forest"] {
+  --glass-1: rgba(18, 48, 36, 0.9);
+  --glass-2: rgba(10, 36, 26, 0.94);
+}
+:root[data-glass-surfaces="1"][data-theme="neon"] {
+  --glass-1: rgba(46, 22, 88, 0.88);
+  --glass-2: rgba(22, 10, 48, 0.94);
+}
+:root[data-glass-surfaces="1"][data-theme="ocean"] {
+  --glass-1: rgba(10, 58, 70, 0.9);
+  --glass-2: rgba(4, 38, 48, 0.94);
+}
+:root[data-glass-surfaces="1"][data-theme="rose"] {
+  --glass-1: rgba(52, 30, 44, 0.9);
+  --glass-2: rgba(34, 18, 30, 0.94);
+}
+:root[data-glass-surfaces="1"][data-theme="slate"] {
+  --glass-1: rgba(28, 38, 54, 0.9);
+  --glass-2: rgba(16, 24, 36, 0.94);
+}
+:root[data-glass-surfaces="1"][data-theme="aubergine"] {
+  --glass-1: rgba(36, 36, 46, 0.9);
+  --glass-2: rgba(20, 20, 28, 0.94);
+}
+:root[data-glass-surfaces="1"][data-theme="tangerine"] {
+  --glass-1: rgba(40, 34, 28, 0.9);
+  --glass-2: rgba(22, 20, 18, 0.94);
+}
+:root[data-glass-surfaces="1"][data-theme="carmine"] {
+  --glass-1: rgba(42, 30, 34, 0.9);
+  --glass-2: rgba(24, 18, 22, 0.94);
+}
+:root[data-glass-surfaces="1"][data-theme="prism"] {
+  --glass-1: rgba(22, 30, 30, 0.9);
+  --glass-2: rgba(11, 16, 17, 0.94);
+}
+:root[data-glass-surfaces="1"][data-theme="slate-light"],
+:root[data-glass-surfaces="1"][data-theme="aubergine-light"],
+:root[data-glass-surfaces="1"][data-theme="tangerine-light"],
+:root[data-glass-surfaces="1"][data-theme="carmine-light"] {
+  --glass-shine: color-mix(in srgb, white 48%, transparent);
+  --glass-shine-soft: color-mix(in srgb, white 22%, transparent);
+}
+:root[data-glass-surfaces="1"][data-theme="slate-light"] {
+  --glass-1: rgba(210, 222, 240, 0.88);
+  --glass-2: rgba(226, 234, 246, 0.92);
+}
+:root[data-glass-surfaces="1"][data-theme="aubergine-light"] {
+  --glass-1: rgba(220, 212, 246, 0.88);
+  --glass-2: rgba(234, 228, 252, 0.92);
+}
+:root[data-glass-surfaces="1"][data-theme="tangerine-light"] {
+  --glass-1: rgba(246, 224, 196, 0.88);
+  --glass-2: rgba(252, 236, 216, 0.92);
+}
+:root[data-glass-surfaces="1"][data-theme="carmine-light"] {
+  --glass-1: rgba(246, 210, 220, 0.88);
+  --glass-2: rgba(252, 226, 236, 0.92);
+}
+
+:root[data-glass-surfaces="1"][data-glass-backdrop="0"] {
+  --glass-panel: color-mix(in srgb, var(--glass-1) 90%, transparent);
+  --glass-panel-deep: color-mix(in srgb, var(--glass-2) 86%, transparent);
+  --glass-panel-muted: color-mix(in srgb, var(--glass-1) 84%, transparent);
+  --glass-fill-page: var(--glass-panel);
+  --glass-fill-main: linear-gradient(
+    145deg,
+    var(--glass-panel) 0%,
+    var(--glass-panel-deep) 100%
+  );
+  --glass-fill-muted: var(--glass-panel-muted);
+  --glass-fill-accent-band: var(--glass-panel-deep);
+  --glass-filter-main: none;
+  --glass-filter-soft: none;
+  --glass-filter-faint: none;
+}
+
+/* Base: schede trasparenti + isolation (layer su ::before). */
+:root[data-glass-surfaces="1"] .rk-surface-card,
+:root[data-glass-surfaces="1"] .rk-panel,
+:root[data-glass-surfaces="1"] .rk-metric,
+:root[data-glass-surfaces="1"] .rk-hero,
+:root[data-glass-surfaces="1"] .album-hero,
+:root[data-glass-surfaces="1"] .achievements-hero,
+:root[data-glass-surfaces="1"] .listen-stage,
+:root[data-glass-surfaces="1"] .listen-page__stage {
+  position: relative;
+  isolation: isolate;
+  background: transparent;
+  border-color: var(--glass-edge);
+  box-shadow:
+    var(--rk-shadow),
+    inset 0 -1px 0 color-mix(in srgb, black 10%, transparent);
+}
+
+/* Corpo pagina: vetro + sfocatura minima (legacy --glass-filter-faint). */
+:root[data-glass-surfaces="1"] .rk-surface-card::before,
+:root[data-glass-surfaces="1"] .rk-panel::before,
+:root[data-glass-surfaces="1"] .rk-metric::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  z-index: -1;
+  pointer-events: none;
+  background: var(--glass-fill-page);
+  -webkit-backdrop-filter: var(--glass-filter-faint);
+  backdrop-filter: var(--glass-filter-faint);
+  box-shadow: inset 0 1px 0 var(--glass-shine);
+}
+
+/* Hero / listen / album: blur principale (legacy --glass-filter-main). */
+:root[data-glass-surfaces="1"] .rk-hero::before,
+:root[data-glass-surfaces="1"] .listen-stage::before,
+:root[data-glass-surfaces="1"] .listen-page__stage::before,
+:root[data-glass-surfaces="1"] .album-hero::before,
+:root[data-glass-surfaces="1"] .achievements-hero::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  z-index: -1;
+  pointer-events: none;
+  background: var(--glass-fill-page);
+  -webkit-backdrop-filter: var(--glass-filter-main);
+  backdrop-filter: var(--glass-filter-main);
+  box-shadow: inset 0 1px 0 var(--glass-shine);
+}
+
+/*
+ * Prima scheda / toolbar / chrome libreria / studio:
+ * fill accent-band + blur forte (legacy blur 18px saturate 1.5).
+ */
+:root[data-glass-surfaces="1"] .view-page__toolbar-band > :first-child,
+:root[data-glass-surfaces="1"] .view-page--studio > .rk-surface-card:first-child,
+:root[data-glass-surfaces="1"] .settings-page > .rk-surface-card:first-child,
+:root[data-glass-surfaces="1"] .surface-card--toolbar-only.lib-chrome,
+:root[data-glass-surfaces="1"] .rk-surface-card.surface-card--toolbar-only:first-child,
+:root[data-glass-surfaces="1"] .view-page__intro > .rk-hero,
+:root[data-glass-surfaces="1"] .view-page__intro > .achievements-hero {
+  border-color: color-mix(in srgb, var(--rk-accent) 22%, var(--glass-edge) 78%);
+  box-shadow:
+    var(--rk-shadow),
+    inset 1px 0 0 color-mix(in srgb, var(--rk-accent) 12%, transparent);
+}
+
+:root[data-glass-surfaces="1"] .view-page__toolbar-band > :first-child::before,
+:root[data-glass-surfaces="1"] .view-page--studio > .rk-surface-card:first-child::before,
+:root[data-glass-surfaces="1"] .settings-page > .rk-surface-card:first-child::before,
+:root[data-glass-surfaces="1"] .surface-card--toolbar-only.lib-chrome::before,
+:root[data-glass-surfaces="1"] .rk-surface-card.surface-card--toolbar-only:first-child::before,
+:root[data-glass-surfaces="1"] .view-page__intro > .rk-hero::before,
+:root[data-glass-surfaces="1"] .view-page__intro > .achievements-hero::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  z-index: -1;
+  pointer-events: none;
+  background: var(--glass-fill-accent-band);
+  -webkit-backdrop-filter: blur(var(--glass-blur)) saturate(1.5);
+  backdrop-filter: blur(var(--glass-blur)) saturate(1.5);
+  box-shadow: inset 0 1px 0 var(--glass-shine);
+}
+
+/*
+ * Shell chrome — topbar + player: blur forte (legacy player-bar2 20px).
+ */
+:root[data-glass-surfaces="1"] .rekord-context-header,
+:root[data-glass-surfaces="1"] .player-bar {
+  position: relative;
+  isolation: isolate;
+  background: transparent;
+  border-color: var(--glass-edge);
+  box-shadow:
+    0 -4px 24px color-mix(in srgb, var(--rk-bg) 42%, transparent),
+    inset 0 1px 0 var(--glass-shine-soft);
+  -webkit-backdrop-filter: none;
+  backdrop-filter: none;
+}
+
+:root[data-glass-surfaces="1"] .rekord-context-header {
+  box-shadow:
+    0 4px 24px color-mix(in srgb, var(--rk-bg) 42%, transparent),
+    inset 0 1px 0 var(--glass-shine-soft);
+  border-bottom-color: var(--glass-edge);
+}
+
+:root[data-glass-surfaces="1"] .rekord-context-header::before,
+:root[data-glass-surfaces="1"] .player-bar::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  z-index: -1;
+  pointer-events: none;
+  background: color-mix(in srgb, var(--glass-panel-deep) 88%, transparent);
+  -webkit-backdrop-filter: blur(20px) saturate(1.4);
+  backdrop-filter: blur(20px) saturate(1.4);
+}
+
+:root[data-glass-surfaces="1"][data-glass-backdrop="0"] .rekord-context-header::before,
+:root[data-glass-surfaces="1"][data-glass-backdrop="0"] .player-bar::before {
+  -webkit-backdrop-filter: none;
+  backdrop-filter: none;
+  background: color-mix(in srgb, var(--glass-panel-deep) 92%, transparent);
+}
+
+/* Theme picker: leggibile sopra vetro */
+:root[data-glass-surfaces="1"] .theme-picker__btn,
+:root[data-glass-surfaces="1"] .theme-picker__menu {
+  background: color-mix(in srgb, var(--glass-panel) 70%, var(--rk-bg) 30%);
+  border-color: var(--glass-edge);
+  -webkit-backdrop-filter: var(--glass-filter-soft);
+  backdrop-filter: var(--glass-filter-soft);
+}
+
+@media (prefers-reduced-transparency: reduce) {
+  :root[data-glass-surfaces="1"] {
+    --glass-panel: color-mix(in srgb, var(--glass-1) 90%, transparent);
+    --glass-panel-deep: color-mix(in srgb, var(--glass-2) 86%, transparent);
+    --glass-panel-muted: color-mix(in srgb, var(--glass-1) 84%, transparent);
+    --glass-filter-main: none;
+    --glass-filter-soft: none;
+    --glass-filter-faint: none;
+  }
+}

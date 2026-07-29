@@ -54,6 +54,33 @@
   } = $props();
 
   let barEl: HTMLElement | undefined = $state();
+  let isMobileLayout = $state(false);
+
+  function openStudioListen() {
+    if (onopenStudio) onopenStudio();
+    else onopenAlbum();
+  }
+
+  /** Legacy: click empty area of the top player row → Studio → Ascolta. */
+  function openListenFromTopBar(event: MouseEvent) {
+    if (isMobileLayout) return;
+    const el = event.target as HTMLElement | null;
+    if (!el) return;
+    if (el.closest("button, input, a, .crumb, .progress2, .transport-wrap")) {
+      return;
+    }
+    openStudioListen();
+  }
+
+  $effect(() => {
+    const mq = window.matchMedia("(max-width: 1000px)");
+    const sync = () => {
+      isMobileLayout = mq.matches;
+    };
+    sync();
+    mq.addEventListener("change", sync);
+    return () => mq.removeEventListener("change", sync);
+  });
 
   $effect(() => {
     const bar = barEl;
@@ -76,14 +103,20 @@
   });
 </script>
 
-<footer class="dock">
-  <div class="bar" bind:this={barEl}>
-    <div class="row top">
+<footer class="dock player-dock">
+  <div class="bar player-bar" bind:this={barEl}>
+    <div
+      class="row top"
+      class:open-listen={!isMobileLayout}
+      onclick={openListenFromTopBar}
+      title={isMobileLayout ? undefined : "Apri Studio Ascolta"}
+      role={isMobileLayout ? undefined : "link"}
+    >
       <div class="identity">
         <button
           type="button"
           class="art-hit"
-          onclick={() => (onopenStudio ? onopenStudio() : onopenAlbum())}
+          onclick={openStudioListen}
           title="Apri Studio Ascolta"
         >
           <CoverArt
@@ -95,7 +128,9 @@
         </button>
         <div class="meta">
           {#if current}
-            <strong>{current.title}</strong>
+            <button type="button" class="title-hit" onclick={openStudioListen}>
+              <strong>{current.title}</strong>
+            </button>
             <div class="byline">
               <button type="button" class="crumb" onclick={onopenArtist}>
                 {current.artist_name}
@@ -149,12 +184,18 @@
     left: var(--rk-side-w);
     right: 0;
     bottom: 0;
+    /* Above fullscreen Listen viz (z-index 19) — always interactable. */
     z-index: var(--rk-z-player);
     padding-bottom: env(safe-area-inset-bottom, 0px);
   }
 
   .bar {
-    background: var(--rk-sidebar-bg);
+    position: relative;
+    isolation: isolate;
+    /* Opaque when glass is off; glass-surfaces.css makes .player-bar transparent + blur. */
+    background:
+      linear-gradient(var(--rk-surface-2), var(--rk-surface-2)),
+      var(--rk-bg);
     border-top: 1px solid var(--rk-line);
     padding: var(--rk-space-3) var(--rk-space-4) var(--rk-space-2);
     display: flex;
@@ -169,6 +210,10 @@
     column-gap: 0.75rem;
     width: 100%;
     min-width: 0;
+  }
+
+  .row.top.open-listen {
+    cursor: pointer;
   }
 
   .identity {
@@ -194,11 +239,25 @@
     min-width: 0;
   }
 
-  .meta strong {
+  .title-hit {
+    margin: 0;
+    padding: 0;
+    border: none;
+    background: transparent;
+    cursor: pointer;
+    text-align: left;
+    color: inherit;
+    font: inherit;
+    min-width: 0;
+  }
+
+  .meta strong,
+  .title-hit strong {
     font-weight: 650;
     white-space: nowrap;
     overflow: hidden;
     text-overflow: ellipsis;
+    display: block;
   }
 
   .byline {

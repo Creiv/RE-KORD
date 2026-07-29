@@ -450,9 +450,12 @@
       : session.favorites.length
         ? session.favorites
         : [track];
+    // Start playback first; defer Studio mount (visualizer) off the press path.
     player.playRadioFromSeed(track, library);
-    session.studioPane = "listen";
-    session.navigate("studio");
+    window.setTimeout(() => {
+      session.studioPane = "listen";
+      session.navigate("studio");
+    }, 0);
   }
 </script>
 

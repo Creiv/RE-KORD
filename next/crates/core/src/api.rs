@@ -52,6 +52,8 @@ pub fn routes() -> Router<AppState> {
         .route("/api/v1/backup/kord-data", get(download_backup))
         .route("/api/backup/kord-data", get(download_backup))
         .route("/api/backup/rekord-data", get(download_backup))
+        .route("/api/v1/backup/theme-export", get(download_theme_export))
+        .route("/api/backup/theme-export", get(download_theme_export))
         .route(
             "/api/v1/backup/kord-restore",
             post(upload_restore).layer(DefaultBodyLimit::max(512 * 1024 * 1024)),
@@ -460,17 +462,16 @@ async fn set_music_path(
     if !path.is_dir() {
         return err(StatusCode::BAD_REQUEST, "music_root is not a directory");
     }
-    match state.config.lock().unwrap().save_music_root(path.clone()) {
-        Ok(()) => {
-            // First-time path (or never indexed): index in background so admin
-            // "save path" is enough — no separate scan click required.
-            if state.needs_initial_scan() {
-                state.spawn_initial_scan_if_needed();
-            }
-            ok(json!({ "music_root": path })).into_response()
-        }
-        Err(e) => err(StatusCode::INTERNAL_SERVER_ERROR, e.to_string()),
+    // Drop the config guard before needs_initial_scan (it locks again).
+    if let Err(e) = state.config.lock().unwrap().save_music_root(path.clone()) {
+        return err(StatusCode::INTERNAL_SERVER_ERROR, e.to_string());
     }
+    // First-time path (or never indexed): index in background so admin
+    // "save path" is enough — no separate scan click required.
+    if state.needs_initial_scan() {
+        state.spawn_initial_scan_if_needed();
+    }
+    ok(json!({ "music_root": path })).into_response()
 }
 
 async fn run_scan(State(state): State<AppState>) -> impl IntoResponse {
@@ -746,7 +747,62 @@ async fn download_backup(State(state): State<AppState>) -> Response {
     }
 }
 
-async fn upload_restore(State(state): State<AppState>, mut multipart: Multipart) -> Response {
+async fn download_theme_export(
+    State(state): State<AppState>,
+    headers: HeaderMap,
+    Query(aq): Query<AccountQuery>,
+) -> Response {
+    let account_id = match resolve_account(&state, &headers, &aq) {
+        Ok(id) => id,
+        Err(e) => return err(StatusCode::BAD_REQUEST, e),
+    };
+    match tokio::task::spawn_blocking({
+        let state = state.clone();
+        move || backup::build_theme_export_zip(&state, &account_id)
+    })
+    .await
+    {
+        Ok(Ok((bytes, filename))) => {
+            let mut res = bytes.into_response();
+            res.headers_mut().insert(
+                header::CONTENT_TYPE,
+                HeaderValue::from_static("application/zip"),
+            );
+            res.headers_mut().insert(
+                header::CACHE_CONTROL,
+                HeaderValue::from_static("no-store, must-revalidate"),
+            );
+            if let Ok(cd) = HeaderValue::from_str(&format!(
+                "attachment; filename=\"{}\"",
+                filename.replace('"', "")
+            )) {
+                res.headers_mut().insert(header::CONTENT_DISPOSITION, cd);
+            }
+            res
+        }
+        Ok(Err(e)) => err(StatusCode::INTERNAL_SERVER_ERROR, e.to_string()),
+        Err(e) => err(StatusCode::INTERNAL_SERVER_ERROR, e.to_string()),
+    }
+}
+
+#[derive(Debug, Deserialize, Default)]
+struct RestoreQuery {
+    #[serde(rename = "accountId")]
+    account_id: Option<String>,
+    /// When true, only accept a theme package (reject full backups).
+    #[serde(default, rename = "themeOnly")]
+    theme_only: bool,
+}
+
+async fn upload_restore(
+    State(state): State<AppState>,
+    headers: HeaderMap,
+    Query(rq): Query<RestoreQuery>,
+    mut multipart: Multipart,
+) -> Response {
+    let aq = AccountQuery {
+        account_id: rq.account_id.clone(),
+    };
     let mut file_bytes: Option<Vec<u8>> = None;
     while let Ok(Some(field)) = multipart.next_field().await {
         let name = field.name().unwrap_or("").to_string();
@@ -769,6 +825,35 @@ async fn upload_restore(State(state): State<AppState>, mut multipart: Multipart)
     if bytes.len() < 4 || &bytes[..2] != b"PK" {
         return err(StatusCode::BAD_REQUEST, "file is not a zip archive");
     }
+
+    // Theme package? Apply only theme settings to the current account (legacy parity).
+    let account_id = match resolve_account(&state, &headers, &aq) {
+        Ok(id) => id,
+        Err(e) => return err(StatusCode::BAD_REQUEST, e),
+    };
+    match backup::try_import_theme_zip(&state, &account_id, bytes.clone()) {
+        Ok(Some(report)) => return ok(report).into_response(),
+        Ok(None) => {
+            if rq.theme_only {
+                return err(
+                    StatusCode::BAD_REQUEST,
+                    "Not a RE-KORD theme archive (missing rekord-theme.json)",
+                );
+            }
+        }
+        Err(e) => {
+            let msg = e.to_string();
+            let status = if msg.contains("too large") {
+                StatusCode::PAYLOAD_TOO_LARGE
+            } else if msg.contains("Invalid theme") || msg.contains("Unsupported image") {
+                StatusCode::BAD_REQUEST
+            } else {
+                StatusCode::INTERNAL_SERVER_ERROR
+            };
+            return err(status, msg);
+        }
+    }
+
     match backup::restore_backup_zip(&state, bytes).await {
         Ok(report) => ok(report).into_response(),
         Err(e) => {

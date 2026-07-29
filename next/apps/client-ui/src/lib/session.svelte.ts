@@ -18,12 +18,13 @@ import {
   applyTheme,
   loadUserPrefs,
   migratePrefsToRelPaths,
+  normalizeGlassOpacity,
   normalizeLocale,
   normalizeTheme,
+  normalizeVisualizerMode,
   patchUserPrefs,
   setUserPrefsChangeListener,
   type CrossfadeSec,
-  type VisualizerMode,
 } from "./userPrefs";
 
 export type ViewId =
@@ -78,7 +79,10 @@ class ClientSession {
   newPlaylistName = $state("");
   queuePlaylistName = $state("");
   crossfadeSec = $state<CrossfadeSec>(loadUserPrefs().crossfadeSec);
+  /** Bumps on player state changes (track/queue/playing) — drives list/UI refresh. */
   tick = $state(0);
+  /** Bumps on timeupdate only — timeline/dock; must not refresh TrackList. */
+  progressTick = $state(0);
 
   readonly current = $derived.by(() => {
     this.tick;
@@ -89,10 +93,12 @@ class ClientSession {
     return player.playing;
   });
   readonly currentTime = $derived.by(() => {
+    this.progressTick;
     this.tick;
     return player.currentTime;
   });
   readonly duration = $derived.by(() => {
+    this.progressTick;
     this.tick;
     return player.duration;
   });
@@ -176,6 +182,21 @@ class ClientSession {
   private userStateDirty = false;
   private suppressUserStatePush = false;
   private prefsListenerBound = false;
+  /**
+   * False until the first successful pull for the active account on this origin.
+   * Blocks push of pristine localStorage defaults (new LAN/tunnel origin) over
+   * server prefs that were set from localhost / another origin.
+   */
+  private userStateHydrated = false;
+
+  private clearPendingUserStatePush() {
+    this.userStateDirty = false;
+    this.pushAgain = false;
+    if (this.pushTimer != null) {
+      clearTimeout(this.pushTimer);
+      this.pushTimer = null;
+    }
+  }
 
   private ensurePrefsSync() {
     if (this.prefsListenerBound) return;
@@ -198,10 +219,14 @@ class ClientSession {
       this.tick += 1;
       this.crossfadeSec = player.crossfadeSec;
     });
+    const unsubProgress = player.subscribeProgress(() => {
+      this.progressTick += 1;
+    });
     return () => {
       window.removeEventListener("pagehide", flush);
       window.removeEventListener("beforeunload", flush);
       unsub();
+      unsubProgress();
     };
   }
 
@@ -209,11 +234,24 @@ class ClientSession {
     this.allAlbums.filter((a) => !a.has_cover).length,
   );
 
-  async pullUserState() {
+  /**
+   * Pull account prefs from the hub into localStorage + DOM.
+   * Pass `{ skipFlush: true }` after theme import so a stale local customTheme
+   * cannot overwrite the just-imported server state.
+   */
+  async pullUserState(opts?: { skipFlush?: boolean }) {
     this.ensurePrefsSync();
-    // Flush only pending local edits — never push pristine defaults over remote.
-    if (this.userStateDirty || this.pushTimer != null) {
+    // Only flush real edits from an already-hydrated session. A new origin
+    // (LAN IP / Cloudflare tunnel) has empty localStorage → DEFAULTS; pushing
+    // those before pull would wipe server prefs set from localhost.
+    if (
+      this.userStateHydrated &&
+      !opts?.skipFlush &&
+      (this.userStateDirty || this.pushTimer != null)
+    ) {
       await this.flushUserStatePush();
+    } else if (!this.userStateHydrated || opts?.skipFlush) {
+      this.clearPendingUserStatePush();
     }
     this.suppressUserStatePush = true;
     try {
@@ -253,6 +291,15 @@ class ClientSession {
           settings.customTheme as Record<string, unknown>,
         );
       }
+      if (typeof settings.glassSurfaces === "boolean") {
+        patch.glassSurfaces = settings.glassSurfaces;
+      }
+      if (
+        settings.glassOpacity != null &&
+        Number.isFinite(Number(settings.glassOpacity))
+      ) {
+        patch.glassOpacity = normalizeGlassOpacity(settings.glassOpacity);
+      }
       if (localeRaw === "en" || localeRaw === "it") {
         patch.locale = normalizeLocale(localeRaw);
       }
@@ -267,15 +314,19 @@ class ClientSession {
           crossfadeRaw === 8 || crossfadeRaw === 12 ? 5 : crossfadeRaw
         ) as CrossfadeSec;
         this.crossfadeSec = patch.crossfadeSec;
-        player.setCrossfadeSec(patch.crossfadeSec);
+        player.applyCrossfadeSec(patch.crossfadeSec);
       }
       if (typeof vizRaw === "string" && vizRaw.trim()) {
-        patch.visualizerMode = vizRaw as VisualizerMode;
+        patch.visualizerMode = normalizeVisualizerMode(vizRaw);
       }
       patchUserPrefs(patch);
       applyTheme(
         patch.theme ?? local.theme,
         patch.customTheme ?? local.customTheme,
+        {
+          glassSurfaces: patch.glassSurfaces ?? local.glassSurfaces,
+          glassOpacity: patch.glassOpacity ?? local.glassOpacity,
+        },
       );
       i18n.applySaved();
       player.reloadExclusionsFromPrefs();
@@ -283,8 +334,9 @@ class ClientSession {
         | { relPaths?: string[]; currentIndex?: number }
         | null;
       this.moodPrefsTick += 1;
+      this.userStateHydrated = true;
     } catch {
-      /* server may be older / offline */
+      /* server may be older / offline — keep unhydrated so we never push defaults */
     } finally {
       this.suppressUserStatePush = false;
     }
@@ -309,6 +361,8 @@ class ClientSession {
   pushUserStateDebounced() {
     this.ensurePrefsSync();
     if (this.suppressUserStatePush) return;
+    // New origin: wait for pull before any push (defaults must not win).
+    if (!this.userStateHydrated) return;
     if (this.pushTimer != null) clearTimeout(this.pushTimer);
     this.pushTimer = setTimeout(() => {
       this.pushTimer = null;
@@ -322,6 +376,7 @@ class ClientSession {
       this.pushTimer = null;
     }
     if (this.suppressUserStatePush) return;
+    if (!this.userStateHydrated) return;
     if (!this.userStateDirty && !this.pushAgain) return;
     if (this.pushInFlight) {
       this.pushAgain = true;
@@ -340,6 +395,8 @@ class ClientSession {
           crossfadeSec: p.crossfadeSec,
           theme: p.theme,
           customTheme: p.customTheme,
+          glassSurfaces: p.glassSurfaces,
+          glassOpacity: p.glassOpacity,
           locale: p.locale,
           visualizerMode: p.visualizerMode,
         },
@@ -387,22 +444,38 @@ class ClientSession {
   async switchAccount(accountId: string) {
     if (!accountId || accountId === getSelectedAccountId()) return;
     // Persist the outgoing account before the storage key changes.
-    if (this.userStateDirty || this.pushTimer != null) {
+    if (
+      this.userStateHydrated &&
+      (this.userStateDirty || this.pushTimer != null)
+    ) {
       await this.flushUserStatePush();
     }
+    // Next account must pull before any push (empty local key ≠ server defaults).
+    this.userStateHydrated = false;
+    this.clearPendingUserStatePush();
     setSelectedAccountId(accountId);
-    const prefs = loadUserPrefs(accountId);
-    applyTheme(prefs.theme, prefs.customTheme);
-    this.crossfadeSec = prefs.crossfadeSec;
-    player.setCrossfadeSec(prefs.crossfadeSec);
-    player.reloadExclusionsFromPrefs();
-    this.activePlaylistId = null;
-    this.playlistTracks = [];
-    this.selectedArtist = null;
-    this.selectedAlbum = null;
-    this.libraryLevel = "artists";
-    this.moodPrefsTick += 1;
-    i18n.applySaved();
+    this.suppressUserStatePush = true;
+    try {
+      const prefs = loadUserPrefs(accountId);
+      applyTheme(prefs.theme, prefs.customTheme, {
+        glassSurfaces: prefs.glassSurfaces,
+        glassOpacity: prefs.glassOpacity,
+      });
+      this.crossfadeSec = prefs.crossfadeSec;
+      // Do not patchUserPrefs here — empty local defaults would mark dirty and
+      // flush over the server on the subsequent pullUserState.
+      player.applyCrossfadeSec(prefs.crossfadeSec);
+      player.reloadExclusionsFromPrefs();
+      this.activePlaylistId = null;
+      this.playlistTracks = [];
+      this.selectedArtist = null;
+      this.selectedAlbum = null;
+      this.libraryLevel = "artists";
+      this.moodPrefsTick += 1;
+      i18n.applySaved();
+    } finally {
+      this.suppressUserStatePush = false;
+    }
     await this.refreshAll();
   }
 

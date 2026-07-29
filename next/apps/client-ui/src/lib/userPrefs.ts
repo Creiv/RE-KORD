@@ -44,18 +44,34 @@ export type UiTheme = (typeof UI_THEMES)[number];
 
 export type AppLocale = "it" | "en";
 
-/** Classic visualizers (DiscoWall deferred). */
+/**
+ * Classic Listen visualizers (legacy VizMode minus DiscoWall).
+ * Plectr / Nebula are separate surfaces, not prefs here.
+ */
 export const VISUALIZER_MODES = [
   "bars",
   "mirror",
-  "wave",
-  "smooth",
+  "osc",
+  "oscSoft",
   "hmb",
   "signals",
   "karaoke",
 ] as const;
 
 export type VisualizerMode = (typeof VISUALIZER_MODES)[number];
+
+const VISUALIZER_MODE_SET = new Set<string>(VISUALIZER_MODES);
+
+/** Map legacy / next aliases → canonical visualizer mode. */
+export function normalizeVisualizerMode(raw: unknown): VisualizerMode {
+  const v = String(raw ?? "").trim();
+  if (v === "wave") return "osc";
+  if (v === "smooth") return "oscSoft";
+  // Excluded surfaces — fall back to bars
+  if (v === "discowall" || v === "plectr" || v === "nebula") return "bars";
+  if (VISUALIZER_MODE_SET.has(v)) return v as VisualizerMode;
+  return "bars";
+}
 
 export type UserPrefs = {
   crossfadeSec: CrossfadeSec;
@@ -79,6 +95,10 @@ export type UserPrefs = {
   restoreSession: boolean;
   theme: UiTheme;
   customTheme: CustomThemeSettings;
+  /** Semi-transparent frosted surfaces (legacy glassSurfaces). */
+  glassSurfaces: boolean;
+  /** Glass panel opacity 0–100 (legacy default 62). */
+  glassOpacity: number;
   locale: AppLocale;
   visualizerMode: VisualizerMode;
 };
@@ -130,9 +150,52 @@ const DEFAULTS: UserPrefs = {
   restoreSession: true,
   theme: "midnight",
   customTheme: { ...DEFAULT_CUSTOM_THEME },
+  glassSurfaces: false,
+  glassOpacity: 62,
   locale: "it",
   visualizerMode: "bars",
 };
+
+/** Clamp glass opacity percent (legacy normalizeGlassOpacity). */
+export function normalizeGlassOpacity(raw: unknown): number {
+  const n = Number(raw);
+  if (!Number.isFinite(n)) return 62;
+  return Math.min(100, Math.max(0, Math.round(n)));
+}
+
+function probeGlassBackdropWorks(): boolean {
+  if (typeof document === "undefined" || typeof CSS === "undefined") return true;
+  const supportsBlur =
+    CSS.supports("backdrop-filter", "blur(2px)") ||
+    CSS.supports("-webkit-backdrop-filter", "blur(2px)");
+  if (!supportsBlur) return false;
+  try {
+    if (window.matchMedia("(prefers-reduced-transparency: reduce)").matches) {
+      return false;
+    }
+  } catch {
+    /* ignore */
+  }
+  return true;
+}
+
+/** Apply data-glass-surfaces + CSS vars on <html> (legacy syncGlassSurfaceDom). */
+export function syncGlassSurfaceDom(
+  root: HTMLElement = document.documentElement,
+  settings?: { glassSurfaces?: boolean; glassOpacity?: number },
+): void {
+  const src = settings ?? loadUserPrefs();
+  if (!src.glassSurfaces) {
+    delete root.dataset.glassSurfaces;
+    delete root.dataset.glassBackdrop;
+    root.style.removeProperty("--glass-user-opacity");
+    return;
+  }
+  root.dataset.glassSurfaces = "1";
+  const opacity = normalizeGlassOpacity(src.glassOpacity);
+  root.style.setProperty("--glass-user-opacity", String(opacity / 100));
+  root.dataset.glassBackdrop = probeGlassBackdropWorks() ? "1" : "0";
+}
 
 export function normalizeTheme(raw: unknown): UiTheme {
   if (typeof raw === "string" && THEME_SET.has(raw)) return raw as UiTheme;
@@ -179,18 +242,24 @@ function applyCustomThemeBackground(
 export function applyTheme(
   theme: UiTheme,
   customTheme?: CustomThemeSettings | null,
+  glass?: { glassSurfaces?: boolean; glassOpacity?: number } | null,
 ) {
   const root = document.documentElement;
+  const prefs = loadUserPrefs();
   const t = normalizeTheme(theme);
   clearCustomThemeCss(root);
   if (t === "midnight") root.removeAttribute("data-theme");
   else root.setAttribute("data-theme", t);
   const resolvedCustom =
     t === "custom"
-      ? normalizeCustomTheme(customTheme ?? loadUserPrefs().customTheme)
+      ? normalizeCustomTheme(customTheme ?? prefs.customTheme)
       : null;
   if (resolvedCustom) applyCustomThemeCss(resolvedCustom, root);
   applyCustomThemeBackground(resolvedCustom, t === "custom", root);
+  syncGlassSurfaceDom(root, {
+    glassSurfaces: glass?.glassSurfaces ?? prefs.glassSurfaces,
+    glassOpacity: glass?.glassOpacity ?? prefs.glassOpacity,
+  });
 }
 
 function normalizeCrossfade(v: unknown): CrossfadeSec {
@@ -242,12 +311,13 @@ export function loadUserPrefs(accountId?: string | null): UserPrefs {
           ? (parsed.customTheme as Partial<CustomThemeSettings>)
           : undefined,
       ),
+      glassSurfaces: parsed.glassSurfaces === true,
+      glassOpacity: normalizeGlassOpacity(parsed.glassOpacity),
       locale: normalizeLocale(parsed.locale),
-      visualizerMode: (VISUALIZER_MODES as readonly string[]).includes(
-        String(parsed.visualizerMode),
-      )
-        ? (parsed.visualizerMode as VisualizerMode)
-        : "bars",
+      visualizerMode: normalizeVisualizerMode(
+        parsed.visualizerMode ??
+          (parsed as { vizMode?: unknown }).vizMode,
+      ),
     };
   } catch {
     return {
@@ -274,10 +344,17 @@ type PrefsChangeListener = (
 ) => void;
 
 let prefsChangeListener: PrefsChangeListener | null = null;
+const prefsSubscribers = new Set<(prefs: UserPrefs) => void>();
 
 /** Session registers this to debounce-push user-state after local edits. */
 export function setUserPrefsChangeListener(fn: PrefsChangeListener | null) {
   prefsChangeListener = fn;
+}
+
+/** UI components subscribe for live prefs (e.g. visualizer mode). */
+export function subscribeUserPrefs(fn: (prefs: UserPrefs) => void): () => void {
+  prefsSubscribers.add(fn);
+  return () => prefsSubscribers.delete(fn);
 }
 
 /**
@@ -307,8 +384,12 @@ export function patchUserPrefs(
 ): UserPrefs {
   const id = (accountId || "").trim() || activeAccountId();
   const next = { ...loadUserPrefs(id), ...patch };
+  if ("visualizerMode" in patch) {
+    next.visualizerMode = normalizeVisualizerMode(next.visualizerMode);
+  }
   saveUserPrefs(next, id);
   prefsChangeListener?.(next, patch, id);
+  for (const fn of prefsSubscribers) fn(next);
   return next;
 }
 

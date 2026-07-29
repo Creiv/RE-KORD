@@ -454,12 +454,51 @@ export const api = {
     return decodeURIComponent(name);
   },
 
-  /** Upload backup ZIP (next v3 or legacy v2). */
-  restoreBackup: (file: File) => {
+  /** Download shareable theme ZIP for the current account. */
+  async downloadThemeExport(): Promise<string> {
+    const res = await fetch(apiUrl("/api/v1/backup/theme-export"), {
+      cache: "no-store",
+      headers: accountHeaders(),
+    });
+    if (!res.ok) {
+      let msg = "Theme export failed";
+      try {
+        const j = (await res.json()) as Envelope<unknown>;
+        if (j.error) msg = j.error;
+      } catch {
+        /* ignore */
+      }
+      throw new Error(msg);
+    }
+    const cd = res.headers.get("Content-Disposition") || "";
+    const m = /filename\*?=(?:UTF-8''|"?)([^";\n]+)/i.exec(cd);
+    const name =
+      (m?.[1] || "").replace(/^["']|["']$/g, "").trim() || "rekord-theme.zip";
+    const blob = await res.blob();
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = decodeURIComponent(name);
+    a.rel = "noopener";
+    a.click();
+    window.setTimeout(() => URL.revokeObjectURL(url), 60_000);
+    return decodeURIComponent(name);
+  },
+
+  /**
+   * Upload backup ZIP (next v3 or legacy v2), or a theme package
+   * (`rekord-theme.json`) which applies only theme settings to the current account.
+   * Pass `{ themeOnly: true }` to reject non-theme archives (Interface upload).
+   */
+  restoreBackup: (file: File, opts?: { themeOnly?: boolean }) => {
     const fd = new FormData();
     fd.append("file", file);
-    return fetch(apiUrl("/api/v1/backup/kord-restore"), {
+    const path = opts?.themeOnly
+      ? withAccountQuery("/api/v1/backup/kord-restore?themeOnly=true")
+      : withAccountQuery("/api/v1/backup/kord-restore");
+    return fetch(apiUrl(path), {
       method: "POST",
+      headers: accountHeaders(),
       body: fd,
     }).then(async (res) => {
       const body = (await res.json()) as Envelope<{
@@ -470,6 +509,10 @@ export const api = {
         playlist_tracks?: number;
         library_files?: number;
         scanned_tracks?: number;
+        themeImported?: boolean;
+        theme?: string | null;
+        glassSurfaces?: boolean;
+        glassOpacity?: number;
       }>;
       if (!res.ok || !body.ok) {
         throw new Error(body.error || res.statusText);

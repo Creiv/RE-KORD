@@ -6,12 +6,12 @@ Nuova implementazione modulare (staging in `next/`). Stesso nome prodotto; sosti
 
 | App | Ruolo |
 |-----|--------|
-| **rekord-server** | Backend API + SQLite + scan + stream media + UI admin minima |
+| **rekord-server** | Backend API + SQLite + scan + stream media + SPA client (stesso origin) |
 | **client-ui** | Frontend completo (player, libreria, preferiti, playlist) via API |
 | **client-shell** | Shell Tauri 2 che carica `client-ui` locale |
 | **@rekord/ui** | Componenti grafici condivisi (Button, Panel, Field, …) |
 
-Il server **non** serve la SPA del client. Il client parla solo a `/api/v1` e `/media`.
+In produzione / accesso remoto il hub serve `client-ui` su `/` (same-origin con `/api/v1` e `/media`), come il server legacy. In dev puoi ancora usare Vite su `:7422` con proxy.
 
 ### UI components
 
@@ -42,11 +42,13 @@ pnpm dev:client-ui
 pnpm --filter @rekord/client-shell tauri dev
 ```
 
-Default API: `http://127.0.0.1:7420`
+Default hub: `http://127.0.0.1:7420` (bind `0.0.0.0:7420` → raggiungibile in LAN).  
+Per solo localhost: `REKORD_BIND=127.0.0.1:7420`.
 
-1. Apri admin UI (`http://127.0.0.1:7421`) o `PUT /api/v1/library/path`
-2. Avvia scan
-3. Apri client e ascolta
+1. Apri il client su `http://127.0.0.1:7420/` (UI servita dal hub se `apps/client-ui/dist` è presente) oppure Vite (`pnpm dev:client-ui`)
+2. Imposta libreria via Settings / admin UI (`:7421`) o `PUT /api/v1/library/path`
+3. Avvia scan e ascolta
+4. Accesso remoto: Settings → Rete (LAN URL / Cloudflare tunnel) — apri l’URL dal telefono; API e UI sullo stesso origin
 
 ## Build
 

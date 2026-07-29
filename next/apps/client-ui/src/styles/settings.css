@@ -11,6 +11,180 @@
   margin-bottom: 0;
 }
 
+.settings-ui-section.rk-panel .rk-panel__actions .rk-btn {
+  padding: 0.28rem 0.65rem;
+  font-size: 0.78rem;
+  font-weight: 700;
+  letter-spacing: 0.01em;
+  text-transform: uppercase;
+}
+
+.settings-ui-section.rk-panel .rk-panel__actions .rk-btn.settings-theme-export-btn {
+  padding: 0.28rem;
+  min-width: 1.85rem;
+  min-height: 1.85rem;
+  text-transform: none;
+  letter-spacing: 0;
+}
+
+.settings-ui-section .settings-theme-export-btn__ic {
+  --ui-ic-size: 1.05rem;
+}
+
+.settings-ui-section .settings-theme-import-msg {
+  margin: -0.35rem 0 0.65rem;
+}
+
+.settings-language-field,
+.settings-language-field :global(.rk-field),
+.settings-language-field :global(.rk-select) {
+  width: 100%;
+  min-width: 0;
+  box-sizing: border-box;
+}
+
+/* Tema + opacità vetro (come legacy settings-theme-glass-block) */
+.settings-theme-glass-block {
+  display: grid;
+  gap: 0.75rem;
+  min-width: 0;
+  margin-bottom: 0.15rem;
+}
+
+.settings-theme-glass-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: 0.75rem;
+  align-items: stretch;
+  min-width: 0;
+}
+
+.settings-theme-glass-row__theme,
+.settings-theme-glass-row__opacity {
+  min-width: 0;
+}
+
+.settings-theme-glass-row__theme :global(.rk-field) {
+  margin-bottom: 0;
+}
+
+.settings-theme-glass-row__customize.theme-picker__customize-btn {
+  width: 100%;
+  min-height: 2.6rem;
+  justify-self: stretch;
+  box-sizing: border-box;
+  margin-top: 0;
+}
+
+@media (min-width: 760px) {
+  .settings-theme-glass-row {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    align-items: end;
+  }
+
+  .settings-theme-glass-row--custom {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+
+  .settings-theme-glass-row__customize {
+    width: 100%;
+    min-width: 0;
+  }
+}
+
+.settings-glass-toggle {
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  gap: 0.55rem;
+  font-size: 0.86rem;
+  font-weight: 500;
+  line-height: 1.35;
+  color: var(--rk-ink);
+  cursor: pointer;
+  user-select: none;
+  min-width: 0;
+}
+
+.settings-glass-toggle > span {
+  min-width: 0;
+}
+
+.settings-checkbox {
+  width: 1.125rem;
+  height: 1.125rem;
+  accent-color: var(--rk-accent-2);
+  cursor: pointer;
+  flex: 0 0 auto;
+}
+
+/* Label sopra; slider + num + % sulla seconda riga (legacy) */
+.settings-glass-opacity {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto auto;
+  grid-template-rows: auto auto;
+  align-items: center;
+  gap: 0.35rem 0.6rem;
+  min-width: 0;
+  width: 100%;
+}
+
+.settings-glass-opacity__label {
+  grid-column: 1 / -1;
+  grid-row: 1;
+  font-size: 0.82rem;
+  color: var(--rk-muted-strong);
+}
+
+.settings-glass-opacity__slider {
+  grid-column: 1;
+  grid-row: 2;
+  width: 100%;
+  max-width: none;
+  min-width: 0;
+  height: 0.35rem;
+  accent-color: var(--rk-accent-2);
+  cursor: pointer;
+  display: block;
+}
+
+.settings-glass-opacity__slider:disabled {
+  cursor: default;
+  opacity: 0.45;
+}
+
+.settings-glass-opacity__num {
+  grid-column: 2;
+  grid-row: 2;
+  width: 4.2rem;
+  justify-self: end;
+  box-sizing: border-box;
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+  font: inherit;
+  font-size: 0.9rem;
+  padding: 0.35rem 0.4rem;
+  border-radius: var(--rk-radius);
+  border: 1px solid var(--rk-line);
+  background: var(--rk-surface-3);
+  color: var(--rk-ink);
+}
+
+.settings-glass-opacity__num:disabled,
+.settings-glass-opacity:has(.settings-glass-opacity__slider:disabled)
+  .settings-glass-opacity__label,
+.settings-glass-opacity:has(.settings-glass-opacity__slider:disabled)
+  .settings-glass-opacity__unit {
+  opacity: 0.45;
+}
+
+.settings-glass-opacity__unit {
+  grid-column: 3;
+  grid-row: 2;
+  font-size: 0.82rem;
+  color: var(--rk-muted);
+}
+
 .settings-player-section .hint {
   margin-top: 0.15rem;
 }
@@ -40,7 +214,10 @@
   min-height: 2.6rem;
   padding: 0.7rem 0.85rem;
   border-radius: var(--rk-radius-lg);
-  background: color-mix(in srgb, var(--rk-surface-2) 78%, transparent);
+  /* Opaque (glass mode will be separate). */
+  background:
+    linear-gradient(var(--rk-surface-3), var(--rk-surface-3)),
+    var(--rk-bg);
   border: 1px solid var(--rk-line);
   color: var(--rk-ink);
   cursor: pointer;
@@ -102,7 +279,9 @@
   list-style: none;
   border-radius: var(--rk-radius-lg);
   border: 1px solid var(--rk-line);
-  background: var(--rk-surface-2);
+  background:
+    linear-gradient(var(--rk-surface-2), var(--rk-surface-2)),
+    var(--rk-bg);
   box-shadow: var(--rk-shadow-2);
   max-height: min(22rem, 55vh);
   overflow-y: auto;
@@ -167,7 +346,9 @@
   padding: 0.45rem 0.85rem;
   border-radius: var(--rk-radius-lg);
   border: 1px solid var(--rk-line);
-  background: color-mix(in srgb, var(--rk-surface-3) 86%, transparent);
+  background:
+    linear-gradient(var(--rk-surface-3), var(--rk-surface-3)),
+    var(--rk-bg);
   color: var(--rk-ink);
   font: inherit;
   font-size: 0.88rem;
@@ -181,4 +362,121 @@
 
 .settings-integrations-footnote {
   margin-top: 0.85rem;
+}
+
+/* Activity log — densità da legacy, layout 3 colonne (schema next) */
+.settings-activity-section.rk-panel .rk-panel__actions .rk-btn {
+  padding: 0.28rem 0.65rem;
+  font-size: 0.78rem;
+  font-weight: 700;
+  letter-spacing: 0.01em;
+  text-transform: uppercase;
+}
+
+.settings-activity-section .activity-log-scroll {
+  max-height: 22rem;
+  max-width: 100%;
+  overflow: auto;
+  overscroll-behavior: contain;
+  -webkit-overflow-scrolling: touch;
+  border: 1px solid color-mix(in srgb, var(--rk-line) 90%, transparent);
+  border-radius: calc(var(--rk-radius) - 2px);
+  background: color-mix(in srgb, var(--rk-surface-3) 55%, transparent);
+}
+
+.settings-activity-section .activity-log-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.8rem;
+  line-height: 1.35;
+}
+
+.settings-activity-section .activity-log-table th,
+.settings-activity-section .activity-log-table td {
+  padding: 0.38rem 0.65rem;
+  text-align: left;
+  vertical-align: top;
+  border-bottom: 1px solid color-mix(in srgb, var(--rk-line) 75%, transparent);
+}
+
+.settings-activity-section .activity-log-table th {
+  position: sticky;
+  top: 0;
+  z-index: 1;
+  font-size: 0.7rem;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--rk-muted);
+  background: color-mix(in srgb, var(--rk-surface-2) 88%, var(--rk-surface-3) 12%);
+  backdrop-filter: blur(6px);
+}
+
+.settings-activity-section .activity-log-table tbody tr:last-child td {
+  border-bottom: none;
+}
+
+.settings-activity-section .activity-log-table tbody tr:hover td {
+  background: color-mix(in srgb, var(--rk-ink) 4%, transparent);
+}
+
+.settings-activity-section .activity-log-td-time {
+  white-space: nowrap;
+  font-variant-numeric: tabular-nums;
+  font-family: var(--rk-mono, ui-monospace, monospace);
+  font-size: 0.74rem;
+  color: var(--rk-muted-strong);
+}
+
+.settings-activity-section .activity-log-kind {
+  display: inline-block;
+  max-width: 8.5rem;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  padding: 0.12rem 0.4rem;
+  border-radius: 0.3rem;
+  border: 1px solid color-mix(in srgb, var(--rk-line) 85%, transparent);
+  background: color-mix(in srgb, var(--rk-surface-3) 80%, transparent);
+  font-family: var(--rk-mono, ui-monospace, monospace);
+  font-size: 0.66rem;
+  font-weight: 700;
+  letter-spacing: 0.03em;
+  text-transform: uppercase;
+  color: var(--rk-muted-strong);
+}
+
+.settings-activity-section .activity-log-kind--accent {
+  color: var(--rk-accent-2);
+  border-color: color-mix(in srgb, var(--rk-accent-2) 35%, var(--rk-line) 65%);
+  background: color-mix(in srgb, var(--rk-accent-2) 12%, transparent);
+}
+
+.settings-activity-section .activity-log-kind--info {
+  color: var(--rk-muted-strong);
+}
+
+.settings-activity-section .activity-log-kind--warn {
+  color: color-mix(in srgb, var(--rk-accent) 80%, #e6b84d 20%);
+  border-color: color-mix(in srgb, var(--rk-accent) 40%, var(--rk-line) 60%);
+  background: color-mix(in srgb, var(--rk-accent) 14%, transparent);
+}
+
+.settings-activity-section .activity-log-kind--err {
+  color: var(--rk-danger, #e85d5d);
+  border-color: color-mix(in srgb, var(--rk-danger, #e85d5d) 40%, var(--rk-line) 60%);
+  background: color-mix(in srgb, var(--rk-danger, #e85d5d) 12%, transparent);
+}
+
+.settings-activity-section .activity-log-td-msg {
+  min-width: 10rem;
+  max-width: 36rem;
+  color: var(--rk-ink);
+  word-break: break-word;
+}
+
+@media (max-width: 640px) {
+  .settings-activity-section .activity-log-td-msg {
+    max-width: 14rem;
+  }
 }

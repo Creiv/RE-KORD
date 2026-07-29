@@ -5,6 +5,9 @@
 :root {
   --rk-bg: #0a0e14;
   --rk-bg-deep: #0a0e14;
+  /* Page gradient stops for Listen viz canvas (parity with 5.x --page-lg-*) */
+  --rk-page-lg-1: #07101b;
+  --rk-page-lg-2: #08111d;
   --rk-surface: #121820;
   --rk-surface-2: #161d28;
   --rk-surface-3: #1c2532;
@@ -73,6 +76,8 @@
   --rk-z-player: 25;
   --rk-z-nav: 35;
   --rk-z-modal: 120;
+  /* Fullscreen Listen viz clears the fixed player dock (parity with 5.x) */
+  --viz-expanded-bottom-clear: calc(var(--rk-dock-h) + 0.4rem);
   color-scheme: dark;
 }
 
@@ -88,6 +93,9 @@
     --rk-side-w: 0px;
     /* Stacked transport row — parity with 5.x --bar-h: 11rem */
     --rk-dock-h: 11rem;
+    --viz-expanded-bottom-clear: calc(
+      var(--rk-dock-h) + var(--rk-mobile-nav-h) + 0.2rem
+    );
   }
 }
 

@@ -41,8 +41,6 @@ pub fn routes() -> Router<AppState> {
         .route("/api/diagnostics", get(diagnostics))
         .route("/api/v1/activity-log", get(activity_log))
         .route("/api/activity-log", get(activity_log))
-        .route("/api/v1/backup/theme-export", get(theme_export_stub))
-        .route("/api/backup/theme-export", get(theme_export_stub))
 }
 
 async fn diagnostics(State(state): State<AppState>) -> Response {
@@ -81,16 +79,3 @@ async fn activity_log(State(state): State<AppState>) -> Response {
     ok(json!({ "entries": entries }))
 }
 
-/// Theme export: zip with a small JSON of theme settings from query is client-driven.
-/// This endpoint returns an empty theme package template for clients to fill via backup.
-async fn theme_export_stub(State(state): State<AppState>) -> Response {
-    let data_dir = state.config.lock().unwrap().data_dir.clone();
-    let path = data_dir.join("theme-export-template.json");
-    let body = json!({
-        "kordTheme": 1,
-        "exportedAt": chrono::Utc::now().to_rfc3339(),
-        "note": "Client should POST theme settings into backup/theme flow; template only."
-    });
-    let _ = fs::write(&path, serde_json::to_string_pretty(&body).unwrap_or_default());
-    ok(body)
-}
