@@ -68,7 +68,7 @@
 
   .title {
     font-weight: 700;
-    font-size: 0.9rem;
+    font-size: var(--rk-fs-md);
     letter-spacing: -0.02em;
     white-space: nowrap;
     overflow: hidden;
@@ -76,7 +76,7 @@
   }
 
   .meta {
-    font-size: 0.78rem;
+    font-size: var(--rk-fs-xs);
     color: color-mix(in srgb, var(--rk-muted) 88%, var(--rk-ink) 12%);
     white-space: nowrap;
     overflow: hidden;

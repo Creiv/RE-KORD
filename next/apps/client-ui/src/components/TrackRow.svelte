@@ -15,19 +15,22 @@
 
 <script lang="ts">
   import { CoverArt, type SelectOption } from "@rekord/ui";
-  import { onMount } from "svelte";
   import { albumCoverUrl, type Track } from "../lib/api";
+  import { CONTAINER_WIDTHS } from "../lib/breakpoints";
   import { formatTime, player } from "../lib/player";
   import { session } from "../lib/session.svelte";
-  import { lyricsKind, resolveTrackMoods, trackGenre } from "../lib/trackMoods";
+  import {
+    lyricsKind,
+    resolveTrackMoods,
+    trackHasFileMeta,
+  } from "../lib/trackMoods";
   import { loadUserPrefs } from "../lib/userPrefs";
   import GraphicEq from "./icons/GraphicEq.svelte";
   import UiIcon from "./icons/UiIcon.svelte";
   import MetaBadgeCluster from "./MetaBadgeCluster.svelte";
   import TrackLyricsIcon from "./TrackLyricsIcon.svelte";
 
-  /** Parity old TRACK_ROW_INLINE_ACTIONS_MIN_PX */
-  const INLINE_ACTIONS_MIN_PX = 651;
+  const INLINE_ACTIONS_MIN_PX = CONTAINER_WIDTHS.trackRowInlineActions;
 
   let {
     track,
@@ -36,8 +39,13 @@
     favorited = false,
     active = false,
     playlistOptions = [],
+    /** Come React TrackListRow: coda/playlist sempre disponibili salvo opt-out. */
+    showQueueActions = true,
+    showPlaylistAction = true,
     autoFocusActive = true,
     extraActions = null as import("svelte").Snippet | null,
+    reorderIndex = null,
+    onreorderStep,
     onplay,
     ontoggleFavorite,
     onaddToPlaylist,
@@ -53,8 +61,14 @@
     favorited?: boolean;
     active?: boolean;
     playlistOptions?: SelectOption[];
+    showQueueActions?: boolean;
+    showPlaylistAction?: boolean;
     autoFocusActive?: boolean;
     extraActions?: import("svelte").Snippet | null;
+    /** Position in the reorderable list; enables the drag grip when set. */
+    reorderIndex?: number | null;
+    /** Keyboard alternative to dragging: -1 moves up, +1 moves down. */
+    onreorderStep?: (delta: number) => void;
     onplay: () => void;
     ontoggleFavorite: () => void;
     onaddToPlaylist?: (playlistId: string) => void;
@@ -94,17 +108,38 @@
     revision;
     return resolveTrackMoods(track.id, track.rel_path, loadUserPrefs().trackMoods);
   });
-  const genre = $derived(trackGenre(track));
   /** Come old: EQ se riga attiva; animazione solo in play. */
   const showStudio = $derived(active);
   const trackLyricsKind = $derived(lyricsKind(track.lyrics));
   /** Come old: icona lyrics anche in stato off (ghost); nascosta solo se kind=hidden. */
   const showLyricsIcon = true;
 
-  onMount(() => {
-    if (!rowEl) return;
+  /** Opzioni playlist: prop esplicita, altrimenti catalogo sessione (come React). */
+  const resolvedPlaylistOptions = $derived(
+    playlistOptions.length > 0 ? playlistOptions : session.playlistOptions,
+  );
+
+  function addToQueue() {
+    if (onaddToQueue) onaddToQueue();
+    else player.addToQueue(track);
+  }
+
+  function removeFromQueue() {
+    if (onremoveFromQueue) onremoveFromQueue();
+    else player.removeFromQueueById(track.id);
+  }
+
+  function addToPlaylist(playlistId: string) {
+    if (onaddToPlaylist) onaddToPlaylist(playlistId);
+    else void session.addToPlaylist(playlistId, track.id);
+  }
+
+  /** Come React useLayoutEffect+ResizeObserver: osserva quando il nodo esiste. */
+  $effect(() => {
+    const el = rowEl;
+    if (!el) return;
     const sync = () => {
-      const next = rowEl!.getBoundingClientRect().width >= INLINE_ACTIONS_MIN_PX;
+      const next = el.getBoundingClientRect().width >= INLINE_ACTIONS_MIN_PX;
       wide = next;
       if (next) {
         menuOpen = false;
@@ -113,7 +148,7 @@
     };
     sync();
     const ro = new ResizeObserver(sync);
-    ro.observe(rowEl);
+    ro.observe(el);
     return () => ro.disconnect();
   });
 
@@ -197,12 +232,13 @@
   class="track-row"
   class:is-active={active}
   class:track-row--compact-tools={!wide}
+  data-reorder-index={reorderIndex ?? undefined}
 >
   <div class="track-row__art-wrap">
     <CoverArt
       title={track.title}
       seed={`${track.artist_name}/${track.album_name}`}
-      src={track.album_id != null ? albumCoverUrl(track.album_id) : ""}
+      src={track.album_id != null ? albumCoverUrl(track.album_id, 128) : ""}
       size="md"
     />
     {#if showStudio}
@@ -234,7 +270,7 @@
       <span class="track-row__stats">
         <span class="track-row__duration">{formatTime(track.duration_ms / 1000)}</span>
         <span class="track-row__plays">({plays})</span>
-        <MetaBadgeCluster missingMeta={!genre} {moods} variant="inline" />
+        <MetaBadgeCluster missingMeta={!trackHasFileMeta(track)} {moods} variant="inline" />
         <TrackLyricsIcon kind={trackLyricsKind} class="track-row__lyrics-inline--stats" />
       </span>
     </span>
@@ -251,15 +287,34 @@
     class="track-row__actions"
     class:track-row__actions--compact-tools={!wide}
   >
+    {#if reorderIndex != null}
+      <button
+        type="button"
+        class="track-row__ic track-row__grip"
+        data-reorder-handle
+        title="Trascina per riordinare (o frecce su e giù)"
+        aria-label="Trascina per riordinare il brano, oppure usa le frecce su e giù"
+        onkeydown={(e) => {
+          if (e.key !== "ArrowUp" && e.key !== "ArrowDown") return;
+          e.preventDefault();
+          onreorderStep?.(e.key === "ArrowUp" ? -1 : 1);
+        }}
+      >
+        <span class="track-row__ic-glyph track-row__ic-glyph--svg" aria-hidden="true">
+          <UiIcon name="dragHandle" />
+        </span>
+      </button>
+    {/if}
+
     {#if wide}
-      {#if onaddToQueue || onremoveFromQueue}
+      {#if showQueueActions}
         {#if inQueue}
           <button
             type="button"
             class="track-row__in-coda"
             title="Rimuovi dalla coda"
             aria-label="Rimuovi dalla coda"
-            onclick={() => onremoveFromQueue?.()}
+            onclick={removeFromQueue}
           >
             <span class="track-row__in-coda__label track-row__in-coda__label--idle">in coda</span>
             <span class="track-row__in-coda__label track-row__in-coda__label--act">rimuovi</span>
@@ -270,7 +325,7 @@
             class="track-row__ic track-row__ic--queue"
             title="Riproduci come prossimo"
             aria-label="Riproduci come prossimo"
-            onclick={() => onaddToQueue?.()}
+            onclick={addToQueue}
           >
             <span class="track-row__ic-glyph track-row__ic-glyph--svg" aria-hidden="true">
               <UiIcon name="add" />
@@ -293,7 +348,7 @@
         </span>
       </button>
 
-      {#if onaddToPlaylist}
+      {#if showPlaylistAction}
         <div class="track-row__playlist-anchor" bind:this={playlistAnchorEl}>
           <button
             type="button"
@@ -313,14 +368,14 @@
           </button>
           {#if playlistOpen}
             <div class="track-row__playlist-popover rk-scroll" role="dialog" aria-label="Playlist">
-              {#if playlistOptions.length}
+              {#if resolvedPlaylistOptions.length}
                 <ul class="track-row__playlist-popover-list">
-                  {#each playlistOptions as opt}
+                  {#each resolvedPlaylistOptions as opt}
                     <li>
                       <button
                         type="button"
                         class="track-row__playlist-popover-item"
-                        onclick={() => run(() => onaddToPlaylist?.(opt.value))}
+                        onclick={() => run(() => addToPlaylist(opt.value))}
                       >
                         <span class="track-row__playlist-popover-item__name">{opt.label}</span>
                         <span class="track-row__playlist-popover-item__state">+</span>
@@ -415,7 +470,7 @@
                 <span class="track-row__overflow-item-label">Preferito</span>
               </button>
             </li>
-            {#if onaddToQueue || onremoveFromQueue}
+            {#if showQueueActions}
               <li role="presentation">
                 <button
                   type="button"
@@ -423,7 +478,7 @@
                   class="track-row__overflow-item"
                   class:is-on={inQueue}
                   title={inQueue ? "Rimuovi dalla coda" : "Riproduci come prossimo"}
-                  onclick={() => run(inQueue ? onremoveFromQueue : onaddToQueue)}
+                  onclick={() => run(inQueue ? removeFromQueue : addToQueue)}
                 >
                   <span class="track-row__overflow-item-glyph track-row__ic-glyph--svg" aria-hidden="true">
                     <UiIcon name={inQueue ? "close" : "add"} />
@@ -434,7 +489,7 @@
                 </button>
               </li>
             {/if}
-            {#if onaddToPlaylist}
+            {#if showPlaylistAction}
               <li role="presentation">
                 <button
                   type="button"
@@ -512,16 +567,16 @@
             {/if}
           </ul>
         {/if}
-        {#if playlistOpen && onaddToPlaylist}
+        {#if playlistOpen && showPlaylistAction}
           <div class="track-row__playlist-popover rk-scroll" role="dialog" aria-label="Playlist">
-            {#if playlistOptions.length}
+            {#if resolvedPlaylistOptions.length}
               <ul class="track-row__playlist-popover-list">
-                {#each playlistOptions as opt}
+                {#each resolvedPlaylistOptions as opt}
                   <li>
                     <button
                       type="button"
                       class="track-row__playlist-popover-item"
-                      onclick={() => run(() => onaddToPlaylist?.(opt.value))}
+                      onclick={() => run(() => addToPlaylist(opt.value))}
                     >
                       <span class="track-row__playlist-popover-item__name">{opt.label}</span>
                       <span class="track-row__playlist-popover-item__state">+</span>

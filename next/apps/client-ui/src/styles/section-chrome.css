@@ -1,5 +1,12 @@
 /* Toolbar / nav di sezione — parity RE-KORD 5.0 + polish */
 
+:root {
+  /* Icon gutter of a page toolbar, and the indent anything below the title
+     needs in order to line up with it. */
+  --rk-toolbar-ic-w: 2.75rem;
+  --rk-toolbar-lead: calc(var(--rk-toolbar-ic-w) + 0.7rem);
+}
+
 .section-head {
   display: flex;
   flex-wrap: wrap;
@@ -12,9 +19,9 @@
 .section-head--page-toolbar {
   align-items: center;
   flex-wrap: wrap;
-  gap: var(--rk-space-3) var(--rk-space-5);
+  gap: var(--rk-space-md) var(--rk-space-xl);
   margin-top: 0;
-  margin-bottom: var(--rk-space-4);
+  margin-bottom: var(--rk-space-lg);
 }
 
 .section-head--page-toolbar > :first-child {
@@ -41,16 +48,16 @@
 
 .section-head--page-toolbar h2 {
   margin: 0;
-  font-size: 1.32rem;
+  font-size: var(--rk-fs-title);
   font-weight: 800;
   letter-spacing: -0.03em;
-  line-height: 1.2;
+  line-height: var(--rk-lh-tight);
   color: var(--rk-ink);
 }
 
 .section-head--page-toolbar .rk-eyebrow {
   margin: 0;
-  line-height: 1.25;
+  line-height: var(--rk-lh-snug);
 }
 
 .section-head__lead {
@@ -101,7 +108,7 @@
   box-sizing: border-box;
   --ui-ic-size: 2.45rem;
   width: auto;
-  min-width: calc(var(--ui-ic-size) + 0.3rem);
+  min-width: var(--rk-toolbar-ic-w);
   height: auto;
   padding: 0.1rem 0.15rem;
 }
@@ -118,43 +125,63 @@
   flex-wrap: wrap;
   align-items: center;
   justify-content: flex-end;
-  gap: 0.45rem;
+  gap: var(--rk-space-sm);
   margin-left: auto;
   flex-shrink: 0;
+  min-width: 0;
+}
+
+/* The controls of a page toolbar are the page's primary actions, so they get
+   more air than the dense tool clusters inside a card. */
+.page-toolbar__actions {
+  gap: var(--rk-space-md) var(--rk-space-lg);
 }
 
 .section-head__text h2,
 .section-head-lead__text h2 {
   margin: 0;
-  font-size: 1.32rem;
+  font-size: var(--rk-fs-title);
   font-weight: 800;
   letter-spacing: -0.03em;
-  line-height: 1.2;
+  line-height: var(--rk-lh-tight);
 }
 
 .section-head .rk-eyebrow,
 .section-head-lead .rk-eyebrow {
   margin: 0;
-  font-size: 0.68rem;
+  font-size: var(--rk-fs-eyebrow);
   font-weight: 700;
   letter-spacing: 0.1em;
   text-transform: uppercase;
   color: color-mix(in srgb, var(--rk-accent-2) 70%, var(--rk-muted) 30%);
 }
 
-.text-btn {
-  border: 0;
-  background: transparent;
-  color: color-mix(in srgb, var(--rk-accent-2) 80%, var(--rk-ink));
-  font: inherit;
-  font-size: 0.82rem;
-  font-weight: 650;
-  cursor: pointer;
-  padding: 0.2rem 0.15rem;
+/* Lead variant: icon tile plus eyebrow and title, used by cards that are not a
+   full page toolbar. */
+.section-head-lead {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--rk-space-lg);
+  min-width: 0;
 }
 
-.text-btn:hover {
-  text-decoration: underline;
+.section-head-lead__icon {
+  display: grid;
+  place-items: center;
+  width: 2.4rem;
+  height: 2.4rem;
+  border-radius: var(--rk-radius);
+  background: var(--rk-accent2-soft);
+  color: var(--rk-accent-2);
+  flex-shrink: 0;
+}
+
+.section-head-lead__text {
+  min-width: 0;
+}
+
+.play-collection-btn {
+  --ui-ic-size: 1.05rem;
 }
 
 /* Sort segmented (Nome / Preferiti) */
@@ -201,7 +228,11 @@
     color-mix(in srgb, var(--rk-accent) 28%, var(--rk-surface-3)),
     color-mix(in srgb, var(--rk-accent-2) 22%, var(--rk-surface-2))
   );
-  border-color: color-mix(in srgb, var(--rk-accent) 32%, var(--rk-line-strong) 68%);
+  border-color: color-mix(
+    in srgb,
+    var(--rk-accent) 32%,
+    var(--rk-line-strong) 68%
+  );
   box-shadow: 0 1px 0 color-mix(in srgb, var(--rk-accent) 18%, transparent);
 }
 
@@ -216,7 +247,7 @@
   justify-content: center;
   gap: 0.38rem;
   min-width: 0;
-  line-height: 1.2;
+  line-height: var(--rk-lh-tight);
 }
 
 .segmented__ic {
@@ -235,6 +266,37 @@
 .surface-card--toolbar-only .section-head--page-toolbar {
   margin-bottom: 0;
   align-items: center;
+}
+
+/* Page toolbar: title row on top, section nav on its own row underneath. */
+.page-toolbar-card--tabs .section-head--page-toolbar {
+  margin-bottom: var(--rk-space-md);
+}
+
+.page-toolbar__tabs {
+  display: flex;
+  min-width: 0;
+  /* Line the tabs up with the title, not with the icon gutter. */
+  padding-top: var(--rk-space-md);
+  padding-left: var(--rk-toolbar-lead);
+  border-top: 1px solid var(--rk-line);
+}
+
+@media (max-width: 559.98px) {
+  .page-toolbar__tabs {
+    padding-left: 0;
+  }
+
+  /* Phone: title block on top, actions on a full-width row of their own. */
+  .page-toolbar-card .section-head--page-toolbar {
+    flex-flow: column;
+    align-items: stretch;
+  }
+
+  .page-toolbar-card .section-head__tools {
+    margin-left: 0;
+    width: 100%;
+  }
 }
 
 .library-filter-panel {
@@ -293,10 +355,10 @@
 }
 
 .library-genre-tracklist-headrow h2 {
-  font-size: 1.32rem;
+  font-size: var(--rk-fs-title);
   font-weight: 800;
   letter-spacing: -0.03em;
-  line-height: 1.2;
+  line-height: var(--rk-lh-tight);
 }
 
 .section-head__tools.library-overview-toolbar {
@@ -318,6 +380,49 @@
 .library-overview-toolbar .segmented--joined button {
   padding: 0.32rem 0.52rem;
   font-size: clamp(0.8rem, 0.85vw, 0.98rem);
+}
+
+/* Telefono: le toolbar di libreria smettono di stringersi nell'angolo destro.
+   Dopo le regole desktop qui sopra, che allineano a destra e tengono la larghezza
+   automatica: da qui si scrive il contrario, e vince chi viene dopo. */
+@media (max-width: 559.98px) {
+  /* Titolo sopra, comandi su una riga loro: in fila restava un titolo schiacciato
+     accanto a un gruppo di bottoni schiacciati. Vale per tutte le intestazioni dei
+     pannelli filtro, non solo per quella della tracklist di un genere: senza questo
+     i comandi vanno a capo da soli e restano larghi quanto il loro contenuto,
+     appoggiati al bordo destro. */
+  .library-filter-panel .section-head--page-toolbar,
+  .library-genre-tracklist-headrow {
+    flex-flow: column nowrap;
+    align-items: stretch;
+  }
+
+  .library-filter-panel .section-head__tools,
+  .library-genre-tracklist-headrow .section-head__tools {
+    margin-left: 0;
+    width: 100%;
+  }
+
+  /* Il segmentato prende la riga e le voci se la dividono: due bersagli larghi
+     invece di due etichette da 80px appoggiate al bordo. */
+  .library-sort-panel .segmented--joined,
+  .library-overview-toolbar .segmented--joined {
+    width: 100%;
+    max-width: none;
+    flex-wrap: nowrap;
+    justify-content: stretch;
+  }
+
+  .library-sort-panel .segmented--joined > button,
+  .library-overview-toolbar .segmented--joined > button {
+    flex: 1 1 0;
+    min-width: 0;
+  }
+
+  /* «Riproduci tutto» e compagnia sono l'azione della pagina: a tutta riga. */
+  .page-toolbar-card .section-head__tools .play-collection-btn {
+    flex: 1 1 100%;
+  }
 }
 
 .page-toolbar__lead--backrow {
@@ -348,7 +453,7 @@
   font-size: clamp(1.15rem, 1.6vw, 1.45rem);
   font-weight: 700;
   letter-spacing: -0.03em;
-  line-height: 1.15;
+  line-height: var(--rk-lh-tight);
 }
 
 .page-toolbar-back-ic {
@@ -363,12 +468,14 @@
   min-width: calc(var(--ui-ic-size) + 0.3rem);
   padding: 0.1rem 0.15rem;
   border: none;
-  border-radius: 8px;
+  border-radius: var(--rk-radius-lg);
   background: transparent;
   color: color-mix(in srgb, var(--rk-muted) 82%, var(--rk-ink) 18%);
   line-height: 1;
   cursor: pointer;
-  transition: color 0.16s ease, background 0.16s ease;
+  transition:
+    color 0.16s ease,
+    background 0.16s ease;
 }
 
 .page-toolbar-back-ic:hover {
@@ -390,37 +497,31 @@
   pointer-events: none;
 }
 
-.hero-card__actions {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 0.45rem;
-  align-items: center;
-  justify-content: flex-end;
-}
-
 /* Dashboard mix panels */
 .dashboard-mix-card > .section-head.section-head--page-toolbar {
-  margin-bottom: 0.65rem;
+  margin-bottom: var(--rk-space-lg);
 }
 
 .dashboard-mix-body {
   display: flex;
   flex-direction: column;
-  gap: 0.85rem;
+  /* Selection, the two pickers and the footer are separate decisions: keep them
+     a full rung apart so the panel does not read as one wall of chips. */
+  gap: var(--rk-space-xl);
   min-height: 0;
 }
 
 .dashboard-mix-panels {
   display: flex;
   flex-direction: column;
-  gap: 0.85rem;
+  gap: var(--rk-space-xl);
   min-width: 0;
 }
 
 .dashboard-mix-panel {
   display: flex;
   flex-direction: column;
-  gap: 0.55rem;
+  gap: var(--rk-space-md);
   min-width: 0;
 }
 
@@ -430,11 +531,11 @@
   flex-wrap: wrap;
   align-items: center;
   justify-content: space-between;
-  gap: 0.35rem 0.75rem;
+  gap: var(--rk-space-xs) var(--rk-space-lg);
 }
 
 .dashboard-mix-panel__eyebrow {
-  font-size: 0.68rem;
+  font-size: var(--rk-fs-3xs);
   font-weight: 700;
   letter-spacing: 0.1em;
   text-transform: uppercase;
@@ -445,8 +546,8 @@
   display: flex;
   flex-wrap: wrap;
   align-items: center;
-  gap: 0.4rem;
-  padding: 0.45rem 0.55rem;
+  gap: var(--rk-space-sm);
+  padding: var(--rk-space-md) var(--rk-space-lg);
   border-radius: var(--rk-radius);
   border: 1px solid color-mix(in srgb, var(--rk-line) 80%, transparent);
   background: color-mix(in srgb, var(--rk-surface-3) 72%, transparent);
@@ -455,7 +556,7 @@
 .dashboard-mix-selection__chips {
   display: flex;
   flex-wrap: wrap;
-  gap: 0.35rem;
+  gap: var(--rk-space-xs);
   min-width: 0;
   flex: 1 1 auto;
 }
@@ -463,15 +564,15 @@
 .dashboard-mix-pill {
   display: inline-flex;
   align-items: center;
-  gap: 0.3rem;
+  gap: var(--rk-space-2xs);
   max-width: 100%;
-  padding: 0.28rem 0.5rem;
+  padding: var(--rk-space-2xs) var(--rk-space-md);
   border-radius: var(--rk-radius);
   border: 1px solid color-mix(in srgb, var(--rk-accent) 35%, var(--rk-line));
   background: color-mix(in srgb, var(--rk-accent) 14%, transparent);
   color: var(--rk-ink);
   font: inherit;
-  font-size: 0.74rem;
+  font-size: var(--rk-fs-2xs);
   font-weight: 650;
   cursor: pointer;
 }
@@ -483,8 +584,8 @@
 }
 
 .dashboard-mix-pill--mood-ico {
-  padding: 0.28rem 0.38rem;
-  gap: 0.22rem;
+  padding: var(--rk-space-2xs) var(--rk-space-xs);
+  gap: var(--rk-space-3xs);
 }
 
 .dashboard-mix-pill :global(.mood-g),
@@ -502,26 +603,26 @@
 .dashboard-mix-genre-chips {
   display: flex;
   flex-wrap: wrap;
-  gap: 0.35rem;
+  gap: var(--rk-space-sm);
 }
 
 .dashboard-mix-empty {
   margin: 0;
   color: var(--rk-muted);
-  font-size: 0.78rem;
+  font-size: var(--rk-fs-xs);
 }
 
 .dashboard-mix-genre-chip {
   display: inline-flex;
   align-items: baseline;
-  gap: 0.4rem;
+  gap: var(--rk-space-xs);
   border: 1px solid color-mix(in srgb, var(--rk-line) 72%, transparent);
   border-radius: var(--rk-radius);
   background: color-mix(in srgb, var(--rk-surface-3) 70%, transparent);
   color: var(--rk-muted-strong);
-  padding: 0.36rem 0.62rem;
+  padding: var(--rk-space-xs) var(--rk-space-lg);
   font: inherit;
-  font-size: 0.78rem;
+  font-size: var(--rk-fs-xs);
   font-weight: 650;
   cursor: pointer;
   transition:
@@ -541,8 +642,17 @@
   background: var(--rk-accent-soft);
 }
 
+/* Composite genres ("Hip Hop; Funk; Pop; Contemporary R&B; …") would wrap inside
+   the chip and turn the picker into a wall; one line each, full name on hover. */
+.dashboard-mix-genre-chip__label {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  max-width: 14rem;
+}
+
 .dashboard-mix-genre-chip__count {
-  font-size: 0.72rem;
+  font-size: var(--rk-fs-2xs);
   font-weight: 800;
   font-variant-numeric: tabular-nums;
   opacity: 0.8;
@@ -554,9 +664,8 @@
   flex-wrap: wrap;
   align-items: center;
   justify-content: space-between;
-  gap: 0.65rem 1rem;
-  padding-top: 0.75rem;
-  margin-top: 0.1rem;
+  gap: var(--rk-space-md) var(--rk-space-xl);
+  padding-top: var(--rk-space-lg);
   border-top: 1px solid color-mix(in srgb, var(--rk-line) 55%, transparent);
 }
 
@@ -565,20 +674,20 @@
   flex: 1 1 12rem;
   min-width: 0;
   color: var(--rk-muted);
-  font-size: 0.78rem;
-  line-height: 1.35;
+  font-size: var(--rk-fs-xs);
+  line-height: var(--rk-lh-snug);
 }
 
 .dashboard-session-card.rk-panel,
 .dashboard-session-card {
   /* Parity old surface-card (ui-pro-layout): space-4 / space-5 */
-  padding: var(--rk-space-4) var(--rk-space-5);
+  padding: var(--rk-space-lg) var(--rk-space-xl);
   /* Il gap tra schede è gestito da .dashboard-page / .dashboard-page__main */
   margin-bottom: 0;
 }
 
 .dashboard-session-card > .section-head {
-  margin-bottom: var(--rk-space-4);
+  margin-bottom: var(--rk-space-lg);
 }
 
 /* —— Smart Radio (parity old dashboard.css) —— */
@@ -614,7 +723,7 @@
   display: block;
   width: 100%;
   aspect-ratio: 1;
-  border-radius: 8px;
+  border-radius: var(--rk-radius-lg);
   overflow: hidden;
   background: color-mix(in srgb, var(--rk-surface-3) 78%, transparent);
   isolation: isolate;
@@ -715,9 +824,9 @@
 }
 
 .dashboard-smart-radio-tile__title {
-  font-size: 0.8rem;
+  font-size: var(--rk-fs-xs);
   font-weight: 650;
-  line-height: 1.28;
+  line-height: var(--rk-lh-snug);
   letter-spacing: -0.015em;
   white-space: nowrap;
   overflow: hidden;
@@ -750,7 +859,7 @@
   min-height: 1.25rem;
   min-width: 0;
   padding: 0.08rem;
-  border-radius: 6px;
+  border-radius: var(--rk-radius);
   border: 1px solid var(--rk-line);
   background: color-mix(in srgb, var(--rk-surface-3) 80%, transparent);
   color: var(--rk-muted);
@@ -788,7 +897,9 @@
   border: 1px solid color-mix(in srgb, var(--rk-accent) 24%, var(--rk-line) 76%);
 }
 
-.dashboard-smart-radio-tile--random .dashboard-smart-radio-tile__media--random :is(svg, .ui-ic) {
+.dashboard-smart-radio-tile--random
+  .dashboard-smart-radio-tile__media--random
+  :is(svg, .ui-ic) {
   width: 1.75rem;
   height: 1.75rem;
   color: color-mix(in srgb, var(--rk-accent) 82%, var(--rk-ink) 18%);
@@ -798,13 +909,13 @@
   color: color-mix(in srgb, var(--rk-ink) 82%, var(--rk-muted) 18%);
 }
 
-@media (max-width: 719px) {
+@media (max-width: 719.98px) {
   .dashboard-smart-radio-grid {
     gap: 0.72rem 0.5rem;
   }
 
   .dashboard-smart-radio-tile__title {
-    font-size: 0.76rem;
+    font-size: var(--rk-fs-xs);
   }
 }
 
@@ -833,9 +944,9 @@
   font: inherit;
   padding: 0.12rem 0;
   font-weight: 800;
-  font-size: 1.32rem;
+  font-size: var(--rk-fs-title);
   letter-spacing: -0.03em;
-  line-height: 1.2;
+  line-height: var(--rk-lh-tight);
   color: color-mix(in srgb, var(--rk-muted) 78%, var(--rk-ink) 22%);
   transition: color 0.16s ease;
 }
@@ -846,10 +957,10 @@
   justify-content: center;
   min-height: 2rem;
   padding: 0.4rem 0.55rem;
-  font-size: 0.9rem;
+  font-size: var(--rk-fs-md);
   font-weight: 750;
   letter-spacing: -0.01em;
-  border-radius: 6px;
+  border-radius: var(--rk-radius);
 }
 
 .dashboard-mix-match.segmented--joined button:hover:not(.is-on),
@@ -887,7 +998,7 @@
   right: 0;
   bottom: -0.08rem;
   height: 2px;
-  border-radius: 99px;
+  border-radius: var(--rk-radius-round);
   background: linear-gradient(
     90deg,
     color-mix(in srgb, var(--rk-accent) 85%, transparent),
@@ -910,7 +1021,7 @@
 .dashboard-mix-mood-grid {
   display: grid;
   grid-template-columns: repeat(4, minmax(0, 1fr));
-  gap: 0.4rem;
+  gap: var(--rk-space-sm);
   width: 100%;
 }
 
@@ -926,10 +1037,6 @@
   }
 }
 
-.dashboard-mix-mood-grid .library-mood-filter-btn {
-  min-height: 2.55rem;
-}
-
 .dashboard-mix-footer__hint strong {
   color: var(--rk-ink);
   font-variant-numeric: tabular-nums;
@@ -937,7 +1044,7 @@
 
 .dashboard-mix-footer__listen {
   flex-shrink: 0;
-  gap: 0.4rem;
+  gap: var(--rk-space-xs);
   min-width: 6.75rem;
 }
 
@@ -949,7 +1056,7 @@
   align-items: center;
   justify-content: center;
   min-height: 2.75rem;
-  padding: 0.45rem 0.52rem;
+  padding: var(--rk-space-sm) var(--rk-space-md);
   border-radius: var(--rk-radius);
   border: 1px solid color-mix(in srgb, var(--rk-line) 62%, transparent);
   background: color-mix(in srgb, var(--rk-surface-2) 88%, transparent);
@@ -965,7 +1072,9 @@
     opacity 0.15s ease;
 }
 
-.library-mood-filter-btn:hover:not(:disabled):not(.library-mood-filter-btn--on) {
+.library-mood-filter-btn:hover:not(:disabled):not(
+    .library-mood-filter-btn--on
+  ) {
   opacity: 1;
   border-color: color-mix(in srgb, var(--rk-line) 78%, transparent);
   background: color-mix(in srgb, var(--rk-surface-3) 76%, transparent);
@@ -989,7 +1098,7 @@
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  gap: 0.42rem;
+  gap: var(--rk-space-xs);
   width: 100%;
   color: inherit;
 }
@@ -1001,7 +1110,7 @@
 }
 
 .library-mood-filter-btn__count {
-  font-size: 0.75rem;
+  font-size: var(--rk-fs-2xs);
   font-weight: 800;
   font-variant-numeric: tabular-nums;
   line-height: 1;

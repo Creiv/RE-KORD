@@ -1,4 +1,5 @@
 @import "@rekord/ui/styles/tokens.css";
+@import "@rekord/ui/styles/controls.css";
 
 * {
   box-sizing: border-box;
@@ -10,7 +11,7 @@ body {
   min-height: 100%;
   font-family: var(--rk-font);
   font-size: 15px;
-  line-height: 1.45;
+  line-height: var(--rk-lh);
   color: var(--rk-ink);
   background: linear-gradient(180deg, var(--rk-bg-deep) 0%, var(--rk-bg) 100%);
   background-attachment: fixed;

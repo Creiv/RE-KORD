@@ -44,6 +44,8 @@
   let visible = typeof document !== "undefined" ? !document.hidden : true;
   let inView = true;
   let unsubPrefs: (() => void) | null = null;
+  // Copie non reattive lette dal ciclo di disegno, che gira fuori da Svelte: le
+  // riallinea l'effetto piu' sotto a ogni cambio di stato.
   let playingRef = playing;
   let modeRef: VizMode = "bars";
   let expandedRef = false;
@@ -360,14 +362,14 @@
       0 0 0 3px color-mix(in srgb, var(--rk-accent-2) 18%, transparent);
   }
 
-  /* Below --rk-z-player (25) so the dock stays visible & clickable (legacy z-index 19). */
+  /* One rung below the player so the dock stays visible and clickable. */
   .viz-wrap.is-expanded {
     position: fixed;
     top: 0;
     right: 0;
     bottom: 0;
     left: var(--rk-side-w, 0px);
-    z-index: 19;
+    z-index: calc(var(--rk-z-player) - 1);
     box-sizing: border-box;
     border-radius: 0;
     cursor: zoom-out;
@@ -461,7 +463,7 @@
     font: inherit;
     font-weight: 600;
     font-size: clamp(0.9rem, 1.8vw, 1.2rem);
-    line-height: 1.45;
+    line-height: var(--rk-lh);
     text-shadow: 0 2px 16px rgba(0, 0, 0, 0.55);
     max-height: 50vh;
     overflow: hidden;

@@ -1,6 +1,7 @@
 <script lang="ts">
   import { onMount } from "svelte";
-  import SectionNavTabs from "../components/SectionNavTabs.svelte";
+  import { Panel } from "@rekord/ui";
+  import PageToolbar from "../components/PageToolbar.svelte";
   import UiIcon from "../components/icons/UiIcon.svelte";
   import {
     albumCoverUrl,
@@ -12,25 +13,27 @@
   import { buildArtistCoverAlbumMap } from "../lib/artistCover";
   import { initials } from "../lib/initials";
   import { player } from "../lib/player";
+  import { i18n, t } from "../lib/i18n.svelte";
   import { session } from "../lib/session.svelte";
   import { trackGenre } from "../lib/trackMoods";
 
   type MetricMode = "plays" | "favorites" | "blocked";
 
   const TOP_N = 3;
-  const METRIC_TABS: { id: MetricMode; label: string }[] = [
-    { id: "plays", label: "Ascolti" },
-    { id: "favorites", label: "Preferiti" },
-    { id: "blocked", label: "Bloccati" },
-  ];
+  const METRIC_TABS = $derived([
+    { id: "plays", label: t("page.statistics.tab.plays") },
+    { id: "favorites", label: t("page.statistics.tab.favorites") },
+    { id: "blocked", label: t("page.statistics.tab.blocked") },
+  ]);
 
   let metricMode = $state<MetricMode>("plays");
   let ready = $state(false);
 
-  const fmtN = (n: number) => n.toLocaleString("it-IT");
+  const fmtN = (n: number) =>
+    n.toLocaleString(i18n.locale === "en" ? "en-US" : "it-IT");
 
   const modeLabel = $derived(
-    METRIC_TABS.find((t) => t.id === metricMode)?.label ?? "Ascolti",
+    METRIC_TABS.find((tab) => tab.id === metricMode)?.label ?? "",
   );
 
   const tracks = $derived(session.catalogTracks);
@@ -265,26 +268,18 @@
 </script>
 
 <div class="view-page statistics-page">
-  <header class="view-page__toolbar-band statistics-page__toolbar">
-    <section class="rk-surface-card surface-card--toolbar-only">
-      <div class="section-head section-head--page-toolbar">
-        <div class="section-head__lead">
-          <span class="section-head__icon-wrap" aria-hidden="true">
-            <UiIcon name="chart" class="section-head__ic" />
-          </span>
-          <div class="section-head__text">
-            <p class="rk-eyebrow">Approfondimenti</p>
-            <SectionNavTabs
-              tabs={METRIC_TABS}
-              active={metricMode}
-              ariaLabel="Criterio classifiche statistiche"
-              onselect={(id) => (metricMode = id as MetricMode)}
-            />
-          </div>
-        </div>
-      </div>
-    </section>
-  </header>
+  <PageToolbar
+    eyebrow={t("page.statistics.eyebrow")}
+    title={t("page.statistics.title", { plays: fmtN(overview.totalScore) })}
+    tabs={METRIC_TABS}
+    activeTab={metricMode}
+    tabsAriaLabel={t("page.statistics.tabsAria")}
+    ontab={(id) => (metricMode = id as MetricMode)}
+  >
+    {#snippet icon()}
+      <UiIcon name="chart" class="section-head__ic" />
+    {/snippet}
+  </PageToolbar>
 
   <div class="statistics-page__sections">
     <div
@@ -292,11 +287,10 @@
       class:statistics-page__rankings--duo={metricMode === "blocked"}
     >
       {#if metricMode !== "blocked"}
-        <section class="rk-surface-card statistics-section">
-          <div class="statistics-section__head">
-            <h3>Top 3 brani</h3>
+        <Panel title="Top 3 brani" class="statistics-section">
+          {#snippet actions()}
             <span class="statistics-section__mode">{modeLabel}</span>
-          </div>
+          {/snippet}
           {#if !ready}
             <p class="panel-empty statistics-section__empty">Caricamento…</p>
           {:else if rankings.topTracks.length === 0}
@@ -317,7 +311,7 @@
                     {#if row.tr.album_id != null}
                       <img
                         class="statistics-rank-row__art"
-                        src={albumCoverUrl(row.tr.album_id)}
+                        src={albumCoverUrl(row.tr.album_id, 128)}
                         alt=""
                         loading="lazy"
                       />
@@ -343,14 +337,13 @@
               {/each}
             </ol>
           {/if}
-        </section>
+        </Panel>
       {/if}
 
-      <section class="rk-surface-card statistics-section">
-        <div class="statistics-section__head">
-          <h3>Top 3 artisti</h3>
+      <Panel title="Top 3 artisti" class="statistics-section">
+        {#snippet actions()}
           <span class="statistics-section__mode">{modeLabel}</span>
-        </div>
+        {/snippet}
         {#if !ready}
           <p class="panel-empty statistics-section__empty">Caricamento…</p>
         {:else if rankings.topArtists.length === 0}
@@ -372,7 +365,7 @@
                   {#if coverId != null}
                     <img
                       class="statistics-rank-row__art"
-                      src={albumCoverUrl(coverId)}
+                      src={albumCoverUrl(coverId, 128)}
                       alt=""
                       loading="lazy"
                     />
@@ -395,13 +388,12 @@
             {/each}
           </ol>
         {/if}
-      </section>
+      </Panel>
 
-      <section class="rk-surface-card statistics-section">
-        <div class="statistics-section__head">
-          <h3>Top 3 album</h3>
+      <Panel title="Top 3 album" class="statistics-section">
+        {#snippet actions()}
           <span class="statistics-section__mode">{modeLabel}</span>
-        </div>
+        {/snippet}
         {#if !ready}
           <p class="panel-empty statistics-section__empty">Caricamento…</p>
         {:else if rankings.topAlbums.length === 0}
@@ -422,7 +414,7 @@
                   {#if row.al.id >= 0 && row.al.has_cover}
                     <img
                       class="statistics-rank-row__art"
-                      src={albumCoverUrl(row.al.id)}
+                      src={albumCoverUrl(row.al.id, 128)}
                       alt=""
                       loading="lazy"
                     />
@@ -446,15 +438,14 @@
             {/each}
           </ol>
         {/if}
-      </section>
+      </Panel>
     </div>
 
     <div class="statistics-page__footer">
-      <section class="rk-surface-card statistics-section statistics-section--genres">
-        <div class="statistics-section__head">
-          <h3>Top 3 generi</h3>
+      <Panel title="Top 3 generi" class="statistics-section statistics-section--genres">
+        {#snippet actions()}
           <span class="statistics-section__mode">{modeLabel}</span>
-        </div>
+        {/snippet}
         {#if !ready}
           <p class="panel-empty statistics-section__empty">Caricamento…</p>
         {:else if rankings.topGenres.length === 0}
@@ -480,13 +471,12 @@
             {/each}
           </ol>
         {/if}
-      </section>
+      </Panel>
 
-      <section class="rk-surface-card statistics-section statistics-section--overview">
-        <div class="statistics-section__head">
-          <h3>In sintesi</h3>
+      <Panel title="In sintesi" class="statistics-section statistics-section--overview">
+        {#snippet actions()}
           <span class="statistics-section__mode">Tutto</span>
-        </div>
+        {/snippet}
         <div class="statistics-overview">
           <div
             class="stats-grid statistics-overview-grid statistics-overview-grid--plays"
@@ -523,7 +513,7 @@
             </div>
           </div>
         </div>
-      </section>
+      </Panel>
     </div>
   </div>
 </div>

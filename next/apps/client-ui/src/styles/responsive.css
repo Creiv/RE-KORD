@@ -1,0 +1,38 @@
+/* Strato responsive: l'elenco canonico dei breakpoint e le metriche di pagina
+   che ne dipendono. Mirror di src/lib/breakpoints.ts — tenerli allineati.
+
+     xs    400px   telefoni stretti: le card metriche vanno a una per riga
+     sm    560px   telefono: le toolbar si staccano dal titolo, le azioni vanno a capo
+     md    640px   telefono grande: card a due, griglie mood e statistiche più larghe
+     lg    720px   tablet verticale: form, hero e pannelli passano a due colonne
+     xl    900px   tablet orizzontale: Studio e Ascolta affiancano i riquadri
+     xxl  1000px   cromatura desktop: rail e dock completo invece della nav mobile
+
+   Convenzione, in tutti i fogli: verso l'alto `min-width: Npx`, verso il basso
+   `max-width: (N - 0.02)px`. Così una larghezza non ricade mai su entrambi i lati
+   dello stesso breakpoint e non resta un buco di 1px sulle larghezze frazionarie
+   (zoom, schermi hidpi). Nessun altro valore va introdotto: se una vista ha
+   bisogno di una soglia diversa, si aggiunge qui e in breakpoints.ts. */
+
+:root {
+  /* Gutter della pagina: lo consuma AppShell e chiunque debba allinearsi ad esso. */
+  --rk-page-pad-x: 1.25rem;
+  --rk-page-pad-y: var(--rk-space-xl);
+  /* Gutter effettivi. Con viewport-fit=cover il layout arriva sotto tacca, barre
+     di sistema e bordi curvi: di lato si tiene il maggiore fra il gutter e
+     l'inset, così su un telefono in orizzontale il testo non finisce sotto la
+     tacca e in verticale (inset a 0) resta il gutter normale. In alto e in basso
+     ci pensano topbar, dock e nav, che sono elementi fissi. */
+  --rk-page-pad-l: max(var(--rk-page-pad-x), env(safe-area-inset-left, 0px));
+  --rk-page-pad-r: max(var(--rk-page-pad-x), env(safe-area-inset-right, 0px));
+  /* Il rail cresce dell'inset invece di restringersi: le icone restano larghe
+     56px e la fascia si estende sotto la tacca. Lo usano la colonna della shell,
+     il rail stesso e il bordo sinistro del dock, che devono coincidere. */
+  --rk-rail-w: calc(var(--rk-side-w) + env(safe-area-inset-left, 0px));
+}
+
+@media (max-width: 999.98px) {
+  :root {
+    --rk-page-pad-x: var(--rk-space-xl);
+  }
+}

@@ -1,6 +1,5 @@
 <script lang="ts">
-  import { ActionRow, Button } from "@rekord/ui";
-  import QrCodeImg from "./QrCodeImg.svelte";
+  import { ActionRow, Button, QrCodeImg } from "@rekord/ui";
   import { t } from "../lib/i18n.svelte";
   import type { RemoteAccessState } from "../lib/api";
 
@@ -9,15 +8,24 @@
     busy = false,
     error = "",
     copyOk = "",
+    readOnly = false,
+    readOnlyNote = "",
     onLogin,
     onLogout,
     onToggleShare,
     onCopyUrl,
+    hubPanelUrl = "",
   }: {
     remote: RemoteAccessState | null;
     busy?: boolean;
     error?: string;
     copyOk?: string;
+    /** Non-default accounts and remote clients: show status/URL/QR, hide login/start/stop. */
+    readOnly?: boolean;
+    /** Why the controls are hidden (wrong account vs. not on the hub machine). */
+    readOnlyNote?: string;
+    /** Shown next to `readOnlyNote` when the hub panel can take over. */
+    hubPanelUrl?: string;
     onLogin: () => void;
     onLogout: () => void;
     onToggleShare: () => void;
@@ -32,6 +40,13 @@
   const publicUrl = $derived(
     status === "running" ? remote?.publicUrl?.trim() || null : null,
   );
+  /**
+   * Il QR mostra il tunnel quando c'e', altrimenti l'indirizzo in rete locale.
+   * Prima esisteva solo per il tunnel, e chi installava l'APK in casa — il caso
+   * normale — non aveva niente da inquadrare e doveva copiare l'IP a mano.
+   */
+  const qrUrl = $derived(publicUrl ?? lanUrl);
+  const qrIsPublic = $derived(Boolean(publicUrl));
   const loggedIn = $derived(Boolean(remote?.cloudflareLoggedIn));
   const errText = $derived(error || remote?.error || "");
   const cloudflaredOk = $derived(remote?.cloudflaredAvailable !== false);
@@ -80,32 +95,50 @@
       <p class="hint">{t("settings.networkNoUrl")}</p>
     {/if}
 
-    <ActionRow>
-      <Button
-        variant="ghost"
-        class={loggedIn ? "is-remote-on" : ""}
-        disabled={busy}
-        onmouseenter={() => (loginHover = true)}
-        onmouseleave={() => (loginHover = false)}
-        onclick={() => (loggedIn ? onLogout() : onLogin())}
-      >
-        {loginLabel}
-      </Button>
-      <Button
-        variant={status === "running" || status === "starting" ? "secondary" : "primary"}
-        class={status === "starting"
-          ? "is-remote-starting"
-          : status === "running"
-            ? "is-remote-on"
-            : ""}
-        disabled={busy}
-        onmouseenter={() => (shareHover = true)}
-        onmouseleave={() => (shareHover = false)}
-        onclick={() => onToggleShare()}
-      >
-        {shareLabel}
-      </Button>
-    </ActionRow>
+    {#if readOnly}
+      <p class="hint">
+        {readOnlyNote || t("settings.defaultAccountOnly")}
+        {#if hubPanelUrl}
+          {" "}
+          <a
+            class="remote-access__link"
+            href={hubPanelUrl}
+            target="_blank"
+            rel="noopener noreferrer">{t("settings.openHubPanel")}</a
+          >
+        {/if}
+      </p>
+      {#if loggedIn}
+        <p class="hint">{t("settings.remoteLoginDone")}</p>
+      {/if}
+    {:else}
+      <ActionRow>
+        <Button
+          variant="ghost"
+          class={loggedIn ? "is-remote-on" : ""}
+          disabled={busy}
+          onmouseenter={() => (loginHover = true)}
+          onmouseleave={() => (loginHover = false)}
+          onclick={() => (loggedIn ? onLogout() : onLogin())}
+        >
+          {loginLabel}
+        </Button>
+        <Button
+          variant={status === "running" || status === "starting" ? "secondary" : "primary"}
+          class={status === "starting"
+            ? "is-remote-starting"
+            : status === "running"
+              ? "is-remote-on"
+              : ""}
+          disabled={busy}
+          onmouseenter={() => (shareHover = true)}
+          onmouseleave={() => (shareHover = false)}
+          onclick={() => onToggleShare()}
+        >
+          {shareLabel}
+        </Button>
+      </ActionRow>
+    {/if}
 
     {#if status === "running" && publicUrl}
       <p class="hint">
@@ -129,22 +162,25 @@
     {/if}
   </div>
 
-  {#if status === "running" && publicUrl}
+  {#if qrUrl}
     <div class="remote-access__qr-wrap">
       <button
         type="button"
         class="remote-access__qr"
         title={t("settings.remoteQrCopyTitle")}
-        aria-label={t("settings.remoteQrCopyAria", { url: publicUrl })}
-        onclick={() => onCopyUrl(publicUrl)}
+        aria-label={t("settings.remoteQrCopyAria", { url: qrUrl })}
+        onclick={() => onCopyUrl(qrUrl)}
       >
         <QrCodeImg
           class="remote-access__qr-img"
-          value={publicUrl}
+          value={qrUrl}
           size={220}
-          alt={t("settings.remoteQrAlt", { url: publicUrl })}
+          alt={t("settings.remoteQrAlt", { url: qrUrl })}
         />
       </button>
+      <p class="hint remote-access__qr-caption">
+        {qrIsPublic ? t("settings.remoteQrPublic") : t("settings.remoteQrLan")}
+      </p>
       {#if copyOk}
         <p class="hint remote-access__qr-ok">{copyOk}</p>
       {/if}
@@ -215,14 +251,13 @@
     outline-offset: 2px;
   }
 
-  .remote-access__qr :global(img),
-  .remote-access__qr-img {
+  .remote-access__qr :global(img) {
     display: block;
     width: min(160px, 42vw);
     height: auto;
     aspect-ratio: 1 / 1;
     object-fit: contain;
-    border-radius: 0.45rem;
+    border-radius: var(--rk-radius);
   }
 
   .remote-access__qr-ok {
@@ -231,6 +266,13 @@
     max-width: min(180px, 70vw);
     color: var(--rk-accent);
     font-weight: 650;
+  }
+
+  .remote-access__qr-caption {
+    margin: 0;
+    text-align: center;
+    max-width: min(180px, 70vw);
+    font-size: var(--rk-fs-xs);
   }
 
   .remote-access :global(.rk-btn.is-remote-on) {
@@ -262,12 +304,13 @@
       justify-self: end;
     }
 
-    .remote-access__qr-ok {
+    .remote-access__qr-ok,
+    .remote-access__qr-caption {
       text-align: right;
     }
   }
 
-  @media (max-width: 719px) {
+  @media (max-width: 719.98px) {
     .remote-access :global(.rk-actions) {
       flex-direction: column;
       align-items: stretch;

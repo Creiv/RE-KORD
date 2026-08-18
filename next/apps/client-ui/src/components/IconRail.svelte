@@ -127,8 +127,8 @@
 <style>
   .rail {
     grid-row: 1 / 3;
-    width: var(--rk-side-w);
-    min-width: var(--rk-side-w);
+    width: var(--rk-rail-w);
+    min-width: var(--rk-rail-w);
     height: 100dvh;
     position: sticky;
     top: 0;
@@ -138,7 +138,8 @@
     display: flex;
     flex-direction: column;
     align-items: stretch;
-    padding: 0;
+    /* Il rail è il bordo sinistro dello schermo: in orizzontale la tacca cade qui. */
+    padding: 0 0 0 env(safe-area-inset-left, 0px);
     z-index: var(--rk-z-sidebar);
     overflow: hidden;
   }
@@ -154,10 +155,10 @@
     flex: 1 1 auto;
     overflow-y: auto;
     overflow-x: hidden;
-    padding: var(--rk-space-2) 0 var(--rk-space-3);
+    padding: var(--rk-space-xs) 0 var(--rk-space-md);
     display: flex;
     flex-direction: column;
-    gap: var(--rk-space-4);
+    gap: var(--rk-space-lg);
     scrollbar-width: none;
   }
 
@@ -189,7 +190,7 @@
     flex-shrink: 0;
   }
 
-  @media (max-width: 1000px) {
+  @media (max-width: 999.98px) {
     .rail {
       display: none;
     }

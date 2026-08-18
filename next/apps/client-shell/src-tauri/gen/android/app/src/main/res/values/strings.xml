@@ -1,0 +1,12 @@
+<resources>
+    <string name="app_name">"RE-KORD"</string>
+    <string name="main_activity_title">"RE-KORD"</string>
+
+    <!-- Notifica media: Android sceglie da se' la lingua, l'italiano sta in values-it. -->
+    <string name="media_channel_name">Playback</string>
+    <string name="media_channel_description">Controls for the track playing now</string>
+    <string name="media_previous">Previous</string>
+    <string name="media_play">Play</string>
+    <string name="media_pause">Pause</string>
+    <string name="media_next">Next</string>
+</resources>

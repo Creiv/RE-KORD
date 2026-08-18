@@ -83,9 +83,7 @@ const THEME_BG_EXTS: &[&str] = &["jpg", "jpeg", "png", "webp", "gif"];
 pub const THEME_BG_MAX_BYTES: usize = 32 * 1024 * 1024;
 
 pub fn account_info_dir(data_dir: &std::path::Path, account: &str) -> PathBuf {
-    data_dir
-        .join("accounts")
-        .join(format!("{account}_info"))
+    data_dir.join("accounts").join(format!("{account}_info"))
 }
 
 /// Default path used when the extension is unknown (jpg). Prefer `find_theme_bg_path`.
@@ -367,10 +365,7 @@ pub fn user_state_from_legacy_json(raw: &str) -> anyhow::Result<UserStateV1> {
         }
     }
 
-    if let Some(arr) = v
-        .get("shuffleExcludedAlbumIds")
-        .and_then(|x| x.as_array())
-    {
+    if let Some(arr) = v.get("shuffleExcludedAlbumIds").and_then(|x| x.as_array()) {
         let mut keys = Vec::new();
         let mut ids = Vec::new();
         for item in arr {
@@ -404,10 +399,7 @@ pub fn user_state_from_legacy_json(raw: &str) -> anyhow::Result<UserStateV1> {
                     rel_paths.push(Value::String(path));
                 }
             }
-            current_index = q
-                .get("currentIndex")
-                .and_then(|x| x.as_u64())
-                .unwrap_or(0);
+            current_index = q.get("currentIndex").and_then(|x| x.as_u64()).unwrap_or(0);
         } else if let Some(tracks) = q.as_array() {
             for t in tracks {
                 let rel = t
@@ -440,7 +432,11 @@ fn load_state(data_dir: &std::path::Path, account: &str) -> UserStateV1 {
     load_user_state(data_dir, account)
 }
 
-fn save_state(data_dir: &std::path::Path, account: &str, state: &UserStateV1) -> anyhow::Result<()> {
+fn save_state(
+    data_dir: &std::path::Path,
+    account: &str,
+    state: &UserStateV1,
+) -> anyhow::Result<()> {
     save_user_state(data_dir, account, state)
 }
 
@@ -457,11 +453,15 @@ pub fn routes() -> Router<AppState> {
     Router::new()
         .route(
             "/api/v1/user-state",
-            get(get_user_state).put(put_user_state).patch(patch_user_state),
+            get(get_user_state)
+                .put(put_user_state)
+                .patch(patch_user_state),
         )
         .route(
             "/api/user-state",
-            get(get_user_state).put(put_user_state).patch(patch_user_state),
+            get(get_user_state)
+                .put(put_user_state)
+                .patch(patch_user_state),
         )
         .route(
             "/api/v1/user-state/custom-theme-bg",
@@ -505,7 +505,10 @@ async fn put_user_state(
     let current = load_state(&data_dir, &account);
     if let Some(expected) = body.expected_revision {
         if expected != current.revision {
-            return err(StatusCode::CONFLICT, format!("revision conflict: have {}", current.revision));
+            return err(
+                StatusCode::CONFLICT,
+                format!("revision conflict: have {}", current.revision),
+            );
         }
     }
     let mut next = body.state;
@@ -546,7 +549,10 @@ async fn patch_user_state(
     let mut current = load_state(&data_dir, &account);
     if let Some(expected) = body.expected_revision {
         if expected != current.revision {
-            return err(StatusCode::CONFLICT, format!("revision conflict: have {}", current.revision));
+            return err(
+                StatusCode::CONFLICT,
+                format!("revision conflict: have {}", current.revision),
+            );
         }
     }
     if let Some(v) = body.play_counts {
@@ -564,6 +570,7 @@ async fn patch_user_state(
     if let Some(v) = body.excluded_album_ids {
         current.excluded_album_ids = v;
     }
+    let settings_touched = body.settings.is_some();
     if let Some(v) = body.settings {
         // Merge keys so a partial settings patch cannot wipe theme/locale/etc.
         for (k, val) in v {
@@ -572,7 +579,17 @@ async fn patch_user_state(
     }
     current.revision = current.revision.saturating_add(1);
     match save_state(&data_dir, &account, &current) {
-        Ok(()) => ok(current),
+        Ok(()) => {
+            if settings_touched {
+                crate::diagnostics::append_activity_with_account(
+                    &data_dir,
+                    "settings",
+                    "settings updated",
+                    Some(&account),
+                );
+            }
+            ok(current)
+        }
         Err(e) => err(StatusCode::INTERNAL_SERVER_ERROR, e.to_string()),
     }
 }

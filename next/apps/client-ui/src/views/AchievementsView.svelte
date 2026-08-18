@@ -1,5 +1,6 @@
 <script lang="ts">
   import { onMount } from "svelte";
+  import { Panel } from "@rekord/ui";
   import UiIcon from "../components/icons/UiIcon.svelte";
   import {
     buildAchievementsSnapshot,
@@ -201,10 +202,9 @@
     </section>
   </header>
 
-  <div class="achievements-page__main view-page__main">
-    <section class="rk-surface-card achievements-board" aria-busy={loading}>
-      <div class="achievements-board__head">
-        <h2>Tutti i badge</h2>
+  <div class="achievements-page__main view-page__main" aria-busy={loading}>
+    <Panel title="Tutti i badge" class="achievements-board">
+      {#snippet actions()}
         <p class="achievements-board__lead">
           {#if loading || !snapshot}
             …
@@ -212,7 +212,7 @@
             {unlocked}/{snapshot.achievements.length}
           {/if}
         </p>
-      </div>
+      {/snippet}
       <ul class="achievements-badge-grid">
         {#each snapshot?.achievements ?? [] as ach (ach.id)}
           <li
@@ -245,6 +245,6 @@
           </li>
         {/each}
       </ul>
-    </section>
+    </Panel>
   </div>
 </div>

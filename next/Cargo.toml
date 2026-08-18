@@ -35,10 +35,12 @@ uuid = { version = "1", features = ["v4", "serde"] }
 walkdir = "2"
 lofty = "0.22"
 http-range-header = "0.4"
-tower = "0.5"
+tower = { version = "0.5", features = ["util"] }
 zip = { version = "2", default-features = false, features = ["deflate"] }
 reqwest = { version = "0.12", default-features = false, features = ["json", "rustls-tls", "multipart", "stream"] }
 futures = "0.3"
 bytes = "1"
 url = "2"
 tokio-stream = "0.1"
+notify = "8"
+image = { version = "0.25", default-features = false, features = ["jpeg", "png", "webp"] }

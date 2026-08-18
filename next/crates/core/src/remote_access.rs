@@ -1,13 +1,14 @@
 //! Remote access via Cloudflare quick tunnel (cloudflared) + LAN URL helpers.
 //! Behaviour mirrors legacy `server/remoteAccess.mjs`.
 
+use crate::perm::PeerAddr;
 use crate::state::AppState;
-use axum::extract::State;
-use axum::http::StatusCode;
+use axum::extract::{Query, State};
+use axum::http::{HeaderMap, StatusCode};
 use axum::response::{IntoResponse, Response};
 use axum::routing::{get, post};
 use axum::{Json, Router};
-use serde::Serialize;
+use serde::{Deserialize, Serialize};
 use serde_json::json;
 use std::net::UdpSocket;
 use std::path::{Path, PathBuf};
@@ -111,6 +112,78 @@ pub fn lan_url_for_port(port: u16) -> Option<String> {
     guess_lan_ip().map(|ip| format!("http://{ip}:{port}"))
 }
 
+/// Extract an IPv4/IPv6 literal from a JSON or plain-text lookup response.
+pub fn parse_public_ip(raw: &str) -> Option<String> {
+    let trimmed = raw.trim();
+    if trimmed.is_empty() {
+        return None;
+    }
+    let candidate = serde_json::from_str::<serde_json::Value>(trimmed)
+        .ok()
+        .and_then(|v| v.get("ip").and_then(|ip| ip.as_str()).map(str::to_string))
+        .unwrap_or_else(|| {
+            trimmed
+                .split_whitespace()
+                .next()
+                .unwrap_or_default()
+                .to_string()
+        });
+    let candidate = candidate.trim();
+    if candidate.is_empty() {
+        return None;
+    }
+    candidate
+        .parse::<std::net::IpAddr>()
+        .ok()
+        .map(|ip| ip.to_string())
+}
+
+const PUBLIC_IP_LOOKUPS: &[&str] = &[
+    "https://api.ipify.org?format=json",
+    "https://api64.ipify.org?format=json",
+    "https://ifconfig.me/ip",
+];
+
+/// WAN address of the host running the hub (best effort, cached 5 minutes).
+pub async fn resolve_public_ip() -> Option<String> {
+    static CACHE: OnceLock<Mutex<(Option<String>, std::time::Instant)>> = OnceLock::new();
+    let cache = CACHE.get_or_init(|| {
+        Mutex::new((
+            None,
+            std::time::Instant::now() - std::time::Duration::from_secs(3600),
+        ))
+    });
+    {
+        let guard = cache.lock().unwrap();
+        if guard.1.elapsed() < std::time::Duration::from_secs(300) {
+            if let Some(ip) = guard.0.clone() {
+                return Some(ip);
+            }
+        }
+    }
+    let client = reqwest::Client::builder()
+        .timeout(std::time::Duration::from_secs(5))
+        .build()
+        .ok()?;
+    for url in PUBLIC_IP_LOOKUPS {
+        let Ok(res) = client.get(*url).send().await else {
+            continue;
+        };
+        if !res.status().is_success() {
+            continue;
+        }
+        let Ok(body) = res.text().await else { continue };
+        if let Some(ip) = parse_public_ip(&body) {
+            let mut guard = cache.lock().unwrap();
+            *guard = (Some(ip.clone()), std::time::Instant::now());
+            return Some(ip);
+        }
+    }
+    let mut guard = cache.lock().unwrap();
+    *guard = (None, std::time::Instant::now());
+    None
+}
+
 /// Extract trycloudflare URL from cloudflared stdout/stderr (may be split across chunks).
 pub fn extract_cloudflare_tunnel_url(buffer: &str) -> Option<String> {
     let lower = buffer.to_ascii_lowercase();
@@ -122,10 +195,7 @@ pub fn extract_cloudflare_tunnel_url(buffer: &str) -> Option<String> {
             let url = &buffer[start..end];
             let host = &url["https://".len()..];
             if let Some(label) = host.strip_suffix(".trycloudflare.com") {
-                if !label.is_empty()
-                    && label
-                        .chars()
-                        .all(|c| c.is_ascii_alphanumeric() || c == '-')
+                if !label.is_empty() && label.chars().all(|c| c.is_ascii_alphanumeric() || c == '-')
                 {
                     return Some(url.to_string());
                 }
@@ -561,17 +631,54 @@ pub fn routes() -> Router<AppState> {
         .route("/api/remote-access/logout", post(remote_logout))
 }
 
-async fn remote_status(State(state): State<AppState>) -> Response {
+#[derive(Debug, Deserialize, Default)]
+struct AccountQuery {
+    #[serde(rename = "accountId")]
+    account_id: Option<String>,
+}
+
+/// Managing the tunnel changes what the host exposes to the internet, so it is
+/// a machine operation.
+fn require_machine_op(
+    state: &AppState,
+    headers: &HeaderMap,
+    q: &AccountQuery,
+    peer: Option<std::net::SocketAddr>,
+) -> Result<(), Response> {
+    crate::perm::require_machine_op(state, headers, q.account_id.as_deref(), peer).map(|_| ())
+}
+
+async fn remote_status(
+    State(state): State<AppState>,
+    headers: HeaderMap,
+    PeerAddr(peer): PeerAddr,
+    Query(q): Query<AccountQuery>,
+) -> Response {
     let cfg = state.config.lock().unwrap().clone();
     let lan = lan_url_for_port(cfg.bind.port());
     let bind = cfg.bind.to_string();
     let data_dir = cfg.data_dir.clone();
-    let mut inner = manager().inner.lock().unwrap();
-    ensure_logged_in_loaded(&mut inner, &data_dir);
-    ok(snapshot_json(&inner, lan, bind))
+    let access = crate::perm::machine_op_status(&state, &headers, q.account_id.as_deref(), peer);
+    let mut snap = {
+        let mut inner = manager().inner.lock().unwrap();
+        ensure_logged_in_loaded(&mut inner, &data_dir);
+        snapshot_json(&inner, lan, bind)
+    };
+    if let Some(obj) = snap.as_object_mut() {
+        obj.insert("machineAccess".into(), access);
+    }
+    ok(snap)
 }
 
-async fn remote_start(State(state): State<AppState>) -> Response {
+async fn remote_start(
+    State(state): State<AppState>,
+    headers: HeaderMap,
+    PeerAddr(peer): PeerAddr,
+    Query(q): Query<AccountQuery>,
+) -> Response {
+    if let Err(e) = require_machine_op(&state, &headers, &q, peer) {
+        return e;
+    }
     let cfg = state.config.lock().unwrap().clone();
     let port = cfg.bind.port();
     let data_dir = cfg.data_dir.clone();
@@ -601,7 +708,15 @@ async fn remote_start(State(state): State<AppState>) -> Response {
     ok(snapshot_json(&inner, lan, bind))
 }
 
-async fn remote_stop(State(state): State<AppState>) -> Response {
+async fn remote_stop(
+    State(state): State<AppState>,
+    headers: HeaderMap,
+    PeerAddr(peer): PeerAddr,
+    Query(q): Query<AccountQuery>,
+) -> Response {
+    if let Err(e) = require_machine_op(&state, &headers, &q, peer) {
+        return e;
+    }
     let cfg = state.config.lock().unwrap().clone();
     let data_dir = cfg.data_dir.clone();
     let lan = lan_url_for_port(cfg.bind.port());
@@ -613,7 +728,15 @@ async fn remote_stop(State(state): State<AppState>) -> Response {
     ok(snapshot_json(&inner, lan, bind))
 }
 
-async fn remote_login(State(state): State<AppState>) -> Response {
+async fn remote_login(
+    State(state): State<AppState>,
+    headers: HeaderMap,
+    PeerAddr(peer): PeerAddr,
+    Query(q): Query<AccountQuery>,
+) -> Response {
+    if let Err(e) = require_machine_op(&state, &headers, &q, peer) {
+        return e;
+    }
     let data_dir = state.config.lock().unwrap().data_dir.clone();
     if let Err(e) = persist_logged_in(&data_dir, true) {
         return err(StatusCode::INTERNAL_SERVER_ERROR, e);
@@ -628,7 +751,15 @@ async fn remote_login(State(state): State<AppState>) -> Response {
     }))
 }
 
-async fn remote_logout(State(state): State<AppState>) -> Response {
+async fn remote_logout(
+    State(state): State<AppState>,
+    headers: HeaderMap,
+    PeerAddr(peer): PeerAddr,
+    Query(q): Query<AccountQuery>,
+) -> Response {
+    if let Err(e) = require_machine_op(&state, &headers, &q, peer) {
+        return e;
+    }
     let cfg = state.config.lock().unwrap().clone();
     let data_dir = cfg.data_dir.clone();
     let lan = lan_url_for_port(cfg.bind.port());

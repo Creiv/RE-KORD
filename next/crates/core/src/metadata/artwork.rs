@@ -193,12 +193,14 @@ async fn coverart_archive(artist: &str, album: &str) -> Result<Vec<ArtworkHit>> 
 
 async fn discogs_art(cfg: &AppConfig, artist: &str, album: &str) -> Result<Vec<ArtworkHit>> {
     let client = client()?;
-    let mut req = client.get("https://api.discogs.com/database/search").query(&[
-        ("artist", artist),
-        ("release_title", album),
-        ("type", "release"),
-        ("per_page", "10"),
-    ]);
+    let mut req = client
+        .get("https://api.discogs.com/database/search")
+        .query(&[
+            ("artist", artist),
+            ("release_title", album),
+            ("type", "release"),
+            ("per_page", "10"),
+        ]);
     if let Some(tok) = &cfg.discogs_token {
         req = req.header("Authorization", format!("Discogs token={tok}"));
     }
@@ -252,14 +254,12 @@ pub async fn search_artwork(
         .map(str::trim)
         .filter(|s| !s.is_empty())
         .map(|s| s.to_string())
-        .or_else(|| {
-            match (artist, album) {
-                (Some(a), Some(b)) if !a.trim().is_empty() && !b.trim().is_empty() => {
-                    Some(format!("{} {}", a.trim(), b.trim()))
-                }
-                (Some(a), _) if !a.trim().is_empty() => Some(a.trim().to_string()),
-                _ => None,
+        .or_else(|| match (artist, album) {
+            (Some(a), Some(b)) if !a.trim().is_empty() && !b.trim().is_empty() => {
+                Some(format!("{} {}", a.trim(), b.trim()))
             }
+            (Some(a), _) if !a.trim().is_empty() => Some(a.trim().to_string()),
+            _ => None,
         })
         .context("q or artist+album required")?;
 

@@ -86,7 +86,7 @@
     position: absolute;
     right: 0;
     bottom: calc(100% + 8px);
-    z-index: 10;
+    z-index: var(--rk-z-popover);
     width: 12rem;
     display: grid;
     gap: 0.45rem;
@@ -114,6 +114,6 @@
   }
 
   strong {
-    font-size: 0.85rem;
+    font-size: var(--rk-fs-sm);
   }
 </style>

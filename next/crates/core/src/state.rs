@@ -16,6 +16,10 @@ pub struct AppState {
     pub scanning: Arc<AtomicBool>,
     /// Active Studio downloads: downloadId → cancel flag.
     pub active_downloads: Arc<Mutex<HashMap<String, Arc<AtomicBool>>>>,
+    /// Filesystem watcher runtime for the music root.
+    pub watcher: crate::watcher::SharedWatcher,
+    /// Background job registry (scan, thumbnails, restore, legacy sync).
+    pub jobs: crate::jobs::SharedJobs,
 }
 
 impl AppState {
@@ -29,6 +33,8 @@ impl AppState {
             modules: Arc::new(modules),
             scanning: Arc::new(AtomicBool::new(false)),
             active_downloads: Arc::new(Mutex::new(HashMap::new())),
+            watcher: Arc::new(crate::watcher::WatcherRuntime::new()),
+            jobs: Arc::new(crate::jobs::JobRegistry::new()),
         })
     }
 
@@ -71,12 +77,20 @@ impl AppState {
 
     /// Run scan on a blocking thread if idle. Used by API and startup autoscan.
     pub async fn run_scan_blocking(&self) -> anyhow::Result<scan::ScanReport> {
+        self.run_scan_mode(scan::ScanMode::Incremental).await
+    }
+
+    pub async fn run_scan_mode(&self, mode: scan::ScanMode) -> anyhow::Result<scan::ScanReport> {
         if !self.try_begin_scan() {
             anyhow::bail!("scan already in progress");
         }
         {
             let data_dir = self.config.lock().unwrap().data_dir.clone();
-            crate::diagnostics::append_activity(&data_dir, "scan", "library scan started");
+            crate::diagnostics::append_activity(
+                &data_dir,
+                "scan",
+                &format!("library scan started ({})", mode.as_str()),
+            );
         }
         let root = {
             let cfg = self.config.lock().unwrap();
@@ -87,7 +101,52 @@ impl AppState {
             anyhow::bail!("music_root not set");
         };
         let db = self.db.clone();
-        let result = tokio::task::spawn_blocking(move || scan::scan_library(&db, &root)).await;
+        let data_dir = self.config.lock().unwrap().data_dir.clone();
+        let job = self
+            .jobs
+            .start("scan", &format!("Scan libreria ({})", mode.as_str()), false);
+        let result = tokio::task::spawn_blocking(move || {
+            job.message("indicizzazione file");
+            let report = scan::scan_library_with(&db, &root, mode)?;
+            job.progress(0.8, "metadati legacy");
+            // After every scan, fill gaps from legacy library DB / sidecars (never wipe richer hub data).
+            match crate::backup::sync_restored_library_metadata(&db, &root) {
+                Ok((albums, tracks)) => {
+                    let _ = db.clear_weak_studio_placeholders();
+                    if albums > 0 || tracks > 0 {
+                        info!(
+                            album_meta_merged = albums,
+                            track_meta_merged = tracks,
+                            "merged legacy studio metadata after scan"
+                        );
+                    }
+                }
+                Err(e) => warn!(error = %e, "legacy metadata sync after scan failed"),
+            }
+            // Personal moods: fill missing keys only (do not clobber next-only edits).
+            match crate::backup::import_legacy_account_user_state(
+                &data_dir,
+                &root,
+                crate::backup::MoodImportMode::FillEmpty,
+            ) {
+                Ok((accounts, moods)) => {
+                    if accounts > 0 {
+                        info!(
+                            accounts_moods_synced = accounts,
+                            moods_imported = moods,
+                            "filled missing legacy personal moods after scan"
+                        );
+                    }
+                }
+                Err(e) => warn!(error = %e, "legacy mood sync after scan failed"),
+            }
+            job.finish(format!(
+                "{} tracce indicizzate, {} rimosse",
+                report.indexed_tracks, report.removed_tracks
+            ));
+            Ok(report)
+        })
+        .await;
         self.end_scan();
         match result {
             Ok(inner) => inner,

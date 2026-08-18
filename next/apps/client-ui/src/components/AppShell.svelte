@@ -1,8 +1,11 @@
 <script lang="ts">
   import { onMount } from "svelte";
-  import { Banner } from "@rekord/ui";
+  import { Banner, Button } from "@rekord/ui";
+  import { connectGate } from "../lib/connect.svelte";
+  import { t } from "../lib/i18n.svelte";
   import { player } from "../lib/player";
   import { session } from "../lib/session.svelte";
+  import { trackViewportMetrics } from "../lib/viewportMetrics";
   import AchievementsView from "../views/AchievementsView.svelte";
   import DashboardView from "../views/DashboardView.svelte";
   import FavoritesView from "../views/FavoritesView.svelte";
@@ -18,6 +21,7 @@
   import IconRail from "./IconRail.svelte";
   import MobileBottomNav from "./MobileBottomNav.svelte";
   import PlayerDock from "./PlayerDock.svelte";
+  import ToastStack from "./ToastStack.svelte";
   import TopBar from "./TopBar.svelte";
 
   function isTypingTarget(el: EventTarget | null): boolean {
@@ -26,6 +30,8 @@
     if (tag === "INPUT" || tag === "TEXTAREA" || tag === "SELECT") return true;
     return el.isContentEditable;
   }
+
+  onMount(trackViewportMetrics);
 
   onMount(() => {
     const onKey = (e: KeyboardEvent) => {
@@ -74,7 +80,7 @@
 </script>
 
 <div class="shell" class:has-dock={session.hasQueue}>
-  <IconRail active={session.view} onnavigate={(id) => session.navigate(id)} />
+  <IconRail active={session.view} onnavigate={(id) => session.activateNav(id)} />
 
   <div class="main-col">
     <TopBar status={session.status} />
@@ -83,12 +89,25 @@
       <div class="inner">
         {#if session.error}
           <Banner tone="error">{session.error}</Banner>
+          {#if session.status === "offline"}
+            <!-- Sul telefono l'hub cambia indirizzo appena il router lo rinumera: da
+                 qui si riapre la procedura, invece di cercare la voce in Impostazioni. -->
+            <div class="offline-out">
+              <Button variant="ghost" onclick={() => connectGate.open()}>
+                {t("settings.changeHub")}
+              </Button>
+            </div>
+          {/if}
         {/if}
 
         {#if session.view === "dashboard"}
-          <DashboardView />
+          {#key session.dashboardHomeTick}
+            <DashboardView />
+          {/key}
         {:else if session.view === "studio"}
-          <StudioView />
+          {#key session.studioHomeTick}
+            <StudioView />
+          {/key}
         {:else if session.view === "library"}
           <LibraryView />
         {:else if session.view === "plectr"}
@@ -106,7 +125,9 @@
         {:else if session.view === "achievements"}
           <AchievementsView />
         {:else}
-          <SettingsView />
+          {#key session.settingsHomeTick}
+            <SettingsView />
+          {/key}
         {/if}
       </div>
     </main>
@@ -147,14 +168,15 @@
     />
   {/if}
 
-  <MobileBottomNav active={session.view} onnavigate={(id) => session.navigate(id)} />
+  <MobileBottomNav active={session.view} onnavigate={(id) => session.activateNav(id)} />
   <EditDialogs />
+  <ToastStack />
 </div>
 
 <style>
   .shell {
     display: grid;
-    grid-template-columns: var(--rk-side-w) 1fr;
+    grid-template-columns: var(--rk-rail-w) 1fr;
     grid-template-rows: 1fr auto;
     height: 100dvh;
     max-height: 100dvh;
@@ -173,18 +195,26 @@
     flex: 1 1 auto;
     min-height: 0;
     overflow: auto;
-    padding: var(--rk-space-5) 1.25rem 1.25rem;
+    padding: var(--rk-page-pad-y) var(--rk-page-pad-r) var(--rk-page-pad-x)
+      var(--rk-page-pad-l);
     scrollbar-gutter: stable;
+    /* Il rimbalzo di fine lista resta qui: non deve passare alla shell fissa. */
+    overscroll-behavior: contain;
   }
 
   /* Clear fixed PlayerDock — parity with 5.x --content-pad-bottom when dock visible */
   .shell.has-dock .content {
     padding-bottom: calc(
-      env(safe-area-inset-bottom, 0px) + var(--rk-dock-h) + 1.25rem
+      env(safe-area-inset-bottom, 0px) + var(--rk-dock-h) + var(--rk-page-pad-x)
     );
     scroll-padding-bottom: calc(
-      env(safe-area-inset-bottom, 0px) + var(--rk-dock-h) + 1.25rem
+      env(safe-area-inset-bottom, 0px) + var(--rk-dock-h) + var(--rk-page-pad-x)
     );
+  }
+
+  .offline-out {
+    display: flex;
+    justify-content: flex-start;
   }
 
   .inner {
@@ -207,7 +237,7 @@
     margin-bottom: 0;
   }
 
-  @media (max-width: 1000px) {
+  @media (max-width: 999.98px) {
     .shell {
       grid-template-columns: 1fr;
       grid-template-rows: 1fr auto;
@@ -216,16 +246,12 @@
     .shell.has-dock .content {
       padding-bottom: calc(
         env(safe-area-inset-bottom, 0px) + var(--rk-dock-h) + var(--rk-mobile-nav-h) +
-          1.05rem
+          var(--rk-page-pad-x)
       );
       scroll-padding-bottom: calc(
         env(safe-area-inset-bottom, 0px) + var(--rk-dock-h) + var(--rk-mobile-nav-h) +
-          1.05rem
+          var(--rk-page-pad-x)
       );
-    }
-
-    .content {
-      padding-inline: 1rem;
     }
   }
 </style>

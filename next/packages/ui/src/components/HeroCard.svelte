@@ -32,15 +32,9 @@
     padding: 0.75rem 0.95rem;
     border: 1px solid var(--rk-line);
     border-radius: var(--rk-radius);
-    /* Ultimo layer = bg: opaco anche se --rk-surface-2 è rgba. */
+    /* Stesso composite delle altre schede (Panel / surface-card); banda accent in glass-surfaces.css. */
     background:
-      radial-gradient(ellipse at 12% 20%, var(--rk-page-glow-1), transparent 55%),
-      radial-gradient(ellipse at 88% 0%, var(--rk-page-glow-2), transparent 45%),
-      linear-gradient(
-        135deg,
-        color-mix(in srgb, var(--rk-accent) 10%, var(--rk-surface-2)),
-        var(--rk-surface-2) 55%
-      ),
+      linear-gradient(var(--rk-surface-2), var(--rk-surface-2)),
       var(--rk-bg);
     box-shadow: var(--rk-shadow);
     margin-bottom: 0;
@@ -50,10 +44,10 @@
     margin: 0;
     text-transform: uppercase;
     letter-spacing: 0.1em;
-    font-size: 0.68rem;
+    font-size: var(--rk-fs-eyebrow);
     font-weight: 700;
     color: color-mix(in srgb, var(--rk-accent-2) 70%, var(--rk-muted) 30%);
-    line-height: 1.2;
+    line-height: var(--rk-lh-tight);
   }
 
   h1 {
@@ -61,7 +55,7 @@
     font-size: clamp(1.2rem, 2vw, 1.55rem);
     font-weight: 800;
     letter-spacing: -0.03em;
-    line-height: 1.15;
+    line-height: var(--rk-lh-tight);
   }
 
   .actions {

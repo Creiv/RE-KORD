@@ -17,7 +17,7 @@
   .rk-field {
     display: grid;
     gap: 0.35rem;
-    font-size: 0.9rem;
+    font-size: var(--rk-fs-md);
     color: var(--rk-muted);
     margin-bottom: 0.65rem;
   }

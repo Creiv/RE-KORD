@@ -24,6 +24,8 @@
   --rk-focus: color-mix(in srgb, var(--rk-accent-2) 65%, white 20%);
   --rk-danger: #f87171;
   --rk-danger-soft: rgba(248, 113, 113, 0.12);
+  /* Hearts and favourite counters: same red as danger, different meaning. */
+  --rk-favorite: var(--rk-danger);
   --rk-ok: #2e7d32;
   --rk-ok-soft: rgba(46, 125, 50, 0.14);
   --rk-glow: rgba(255, 143, 92, 0.08);
@@ -43,27 +45,78 @@
   --rk-radius: 6px;
   --rk-radius-lg: 8px;
   --rk-radius-xl: 10px;
-  --rk-radius-pill: 6px;
+  --rk-radius-2xl: 16px;
+  /* Anything meant to be a capsule: chips, dots, scrollbar thumbs, rings. */
+  --rk-radius-round: 999px;
   /* Cover art — modest radius (parity with 5.x --radius-lg on compact covers) */
   --rk-radius-cover: 8px;
+  /* Elevation: 1 for resting surfaces, 2 for lifted ones, 3 for overlays. */
   --rk-shadow: 0 1px 0 rgba(0, 0, 0, 0.35), 0 2px 10px rgba(0, 0, 0, 0.22);
   --rk-shadow-2: 0 4px 18px rgba(0, 0, 0, 0.28);
+  --rk-shadow-3: 0 14px 30px color-mix(in srgb, var(--rk-bg) 70%, transparent);
   --rk-font: "Inter", system-ui, -apple-system, sans-serif;
   --rk-display: "Inter", system-ui, -apple-system, sans-serif;
   --rk-mono: "JetBrains Mono", ui-monospace, monospace;
   --rk-badge-font: "Space Grotesk", var(--rk-font);
+  /* Type scale. Every piece of text picks a rung; sizes tied to a graphic (cover
+     initials, wordmark, big counters, fluid hero type) stay local on purpose. */
+  --rk-fs-4xs: 0.6rem;
+  --rk-fs-3xs: 0.68rem;
+  --rk-fs-2xs: 0.72rem;
+  --rk-fs-xs: 0.78rem;
+  --rk-fs-sm: 0.85rem;
+  --rk-fs-md: 0.92rem;
+  --rk-fs-base: 1rem;
+  --rk-fs-lg: 1.1rem;
+  --rk-fs-xl: 1.3rem;
+  --rk-fs-2xl: 1.55rem;
+  --rk-fs-3xl: 1.85rem;
+  /* Heading roles, so the hierarchy is stated once: the page toolbar owns the
+     largest title, the topbar and sub-sections sit one rung below it. */
+  --rk-fs-title: var(--rk-fs-xl);
+  --rk-fs-subtitle: var(--rk-fs-lg);
+  --rk-fs-eyebrow: var(--rk-fs-3xs);
+  --rk-lh-tight: 1.2;
+  --rk-lh-snug: 1.3;
+  --rk-lh: 1.45;
   /* Player dock bar height — measured at runtime; fallback until first paint */
-  --rk-dock-h: 96px;
+  --rk-dock-h: 7.5rem;
   --rk-mobile-nav-h: 58px;
   --rk-side-w: 56px;
   --rk-header-h: 56px;
   --rk-content-max: 1360px;
-  --rk-space-1: 0.25rem;
-  --rk-space-2: 0.375rem;
-  --rk-space-3: 0.625rem;
-  --rk-space-4: 0.875rem;
-  --rk-space-5: 1.125rem;
-  --rk-space-6: 1.5rem;
+  /* Altezza utile della finestra. `interactive-widget=overlays-content` fa sì che
+     la tastiera virtuale copra la pagina senza rimpicciolire il viewport, quindi
+     dvh non la vede: lib/viewportMetrics.ts riscrive questa variabile con
+     l'altezza del visual viewport. Chi deve stare sopra la tastiera (dialoghi,
+     fogli) misura su questa e non su dvh. */
+  --rk-app-vh: 100dvh;
+  /* Controls: buttons and fields share one height so they line up in a row. */
+  --rk-control-h: 2.25rem;
+  --rk-control-h-sm: 2rem;
+  /* Bottom sheet: how much backdrop stays above it, so there is always somewhere
+     to tap outside. See styles/sheet.css. */
+  --rk-sheet-top-gap: 2.5rem;
+  /* Touch: on a coarse pointer every standalone control grows to 44px. Icon
+     clusters inside list rows use the smaller rung — at 44px a track row would
+     be a third taller and fewer rows fit the screen (same call as 5.x). */
+  --rk-tap-min: 44px;
+  --rk-tap-row: 40px;
+  --rk-control-pad-y: 0.42rem;
+  --rk-control-pad-x: 0.85rem;
+  /* Same vertical padding as buttons: a field next to a button lines up. */
+  --rk-field-pad-y: 0.42rem;
+  --rk-field-pad-x: 0.72rem;
+  /* Spacing rungs, named after size instead of an index so a gap says how big it
+     is. The values are the ones the UI already reaches for by hand. */
+  --rk-space-3xs: 0.15rem;
+  --rk-space-2xs: 0.25rem;
+  --rk-space-xs: 0.35rem;
+  --rk-space-sm: 0.45rem;
+  --rk-space-md: 0.55rem;
+  --rk-space-lg: 0.75rem;
+  --rk-space-xl: 1rem;
+  --rk-space-2xl: 1.5rem;
   /* Gap verticale tra schede/sezioni maggiori (hero ↔ body, toolbar ↔ lista, …) */
   --rk-section-gap: 0.65rem;
   --rk-cta: linear-gradient(
@@ -71,11 +124,19 @@
     var(--rk-accent),
     color-mix(in srgb, var(--rk-accent-2) 80%, white 4%)
   );
+  /* Stacking ladder. Anything that has to win against something outside its own
+     component picks a rung; ordering that only matters between siblings of one
+     component (a ::before under its own card) keeps a bare 1 or -1. */
   --rk-z-sticky: 10;
   --rk-z-sidebar: 20;
   --rk-z-player: 25;
   --rk-z-nav: 35;
+  /* Menus, dropdowns and tooltips anchored to page content: above the fixed
+     chrome, because an open menu must never be half-hidden by it. */
+  --rk-z-popover: 40;
   --rk-z-modal: 120;
+  /* Toasts sit above modals: they report what a dialog action just did. */
+  --rk-z-toast: 260;
   /* Fullscreen Listen viz clears the fixed player dock (parity with 5.x) */
   --viz-expanded-bottom-clear: calc(var(--rk-dock-h) + 0.4rem);
   color-scheme: dark;
@@ -88,11 +149,13 @@
   --rk-accent-soft: color-mix(in srgb, var(--rk-accent) 14%, transparent);
 }
 
-@media (max-width: 1000px) {
+/* Cromatura mobile: stessa soglia xxl del client (vedi styles/responsive.css e
+   lib/breakpoints.ts), scritta con la convenzione `N - 0.02` verso il basso. */
+@media (max-width: 999.98px) {
   :root {
     --rk-side-w: 0px;
-    /* Stacked transport row — parity with 5.x --bar-h: 11rem */
-    --rk-dock-h: 11rem;
+    /* Compact phone dock: one row plus the seek line (measured at runtime). */
+    --rk-dock-h: 6.75rem;
     --viz-expanded-bottom-clear: calc(
       var(--rk-dock-h) + var(--rk-mobile-nav-h) + 0.2rem
     );
@@ -116,7 +179,7 @@
 
 .rk-scroll::-webkit-scrollbar-thumb {
   background: color-mix(in srgb, var(--rk-muted) 42%, transparent);
-  border-radius: 999px;
+  border-radius: var(--rk-radius-round);
   border: 2px solid transparent;
   background-clip: padding-box;
 }

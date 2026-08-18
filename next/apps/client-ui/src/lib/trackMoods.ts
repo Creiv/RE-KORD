@@ -99,16 +99,25 @@ export function normalizeMoodIds(raw: unknown): TrackMoodId[] {
   return out;
 }
 
-/** Mood salvati utente, altrimenti preview grafica. */
+/**
+ * Mood personali salvati (rel_path preferito; id numerico solo legacy client).
+ * Nessun fallback “preview”: senza salvataggio → lista vuota (i preview restano
+ * solo per tile decorative via `previewMoods`).
+ */
 export function resolveTrackMoods(
   trackId: number,
   relPath: string,
   saved?: Record<string, string[]>,
 ): TrackMoodId[] {
   const map = saved ?? {};
-  const fromPrefs = normalizeMoodIds(map[String(trackId)] ?? map[relPath]);
-  if (map[String(trackId)] != null || map[relPath] != null) return fromPrefs;
-  return previewMoods(relPath);
+  if (Object.prototype.hasOwnProperty.call(map, relPath)) {
+    return normalizeMoodIds(map[relPath]);
+  }
+  const idKey = String(trackId);
+  if (Object.prototype.hasOwnProperty.call(map, idKey)) {
+    return normalizeMoodIds(map[idKey]);
+  }
+  return [];
 }
 
 export function trackMatchesMoodFilter(
@@ -136,6 +145,35 @@ export function albumGenre(album: { genre?: string | null } | null | undefined):
   return g || null;
 }
 
+/**
+ * Legacy `trackHasFileMeta`: brano “ok” se ha genere o data uscita.
+ * Usato per badge note e alert “brani senza meta”.
+ */
+export function trackHasFileMeta(
+  track: { genre?: string | null; release_date?: string | null } | null | undefined,
+): boolean {
+  if (!track) return false;
+  if (trackGenre(track)) return true;
+  return Boolean(track.release_date?.trim());
+}
+
+/**
+ * Legacy `hasAlbumMeta`: sidecar/studio meta album applicata.
+ * Fallback su campi album-level se il flag non è ancora popolato.
+ */
+export function albumHasAlbumMeta(album: {
+  has_album_meta?: boolean;
+  release_date?: string | null;
+  label?: string | null;
+  country?: string | null;
+} | null | undefined): boolean {
+  if (!album) return false;
+  if (album.has_album_meta) return true;
+  return Boolean(
+    album.release_date?.trim() || album.label?.trim() || album.country?.trim(),
+  );
+}
+
 /** Year from release_date (`YYYY…` or full date). */
 export function releaseYear(
   releaseDate: string | null | undefined,
@@ -152,19 +190,29 @@ export function trackYear(
   return releaseYear(track?.release_date) || releaseYear(album?.release_date);
 }
 
-/** @deprecated Use trackGenre / albumGenre — kept for call-site migration. */
-export function previewGenre(_seed: string): string | null {
-  return null;
+/** Value for `<input type="date">` — accepts ISO date or year-only (`2024` → `2024-01-01`). */
+export function toDateInputValue(raw: string | null | undefined): string {
+  if (!raw?.trim()) return "";
+  const s = raw.trim();
+  if (/^\d{4}-\d{2}-\d{2}/.test(s)) return s.slice(0, 10);
+  if (/^\d{4}$/.test(s)) return `${s}-01-01`;
+  const d = new Date(s);
+  if (!Number.isNaN(d.getTime())) return d.toISOString().slice(0, 10);
+  return "";
 }
 
-/** @deprecated Use trackYear / releaseYear. */
-export function previewYear(_seed: string): string | null {
-  return null;
-}
-
-export function previewLabel(seed: string): string | null {
-  void seed;
-  return null;
+/** Display format dd-mm-yyyy (legacy `fmtDate`). */
+export function fmtDate(d: string | null | undefined): string {
+  if (!d) return "—";
+  const v = String(d).trim();
+  if (!v) return "—";
+  const p = v.match(/^(\d{4})-(\d{2})-(\d{2})/);
+  if (p) return `${p[3]}-${p[2]}-${p[1]}`;
+  if (/^\d{4}$/.test(v)) return v;
+  const dt = new Date(v);
+  if (Number.isNaN(dt.getTime())) return v;
+  const pad = (n: number) => String(n).padStart(2, "0");
+  return `${pad(dt.getDate())}-${pad(dt.getMonth() + 1)}-${dt.getFullYear()}`;
 }
 
 export function lyricsKind(

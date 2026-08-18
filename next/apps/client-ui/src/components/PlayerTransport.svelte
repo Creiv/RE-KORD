@@ -1,5 +1,6 @@
 <script lang="ts">
   import { IconButton } from "@rekord/ui";
+  import { t } from "../lib/i18n.svelte";
   import type { RepeatMode } from "../lib/player";
   import UiIcon from "./icons/UiIcon.svelte";
 
@@ -35,23 +36,34 @@
 </script>
 
 <div class="transport">
-  <IconButton bare tone="danger" label="Preferito" active={favorited} onclick={ontoggleFavorite}>
+  <IconButton
+    bare
+    tone="danger"
+    label={t("player.favorite")}
+    active={favorited}
+    onclick={ontoggleFavorite}
+  >
     <UiIcon name="favorite" />
   </IconButton>
-  <IconButton bare label="Repeat" active={repeat !== "off"} onclick={oncycleRepeat}>
+  <IconButton
+    bare
+    label={t("player.repeat")}
+    active={repeat !== "off"}
+    onclick={oncycleRepeat}
+  >
     <UiIcon name="repeat" />
     {#if repeat === "one"}<span class="one">1</span>{/if}
   </IconButton>
-  <IconButton bare label="Precedente" onclick={onprev}>
+  <IconButton bare label={t("player.prev")} onclick={onprev}>
     <UiIcon name="prev" />
   </IconButton>
-  <IconButton label="Play/Pause" emphasis onclick={ontoggle}>
+  <IconButton label={t("player.playPause")} emphasis onclick={ontoggle}>
     <UiIcon name={playing ? "pause" : "play"} />
   </IconButton>
-  <IconButton bare label="Successivo" onclick={onnext}>
+  <IconButton bare label={t("player.next")} onclick={onnext}>
     <UiIcon name="next" />
   </IconButton>
-  <IconButton bare label="Shuffle" active={shuffle} onclick={ontoggleShuffle}>
+  <IconButton bare label={t("player.shuffle")} active={shuffle} onclick={ontoggleShuffle}>
     <UiIcon name="shuffle" />
   </IconButton>
   {#if ontoggleExclude}
@@ -59,10 +71,10 @@
       bare
       tone="danger"
       label={excludeLocked
-        ? "Escluso dall’album"
+        ? t("player.excludeLocked")
         : excluded
-          ? "Sblocca shuffle"
-          : "Escludi da shuffle"}
+          ? t("player.excludeOn")
+          : t("player.excludeOff")}
       active={excluded || excludeLocked}
       disabled={excludeLocked}
       onclick={ontoggleExclude}

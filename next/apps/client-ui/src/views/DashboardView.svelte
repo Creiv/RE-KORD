@@ -13,15 +13,20 @@
   import GraphicEq from "../components/icons/GraphicEq.svelte";
   import UiIcon from "../components/icons/UiIcon.svelte";
   import { albumCoverUrl, api, type Track } from "../lib/api";
+  import { matchesDown } from "../lib/breakpoints";
   import { player } from "../lib/player";
   import { session } from "../lib/session.svelte";
+  import { toasts } from "../lib/toasts.svelte";
+  import { t } from "../lib/i18n.svelte";
   import {
     TRACK_MOOD_COLORS,
     TRACK_MOOD_IDS,
     TRACK_MOOD_LABELS,
     albumGenre,
+    albumHasAlbumMeta,
     resolveTrackMoods,
     trackGenre,
+    trackHasFileMeta,
     trackMatchesMoodFilter,
     trackYear,
     type TrackMoodId,
@@ -72,7 +77,7 @@
     if (t.album_id == null) return "";
     // Se l’indice album c’è e dice no-cover, non richiedere (evita 404).
     if (albumHasCover(t.album_id) === false) return "";
-    return albumCoverUrl(t.album_id);
+    return albumCoverUrl(t.album_id, 256);
   }
 
   function radioTileCoverSrc(tile: RadioTile): string {
@@ -210,7 +215,7 @@
       const gap = Number.isFinite(gapRaw) && gapRaw > 0 ? gapRaw : 0.65 * font;
       const minTrackPx = Math.min(SMART_RADIO_MIN_TILE_REM * font, width);
       const rawCols = Math.max(1, Math.floor((width + gap) / (minTrackPx + gap)));
-      const isNarrow = window.matchMedia("(max-width: 719px)").matches;
+      const isNarrow = matchesDown("lg");
       radioColumns = isNarrow
         ? Math.max(3, Math.min(5, rawCols))
         : Math.max(SMART_RADIO_MIN_COLS, Math.min(SMART_RADIO_MAX_COLS, rawCols));
@@ -297,37 +302,41 @@
   const qualityAlerts = $derived.by(() => {
     session.catalogTracks;
     const albumsNoCover = session.albumsWithoutCover;
-    const albumsNoMeta = session.allAlbums.filter((a) => !albumGenre(a)).length;
-    const tracksNoMeta = session.catalogTracks.filter((t) => !trackGenre(t)).length;
+    // Legacy: !hasAlbumMeta && !loose
+    const albumsNoMeta = session.allAlbums.filter(
+      (a) => !a.loose && !albumHasAlbumMeta(a),
+    ).length;
+    // Legacy trackHasFileMeta: genre OR releaseDate
+    const tracksNoMeta = session.catalogTracks.filter((tr) => !trackHasFileMeta(tr)).length;
     const loose = session.allAlbums.filter((a) => a.loose).length;
     return [
       {
         id: "albums-without-cover",
-        label: "Album senza cover",
+        label: t("dashboard.alert.albums-without-cover"),
         value: albumsNoCover,
         icon: "image" as const,
         tone: albumsNoCover > 0 ? ("warn" as const) : ("ok" as const),
       },
       {
         id: "albums-without-meta",
-        label: "Album senza meta",
+        label: t("dashboard.alert.albums-without-meta"),
         value: albumsNoMeta,
         icon: "album" as const,
         tone: albumsNoMeta > 0 ? ("warn" as const) : ("ok" as const),
       },
       {
         id: "tracks-without-meta",
-        label: "Brani senza meta",
+        label: t("dashboard.alert.tracks-without-meta"),
         value: tracksNoMeta,
         icon: "note" as const,
-        tone: tracksNoMeta > 0 ? ("info" as const) : ("ok" as const),
+        tone: tracksNoMeta > 0 ? ("warn" as const) : ("ok" as const),
       },
       {
         id: "loose-albums",
-        label: "Album loose",
+        label: t("dashboard.alert.loose-albums"),
         value: loose,
         icon: "list" as const,
-        tone: "info" as const,
+        tone: loose > 0 ? ("info" as const) : ("ok" as const),
       },
     ];
   });
@@ -368,10 +377,10 @@
       );
     }
     if (!list.length) {
-      session.error = "Nessun brano per questa selezione mix.";
+      toasts.info("Nessun brano per questa selezione mix.");
       return;
     }
-    session.playShuffled(list);
+    session.playPoolShuffle(list);
     session.studioPane = "listen";
     session.navigate("studio");
   }
@@ -417,7 +426,7 @@
       }
       await session.openAlbum(album);
     } catch (e) {
-      session.error = e instanceof Error ? e.message : String(e);
+      toasts.fail(e);
     }
   }
 
@@ -451,7 +460,7 @@
         ? session.favorites
         : [track];
     // Start playback first; defer Studio mount (visualizer) off the press path.
-    player.playRadioFromSeed(track, library);
+    void session.playGlobalRadio(track, library);
     window.setTimeout(() => {
       session.studioPane = "listen";
       session.navigate("studio");
@@ -459,8 +468,8 @@
   }
 </script>
 
-<div class="dashboard-page">
-  <HeroCard title="Libreria, ascolto e strumenti" eyebrow="RE-KORD">
+<div class="view-page dashboard-page">
+  <HeroCard title={t("page.dashboard.title")} eyebrow="RE-KORD">
     <Button class="dashboard-hero-listen-btn" onclick={heroListen}>
       {#if heroStartsShuffle}
         <UiIcon name="shuffle" class="dashboard-hero-listen-btn__ic" />
@@ -486,7 +495,7 @@
     <MetricCard label="Artisti" value={session.stats?.artist_count ?? "—"} />
     <MetricCard label="Album" value={session.stats?.album_count ?? "—"} />
     <MetricCard label="Brani" value={session.stats?.track_count ?? "—"} />
-    <MetricCard label="Alert qualità" value={qualitySum} />
+    <MetricCard label={t("dashboard.metricQuality")} value={qualitySum} />
   </div>
 
   <div class="dashboard-page__main">
@@ -676,6 +685,7 @@
                   class="dashboard-mix-genre-chip"
                   class:is-on={mixGenres.includes(g.name)}
                   aria-pressed={mixGenres.includes(g.name)}
+                  title={g.name}
                   onclick={() => toggleMixGenre(g.name)}
                 >
                   <span class="dashboard-mix-genre-chip__label">{g.name}</span>
@@ -796,11 +806,11 @@
             title: a.name,
             /* Come AlbumListTile dashboard React: niente riga artista */
             metaLine: `${a.track_count} brani${year ? ` · ${year}` : ""}`,
-            coverSrc: a.has_cover ? albumCoverUrl(a.id) : "",
+            coverSrc: a.has_cover ? albumCoverUrl(a.id, 256) : "",
             coverSeed: `${a.artist_name}/${a.name}`,
             favoriteCount: session.favorites.filter((t) => t.album_id === a.id).length,
-            tracksMissingMetaCount: tracks.filter((t) => !trackGenre(t)).length,
-            genreMissing: !albumGenre(a),
+            tracksMissingMetaCount: tracks.filter((tr) => !trackHasFileMeta(tr)).length,
+            genreMissing: !albumHasAlbumMeta(a),
             albumExcluded: albumEx,
             tracksExcludedCount: albumEx ? a.track_count : trackEx,
             loose: a.loose,
@@ -829,7 +839,7 @@
           playlistOptions={session.playlistOptions}
           activeTrackId={session.current?.id ?? null}
           emptyMessage="Nessun preferito ancora"
-          onplay={(track, list) => session.playShuffled(list, track)}
+          onplay={(track) => void session.playGlobalRadio(track)}
           ontoggleFavorite={(track) => void session.toggleFavorite(track)}
           onaddToPlaylist={(playlistId, track) =>
             void session.addToPlaylist(playlistId, track.id)}
@@ -866,7 +876,7 @@
     --dashboard-hero-btn-h: 2.75rem;
     min-height: var(--dashboard-hero-btn-h);
     padding: 0 1.4rem;
-    font-size: 1rem;
+    font-size: var(--rk-fs-base);
     box-sizing: border-box;
   }
 
@@ -889,14 +899,6 @@
     width: 1.2rem;
     height: 1.2rem;
     flex-shrink: 0;
-  }
-
-  /* Gap tra sezioni/schede: token globale --rk-section-gap. */
-  .dashboard-page {
-    display: flex;
-    flex-direction: column;
-    gap: var(--rk-section-gap);
-    min-width: 0;
   }
 
   /* Annulla margin dei componenti UI: il ritmo verticale è solo il gap della pagina. */
@@ -934,15 +936,10 @@
     }
   }
 
-  .muted,
-  .muted-xs {
-    margin: 0.15rem 0 0;
+  .muted {
+    margin: var(--rk-space-3xs) 0 0;
     color: var(--rk-muted);
-    font-size: 0.82rem;
-  }
-
-  .muted-xs {
-    font-size: 0.7rem;
+    font-size: var(--rk-fs-sm);
   }
 
   .tight {
@@ -980,14 +977,14 @@
     place-items: center;
     width: 2.1rem;
     height: 2.1rem;
-    border-radius: 10px;
+    border-radius: var(--rk-radius-xl);
     background: var(--rk-surface);
     color: var(--rk-accent);
   }
 
   .qlab {
     color: var(--rk-muted);
-    font-size: 0.72rem;
+    font-size: var(--rk-fs-2xs);
     text-transform: uppercase;
     letter-spacing: 0.08em;
     font-weight: 650;
@@ -1000,13 +997,13 @@
     line-height: 1;
   }
 
-  @media (max-width: 1000px) {
+  @media (max-width: 999.98px) {
     .metrics {
       grid-template-columns: 1fr 1fr;
     }
   }
 
-  @media (max-width: 560px) {
+  @media (max-width: 559.98px) {
     .metrics {
       grid-template-columns: 1fr;
     }

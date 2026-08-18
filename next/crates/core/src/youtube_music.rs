@@ -2,8 +2,8 @@
 
 use crate::config::AppConfig;
 use crate::ytdlp::{
-    coerce_ytdlp_url, guess_youtube_url_from_entry_id, parse_ytdlp_json, pick_flat_entry_url,
-    playlist_track_count, run_json_probe,
+    coerce_ytdlp_url, guess_youtube_url_from_entry_id, pick_flat_entry_url, playlist_track_count,
+    run_json_probe,
 };
 use anyhow::{bail, Context, Result};
 use serde::Serialize;
@@ -60,7 +60,25 @@ async fn innertube_post(url: &str, body: Value) -> Result<Value> {
     Ok(res.json().await?)
 }
 
-fn extract_runs_text(node: &Value) -> String {
+/// Innertube browse payload for a browseId (album `MPREb_…`, playlist `VL…`, feeds).
+pub(crate) async fn browse_payload(browse_id: &str) -> Result<Value> {
+    let body = json!({
+        "context": innertube_context(),
+        "browseId": browse_id,
+    });
+    innertube_post(YTM_BROWSE_URL, body).await
+}
+
+pub(crate) fn browse_response_title(json: &Value) -> String {
+    extract_runs_text(
+        json.pointer("/header/musicHeaderRenderer/title")
+            .unwrap_or(&Value::Null),
+    )
+    .trim()
+    .to_string()
+}
+
+pub(crate) fn extract_runs_text(node: &Value) -> String {
     if let Some(arr) = node.get("runs").and_then(|v| v.as_array()) {
         return arr
             .iter()
@@ -74,7 +92,7 @@ fn extract_runs_text(node: &Value) -> String {
         .to_string()
 }
 
-fn walk_collect<'a>(node: &'a Value, key: &str, out: &mut Vec<&'a Value>) {
+pub(crate) fn walk_collect<'a>(node: &'a Value, key: &str, out: &mut Vec<&'a Value>) {
     match node {
         Value::Object(map) => {
             if let Some(v) = map.get(key) {
@@ -350,6 +368,141 @@ pub fn is_youtube_music_browse_url(value: &str) -> bool {
         && (u.path().contains("/browse") || u.path().contains("/channel/"))
 }
 
+/// BrowseId da `music.youtube.com/browse/…` o `/channel/…`.
+pub fn browse_id_from_music_browse_page_url(raw: &str) -> Option<String> {
+    let u = url::Url::parse(raw.trim()).ok()?;
+    let h = u
+        .host_str()
+        .unwrap_or("")
+        .trim_start_matches("www.")
+        .to_ascii_lowercase();
+    if h != "music.youtube.com" {
+        return None;
+    }
+    let mut segs = u.path_segments()?;
+    let kind = segs.next()?;
+    if kind != "browse" && kind != "channel" {
+        return None;
+    }
+    let id = segs.next()?.trim();
+    if id.is_empty() {
+        None
+    } else {
+        Some(id.to_string())
+    }
+}
+
+fn album_playlist_id_from_two_row(renderer: &Value) -> Option<String> {
+    let items = renderer
+        .pointer("/menu/menuRenderer/items")
+        .and_then(|v| v.as_array())?;
+    for it in items {
+        let pid = it
+            .pointer(
+                "/menuNavigationItemRenderer/navigationEndpoint/watchPlaylistEndpoint/playlistId",
+            )
+            .and_then(|v| v.as_str())
+            .map(str::trim)
+            .filter(|s| !s.is_empty());
+        if let Some(pid) = pid {
+            if pid.starts_with("OLAK5uy_") {
+                return Some(pid.to_string());
+            }
+        }
+    }
+    for it in items {
+        let pid = it
+            .pointer(
+                "/menuServiceItemRenderer/serviceEndpoint/queueAddEndpoint/queueTarget/playlistId",
+            )
+            .and_then(|v| v.as_str())
+            .map(str::trim)
+            .filter(|s| !s.is_empty());
+        if let Some(pid) = pid {
+            if pid.starts_with("OLAK5uy_") {
+                return Some(pid.to_string());
+            }
+        }
+    }
+    None
+}
+
+fn fallback_browse_url_from_two_row(renderer: &Value) -> (String, String) {
+    let bid = renderer
+        .pointer("/navigationEndpoint/browseEndpoint/browseId")
+        .and_then(|v| v.as_str())
+        .unwrap_or("")
+        .trim()
+        .to_string();
+    if bid.starts_with("MPREb_") {
+        return (
+            bid.clone(),
+            format!("https://music.youtube.com/browse/{bid}"),
+        );
+    }
+    (String::new(), String::new())
+}
+
+fn build_entries_from_browse_json(json: &Value) -> Vec<ReleaseEntry> {
+    let mut buckets = Vec::new();
+    walk_collect(json, "musicTwoRowItemRenderer", &mut buckets);
+    let mut seen = HashSet::new();
+    let mut entries = Vec::new();
+    for r in buckets {
+        let title = extract_runs_text(&r["title"]).trim().to_string();
+        if title.is_empty() {
+            continue;
+        }
+        let (id, url) = if let Some(playlist_id) = album_playlist_id_from_two_row(r) {
+            (
+                playlist_id.clone(),
+                format!("https://music.youtube.com/playlist?list={playlist_id}"),
+            )
+        } else {
+            fallback_browse_url_from_two_row(r)
+        };
+        if id.is_empty() || url.is_empty() {
+            continue;
+        }
+        if !seen.insert(id.clone()) {
+            continue;
+        }
+        entries.push(ReleaseEntry {
+            id,
+            title,
+            url,
+            track_count: None,
+        });
+    }
+    entries
+}
+
+/// Elenco album da pagina music.youtube.com/browse/… via Innertube (come legacy).
+pub async fn releases_list_via_innertube_browse(page_url: &str) -> Result<ReleasesList> {
+    let browse_id = browse_id_from_music_browse_page_url(page_url)
+        .ok_or_else(|| anyhow::anyhow!("Not a YouTube Music browse or channel URL"))?;
+    let data = browse_payload(&browse_id).await?;
+    let list_title = browse_response_title(&data);
+    let entries = build_entries_from_browse_json(&data);
+    if entries.is_empty() {
+        bail!("No releases found on this YouTube Music browse page (Innertube)");
+    }
+    Ok(ReleasesList {
+        list_title: list_title.clone(),
+        uploader: list_title,
+        channel_url: String::new(),
+        entries,
+    })
+}
+
+/// Preferisce Innertube per browse YTM; yt-dlp per tab /releases.
+pub async fn releases_list_for_url(cfg: &AppConfig, url: &str) -> Result<ReleasesList> {
+    if is_youtube_music_browse_url(url) {
+        return releases_list_via_innertube_browse(url).await;
+    }
+    releases_list_via_ytdlp(cfg, url).await
+}
+
 pub async fn releases_list_via_ytdlp(cfg: &AppConfig, url: &str) -> Result<ReleasesList> {
     let data = run_json_probe(cfg, url, 45_000).await?;
     let raw = data
@@ -450,7 +603,9 @@ fn resolve_album_url(renderer: &Value) -> String {
         return format!("https://music.youtube.com/playlist?list={pid}");
     }
     // menu items
-    if let Some(items) = renderer.pointer("/menu/menuRenderer/items").and_then(|v| v.as_array())
+    if let Some(items) = renderer
+        .pointer("/menu/menuRenderer/items")
+        .and_then(|v| v.as_array())
     {
         for it in items {
             let ep = it
@@ -556,8 +711,28 @@ pub async fn flat_playlist_count(cfg: &AppConfig, url: &str) -> Result<u64> {
     Ok(playlist_track_count(&data).unwrap_or(0))
 }
 
-/// Silence unused import warning if parse_ytdlp_json unused in some builds.
-#[allow(dead_code)]
-fn _keep(v: &str) -> Result<Value> {
-    parse_ytdlp_json(v)
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn browse_id_from_skrillex_mpad_url() {
+        let id = browse_id_from_music_browse_page_url(
+            "https://music.youtube.com/browse/MPADUCibXKvuw5PoJVmyZJ4qhDIw",
+        );
+        assert_eq!(id.as_deref(), Some("MPADUCibXKvuw5PoJVmyZJ4qhDIw"));
+    }
+
+    #[test]
+    fn music_browse_and_releases_url_checks() {
+        assert!(is_youtube_music_browse_url(
+            "https://music.youtube.com/browse/MPADUCibXKvuw5PoJVmyZJ4qhDIw"
+        ));
+        assert!(is_youtube_releases_tab_url(
+            "https://www.youtube.com/channel/UCibXKvuw5PoJVmyZJ4qhDIw/releases"
+        ));
+        assert!(!is_youtube_music_browse_url(
+            "https://www.youtube.com/watch?v=dQw4w9WgXcQ"
+        ));
+    }
 }

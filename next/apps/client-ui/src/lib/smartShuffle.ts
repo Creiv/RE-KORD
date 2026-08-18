@@ -13,6 +13,16 @@ export function fisherYatesShuffle<T>(items: readonly T[]): T[] {
   return a;
 }
 
+/** Mantiene [0..currentIdx] e mescola solo la coda successiva (legacy shuffleTailFromCurrent). */
+export function shuffleTailFromCurrent<T>(items: readonly T[], currentIdx: number): T[] {
+  if (items.length <= 1) return [...items];
+  const i = Math.min(Math.max(0, currentIdx), items.length - 1);
+  const prefix = items.slice(0, i + 1);
+  const tail = items.slice(i + 1);
+  if (tail.length < 2) return [...prefix, ...tail];
+  return [...prefix, ...fisherYatesShuffle(tail)];
+}
+
 function spreadConsecutiveArtists(tracks: Track[]): void {
   const n = tracks.length;
   if (n < 2) return;
@@ -42,6 +52,33 @@ function genresFor(track: Track): string[] {
   return g ? [g.toLowerCase()] : [];
 }
 
+export type SmartShuffleOpts = {
+  currentRelPath?: string;
+  currentArtist?: string;
+  recentRelPaths?: ReadonlySet<string>;
+};
+
+export type ShuffleExclusionOpts = {
+  respectExclusions?: boolean;
+  isExcluded?: (track: Track) => boolean;
+};
+
+/**
+ * Regola bloccati: i brani esclusi non entrano nelle code generate, salvo se
+ * si parte esplicitamente da un brano bloccato (allora restano ammessi).
+ */
+export function filterPoolForExclusions(
+  pool: readonly Track[],
+  seed: Track | null,
+  opts?: ShuffleExclusionOpts,
+): Track[] {
+  if (!opts?.respectExclusions || !opts.isExcluded) return [...pool];
+  if (seed && opts.isExcluded(seed)) return [...pool];
+  return pool.filter(
+    (t) => (seed != null && t.rel_path === seed.rel_path) || !opts.isExcluded!(t),
+  );
+}
+
 export function seedSimilarityScore(seed: Track, candidate: Track): number {
   const seedMoods = moodsFor(seed);
   let moodScore = 0;
@@ -64,13 +101,28 @@ export function seedSimilarityScore(seed: Track, candidate: Track): number {
   return moodScore + genreScore + artistBonus;
 }
 
+function sortPoolBySeedSimilarity(
+  seed: Track,
+  pool: readonly Track[],
+  recentRelPaths?: ReadonlySet<string>,
+): Track[] {
+  const scored = pool.map((track) => ({
+    track,
+    score: seedSimilarityScore(seed, track),
+    jitter: Math.random(),
+  }));
+  scored.sort((a, b) => (b.score !== a.score ? b.score - a.score : a.jitter - b.jitter));
+  if (recentRelPaths && recentRelPaths.size > 0) {
+    const fresh = scored.filter((s) => !recentRelPaths.has(s.track.rel_path));
+    const stale = scored.filter((s) => recentRelPaths.has(s.track.rel_path));
+    if (fresh.length > 0) return [...fresh, ...stale].map((s) => s.track);
+  }
+  return scored.map((s) => s.track);
+}
+
 export function buildSmartRandomQueue(
   tracks: readonly Track[],
-  opts: {
-    currentRelPath?: string;
-    currentArtist?: string;
-    recentRelPaths?: ReadonlySet<string>;
-  } = {},
+  opts: SmartShuffleOpts = {},
 ): Track[] {
   if (!tracks.length) return [];
   let a = fisherYatesShuffle(tracks);
@@ -95,26 +147,37 @@ export function buildSmartRandomQueue(
   return a;
 }
 
+/** Seed fisso + smart shuffle del resto del pool (preferiti / genere / mood card). */
+export function buildShuffleQueueFromSeed(
+  seed: Track,
+  pool: readonly Track[],
+  opts: SmartShuffleOpts & ShuffleExclusionOpts = {},
+): Track[] {
+  const filtered = filterPoolForExclusions(pool, seed, opts);
+  const rest = filtered.filter((t) => t.rel_path !== seed.rel_path);
+  if (!rest.length) return [seed];
+  const shuffled = buildSmartRandomQueue(rest, {
+    ...opts,
+    currentRelPath: seed.rel_path,
+    currentArtist: seed.artist_name,
+  });
+  return [seed, ...shuffled].slice(0, CARD_QUEUE_CAP);
+}
+
+/** Smart radio: seed + libreria ordinata per similarità mood/genere. */
 export function buildRadioFromSeed(
   seed: Track,
   library: readonly Track[],
-  opts?: { maxLength?: number; recentRelPaths?: ReadonlySet<string> },
+  opts?: {
+    maxLength?: number;
+    recentRelPaths?: ReadonlySet<string>;
+  } & ShuffleExclusionOpts,
 ): Track[] {
   const cap = Math.max(1, Math.min(opts?.maxLength ?? CARD_QUEUE_CAP, CARD_QUEUE_CAP));
-  const pool = library.filter((t) => t.rel_path !== seed.rel_path);
-  const scored = pool.map((track) => ({
-    track,
-    score: seedSimilarityScore(seed, track),
-    jitter: Math.random(),
-  }));
-  scored.sort((a, b) => (b.score !== a.score ? b.score - a.score : a.jitter - b.jitter));
-  let ordered = scored.map((s) => s.track);
-  const recent = opts?.recentRelPaths;
-  if (recent && recent.size > 0) {
-    const fresh = ordered.filter((t) => !recent.has(t.rel_path));
-    const stale = ordered.filter((t) => recent.has(t.rel_path));
-    if (fresh.length) ordered = [...fresh, ...stale];
-  }
+  const pool = filterPoolForExclusions(library, seed, opts).filter(
+    (t) => t.rel_path !== seed.rel_path,
+  );
+  const ordered = sortPoolBySeedSimilarity(seed, pool, opts?.recentRelPaths);
   const full = [seed, ...ordered];
   spreadConsecutiveArtists(full);
   return full.slice(0, cap);

@@ -6,14 +6,24 @@
   min-width: 0;
 }
 
+/* Un riquadro di una griglia si allarga fin dove arriva il suo contenuto: senza
+   questo, una tabella larga (il log attività) sporge dalla finestra e trascina con
+   sé lo scorrimento orizzontale di tutta la pagina. Chi ha contenuto largo se lo
+   scorre dentro il suo contenitore. */
+.settings-page__body > * {
+  min-width: 0;
+}
+
 .settings-ui-section :global(.rk-field:last-child),
 .settings-player-section :global(.rk-field:last-child) {
   margin-bottom: 0;
 }
 
+/* Panel-head buttons run smaller than a form control. */
 .settings-ui-section.rk-panel .rk-panel__actions .rk-btn {
+  min-height: 1.85rem;
   padding: 0.28rem 0.65rem;
-  font-size: 0.78rem;
+  font-size: var(--rk-fs-xs);
   font-weight: 700;
   letter-spacing: 0.01em;
   text-transform: uppercase;
@@ -76,7 +86,7 @@
   margin-top: 0;
 }
 
-@media (min-width: 760px) {
+@media (min-width: 720px) {
   .settings-theme-glass-row {
     grid-template-columns: repeat(2, minmax(0, 1fr));
     align-items: end;
@@ -97,9 +107,9 @@
   flex-direction: row;
   align-items: center;
   gap: 0.55rem;
-  font-size: 0.86rem;
+  font-size: var(--rk-fs-sm);
   font-weight: 500;
-  line-height: 1.35;
+  line-height: var(--rk-lh-snug);
   color: var(--rk-ink);
   cursor: pointer;
   user-select: none;
@@ -132,7 +142,7 @@
 .settings-glass-opacity__label {
   grid-column: 1 / -1;
   grid-row: 1;
-  font-size: 0.82rem;
+  font-size: var(--rk-fs-sm);
   color: var(--rk-muted-strong);
 }
 
@@ -162,7 +172,7 @@
   text-align: right;
   font-variant-numeric: tabular-nums;
   font: inherit;
-  font-size: 0.9rem;
+  font-size: var(--rk-fs-md);
   padding: 0.35rem 0.4rem;
   border-radius: var(--rk-radius);
   border: 1px solid var(--rk-line);
@@ -181,7 +191,7 @@
 .settings-glass-opacity__unit {
   grid-column: 3;
   grid-row: 2;
-  font-size: 0.82rem;
+  font-size: var(--rk-fs-sm);
   color: var(--rk-muted);
 }
 
@@ -196,13 +206,13 @@
 }
 
 .theme-picker.is-open {
-  z-index: 40;
+  z-index: var(--rk-z-popover);
 }
 
 .rk-panel:has(.theme-picker.is-open) {
   overflow: visible;
   position: relative;
-  z-index: 30;
+  z-index: var(--rk-z-popover);
 }
 
 .theme-picker__btn {
@@ -222,7 +232,7 @@
   color: var(--rk-ink);
   cursor: pointer;
   font: inherit;
-  font-size: 0.92rem;
+  font-size: var(--rk-fs-md);
   text-align: left;
   box-sizing: border-box;
 }
@@ -249,7 +259,7 @@
   height: 12px;
   min-width: 3.4rem;
   max-width: 5rem;
-  border-radius: 999px;
+  border-radius: var(--rk-radius-round);
   overflow: hidden;
   box-shadow:
     0 0 0 1px color-mix(in srgb, var(--rk-ink) 16%, transparent),
@@ -270,7 +280,7 @@
 
 .theme-picker__menu {
   position: absolute;
-  z-index: 50;
+  z-index: var(--rk-z-popover);
   left: 0;
   right: 0;
   top: calc(100% + 4px);
@@ -296,7 +306,7 @@
 .theme-picker__group-label {
   padding: 0.35rem 0.85rem 0.25rem;
   color: var(--rk-muted-strong);
-  font-size: 0.72rem;
+  font-size: var(--rk-fs-2xs);
   font-weight: 800;
   text-transform: uppercase;
   letter-spacing: 0.04em;
@@ -320,7 +330,7 @@
   color: var(--rk-ink);
   cursor: pointer;
   font: inherit;
-  font-size: 0.9rem;
+  font-size: var(--rk-fs-md);
   text-align: left;
   box-sizing: border-box;
 }
@@ -351,7 +361,7 @@
     var(--rk-bg);
   color: var(--rk-ink);
   font: inherit;
-  font-size: 0.88rem;
+  font-size: var(--rk-fs-sm);
   font-weight: 650;
   cursor: pointer;
 }
@@ -366,11 +376,46 @@
 
 /* Activity log — densità da legacy, layout 3 colonne (schema next) */
 .settings-activity-section.rk-panel .rk-panel__actions .rk-btn {
+  min-height: 1.85rem;
   padding: 0.28rem 0.65rem;
-  font-size: 0.78rem;
+  font-size: var(--rk-fs-xs);
   font-weight: 700;
   letter-spacing: 0.01em;
   text-transform: uppercase;
+}
+
+.settings-activity-section .activity-log-filters {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.65rem 1rem;
+  align-items: flex-end;
+  margin-bottom: 0.45rem;
+}
+
+.settings-activity-section .activity-log-filter {
+  display: flex;
+  flex-direction: column;
+  gap: 0.28rem;
+  min-width: 9.5rem;
+}
+
+.settings-activity-section .activity-log-filter--source {
+  min-width: 12rem;
+  flex: 1 1 12rem;
+  max-width: 18rem;
+}
+
+.settings-activity-section .activity-log-filter__label {
+  font-size: var(--rk-fs-2xs);
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--rk-muted);
+}
+
+.settings-activity-section .activity-log-window-hint {
+  margin: 0 0 0.65rem;
+  font-size: var(--rk-fs-xs);
 }
 
 .settings-activity-section .activity-log-scroll {
@@ -387,8 +432,8 @@
 .settings-activity-section .activity-log-table {
   width: 100%;
   border-collapse: collapse;
-  font-size: 0.8rem;
-  line-height: 1.35;
+  font-size: var(--rk-fs-xs);
+  line-height: var(--rk-lh-snug);
 }
 
 .settings-activity-section .activity-log-table th,
@@ -403,7 +448,7 @@
   position: sticky;
   top: 0;
   z-index: 1;
-  font-size: 0.7rem;
+  font-size: var(--rk-fs-2xs);
   font-weight: 700;
   letter-spacing: 0.04em;
   text-transform: uppercase;
@@ -424,7 +469,15 @@
   white-space: nowrap;
   font-variant-numeric: tabular-nums;
   font-family: var(--rk-mono, ui-monospace, monospace);
-  font-size: 0.74rem;
+  font-size: var(--rk-fs-2xs);
+  color: var(--rk-muted-strong);
+}
+
+.settings-activity-section .activity-log-td-account {
+  max-width: 9rem;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
   color: var(--rk-muted-strong);
 }
 
@@ -435,11 +488,11 @@
   text-overflow: ellipsis;
   white-space: nowrap;
   padding: 0.12rem 0.4rem;
-  border-radius: 0.3rem;
+  border-radius: var(--rk-radius-sm);
   border: 1px solid color-mix(in srgb, var(--rk-line) 85%, transparent);
   background: color-mix(in srgb, var(--rk-surface-3) 80%, transparent);
   font-family: var(--rk-mono, ui-monospace, monospace);
-  font-size: 0.66rem;
+  font-size: var(--rk-fs-3xs);
   font-weight: 700;
   letter-spacing: 0.03em;
   text-transform: uppercase;
@@ -475,8 +528,71 @@
   word-break: break-word;
 }
 
-@media (max-width: 640px) {
+/* Telefono e tablet verticale: ogni voce diventa un blocco invece di una riga di
+   tabella. Quattro colonne chiedono 480px e su un telefono ne restano 290: la
+   tabella scorreva di lato e la colonna del dettaglio — l'unica per cui si apre
+   questo pannello — stava fuori dallo schermo. Ora in testa c'è quando insieme al
+   tipo, sotto il messaggio per intero, in fondo l'account. */
+@media (max-width: 719.98px) {
+  .settings-activity-section .activity-log-table,
+  .settings-activity-section .activity-log-table tbody {
+    display: block;
+    width: 100%;
+  }
+
+  /* Le intestazioni restano nel documento per chi legge con lo screen reader, ma
+     non servono più: ogni valore sta al suo posto nel blocco. */
+  .settings-activity-section .activity-log-table thead {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    overflow: hidden;
+    clip-path: inset(50%);
+    white-space: nowrap;
+  }
+
+  .settings-activity-section .activity-log-table tbody tr {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto;
+    grid-template-areas:
+      "time kind"
+      "msg msg"
+      "account account";
+    gap: var(--rk-space-3xs) var(--rk-space-sm);
+    padding: var(--rk-space-sm) var(--rk-space-md);
+    border-bottom: 1px solid color-mix(in srgb, var(--rk-line) 75%, transparent);
+  }
+
+  .settings-activity-section .activity-log-table tbody tr:last-child {
+    border-bottom: none;
+  }
+
+  .settings-activity-section .activity-log-table td {
+    display: block;
+    padding: 0;
+    border-bottom: none;
+  }
+
+  .settings-activity-section .activity-log-td-time {
+    grid-area: time;
+  }
+
+  .settings-activity-section .activity-log-td-kind {
+    grid-area: kind;
+    justify-self: end;
+  }
+
   .settings-activity-section .activity-log-td-msg {
-    max-width: 14rem;
+    grid-area: msg;
+    /* Il minimo da tabella teneva larga la colonna e con essa tutto il pannello,
+       che sporgeva dalla finestra e faceva scorrere la pagina di lato. */
+    min-width: 0;
+    max-width: none;
+  }
+
+  .settings-activity-section .activity-log-td-account {
+    grid-area: account;
+    max-width: 100%;
+    font-size: var(--rk-fs-2xs);
   }
 }

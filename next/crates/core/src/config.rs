@@ -14,6 +14,11 @@ pub struct PersistedSettings {
     pub discogs_token_path: Option<PathBuf>,
     /// Optional override for yt-dlp binary.
     pub ytdlp_path: Option<PathBuf>,
+    /// Watch the music root and re-index incrementally on changes.
+    pub watch_library: Option<bool>,
+    /// Allow host-level operations (library path, scan, credentials, tunnel) from
+    /// non-loopback clients. Off by default: LAN/tunnel clients stay read-only there.
+    pub allow_remote_admin: Option<bool>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -32,6 +37,16 @@ pub struct AppConfig {
     pub discogs_token_from_env: bool,
     #[serde(skip)]
     pub ytdlp_path: Option<PathBuf>,
+    /// Filesystem watcher on the music root (persisted).
+    #[serde(default = "default_watch_library")]
+    pub watch_library: bool,
+    /// Host-level operations allowed from remote clients (persisted).
+    #[serde(default)]
+    pub allow_remote_admin: bool,
+}
+
+fn default_watch_library() -> bool {
+    true
 }
 
 impl AppConfig {
@@ -54,6 +69,8 @@ impl AppConfig {
             discogs_token: None,
             discogs_token_from_env: false,
             ytdlp_path: None,
+            watch_library: true,
+            allow_remote_admin: false,
         }
     }
 
@@ -166,7 +183,30 @@ impl AppConfig {
             self.ytdlp_path = Some(p);
         }
 
+        self.watch_library = match Self::env_first(&["REKORD_WATCH_LIBRARY"]) {
+            Some(v) => !matches!(v.as_str(), "0" | "false" | "off"),
+            None => file.watch_library.unwrap_or(true),
+        };
+        self.allow_remote_admin = match Self::env_first(&["REKORD_ALLOW_REMOTE_ADMIN"]) {
+            Some(v) => matches!(v.as_str(), "1" | "true" | "on"),
+            None => file.allow_remote_admin.unwrap_or(false),
+        };
+
         Ok(())
+    }
+
+    pub fn save_watch_library(&mut self, enabled: bool) -> Result<()> {
+        self.watch_library = enabled;
+        let mut s = self.read_persisted();
+        s.watch_library = Some(enabled);
+        self.write_persisted(&s)
+    }
+
+    pub fn save_allow_remote_admin(&mut self, enabled: bool) -> Result<()> {
+        self.allow_remote_admin = enabled;
+        let mut s = self.read_persisted();
+        s.allow_remote_admin = Some(enabled);
+        self.write_persisted(&s)
     }
 
     pub fn load_persisted_music_root(&mut self) -> Result<()> {
@@ -287,6 +327,8 @@ impl AppConfig {
             "discogsTokenConfigured": self.discogs_token.is_some(),
             "discogsLockedByEnv": self.discogs_token_from_env,
             "discogsWritable": !self.discogs_token_from_env,
+            "watchLibrary": self.watch_library,
+            "allowRemoteAdmin": self.allow_remote_admin,
         })
     }
 }

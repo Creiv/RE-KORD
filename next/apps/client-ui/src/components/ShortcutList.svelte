@@ -80,9 +80,9 @@
     font-family: var(--rk-font);
     font-size: 0.82em;
     font-weight: 650;
-    line-height: 1.2;
+    line-height: var(--rk-lh-tight);
     padding: 0.28em 0.58em;
-    border-radius: 6px;
+    border-radius: var(--rk-radius);
     background: color-mix(in srgb, var(--rk-accent) 13%, var(--rk-surface-3) 87%);
     color: var(--rk-accent);
     border: 1px solid color-mix(in srgb, var(--rk-accent) 34%, var(--rk-line-strong) 66%);
@@ -103,30 +103,20 @@
     min-width: 0;
     text-align: center;
     color: var(--rk-muted);
-    font-size: 0.88rem;
+    font-size: var(--rk-fs-sm);
   }
 
-  @media (min-width: 1100px) {
-    .shortcut-row:nth-child(2n) {
-      border-right: none;
-    }
-
-    .shortcut-row:not(:nth-last-child(-n + 2)) {
-      border-bottom: 1px solid color-mix(in srgb, var(--rk-line) 82%, transparent);
-    }
+  /* Griglia a due colonne: niente bordo destro sulla seconda colonna e riga di
+     separazione tranne che sull'ultima coppia. */
+  .shortcut-row:nth-child(2n) {
+    border-right: none;
   }
 
-  @media (max-width: 1099px) {
-    .shortcut-row:nth-child(2n) {
-      border-right: none;
-    }
-
-    .shortcut-row:not(:nth-last-child(-n + 2)) {
-      border-bottom: 1px solid color-mix(in srgb, var(--rk-line) 82%, transparent);
-    }
+  .shortcut-row:not(:nth-last-child(-n + 2)) {
+    border-bottom: 1px solid color-mix(in srgb, var(--rk-line) 82%, transparent);
   }
 
-  @media (max-width: 720px) {
+  @media (max-width: 719.98px) {
     .shortcut-list {
       grid-template-columns: minmax(0, 1fr);
     }

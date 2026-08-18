@@ -82,7 +82,7 @@
 
   .integration-row__title {
     margin: 0 0 0.08rem;
-    font-size: 0.98rem;
+    font-size: var(--rk-fs-md);
     font-weight: 700;
     letter-spacing: -0.015em;
     color: var(--rk-ink);
@@ -90,15 +90,15 @@
 
   .integration-row__body :global(.integration-row__lead) {
     margin: 0;
-    line-height: 1.45;
-    font-size: 0.86rem;
+    line-height: var(--rk-lh);
+    font-size: var(--rk-fs-sm);
     color: var(--rk-muted);
   }
 
   .integration-row__status {
     margin: 0.2rem 0 0;
-    line-height: 1.4;
-    font-size: 0.84rem;
+    line-height: var(--rk-lh);
+    font-size: var(--rk-fs-sm);
     font-weight: 600;
     color: color-mix(in srgb, var(--rk-ink) 55%, var(--rk-muted) 45%);
   }
@@ -120,8 +120,8 @@
 
   .integration-row__body :global(.integration-row__warn) {
     margin: 0.2rem 0 0;
-    font-size: 0.84rem;
-    line-height: 1.4;
+    font-size: var(--rk-fs-sm);
+    line-height: var(--rk-lh);
     color: var(--rk-danger, #e85d5d);
   }
 
@@ -158,7 +158,7 @@
     min-width: 0;
   }
 
-  @media (max-width: 719px) {
+  @media (max-width: 719.98px) {
     .integration-row--stretch-actions .integration-row__actions {
       flex-direction: column;
       align-items: stretch;

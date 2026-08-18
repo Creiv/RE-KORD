@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { Button } from "@rekord/ui";
+  import { Button, sheetDrag, SHEET_MEDIA_QUERY } from "@rekord/ui";
   import { api } from "../lib/api";
   import {
     CUSTOM_THEME_BG_IMAGE_FITS,
@@ -37,6 +37,8 @@
 
   let panelEl: HTMLDivElement | undefined = $state();
   let fileInput: HTMLInputElement | undefined = $state();
+  /* Su telefono il dialogo è un foglio dal basso, spingibile giù per chiudere. */
+  let isSheet = $state(false);
   let bgBusy = $state(false);
   let bgError = $state<string | null>(null);
   let paletteBusy = $state(false);
@@ -64,6 +66,16 @@
       },
     };
   }
+
+  $effect(() => {
+    const mq = window.matchMedia(SHEET_MEDIA_QUERY);
+    const sync = () => {
+      isSheet = mq.matches;
+    };
+    sync();
+    mq.addEventListener("change", sync);
+    return () => mq.removeEventListener("change", sync);
+  });
 
   $effect(() => {
     if (!open) return;
@@ -191,23 +203,29 @@
 {#if open}
   <!-- Transparent overlay (legacy custom-theme-dialog-backdrop) — no dim/blur. -->
   <!-- svelte-ignore a11y_no_noninteractive_element_interactions -->
-  <div
-    class="custom-theme-dialog-backdrop"
-    role="presentation"
-    use:portal
-    onmousedown={onBackdropPointer}
-  >
-    <!-- svelte-ignore a11y_no_noninteractive_element_interactions -->
     <div
-      bind:this={panelEl}
-      class="custom-theme-dialog rk-scroll"
-      role="dialog"
-      aria-modal="true"
-      aria-labelledby="custom-theme-dialog-title"
-      tabindex="-1"
-      onmousedown={(e) => e.stopPropagation()}
+      class="custom-theme-dialog-backdrop rk-sheet-back"
+      role="presentation"
+      use:portal
+      onmousedown={onBackdropPointer}
     >
-      <header class="custom-theme-dialog__head">
+      <!-- svelte-ignore a11y_no_noninteractive_element_interactions -->
+      <div
+        bind:this={panelEl}
+        class="custom-theme-dialog rk-sheet rk-scroll"
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="custom-theme-dialog-title"
+        tabindex="-1"
+        onmousedown={(e) => e.stopPropagation()}
+        use:sheetDrag={{
+          enabled: isSheet,
+          gripSelector: "[data-sheet-grip]",
+          onclose,
+        }}
+      >
+        <div class="rk-sheet__grip" data-sheet-grip aria-hidden="true"></div>
+        <header class="custom-theme-dialog__head" data-sheet-grip>
         <div class="custom-theme-dialog__titles">
           <p class="custom-theme-dialog__eyebrow">{t("settings.panel.ui")}</p>
           <h2 id="custom-theme-dialog-title" class="custom-theme-dialog__title">
@@ -230,7 +248,7 @@
         </button>
       </header>
 
-      <div class="custom-theme-dialog__body">
+        <div class="custom-theme-dialog__body" data-sheet-body>
         <div class="custom-theme-dialog__preview-strip" aria-hidden="true">
           {#if bgPreviewUrl}
             {@render bgPreview(
@@ -473,14 +491,37 @@
             {/each}
           </div>
         </div>
+
+        <div class="custom-theme-dialog__section">
+          <label class="custom-theme-dialog__toggle">
+            <input
+              class="custom-theme-dialog__toggle-input"
+              type="checkbox"
+              checked={theme.accentWash === true}
+              onchange={(e) =>
+                patch({
+                  accentWash: (e.currentTarget as HTMLInputElement).checked,
+                })}
+            />
+            <span class="custom-theme-dialog__toggle-text">
+              <span class="custom-theme-dialog__toggle-label">
+                {t("themePicker.customAccentWash")}
+              </span>
+              <span class="custom-theme-dialog__toggle-hint">
+                {t("themePicker.customAccentWashHint")}
+              </span>
+            </span>
+          </label>
+        </div>
       </div>
     </div>
   </div>
 {/if}
 
 <style>
-  /* Modal-aligned chrome; backdrop stays transparent (live preview behind). */
-  .custom-theme-dialog-backdrop {
+  /* Modal-aligned chrome; backdrop stays transparent (live preview behind).
+     Forma in `:where()`: sul telefono è styles/sheet.css a rifarla come foglio. */
+  :where(.custom-theme-dialog-backdrop) {
     position: fixed;
     inset: 0;
     z-index: var(--rk-z-modal, 120);
@@ -489,13 +530,17 @@
     -webkit-backdrop-filter: none;
     display: grid;
     place-items: center;
-    padding: 1rem;
+    padding: max(1rem, env(safe-area-inset-top, 0px))
+      max(1rem, env(safe-area-inset-right, 0px))
+      max(1rem, env(safe-area-inset-bottom, 0px))
+      max(1rem, env(safe-area-inset-left, 0px));
     box-sizing: border-box;
   }
 
-  .custom-theme-dialog {
+  :where(.custom-theme-dialog) {
     width: min(28rem, 100%);
-    max-height: min(90dvh, 900px);
+    /* Come Modal: --rk-app-vh sta sopra la tastiera, dvh no. */
+    max-height: min(calc(var(--rk-app-vh) * 0.9), 900px);
     overflow: auto;
     overscroll-behavior: contain;
     background: var(--rk-surface);
@@ -523,16 +568,16 @@
     margin: 0;
     text-transform: uppercase;
     letter-spacing: 0.12em;
-    font-size: 0.68rem;
+    font-size: var(--rk-fs-3xs);
     color: var(--rk-muted);
     font-weight: 650;
   }
 
   .custom-theme-dialog__title {
     margin: 0.15rem 0 0;
-    font-size: 1.05rem;
+    font-size: var(--rk-fs-base);
     font-weight: 700;
-    line-height: 1.25;
+    line-height: var(--rk-lh-snug);
   }
 
   .custom-theme-dialog__close {
@@ -591,7 +636,7 @@
 
   .custom-theme-dialog__section-label {
     color: var(--rk-muted-strong);
-    font-size: 0.72rem;
+    font-size: var(--rk-fs-2xs);
     font-weight: 800;
     text-transform: uppercase;
     letter-spacing: 0.04em;
@@ -615,7 +660,7 @@
     color: var(--rk-ink);
     cursor: pointer;
     font: inherit;
-    font-size: 0.78rem;
+    font-size: var(--rk-fs-xs);
     font-weight: 650;
   }
 
@@ -703,14 +748,14 @@
     min-height: 7.5rem;
     padding: 1rem;
     color: var(--rk-muted);
-    font-size: 0.88rem;
+    font-size: var(--rk-fs-sm);
     text-align: center;
   }
 
   .custom-theme-dialog__image-cta {
     padding: 0.55rem 0.75rem;
     border-top: 1px solid color-mix(in srgb, var(--rk-line) 80%, transparent);
-    font-size: 0.85rem;
+    font-size: var(--rk-fs-sm);
     font-weight: 650;
     text-align: center;
   }
@@ -740,7 +785,7 @@
     align-items: center;
     gap: 0.45rem;
     margin-left: auto;
-    font-size: 0.78rem;
+    font-size: var(--rk-fs-xs);
     color: var(--rk-muted-strong);
   }
 
@@ -753,7 +798,7 @@
     min-width: 8.5rem;
     padding: 0.28rem 0.45rem;
     font: inherit;
-    font-size: 0.78rem;
+    font-size: var(--rk-fs-xs);
     color: var(--rk-ink);
     background: var(--rk-surface-3);
     border: 1px solid var(--rk-line);
@@ -799,13 +844,13 @@
   }
 
   .custom-theme-dialog__swatch-label {
-    font-size: 0.72rem;
+    font-size: var(--rk-fs-2xs);
     font-weight: 700;
     color: var(--rk-muted-strong);
   }
 
   .custom-theme-dialog__swatch-hex {
-    font-size: 0.68rem;
+    font-size: var(--rk-fs-3xs);
     font-weight: 600;
     font-variant-numeric: tabular-nums;
     color: var(--rk-muted);
@@ -821,8 +866,57 @@
 
   .custom-theme-dialog__err {
     margin: 0;
-    font-size: 0.84rem;
+    font-size: var(--rk-fs-sm);
     color: var(--rk-danger, #e85d5d);
+  }
+
+  .custom-theme-dialog__toggle {
+    display: flex;
+    flex-direction: row;
+    align-items: flex-start;
+    gap: 0.55rem;
+    margin: 0;
+    padding: 0.55rem 0.65rem;
+    border-radius: var(--rk-radius);
+    border: 1px solid var(--rk-line);
+    background: var(--rk-surface-3);
+    color: var(--rk-ink);
+    cursor: pointer;
+    user-select: none;
+    min-width: 0;
+  }
+
+  .custom-theme-dialog__toggle:hover {
+    border-color: var(--rk-line-strong);
+  }
+
+  .custom-theme-dialog__toggle-input {
+    width: 1.125rem;
+    height: 1.125rem;
+    margin: 0.12rem 0 0;
+    accent-color: var(--rk-accent-2);
+    cursor: pointer;
+    flex: 0 0 auto;
+  }
+
+  .custom-theme-dialog__toggle-text {
+    display: flex;
+    flex-direction: column;
+    gap: 0.15rem;
+    min-width: 0;
+  }
+
+  .custom-theme-dialog__toggle-label {
+    font-size: var(--rk-fs-sm);
+    font-weight: 650;
+    line-height: var(--rk-lh-snug);
+  }
+
+  .custom-theme-dialog__toggle-hint {
+    font-size: var(--rk-fs-2xs);
+    font-weight: 500;
+    line-height: var(--rk-lh-snug);
+    color: var(--rk-muted);
   }
 
   .sr-only {

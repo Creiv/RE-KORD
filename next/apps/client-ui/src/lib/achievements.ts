@@ -266,6 +266,8 @@ export type TrackLike = {
   album_id: number | null;
   album_name: string;
   rel_path: string;
+  /** Serve a chi passa `genreForTrack`: il genere arriva dal brano, non dai segnali. */
+  genre?: string | null;
 };
 
 export type AchievementsSnapshot = {

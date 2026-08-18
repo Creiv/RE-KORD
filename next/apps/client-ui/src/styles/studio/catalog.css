@@ -1,0 +1,237 @@
+/* Catalogo (Scopri): elenco locale/web, filtri e anteprima audio. */
+.studio-catalog-browse {
+  display: flex;
+  flex-direction: column;
+  gap: var(--rk-section-gap);
+  width: 100%;
+  min-width: 0;
+  flex: 1;
+}
+
+.studio-catalog-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: var(--rk-space-lg) var(--rk-space-xl);
+}
+
+.studio-catalog-browse-lead {
+  flex: 1 1 16rem;
+  min-width: 0;
+}
+
+.studio-catalog-toolbar {
+  display: flex;
+  flex-direction: column;
+  gap: var(--rk-space-lg);
+  width: 100%;
+  min-width: 0;
+}
+
+.studio-catalog-toolbar__row {
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  gap: var(--rk-space-lg);
+  flex-wrap: wrap;
+  width: 100%;
+  min-width: 0;
+}
+
+.studio-catalog-toolbar__check {
+  display: inline-flex;
+  align-items: flex-start;
+  gap: var(--rk-space-sm);
+  font-size: var(--rk-fs-sm);
+  color: var(--rk-muted);
+  cursor: pointer;
+}
+
+.studio-catalog-toolbar__check input {
+  margin-top: var(--rk-space-3xs);
+}
+
+.library-overview-cols {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(min(100%, 16.5rem), 1fr));
+  gap: var(--rk-space-md);
+  width: 100%;
+}
+
+/* Studio → Discover: azioni sotto la riga copertina+testo (parity legacy) */
+.studio-catalog-list-tile {
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  gap: var(--rk-space-lg);
+  padding: var(--rk-space-md) var(--rk-space-lg);
+  border: 1px solid var(--rk-line);
+  border-radius: var(--rk-radius-lg);
+  background: color-mix(in srgb, var(--rk-surface-3) 65%, transparent);
+  min-width: 0;
+}
+
+.studio-catalog-list-tile__main {
+  flex: 1 1 auto;
+  width: 100%;
+  min-width: 0;
+  display: flex;
+  gap: var(--rk-space-lg);
+  align-items: center;
+  border: 0;
+  background: transparent;
+  color: inherit;
+  text-align: left;
+  padding: 0;
+  cursor: pointer;
+  font: inherit;
+}
+
+.studio-catalog-list-tile__main > div {
+  min-width: 0;
+}
+
+.studio-catalog-list-tile__actions {
+  display: flex;
+  flex-direction: column;
+  gap: var(--rk-space-xs);
+  width: 100%;
+  align-self: stretch;
+}
+
+.studio-catalog-list-tile__actions .primary-btn,
+.studio-catalog-list-tile__actions .ghost-btn {
+  width: 100%;
+  justify-content: center;
+  min-height: 1.9rem;
+  font-size: var(--rk-fs-xs);
+  padding: var(--rk-space-2xs) var(--rk-space-md);
+}
+
+.studio-catalog-filter-empty {
+  margin: var(--rk-space-xs) 0 0;
+  color: var(--rk-muted);
+  font-size: var(--rk-fs-sm);
+}
+
+.studio-catalog-web-thumb {
+  width: 3rem;
+  height: 3rem;
+  flex-shrink: 0;
+  border-radius: var(--rk-radius);
+  object-fit: cover;
+}
+
+/* —— Anteprima catalogo web —— */
+
+.rk-modal.catalog-preview-dialog {
+  width: min(34rem, 100%);
+}
+
+.catalog-preview__cover {
+  width: 3.25rem;
+  height: 3.25rem;
+  border-radius: var(--rk-radius-lg);
+  object-fit: cover;
+  display: block;
+}
+
+.catalog-preview__tracks {
+  display: flex;
+  flex-direction: column;
+  gap: var(--rk-space-3xs);
+  max-height: min(46vh, 22rem);
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  scrollbar-width: thin;
+}
+
+.catalog-preview__track {
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: var(--rk-space-md);
+  width: 100%;
+  min-height: 2.4rem;
+  padding: var(--rk-space-xs) var(--rk-space-sm);
+  border: 1px solid transparent;
+  border-radius: var(--rk-radius-sm);
+  background: none;
+  color: var(--rk-ink);
+  font: inherit;
+  font-size: var(--rk-fs-sm);
+  text-align: left;
+  cursor: pointer;
+  overflow: hidden;
+}
+
+.catalog-preview__track:hover,
+.catalog-preview__track:focus-visible {
+  background: color-mix(in srgb, var(--rk-surface-3) 75%, transparent);
+}
+
+.catalog-preview__track.is-active {
+  border-color: color-mix(in srgb, var(--rk-accent) 45%, var(--rk-line));
+  background: color-mix(in srgb, var(--rk-accent) 12%, var(--rk-surface-3));
+}
+
+.catalog-preview__track.is-loading {
+  cursor: progress;
+}
+
+.catalog-preview__track-ic {
+  display: inline-grid;
+  place-items: center;
+  width: 1.5rem;
+  height: 1.5rem;
+  flex-shrink: 0;
+  border-radius: 50%;
+  background: color-mix(in srgb, var(--rk-surface-3) 90%, transparent);
+  color: var(--rk-muted-strong);
+}
+
+.catalog-preview__track.is-active .catalog-preview__track-ic {
+  background: color-mix(in srgb, var(--rk-accent) 24%, var(--rk-surface-3));
+  color: var(--rk-ink);
+}
+
+.catalog-preview__track-ic svg {
+  width: 0.85rem;
+  height: 0.85rem;
+}
+
+.catalog-preview__track-title {
+  flex: 1 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.catalog-preview__track-state {
+  flex: 0 0 auto;
+  font-size: var(--rk-fs-2xs);
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  color: var(--rk-muted);
+  font-variant-numeric: tabular-nums;
+}
+
+.catalog-preview__track-bar {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  height: 2px;
+  transform: scaleX(var(--rk-preview-progress, 0));
+  transform-origin: left center;
+  background: var(--rk-accent);
+}
+
+.catalog-preview__list-title {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}

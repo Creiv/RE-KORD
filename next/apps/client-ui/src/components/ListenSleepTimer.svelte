@@ -1,5 +1,6 @@
 <script lang="ts">
   import UiIcon from "./icons/UiIcon.svelte";
+  import { t } from "../lib/i18n.svelte";
   import { player } from "../lib/player";
   import { session } from "../lib/session.svelte";
 
@@ -39,6 +40,12 @@
     return value.replace(/\D/g, "");
   }
 
+  function presetLabel(min: (typeof PRESETS)[number]): string {
+    if (min === 15) return t("player.sleepTimer15");
+    if (min === 30) return t("player.sleepTimer30");
+    return t("player.sleepTimer60");
+  }
+
   function startTimer(minutes: number) {
     player.setSleepTimer(minutes);
     now = Date.now();
@@ -62,7 +69,7 @@
   class="listen-sleep-timer"
   class:is-open={open}
   class:is-active={active}
-  aria-label="Timer spegnimento"
+  aria-label={t("listen.sleepTimerAria")}
 >
   <button
     type="button"
@@ -72,7 +79,7 @@
   >
     <span class="listen-sleep-timer__toggle-main">
       <UiIcon name="history" class="listen-sleep-timer__ic" />
-      <span class="listen-sleep-timer__toggle-title">Timer spegnimento</span>
+      <span class="listen-sleep-timer__toggle-title">{t("listen.sleepTimer")}</span>
       {#if active}
         <span class="listen-sleep-timer__badge" aria-live="polite">{remainingLabel}</span>
       {/if}
@@ -92,18 +99,18 @@
             class="ghost-btn ghost-btn--sm"
             onclick={() => startTimer(min)}
           >
-            {min} min
+            {presetLabel(min)}
           </button>
         {/each}
 
         <label class="listen-sleep-timer__field">
-          <span class="listen-sleep-timer__field-label">Ore</span>
+          <span class="listen-sleep-timer__field-label">{t("listen.sleepTimerHours")}</span>
           <input
             type="text"
             class="ghost-input listen-sleep-timer__input"
             inputmode="numeric"
             autocomplete="off"
-            aria-label="Ore"
+            aria-label={t("listen.sleepTimerHours")}
             value={customHours}
             oninput={(e) => {
               customError = false;
@@ -113,13 +120,13 @@
         </label>
 
         <label class="listen-sleep-timer__field">
-          <span class="listen-sleep-timer__field-label">Minuti</span>
+          <span class="listen-sleep-timer__field-label">{t("listen.sleepTimerMinutes")}</span>
           <input
             type="text"
             class="ghost-input listen-sleep-timer__input"
             inputmode="numeric"
             autocomplete="off"
-            aria-label="Minuti"
+            aria-label={t("listen.sleepTimerMinutes")}
             value={customMinutes}
             oninput={(e) => {
               customError = false;
@@ -132,7 +139,7 @@
         </label>
 
         <button type="button" class="ghost-btn ghost-btn--sm" onclick={startCustom}>
-          Avvia
+          {t("listen.sleepTimerStart")}
         </button>
 
         {#if active}
@@ -141,13 +148,13 @@
             class="text-btn listen-sleep-timer__cancel"
             onclick={() => player.setSleepTimer(null)}
           >
-            Annulla
+            {t("listen.sleepTimerCancel")}
           </button>
         {/if}
       </div>
       {#if customError}
         <p class="listen-sleep-timer__error warnline" role="alert">
-          Imposta un tempo valido.
+          {t("listen.sleepTimerInvalid")}
         </p>
       {/if}
     </div>

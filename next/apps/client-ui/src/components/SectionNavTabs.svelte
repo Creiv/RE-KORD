@@ -5,14 +5,15 @@
     tabs,
     active,
     ariaLabel = "Sezioni",
-    size = "md" as "md" | "sm",
+    size = "md" as "md" | "nav" | "sm",
     even = false,
     onselect,
   }: {
     tabs: Tab[];
     active: string;
     ariaLabel?: string;
-    size?: "md" | "sm";
+    /** `nav` sits under a page title, so it reads smaller than the heading. */
+    size?: "md" | "nav" | "sm";
     /** Distribuisce i tab a tutta larghezza (es. Studio); Library resta flex-start */
     even?: boolean;
     onselect: (id: string) => void;
@@ -21,6 +22,7 @@
 
 <div
   class="section-nav-tabs"
+  class:section-nav-tabs--nav={size === "nav"}
   class:section-nav-tabs--sm={size === "sm"}
   class:section-nav-tabs--even={even}
   role="group"
@@ -61,12 +63,23 @@
     background: transparent;
     cursor: pointer;
     font: inherit;
-    font-size: 1.32rem;
+    font-size: var(--rk-fs-title);
     font-weight: 800;
     letter-spacing: -0.03em;
-    line-height: 1.2;
+    line-height: var(--rk-lh-tight);
     color: color-mix(in srgb, var(--rk-muted) 78%, var(--rk-ink) 22%);
     transition: color 0.16s ease;
+  }
+
+  .section-nav-tabs--nav {
+    gap: 0.25rem 1rem;
+  }
+
+  .section-nav-tabs--nav .section-nav-tab {
+    font-size: var(--rk-fs-base);
+    font-weight: 750;
+    letter-spacing: -0.02em;
+    padding: 0.14rem 0;
   }
 
   .section-nav-tabs--sm {
@@ -74,7 +87,7 @@
   }
 
   .section-nav-tabs--sm .section-nav-tab {
-    font-size: 0.86rem;
+    font-size: var(--rk-fs-sm);
     font-weight: 700;
     letter-spacing: -0.01em;
     padding: 0.1rem 0;
@@ -95,7 +108,7 @@
     right: 0;
     bottom: -0.06rem;
     height: 2px;
-    border-radius: 99px;
+    border-radius: var(--rk-radius-round);
     background: linear-gradient(
       90deg,
       color-mix(in srgb, var(--rk-accent) 85%, transparent),
@@ -110,6 +123,6 @@
   .section-nav-tab:focus-visible {
     outline: 2px solid var(--rk-focus);
     outline-offset: 4px;
-    border-radius: 6px;
+    border-radius: var(--rk-radius);
   }
 </style>

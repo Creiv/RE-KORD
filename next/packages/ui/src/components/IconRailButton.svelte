@@ -67,7 +67,7 @@
     transform: translateY(-50%);
     width: 3px;
     height: 1.25rem;
-    border-radius: 2px;
+    border-radius: var(--rk-radius-xs);
     background: linear-gradient(180deg, var(--rk-accent), var(--rk-accent-2));
   }
 

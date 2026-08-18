@@ -36,7 +36,7 @@
   .bar {
     width: 3px;
     height: 1.05rem;
-    border-radius: 2px;
+    border-radius: var(--rk-radius-xs);
     background: transparent;
     flex-shrink: 0;
   }

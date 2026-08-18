@@ -34,7 +34,7 @@
 <style>
   .disk-meter__value {
     margin: 0;
-    font-size: 0.95rem;
+    font-size: var(--rk-fs-md);
     font-weight: 650;
     color: var(--rk-ink);
     letter-spacing: -0.01em;
@@ -43,7 +43,7 @@
   .disk-meter__bar {
     margin-top: 0.45rem;
     height: 0.45rem;
-    border-radius: 999px;
+    border-radius: var(--rk-radius-round);
     background: color-mix(in srgb, var(--rk-line) 70%, var(--rk-surface-3) 30%);
     overflow: hidden;
   }

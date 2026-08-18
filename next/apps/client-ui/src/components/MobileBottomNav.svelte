@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { sheetDrag } from "@rekord/ui";
   import type { ViewId } from "../lib/session.svelte";
   import GraphicEq from "./icons/GraphicEq.svelte";
   import UiIcon from "./icons/UiIcon.svelte";
@@ -61,8 +62,16 @@
   <div class="sheet" role="dialog" aria-label={t("nav.more")}>
     <button type="button" class="backdrop" aria-label={t("nav.close")} onclick={() => (moreOpen = false)}
     ></button>
-    <div class="panel">
-      <header>
+    <div
+      class="panel"
+      use:sheetDrag={{
+        enabled: true,
+        gripSelector: "[data-sheet-grip]",
+        onclose: () => (moreOpen = false),
+      }}
+    >
+      <div class="rk-sheet__grip" data-sheet-grip aria-hidden="true"></div>
+      <header data-sheet-grip>
         <strong>{t("nav.more")}</strong>
         <button type="button" class="close" onclick={() => (moreOpen = false)} aria-label={t("nav.close")}>
           <UiIcon name="close" />
@@ -85,7 +94,7 @@
     display: none;
   }
 
-  @media (max-width: 1000px) {
+  @media (max-width: 999.98px) {
     .bottom {
       display: block;
       position: fixed;
@@ -102,7 +111,8 @@
       display: grid;
       grid-template-columns: repeat(4, 1fr);
       min-height: 3.25rem;
-      padding: 0.35rem 0.15rem;
+      padding: 0.35rem max(0.15rem, env(safe-area-inset-right, 0px)) 0.35rem
+        max(0.15rem, env(safe-area-inset-left, 0px));
     }
 
     .inner > button {
@@ -111,8 +121,12 @@
       background: transparent;
       color: var(--rk-muted);
       font: inherit;
-      font-size: 0.58rem;
+      font-size: var(--rk-fs-4xs);
       display: grid;
+      /* Icona e nome centrati in un bersaglio pieno: qui si tocca al volo e
+         spesso senza guardare. */
+      align-content: center;
+      min-height: var(--rk-tap-min);
       gap: 0.12rem;
       justify-items: center;
       padding: 0.35rem 0.05rem;
@@ -157,10 +171,15 @@
     left: 0;
     right: 0;
     bottom: 0;
-    border-radius: 16px 16px 0 0;
+    border-radius: var(--rk-radius-2xl) var(--rk-radius-2xl) 0 0;
     background: var(--rk-surface-2);
     border-top: 1px solid var(--rk-line);
-    padding: 0.85rem 1rem calc(1rem + env(safe-area-inset-bottom, 0px));
+    padding: 0.15rem max(1rem, env(safe-area-inset-right, 0px))
+      calc(1rem + env(safe-area-inset-bottom, 0px))
+      max(1rem, env(safe-area-inset-left, 0px));
+    /* Il foglio non passa lo scorrimento alla pagina sotto. */
+    overscroll-behavior: contain;
+    animation: rk-sheet-rise 0.2s ease-out;
   }
 
   .panel header {
@@ -171,10 +190,15 @@
   }
 
   .close {
+    display: grid;
+    place-items: center;
+    min-width: var(--rk-tap-min);
+    min-height: var(--rk-tap-min);
     border: 0;
     background: transparent;
     color: var(--rk-muted);
     padding: 0.25rem;
+    cursor: pointer;
   }
 
   .grid {
@@ -193,7 +217,7 @@
     gap: 0.35rem;
     justify-items: center;
     font: inherit;
-    font-size: 0.68rem;
+    font-size: var(--rk-fs-3xs);
     cursor: pointer;
   }
 

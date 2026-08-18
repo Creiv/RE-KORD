@@ -10,15 +10,52 @@ import { customThemeBgImageUrl } from "./customThemeBgUrl";
 export type { Account, AccountsResponse } from "./account";
 export { customThemeBgImageUrl };
 
-export function albumCoverUrl(albumId: number): string {
-  return apiUrl(`/api/v1/covers/album/${albumId}`);
+/** Cached cover variants: pass a CSS size for grids, omit it for hero artwork. */
+export type CoverSize = 128 | 256 | "full";
+
+function coverQuery(size?: CoverSize): string {
+  return size && size !== "full" ? `?size=${size}` : "";
 }
 
-export function artistCoverUrl(artistId: number): string {
-  return apiUrl(`/api/v1/covers/artist/${artistId}`);
+export function albumCoverUrl(albumId: number, size?: CoverSize): string {
+  return apiUrl(`/api/v1/covers/album/${albumId}${coverQuery(size)}`);
+}
+
+export function artistCoverUrl(artistId: number, size?: CoverSize): string {
+  return apiUrl(`/api/v1/covers/artist/${artistId}${coverQuery(size)}`);
 }
 
 export type Envelope<T> = { ok: boolean; data?: T; error?: string };
+
+/** Parse JSON body; empty/non-JSON (e.g. Vite proxy 500 when hub is down) → clear Error. */
+async function parseJsonBody<T>(res: Response): Promise<T> {
+  const text = await res.text();
+  if (!text.trim()) {
+    const offline =
+      res.status === 0 ||
+      res.status === 502 ||
+      res.status === 503 ||
+      res.status === 504 ||
+      // Vite http-proxy often answers 500 + empty body when the hub is down.
+      res.status === 500;
+    throw new Error(
+      offline
+        ? `Hub non raggiungibile (HTTP ${res.status || "—"})`
+        : `Risposta vuota dal hub (HTTP ${res.status})`,
+    );
+  }
+  try {
+    return JSON.parse(text) as T;
+  } catch {
+    throw new Error(
+      `Risposta non-JSON dal hub (HTTP ${res.status}): ${text.slice(0, 120)}`,
+    );
+  }
+}
+
+async function parseEnvelope<T>(res: Response): Promise<Envelope<T>> {
+  return parseJsonBody<Envelope<T>>(res);
+}
 
 export type Track = {
   id: number;
@@ -33,6 +70,16 @@ export type Track = {
   genre?: string | null;
   release_date?: string | null;
   lyrics?: string | null;
+  source?: string | null;
+  url?: string | null;
+};
+
+/** Extra Discogs da `discogs_extra_json` / sidecar (camelCase, parity legacy). */
+export type DiscogsAlbumExtra = {
+  masterId?: number | null;
+  discogsUri?: string | null;
+  formatSummary?: string | null;
+  catalogNo?: string | null;
 };
 
 export type Album = {
@@ -44,11 +91,17 @@ export type Album = {
   folder_key: string;
   has_cover: boolean;
   loose: boolean;
+  /** Sidecar / studio album meta applicata (parity legacy `hasAlbumMeta`). */
+  has_album_meta?: boolean;
   genre?: string | null;
   release_date?: string | null;
   label?: string | null;
+  country?: string | null;
   /** Tracce attese da catalogo/Discogs (come `expectedTrackCount` React). */
   expected_track_count?: number | null;
+  discogs_release_id?: string | null;
+  discogs_uri?: string | null;
+  discogs_extra?: DiscogsAlbumExtra | null;
 };
 
 export type Artist = {
@@ -204,6 +257,18 @@ export type CatalogWebDiscover = {
   error?: string | null;
 };
 
+export type CatalogWebTrack = {
+  id: string;
+  title: string;
+  url: string;
+};
+
+export type CatalogWebTracks = {
+  tracks: CatalogWebTrack[];
+  title?: string | null;
+  error?: string | null;
+};
+
 export type ArtworkHit = {
   name: string;
   artist: string;
@@ -244,13 +309,18 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
     "Content-Type": "application/json",
     ...(init?.headers || {}),
   });
-  const res = await fetch(url, {
-    ...init,
-    headers,
-  });
-  const body = (await res.json()) as Envelope<T>;
+  let res: Response;
+  try {
+    res = await fetch(url, {
+      ...init,
+      headers,
+    });
+  } catch {
+    throw new Error("Hub non raggiungibile (rete)");
+  }
+  const body = await parseEnvelope<T>(res);
   if (!res.ok || !body.ok) {
-    throw new Error(body.error || res.statusText);
+    throw new Error(body.error || res.statusText || `HTTP ${res.status}`);
   }
   return body.data as T;
 }
@@ -276,13 +346,109 @@ async function requestAsAccount<T>(
       : {}),
     ...(init?.headers || {}),
   };
-  const res = await fetch(url, { ...init, headers });
-  const body = (await res.json()) as Envelope<T>;
+  let res: Response;
+  try {
+    res = await fetch(url, { ...init, headers });
+  } catch {
+    throw new Error("Hub non raggiungibile (rete)");
+  }
+  const body = await parseEnvelope<T>(res);
   if (!res.ok || !body.ok) {
-    throw new Error(body.error || res.statusText);
+    throw new Error(body.error || res.statusText || `HTTP ${res.status}`);
   }
   return body.data as T;
 }
+
+export type ScanReport = {
+  scannedFiles: number;
+  indexedTracks: number;
+  unchanged: number;
+  skipped: number;
+  errors: number;
+  removedTracks: number;
+  removedAlbums: number;
+  removedArtists: number;
+  mode: string;
+  music_root: string;
+};
+
+export type LibraryLayoutConfig = {
+  schemaVersion: number;
+  preferredLayout: "artist/album/track" | "artist/track" | "flat" | "tags";
+  fallbacks: string[];
+  virtualArtist: string;
+  virtualAlbum: string;
+  deepScan: boolean;
+};
+
+export type LibraryProbeReport = {
+  stats: {
+    audioAtRoot: number;
+    dirsAtRoot: number;
+    dirsWithOnlyAudio: number;
+    dirsWithSubdirs: number;
+    maxDepth: number;
+    estimatedTracks: number;
+  };
+  candidates: { layout: string; confidence: number; reason: string }[];
+  warnings: string[];
+  suggestedLayout: LibraryLayoutConfig;
+  currentLayout: LibraryLayoutConfig;
+};
+
+export type WatcherStatus = {
+  enabled: boolean;
+  running: boolean;
+  root: string | null;
+  events: number;
+  lastEventAt: string | null;
+  lastScanAt: string | null;
+  pending: boolean;
+  error: string | null;
+};
+
+/** Host-level write rights for the current client and account. */
+export type MachineAccess = {
+  isDefaultAccount: boolean;
+  local: boolean;
+  allowRemoteAdmin: boolean;
+  canManageMachine: boolean;
+};
+
+export type JobEntry = {
+  id: string;
+  kind: string;
+  label: string;
+  status: "running" | "done" | "failed" | "canceled";
+  progress: number | null;
+  message: string | null;
+  createdAt: string;
+  finishedAt: string | null;
+  error: string | null;
+  cancelable: boolean;
+};
+
+export type TrackPage = {
+  items: Track[];
+  total: number;
+  limit: number;
+  offset: number;
+};
+
+export type ArtistPage = {
+  items: Artist[];
+  total: number;
+  limit: number;
+  offset: number;
+};
+
+export type LibraryChanges = {
+  revision: string | null;
+  full: boolean;
+  updated: Track[];
+  removed: string[];
+  scanning?: boolean;
+};
 
 export type UserStatePayload = {
   version: number;
@@ -296,12 +462,70 @@ export type UserStatePayload = {
 };
 
 export const api = {
-  health: () => fetch(apiUrl("/api/v1/health")).then((r) => r.json()),
+  health: async () => {
+    let res: Response;
+    try {
+      res = await fetch(apiUrl("/api/v1/health"));
+    } catch {
+      throw new Error("Hub non raggiungibile (rete)");
+    }
+    return parseJsonBody<{
+      ok?: boolean;
+      service?: string;
+      version?: string;
+      modules?: string[];
+      scanning?: boolean;
+    }>(res);
+  },
   stats: () => request<LibraryStats>("/api/v1/library/stats"),
+  /** Library rescan. Incremental by default; `full` wipes and rebuilds. */
+  scanLibrary: (mode: "incremental" | "full" = "incremental") =>
+    request<ScanReport>(`/api/v1/library/scan?mode=${mode}`, { method: "POST" }),
+  probeLibrary: () =>
+    request<LibraryProbeReport>("/api/v1/library/probe", { method: "POST" }),
+  libraryLayout: () => request<LibraryLayoutConfig>("/api/v1/library/layout"),
+  setLibraryLayout: (layout: LibraryLayoutConfig) =>
+    request<LibraryLayoutConfig>("/api/v1/library/layout", {
+      method: "PUT",
+      body: JSON.stringify(layout),
+    }),
+  watchStatus: () => request<WatcherStatus>("/api/v1/library/watch"),
+  setWatch: (enabled: boolean) =>
+    request<WatcherStatus>("/api/v1/library/watch", {
+      method: "PUT",
+      body: JSON.stringify({ enabled }),
+    }),
+  rebuildThumbnails: () =>
+    request<{ started: boolean }>("/api/v1/library/thumbnails", { method: "POST" }),
+  jobs: () => request<JobEntry[]>("/api/v1/jobs"),
+  cancelJob: (id: string) =>
+    request<{ id: string }>(`/api/v1/jobs/${id}/cancel`, { method: "POST" }),
+  clearJobs: () => request<{ removed: number }>("/api/v1/jobs", { method: "DELETE" }),
+  publicIp: () => request<{ ip: string | null }>("/api/v1/network/public-ip"),
+  /** Whether this client may change host-level settings ("machine operations"). */
+  machineAccess: () => request<MachineAccess>("/api/v1/system/machine-access"),
+  setRemoteAdmin: (enabled: boolean) =>
+    request<MachineAccess>("/api/v1/system/machine-access", {
+      method: "PUT",
+      body: JSON.stringify({ enabled }),
+    }),
   tracks: (limit = 500, offset = 0) =>
     request<Track[]>(`/api/v1/library?limit=${limit}&offset=${offset}`),
-  search: (q: string) =>
-    request<Track[]>(`/api/v1/library/search?q=${encodeURIComponent(q)}`),
+  /** Paginated personal library: `{ items, total }`. */
+  tracksPage: (limit = 500, offset = 0) =>
+    request<TrackPage>(`/api/v1/library/tracks-page?limit=${limit}&offset=${offset}`),
+  artistsPage: (limit = 200, offset = 0) =>
+    request<ArtistPage>(`/api/v1/library/artists-page?limit=${limit}&offset=${offset}`),
+  /** Delta since a revision cursor; `full` asks the client to page again. */
+  libraryChanges: (since?: string | null) =>
+    request<LibraryChanges>(
+      `/api/v1/library/changes${since ? `?since=${encodeURIComponent(since)}` : ""}`,
+    ),
+  /** Hub caps the limit at 500; the list is windowed, so ask for the full page. */
+  search: (q: string, limit = 500) =>
+    request<Track[]>(
+      `/api/v1/library/search?q=${encodeURIComponent(q)}&limit=${limit}`,
+    ),
   artists: () => request<Artist[]>("/api/v1/library/artists"),
   artist: (id: number) => request<Artist>(`/api/v1/library/artists/${id}`),
   artistAlbums: (id: number) => request<Album[]>(`/api/v1/library/artists/${id}/albums`),
@@ -340,6 +564,12 @@ export const api = {
   removeFromPlaylist: (playlistId: string, track_id: number) =>
     request(`/api/v1/playlists/${playlistId}/tracks?track_id=${track_id}`, {
       method: "DELETE",
+    }),
+  /** Rewrites the playlist order; the ids must be the ones already inside it. */
+  reorderPlaylist: (playlistId: string, trackIds: number[]) =>
+    request(`/api/v1/playlists/${playlistId}/tracks`, {
+      method: "PUT",
+      body: JSON.stringify({ trackIds }),
     }),
   /** Info/curiosità per artista (album omesso) o album. Nomi cartella. */
   entityInfo: (artist: string, album?: string | null) => {
@@ -501,7 +731,7 @@ export const api = {
       headers: accountHeaders(),
       body: fd,
     }).then(async (res) => {
-      const body = (await res.json()) as Envelope<{
+      const body = await parseEnvelope<{
         restored?: boolean;
         version?: number;
         favorites?: number;
@@ -509,11 +739,13 @@ export const api = {
         playlist_tracks?: number;
         library_files?: number;
         scanned_tracks?: number;
+        album_meta_merged?: number;
+        track_meta_merged?: number;
         themeImported?: boolean;
         theme?: string | null;
         glassSurfaces?: boolean;
         glassOpacity?: number;
-      }>;
+      }>(res);
       if (!res.ok || !body.ok) {
         throw new Error(body.error || res.statusText);
       }
@@ -530,7 +762,7 @@ export const api = {
       method: "POST",
       body: fd,
     }).then(async (res) => {
-      const body = (await res.json()) as Envelope<HubConfig>;
+      const body = await parseEnvelope<HubConfig>(res);
       if (!res.ok || !body.ok) throw new Error(body.error || res.statusText);
       return body.data!;
     });
@@ -585,6 +817,19 @@ export const api = {
     request<CatalogWebDiscover>(
       `/api/v1/catalog-web-discover${force ? "?force=1" : ""}`,
     ),
+
+  catalogWebTracks: (url: string) =>
+    request<CatalogWebTracks>(
+      `/api/v1/catalog-web-tracks?url=${encodeURIComponent(url.trim())}`,
+    ),
+
+  /** Absolute `<audio src>` for a ~30s audition of a web catalog track. */
+  catalogWebPreviewSrc: async (url: string) => {
+    const { playUrl } = await request<{ playUrl: string }>(
+      `/api/v1/catalog-web-preview?url=${encodeURIComponent(url.trim())}`,
+    );
+    return apiUrl(playUrl);
+  },
 
   downloadFlatCount: (url: string) =>
     request<{ count: number }>("/api/v1/download-flat-count", {
@@ -667,11 +912,16 @@ export const api = {
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ albumPath, artist, album }),
     }).then(async (res) => {
-      const body = await res.json();
+      const body = await parseJsonBody<{
+        ok?: boolean;
+        error?: string;
+        albumPath: string;
+        meta: Record<string, unknown>;
+      }>(res);
       if (!res.ok || body.ok === false) {
         throw new Error(body.error || res.statusText);
       }
-      return body as { ok?: boolean; albumPath: string; meta: Record<string, unknown> };
+      return body;
     }),
 
   trackInfoFetchAlbum: (albumPath: string) =>
@@ -684,6 +934,76 @@ export const api = {
       method: "POST",
       body: JSON.stringify({ albumPath }),
     }),
+
+  pruneAlbumMetadata: (albumPath: string) =>
+    request<{
+      albumPath: string;
+      removed: string[];
+      written: boolean;
+      expectedTracksCleared?: boolean;
+      trackOrderingFieldsCleared?: number;
+      albumFieldsMerged?: number;
+      tracksMerged?: number;
+      jsonFilesRemoved?: number;
+      jsonFilesTrimmed?: number;
+    }>("/api/v1/track-info/prune-orphans", {
+      method: "POST",
+      body: JSON.stringify({ albumPath }),
+    }),
+
+  sanitizeTrackTitles: (body: {
+    scope: "album" | "all";
+    albumPath?: string;
+    dryRun: boolean;
+  }) =>
+    request<{
+      changes: Array<{
+        albumRel?: string;
+        albumPath?: string;
+        fileName: string;
+        from: string;
+        to: string;
+      }>;
+      albumsScanned?: number;
+      dryRun: boolean;
+      written?: boolean;
+      albumPath?: string;
+    }>("/api/v1/studio/sanitize-track-titles", {
+      method: "POST",
+      body: JSON.stringify(body),
+    }),
+
+  /**
+   * Deletes the audio files from disk. `skipped` holds the paths the hub would
+   * not touch (already gone, not audio, outside the library).
+   */
+  deleteTrackFiles: (relPaths: string[]) =>
+    request<{ deleted: string[]; skipped: string[]; affectedAlbums: string[] }>(
+      "/api/v1/fs/delete-audio-relpaths",
+      {
+        method: "POST",
+        body: JSON.stringify({ relPaths }),
+      },
+    ),
+
+  /** Deletes the album folder whole: audio, cover and sidecars. */
+  deleteAlbumFolder: (albumPath: string) =>
+    request<{ deleted: string[]; deletedFolder: string; affectedAlbums: string[] }>(
+      "/api/v1/fs/delete-album-folder",
+      {
+        method: "POST",
+        body: JSON.stringify({ albumPath }),
+      },
+    ),
+
+  downloadPreset: () =>
+    request<{
+      found: boolean;
+      program?: string;
+      cookiesConfigured?: boolean;
+      text?: string;
+      args?: string[];
+    }>("/api/v1/download-preset"),
 
   discogsSearchReleases: (artist: string, album: string) =>
     request<{ ok: boolean; candidates: DiscogsCandidate[] }>(
@@ -700,7 +1020,9 @@ export const api = {
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ albumPath, releaseId, artist, album }),
     }).then(async (res) => {
-      const body = await res.json();
+      const body = await parseJsonBody<{ ok?: boolean; error?: string } & Record<string, unknown>>(
+        res,
+      );
       if (!res.ok || body.ok === false) {
         throw new Error(body.error || res.statusText);
       }
@@ -748,9 +1070,25 @@ export const api = {
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ relPath }),
     }).then(async (res) => {
-      const body = await res.json();
+      const body = await parseJsonBody<{
+        ok?: boolean;
+        error?: string;
+        meta?: Record<string, unknown>;
+        lyrics?: string;
+      }>(res);
       if (!res.ok || body.ok === false) throw new Error(body.error || res.statusText);
-      return body as { meta?: Record<string, unknown>; lyrics?: string };
+      return body;
+    }),
+
+  /** LRCLIB — synced/plain lyrics (parity legacy `/api/track-lyrics/fetch`). */
+  trackLyricsFetch: (relPath: string) =>
+    request<{
+      relPath: string;
+      syncedLyrics: string | null;
+      plainLyrics: string | null;
+    }>("/api/v1/track-lyrics/fetch", {
+      method: "POST",
+      body: JSON.stringify({ relPath }),
     }),
 
   albumInfoSave: (
@@ -776,7 +1114,7 @@ export const api = {
       method: "POST",
       body: fd,
     }).then(async (res) => {
-      const body = (await res.json()) as Envelope<{ saved?: boolean; coverRelPath?: string }>;
+      const body = await parseEnvelope<{ saved?: boolean; coverRelPath?: string }>(res);
       if (!res.ok || !body.ok) throw new Error(body.error || res.statusText);
       return body.data!;
     });
@@ -808,10 +1146,10 @@ export const api = {
       headers: accountHeaders(),
       body: fd,
     }).then(async (res) => {
-      const body = (await res.json()) as Envelope<{
+      const body = await parseEnvelope<{
         bgImage: string;
         bgImageRev: number;
-      }>;
+      }>(res);
       if (!res.ok || !body.ok) throw new Error(body.error || res.statusText);
       return body.data!;
     });
@@ -823,7 +1161,7 @@ export const api = {
       method: "DELETE",
       headers: accountHeaders(),
     });
-    const body = (await res.json()) as Envelope<null>;
+    const body = await parseEnvelope<null>(res);
     if (!res.ok || !body.ok) throw new Error(body.error || res.statusText);
   },
 
@@ -842,10 +1180,43 @@ export const api = {
       activeDownloads: number;
     }>("/api/v1/diagnostics"),
 
-  activityLog: () =>
-    request<{ entries: Array<{ ts: string; kind: string; message: string }> }>(
-      "/api/v1/activity-log",
-    ),
+  activityLog: (opts?: {
+    /** Calendar day `YYYY-MM-DD` (Default account only; ignored server-side otherwise). */
+    day?: string;
+    /** `all` | `system` | `user` */
+    scope?: string;
+    /** Restrict to one account’s events. */
+    filterAccountId?: string;
+    limit?: number;
+  }) => {
+    const p = new URLSearchParams();
+    if (opts?.day?.trim()) p.set("day", opts.day.trim());
+    if (opts?.scope?.trim()) p.set("scope", opts.scope.trim());
+    if (opts?.filterAccountId?.trim()) {
+      p.set("filterAccountId", opts.filterAccountId.trim());
+    }
+    if (opts?.limit != null && Number.isFinite(opts.limit)) {
+      p.set("limit", String(Math.trunc(opts.limit)));
+    }
+    const q = p.toString();
+    return request<{
+      entries: Array<{
+        ts: string;
+        kind: string;
+        message: string;
+        accountId?: string | null;
+        accountName?: string | null;
+      }>;
+      canSelectDay?: boolean;
+      scope?: string;
+      filterAccountId?: string | null;
+      window?: {
+        since: string;
+        until: string;
+        day?: string | null;
+      };
+    }>(`/api/v1/activity-log${q ? `?${q}` : ""}`);
+  },
 
   remoteAccess: () => request<RemoteAccessState>("/api/v1/remote-access"),
 

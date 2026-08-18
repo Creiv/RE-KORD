@@ -54,10 +54,10 @@
     gap: 0.55rem;
     margin: 0;
     min-width: 0;
-    font-size: 1.08rem;
+    font-size: var(--rk-fs-subtitle);
     font-weight: 800;
     letter-spacing: -0.025em;
-    line-height: 1.2;
+    line-height: var(--rk-lh-tight);
     color: var(--rk-ink);
   }
 
@@ -66,7 +66,7 @@
     flex: 0 0 auto;
     width: 3px;
     height: 1.05em;
-    border-radius: 2px;
+    border-radius: var(--rk-radius-xs);
     background: linear-gradient(
       180deg,
       var(--rk-accent) 0%,

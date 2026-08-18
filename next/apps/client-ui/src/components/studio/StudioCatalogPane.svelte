@@ -18,6 +18,7 @@
   } from "../../lib/catalogHelpers";
   import { session } from "../../lib/session.svelte";
   import UiIcon from "../icons/UiIcon.svelte";
+  import StudioCatalogPreviewDialog from "./StudioCatalogPreviewDialog.svelte";
 
   let {
     onSendToDownload,
@@ -39,6 +40,7 @@
   let webDiscover = $state<CatalogWebDiscover | null>(null);
   let webBusy = $state(false);
   let webErr = $state<string | null>(null);
+  let previewItem = $state<CatalogWebItem | null>(null);
 
   const catalogArtists = $derived.by(() => {
     const q = catalogQuery.trim().toLowerCase();
@@ -252,22 +254,35 @@
           {:else if webDiscover?.albums?.length}
             {#each webDiscover.albums as item}
               <div class="studio-catalog-list-tile">
-                <div class="studio-catalog-list-tile__main">
+                <button
+                  type="button"
+                  class="studio-catalog-list-tile__main"
+                  title="Ascolta un'anteprima"
+                  onclick={() => (previewItem = item)}
+                >
                   {#if item.thumbnailUrl}
                     <img
+                      class="studio-catalog-web-thumb"
                       src={item.thumbnailUrl}
                       alt=""
                       width="48"
                       height="48"
-                      style="border-radius:6px;object-fit:cover"
                     />
                   {/if}
                   <div>
                     <div class="library-list-tile__title">{item.title}</div>
                     <div class="library-list-tile__meta">{item.subtitle}</div>
                   </div>
-                </div>
+                </button>
                 <div class="studio-catalog-list-tile__actions">
+                  <button
+                    type="button"
+                    class="ghost-btn"
+                    onclick={() => (previewItem = item)}
+                  >
+                    <UiIcon name="play" />
+                    Anteprima
+                  </button>
                   <button
                     type="button"
                     class="primary-btn"
@@ -292,13 +307,35 @@
           {#if webDiscover?.songs?.length}
             {#each webDiscover.songs as item}
               <div class="studio-catalog-list-tile">
-                <div class="studio-catalog-list-tile__main">
+                <button
+                  type="button"
+                  class="studio-catalog-list-tile__main"
+                  title="Ascolta un'anteprima"
+                  onclick={() => (previewItem = item)}
+                >
+                  {#if item.thumbnailUrl}
+                    <img
+                      class="studio-catalog-web-thumb"
+                      src={item.thumbnailUrl}
+                      alt=""
+                      width="48"
+                      height="48"
+                    />
+                  {/if}
                   <div>
                     <div class="library-list-tile__title">{item.title}</div>
                     <div class="library-list-tile__meta">{item.subtitle}</div>
                   </div>
-                </div>
+                </button>
                 <div class="studio-catalog-list-tile__actions">
+                  <button
+                    type="button"
+                    class="ghost-btn"
+                    onclick={() => (previewItem = item)}
+                  >
+                    <UiIcon name="play" />
+                    Anteprima
+                  </button>
                   <button
                     type="button"
                     class="primary-btn"
@@ -396,7 +433,7 @@
                 <CoverArt
                   title={al.name}
                   seed={`${al.artist}/${al.name}`}
-                  src={al.has_cover ? albumCoverUrl(al.id) : ""}
+                  src={al.has_cover ? albumCoverUrl(al.id, 128) : ""}
                   size="tile"
                 />
                 <div>
@@ -452,7 +489,7 @@
                 <CoverArt
                   title={artist.name}
                   seed={artist.name}
-                  src={artist.has_cover && coverId ? artistCoverUrl(coverId) : ""}
+                  src={artist.has_cover && coverId ? artistCoverUrl(coverId, 128) : ""}
                   size="tile"
                 />
                 <div>
@@ -507,3 +544,12 @@
     {/if}
   </div>
 </div>
+
+<StudioCatalogPreviewDialog
+  item={previewItem}
+  onclose={() => (previewItem = null)}
+  onDownload={(item, mode) => {
+    previewItem = null;
+    onSendToDownload(item, mode);
+  }}
+/>

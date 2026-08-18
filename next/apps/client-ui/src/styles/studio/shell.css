@@ -1,0 +1,167 @@
+/* Guscio Studio: griglia della pagina, riquadri, titoli di pannello e mode switch. */
+.tools.tool-studio-layout {
+  display: flex;
+  flex-direction: column;
+  gap: var(--rk-section-gap);
+  min-width: 0;
+}
+
+.studio-page-card {
+  min-width: 0;
+  /* Allinea densità alle surface-card di contenuto (libreria/body). */
+  padding: var(--rk-space-lg) var(--rk-space-xl);
+}
+
+.studio-page-card > .tools.tool-studio-layout {
+  padding-bottom: 0;
+}
+
+.studio-listen-shell > .tools.tool-studio-layout {
+  padding-bottom: 0;
+}
+
+.studio-listen-shell {
+  min-width: 0;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  box-shadow: none;
+}
+
+.studio-pane {
+  line-height: var(--rk-lh);
+  min-width: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  min-height: 0;
+}
+
+.studio-pane.tools-download,
+.studio-pane.tools-meta,
+.studio-pane.tools-art,
+.studio-pane.studio-catalog-pane {
+  gap: var(--rk-section-gap);
+}
+
+.studio-panel {
+  padding: var(--rk-space-lg) var(--rk-space-xl);
+  border: 1px solid var(--rk-line);
+  border-radius: var(--rk-radius-lg);
+  background: color-mix(in srgb, var(--rk-surface-3) 72%, transparent);
+  min-width: 0;
+}
+
+.studio-panel-title {
+  margin: 0 0 var(--rk-space-md);
+  font-size: var(--rk-fs-2xs);
+  font-weight: 800;
+  text-transform: uppercase;
+  letter-spacing: 0.11em;
+  color: var(--rk-accent-2);
+}
+
+.studio-panel-gap {
+  margin: 0 0 var(--rk-space-xl);
+}
+
+.subtle.sm {
+  margin: 0;
+  font-size: var(--rk-fs-sm);
+  color: var(--rk-muted);
+  line-height: var(--rk-lh);
+}
+
+.warnline {
+  color: #f0c674;
+  font-size: var(--rk-fs-sm);
+  margin: var(--rk-space-xs) 0 var(--rk-space-md);
+}
+
+.block-label {
+  display: block;
+  margin: 0 0 var(--rk-space-2xs);
+}
+
+/* Buttons and fields: `@rekord/ui/styles/controls.css`. Only layout here. */
+.ghost-input--search {
+  min-width: min(100%, 14rem);
+  flex: 1 1 12rem;
+}
+
+.panel-empty {
+  margin: 0;
+  padding: var(--rk-space-xl);
+  text-align: center;
+  color: var(--rk-muted);
+  font-size: var(--rk-fs-md);
+  border-radius: var(--rk-radius);
+  border: 1px dashed color-mix(in srgb, var(--rk-line-strong) 70%, transparent);
+  background: color-mix(in srgb, var(--rk-surface-3) 55%, transparent);
+}
+
+.panel-empty--actions {
+  display: grid;
+  gap: var(--rk-space-lg);
+  justify-items: center;
+  border-radius: var(--rk-radius-lg);
+}
+
+/* —— Mode switch (Locale/Web, Classico/Explora) —— */
+.tools-dl-studio-switch {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--rk-space-md);
+  padding: var(--rk-space-xs) var(--rk-space-md);
+  border-radius: var(--rk-radius-lg);
+  border: 1px solid color-mix(in srgb, var(--rk-line) 78%, transparent);
+  background: color-mix(in srgb, var(--rk-surface-2) 50%, var(--rk-bg));
+}
+
+.tools-dl-studio-switch__label {
+  font-size: var(--rk-fs-2xs);
+  font-weight: 650;
+  color: var(--rk-muted);
+  white-space: nowrap;
+}
+
+.tools-dl-studio-switch__label.is-active {
+  color: var(--rk-ink);
+}
+
+.tools-dl-studio-switch__track {
+  position: relative;
+  width: 2.65rem;
+  height: 1.45rem;
+  flex-shrink: 0;
+  padding: 0;
+  border: 1px solid color-mix(in srgb, var(--rk-line) 85%, transparent);
+  border-radius: var(--rk-radius-round);
+  background: color-mix(in srgb, var(--rk-surface-2) 70%, var(--rk-bg));
+  cursor: pointer;
+}
+
+.tools-dl-studio-switch__track[aria-checked="true"] {
+  border-color: color-mix(in srgb, var(--rk-accent) 55%, var(--rk-line));
+  background: color-mix(in srgb, var(--rk-accent) 22%, var(--rk-surface-2));
+}
+
+.tools-dl-studio-switch__thumb {
+  position: absolute;
+  top: 50%;
+  left: 0.14rem;
+  width: 1.05rem;
+  height: 1.05rem;
+  border-radius: 50%;
+  background: var(--rk-ink);
+  transform: translateY(-50%);
+  transition: left 0.18s ease;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.22);
+}
+
+.tools-dl-studio-switch__track[aria-checked="true"]
+  .tools-dl-studio-switch__thumb {
+  left: calc(100% - 1.05rem - 0.14rem);
+  background: color-mix(in srgb, var(--rk-accent-2) 85%, #fff);
+}

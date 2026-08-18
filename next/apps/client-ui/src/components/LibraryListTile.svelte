@@ -30,7 +30,7 @@
     favoriteCount?: number;
     albumsMissingMetaCount?: number;
     tracksMissingMetaCount?: number;
-    /** True when album/track genre is missing from DB. */
+    /** True when album studio/sidecar meta is missing (legacy `!hasAlbumMeta`). */
     genreMissing?: boolean;
     albumExcluded?: boolean;
     albumsExcludedCount?: number;
@@ -40,7 +40,6 @@
     onclick?: () => void;
   } = $props();
 
-  void coverSeed;
   const albumMetaMissing = $derived(kind === "album" ? genreMissing : false);
   const badge = $derived(initials(title) || title.charAt(0).toUpperCase());
   const useBadge = $derived(kind === "artist" && showInitialsFallback && !coverSrc);

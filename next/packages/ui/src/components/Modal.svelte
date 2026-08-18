@@ -1,12 +1,15 @@
 <script lang="ts">
   import type { Snippet } from "svelte";
+  import { sheetDrag, SHEET_MEDIA_QUERY } from "../lib/sheetDrag";
 
   let {
     open = false,
     title = "",
     eyebrow = "",
     lede = "",
+    panelClass = "",
     onclose,
+    lead,
     children,
     footer,
   }: {
@@ -15,42 +18,84 @@
     eyebrow?: string;
     /** Optional path / subtitle under the title (meta-edit parity). */
     lede?: string;
+    /** Extra class on the dialog panel (e.g. wider reading layouts). */
+    panelClass?: string;
     onclose: () => void;
+    /** Optional media / avatar left of the title block (entity-info parity). */
+    lead?: Snippet;
     children: Snippet;
     footer?: Snippet;
   } = $props();
 
+  /* Su telefono il dialogo è un foglio dal basso e si può spingere giù per
+     chiuderlo; su schermo grande resta un pannello centrato. */
+  let isSheet = $state(false);
+
+  $effect(() => {
+    const mq = window.matchMedia(SHEET_MEDIA_QUERY);
+    const sync = () => {
+      isSheet = mq.matches;
+    };
+    sync();
+    mq.addEventListener("change", sync);
+    return () => mq.removeEventListener("change", sync);
+  });
+
   function onKey(e: KeyboardEvent) {
     if (e.key === "Escape") onclose();
+  }
+
+  /** Escape stacking contexts (glass panels / isolation) — same as CustomThemeDialog. */
+  function portal(node: HTMLElement) {
+    document.body.appendChild(node);
+    return {
+      destroy() {
+        if (node.parentNode) node.parentNode.removeChild(node);
+      },
+    };
   }
 </script>
 
 {#if open}
   <!-- svelte-ignore a11y_no_noninteractive_element_interactions -->
   <div
-    class="rk-modal-back"
+    class="rk-modal-back rk-sheet-back"
     role="presentation"
+    use:portal
     onclick={(e) => {
       if (e.target === e.currentTarget) onclose();
     }}
     onkeydown={onKey}
   >
     <div
-      class="rk-modal rk-scroll"
+      class={["rk-modal", "rk-sheet", "rk-scroll", panelClass]
+        .filter(Boolean)
+        .join(" ")}
       role="dialog"
       aria-modal="true"
       aria-labelledby="rk-modal-title"
       tabindex="-1"
+      use:sheetDrag={{
+        enabled: isSheet,
+        gripSelector: "[data-sheet-grip]",
+        onclose,
+      }}
     >
-      <header class="head">
-        <div class="titles">
-          {#if eyebrow}
-            <p class="eyebrow">{eyebrow}</p>
+      <div class="rk-sheet__grip" data-sheet-grip aria-hidden="true"></div>
+      <header class="head" data-sheet-grip>
+        <div class="head-main">
+          {#if lead}
+            <div class="lead">{@render lead()}</div>
           {/if}
-          <h2 id="rk-modal-title">{title}</h2>
-          {#if lede}
-            <p class="lede">{lede}</p>
-          {/if}
+          <div class="titles">
+            {#if eyebrow}
+              <p class="eyebrow">{eyebrow}</p>
+            {/if}
+            <h2 id="rk-modal-title">{title}</h2>
+            {#if lede}
+              <p class="lede">{lede}</p>
+            {/if}
+          </div>
         </div>
         <button
           type="button"
@@ -67,28 +112,36 @@
           </svg>
         </button>
       </header>
-      <div class="body">{@render children()}</div>
+      <div class="body" data-sheet-body>{@render children()}</div>
       {#if footer}
-        <footer class="foot">{@render footer()}</footer>
+        <footer class="foot" data-sheet-foot>{@render footer()}</footer>
       {/if}
     </div>
   </div>
 {/if}
 
 <style>
-  .rk-modal-back {
+  /* Zero specificity on the shape rules: on a phone `styles/sheet.css` reshapes
+     this panel into a bottom sheet with a plain class, and it must win. */
+  :where(.rk-modal-back) {
     position: fixed;
     inset: 0;
     z-index: var(--rk-z-modal, 120);
     background: rgba(4, 10, 18, 0.72);
     display: grid;
     place-items: center;
-    padding: 1rem;
+    /* Notch, status bar and home indicator all stay clear of the dialog. */
+    padding: max(1rem, env(safe-area-inset-top, 0px))
+      max(1rem, env(safe-area-inset-right, 0px))
+      max(1rem, env(safe-area-inset-bottom, 0px))
+      max(1rem, env(safe-area-inset-left, 0px));
   }
 
-  .rk-modal {
+  :where(.rk-modal) {
     width: min(28rem, 100%);
-    max-height: min(90dvh, 900px);
+    /* --rk-app-vh, not dvh: the on-screen keyboard overlays the page instead of
+       shrinking it, and a dialog with a field in it has to stay above the keys. */
+    max-height: min(calc(var(--rk-app-vh) * 0.9), 900px);
     overflow: auto;
     overscroll-behavior: contain;
     background: var(--rk-surface);
@@ -107,6 +160,20 @@
     border-bottom: 1px solid var(--rk-line);
   }
 
+  .head-main {
+    display: flex;
+    align-items: center;
+    gap: 0.85rem;
+    min-width: 0;
+    flex: 1 1 auto;
+  }
+
+  .lead {
+    flex: 0 0 auto;
+    display: grid;
+    place-items: center;
+  }
+
   .titles {
     min-width: 0;
   }
@@ -115,20 +182,20 @@
     margin: 0;
     text-transform: uppercase;
     letter-spacing: 0.12em;
-    font-size: 0.68rem;
+    font-size: var(--rk-fs-eyebrow);
     color: var(--rk-muted);
     font-weight: 650;
   }
 
   h2 {
     margin: 0.15rem 0 0;
-    font-size: 1.05rem;
-    line-height: 1.25;
+    font-size: var(--rk-fs-base);
+    line-height: var(--rk-lh-snug);
   }
 
   .lede {
     margin: 0.35rem 0 0;
-    font-size: 0.78rem;
+    font-size: var(--rk-fs-xs);
     color: var(--rk-muted);
     word-break: break-all;
     font-family: var(--rk-mono);
@@ -163,7 +230,7 @@
   .body :global(.rk-field) {
     margin-bottom: 0;
     gap: 0.28rem;
-    font-size: 0.86rem;
+    font-size: var(--rk-fs-sm);
   }
 
   .body :global(.rk-input) {

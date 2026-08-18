@@ -1,12 +1,14 @@
 //! Backup / restore ZIP for the next hub (kordBackup: 3) + restore of legacy v2 ZIPs.
 
 use crate::accounts::{self, Account, DEFAULT_ACCOUNT_ID};
-use crate::db::{PlaylistBackup, PlaylistBackupTrack};
+use crate::db::{Db, PlaylistBackup, PlaylistBackupTrack};
+use crate::metadata::providers::{DiscogsAlbumExtra, FetchedAlbumMeta, FetchedTrackMeta};
 use crate::scan;
 use crate::selection;
 use crate::state::AppState;
 use crate::user_state::{self, UserStateV1};
 use anyhow::{bail, Context, Result};
+use rusqlite::{Connection, OpenFlags};
 use serde::{Deserialize, Serialize};
 use serde_json::{json, Value};
 use std::collections::BTreeMap;
@@ -57,6 +59,8 @@ pub struct RestoreReport {
     pub playlist_tracks: u32,
     pub library_files: u32,
     pub scanned_tracks: u64,
+    pub album_meta_merged: u32,
+    pub track_meta_merged: u32,
 }
 
 #[derive(Debug, Clone, Serialize)]
@@ -463,9 +467,7 @@ pub fn try_import_theme_zip(
 
     if let Some(theme) = payload.get("theme").and_then(|v| v.as_str()) {
         if !theme.trim().is_empty() {
-            ustate
-                .settings
-                .insert("theme".into(), json!(theme.trim()));
+            ustate.settings.insert("theme".into(), json!(theme.trim()));
         }
     }
     if let Some(gs) = payload.get("glassSurfaces").and_then(|v| v.as_bool()) {
@@ -488,7 +490,13 @@ pub fn try_import_theme_zip(
         .and_then(|v| v.as_str())
         .map(str::trim)
         .filter(|s| !s.is_empty())
-        .map(|s| Path::new(s).file_name().and_then(|n| n.to_str()).unwrap_or(s).to_string());
+        .map(|s| {
+            Path::new(s)
+                .file_name()
+                .and_then(|n| n.to_str())
+                .unwrap_or(s)
+                .to_string()
+        });
 
     let mut bg_applied = false;
     if let Some(ref bg_name) = bg_file {
@@ -576,7 +584,10 @@ fn safe_join(base: &Path, rel: &str) -> Result<PathBuf> {
     Ok(out)
 }
 
-fn read_zip_string(archive: &mut ZipArchive<Cursor<Vec<u8>>>, name: &str) -> Result<Option<String>> {
+fn read_zip_string(
+    archive: &mut ZipArchive<Cursor<Vec<u8>>>,
+    name: &str,
+) -> Result<Option<String>> {
     match archive.by_name(name) {
         Ok(mut f) => {
             let mut s = String::new();
@@ -701,7 +712,10 @@ fn legacy_album_key_to_folder(key: &str) -> String {
     }
 }
 
-fn remap_legacy_excluded_albums(state: &mut UserStateV1, album_folder_to_id: &BTreeMap<String, i64>) {
+fn remap_legacy_excluded_albums(
+    state: &mut UserStateV1,
+    album_folder_to_id: &BTreeMap<String, i64>,
+) {
     let Some(keys_val) = state.settings.remove("legacyExcludedAlbumKeys") else {
         return;
     };
@@ -719,6 +733,78 @@ fn remap_legacy_excluded_albums(state: &mut UserStateV1, album_folder_to_id: &BT
             }
         }
     }
+}
+
+fn account_name_key(name: &str) -> String {
+    name.split_whitespace()
+        .collect::<Vec<_>>()
+        .join(" ")
+        .trim()
+        .to_ascii_lowercase()
+}
+
+/// Map backup account ids onto existing hub ids when the display name matches
+/// (case-insensitive). Same-id always wins; `default` always stays `default`.
+/// Returns `(registry with target ids + backup names, backup_id → target_id)`.
+fn resolve_restore_account_targets(
+    backup_registry: &[Account],
+    existing_hub: &[Account],
+) -> (Vec<Account>, BTreeMap<String, String>) {
+    let hub_ids: std::collections::HashSet<&str> =
+        existing_hub.iter().map(|a| a.id.as_str()).collect();
+    let mut id_map = BTreeMap::new();
+    let mut used_targets = std::collections::HashSet::new();
+    let mut final_reg = Vec::new();
+
+    for bak in backup_registry {
+        let mut target = if bak.id == DEFAULT_ACCOUNT_ID {
+            DEFAULT_ACCOUNT_ID.to_string()
+        } else if hub_ids.contains(bak.id.as_str()) {
+            bak.id.clone()
+        } else {
+            let key = account_name_key(&bak.name);
+            existing_hub
+                .iter()
+                .find(|h| {
+                    h.id != DEFAULT_ACCOUNT_ID
+                        && !used_targets.contains(h.id.as_str())
+                        && !backup_registry.iter().any(|b| b.id == h.id)
+                        && account_name_key(&h.name) == key
+                })
+                .map(|h| h.id.clone())
+                .unwrap_or_else(|| bak.id.clone())
+        };
+        if used_targets.contains(target.as_str()) {
+            target = bak.id.clone();
+        }
+        if used_targets.contains(target.as_str()) {
+            // Extremely unlikely: bak.id already claimed — keep first mapping only.
+            continue;
+        }
+        used_targets.insert(target.clone());
+        id_map.insert(bak.id.clone(), target.clone());
+        final_reg.push(Account {
+            id: target,
+            name: bak.name.clone(),
+        });
+    }
+
+    (final_reg, id_map)
+}
+
+fn remap_account_bundles(
+    per_account: BTreeMap<String, AccountRestoreBundle>,
+    id_map: &BTreeMap<String, String>,
+) -> BTreeMap<String, AccountRestoreBundle> {
+    let mut remapped = BTreeMap::new();
+    for (bak_id, bundle) in per_account {
+        let target = id_map
+            .get(&bak_id)
+            .cloned()
+            .unwrap_or_else(|| bak_id.clone());
+        merge_account_bundle(&mut remapped, &target, bundle);
+    }
+    remapped
 }
 
 fn merge_account_bundle(
@@ -795,6 +881,837 @@ fn collect_manifest_accounts(manifest_raw: &str) -> Vec<Account> {
         return Vec::new();
     };
     accounts::accounts_from_json_value(&v)
+}
+
+fn json_str_field(obj: &Value, keys: &[&str]) -> Option<String> {
+    for k in keys {
+        if let Some(s) = obj.get(*k).and_then(|v| v.as_str()) {
+            let t = s.trim();
+            if !t.is_empty() {
+                return Some(t.to_string());
+            }
+        }
+    }
+    None
+}
+
+fn json_i64_field(obj: &Value, keys: &[&str]) -> Option<i64> {
+    for k in keys {
+        let Some(v) = obj.get(*k) else { continue };
+        if let Some(n) = v.as_i64() {
+            return Some(n);
+        }
+        if let Some(n) = v.as_u64() {
+            return Some(n as i64);
+        }
+        if let Some(s) = v.as_str() {
+            if let Ok(n) = s.trim().parse::<i64>() {
+                return Some(n);
+            }
+        }
+    }
+    None
+}
+
+/// Drop 1-char / short-numeric stubs that are not real studio metadata.
+fn scrub_studio_str(v: Option<String>) -> Option<String> {
+    let s = v?.trim().to_string();
+    if s.is_empty() {
+        return None;
+    }
+    if s.len() == 1 {
+        return None;
+    }
+    if s.len() <= 2 && s.chars().all(|c| c.is_ascii_digit()) {
+        return None;
+    }
+    Some(s)
+}
+
+/// Like [`scrub_studio_str`], also drops generic ID3 genre stubs (`Music`, `Unknown`, …).
+fn scrub_studio_genre(v: Option<String>) -> Option<String> {
+    let s = scrub_studio_str(v)?;
+    if crate::db::is_weak_genre(Some(&s)) {
+        None
+    } else {
+        Some(s)
+    }
+}
+
+fn album_meta_from_sidecar_json(json: &Value) -> Option<FetchedAlbumMeta> {
+    if !json.is_object() {
+        return None;
+    }
+    let title = json_str_field(json, &["title"]);
+    let release_date = scrub_studio_str(json_str_field(
+        json,
+        &["releaseDate", "release_date", "date"],
+    ));
+    let genre = scrub_studio_genre(json_str_field(json, &["genre"]));
+    let label = scrub_studio_str(json_str_field(json, &["label"]));
+    let country = json_str_field(json, &["country"]).and_then(|s| {
+        let t = s.trim().to_string();
+        if t.is_empty() {
+            None
+        } else {
+            Some(t)
+        }
+    });
+    let source = json_str_field(json, &["source"]);
+    let musicbrainz_release_id =
+        json_str_field(json, &["musicbrainzReleaseId", "musicbrainz_release_id"]);
+    let discogs_release_id = json_i64_field(json, &["discogsReleaseId", "discogs_release_id"])
+        .map(|n| n.to_string())
+        .or_else(|| json_str_field(json, &["discogsReleaseId", "discogs_release_id"]));
+    let discogs_extra_value = json
+        .get("discogsExtra")
+        .or_else(|| json.get("discogs_extra"))
+        .filter(|v| v.is_object())
+        .cloned();
+    let discogs_extra = discogs_extra_value
+        .as_ref()
+        .and_then(|v| serde_json::from_value::<DiscogsAlbumExtra>(v.clone()).ok())
+        .filter(|e| {
+            e.master_id.is_some()
+                || e.discogs_uri.as_ref().is_some_and(|s| !s.trim().is_empty())
+                || e.format_summary
+                    .as_ref()
+                    .is_some_and(|s| !s.trim().is_empty())
+                || e.catalog_no.as_ref().is_some_and(|s| !s.trim().is_empty())
+        });
+    let discogs_extra_json = discogs_extra_value.and_then(|v| serde_json::to_string(&v).ok());
+    let discogs_uri = json_str_field(json, &["discogsUri", "discogs_uri"]).or_else(|| {
+        discogs_extra
+            .as_ref()
+            .and_then(|e| e.discogs_uri.clone())
+            .filter(|s| !s.trim().is_empty())
+    });
+    if title.is_none()
+        && release_date.is_none()
+        && genre.is_none()
+        && label.is_none()
+        && country.is_none()
+        && musicbrainz_release_id.is_none()
+        && discogs_release_id.is_none()
+        && discogs_uri.is_none()
+        && discogs_extra.is_none()
+    {
+        return None;
+    }
+    Some(FetchedAlbumMeta {
+        ok: true,
+        title,
+        release_date,
+        genre,
+        label,
+        country,
+        source,
+        musicbrainz_release_id,
+        discogs_release_id,
+        discogs_uri,
+        discogs_extra,
+        discogs_extra_json,
+        expected_track_count: None,
+    })
+}
+
+fn track_meta_from_sidecar_json(json: &Value) -> Option<FetchedTrackMeta> {
+    if !json.is_object() {
+        return None;
+    }
+    let title = json_str_field(json, &["title"]);
+    let release_date = scrub_studio_str(json_str_field(
+        json,
+        &["releaseDate", "release_date", "date"],
+    ));
+    let genre = scrub_studio_genre(json_str_field(json, &["genre"]));
+    let lyrics = json_str_field(json, &["lyrics"]);
+    let source = json_str_field(json, &["source"]);
+    let url = json_str_field(json, &["url"]);
+    let duration_ms = json_i64_field(json, &["durationMs", "duration_ms"]);
+    if title.is_none()
+        && release_date.is_none()
+        && genre.is_none()
+        && lyrics.is_none()
+        && source.is_none()
+        && url.is_none()
+    {
+        return None;
+    }
+    Some(FetchedTrackMeta {
+        ok: true,
+        title,
+        release_date,
+        genre,
+        lyrics,
+        track_number: None,
+        disc_number: None,
+        source,
+        url,
+        duration_ms,
+    })
+}
+
+/// Import album/track studio metadata from restored library sidecar JSON files.
+/// Parity with legacy `importLegacyAlbumMetaToDb` / `importLegacyTrackMetaMapToDb`.
+pub fn import_sidecar_metadata(db: &Db, music_root: &Path) -> Result<(u32, u32)> {
+    let mut albums = 0u32;
+    let mut tracks = 0u32;
+    if !music_root.is_dir() {
+        return Ok((0, 0));
+    }
+    for entry in WalkDir::new(music_root)
+        .into_iter()
+        .filter_map(|e| e.ok())
+        .filter(|e| e.file_type().is_file())
+    {
+        let name = entry.file_name().to_string_lossy();
+        let is_album = matches!(name.as_ref(), "kord-albuminfo.json" | "wpp-albuminfo.json");
+        let is_track = matches!(name.as_ref(), "kord-trackinfo.json" | "wpp-trackinfo.json");
+        if !is_album && !is_track {
+            continue;
+        }
+        let abs = entry.path();
+        let Ok(rel) = abs.strip_prefix(music_root) else {
+            continue;
+        };
+        if rel.components().any(|c| {
+            matches!(
+                c.as_os_str().to_str(),
+                Some(".kord" | ".rekord" | ".wpp" | "node_modules" | ".git")
+            )
+        }) {
+            continue;
+        }
+        let Some(parent) = abs.parent() else {
+            continue;
+        };
+        let Ok(folder_rel) = parent.strip_prefix(music_root) else {
+            continue;
+        };
+        let folder_key = folder_rel.to_string_lossy().replace('\\', "/");
+        let Ok(raw) = fs::read_to_string(abs) else {
+            continue;
+        };
+        let Ok(json) = serde_json::from_str::<Value>(&raw) else {
+            continue;
+        };
+        if is_album {
+            if let Some(meta) = album_meta_from_sidecar_json(&json) {
+                if db
+                    .fill_album_meta_empty(&folder_key, &meta)
+                    .unwrap_or(false)
+                {
+                    albums += 1;
+                }
+            }
+        } else if let Some(map) = json.as_object() {
+            for (file_name, meta_v) in map {
+                let Some(meta) = track_meta_from_sidecar_json(meta_v) else {
+                    continue;
+                };
+                let Ok(Some(rel_path)) = db.resolve_track_rel_in_album(&folder_key, file_name)
+                else {
+                    continue;
+                };
+                if db.fill_track_meta_empty(&rel_path, &meta).unwrap_or(false) {
+                    tracks += 1;
+                }
+            }
+        }
+    }
+    Ok((albums, tracks))
+}
+
+/// Merge album/track studio metadata from a restored legacy `.kord/rekord.db`.
+/// Next keeps its own hub DB; v2 backups store fetched meta in the library SQLite, not only sidecars.
+pub fn import_legacy_library_db_metadata(db: &Db, legacy_db_path: &Path) -> Result<(u32, u32)> {
+    if !legacy_db_path.is_file() {
+        return Ok((0, 0));
+    }
+    let legacy = Connection::open_with_flags(legacy_db_path, OpenFlags::SQLITE_OPEN_READ_ONLY)
+        .with_context(|| format!("open legacy db {}", legacy_db_path.display()))?;
+
+    let mut albums = 0u32;
+    let mut tracks = 0u32;
+
+    {
+        let has_discogs_extra = legacy
+            .prepare("PRAGMA table_info(albums)")
+            .ok()
+            .map(|mut s| {
+                s.query_map([], |r| r.get::<_, String>(1))
+                    .ok()
+                    .map(|rows| {
+                        rows.filter_map(|r| r.ok())
+                            .any(|name| name == "discogs_extra_json")
+                    })
+                    .unwrap_or(false)
+            })
+            .unwrap_or(false);
+        let sql = if has_discogs_extra {
+            r#"
+            SELECT folder_rel_path, title, release_date, genre, label, country,
+                   musicbrainz_release_id, discogs_release_id, expected_track_count,
+                   discogs_extra_json
+            FROM albums
+            WHERE has_album_meta = 1
+               OR (title IS NOT NULL AND trim(title) != '')
+               OR (genre IS NOT NULL AND trim(genre) != '')
+               OR (label IS NOT NULL AND trim(label) != '')
+               OR (release_date IS NOT NULL AND trim(release_date) != '')
+               OR (country IS NOT NULL AND trim(country) != '')
+               OR (musicbrainz_release_id IS NOT NULL AND trim(musicbrainz_release_id) != '')
+               OR discogs_release_id IS NOT NULL
+               OR (discogs_extra_json IS NOT NULL AND trim(discogs_extra_json) != '')
+            "#
+        } else {
+            r#"
+            SELECT folder_rel_path, title, release_date, genre, label, country,
+                   musicbrainz_release_id, discogs_release_id, expected_track_count,
+                   NULL AS discogs_extra_json
+            FROM albums
+            WHERE has_album_meta = 1
+               OR (title IS NOT NULL AND trim(title) != '')
+               OR (genre IS NOT NULL AND trim(genre) != '')
+               OR (label IS NOT NULL AND trim(label) != '')
+               OR (release_date IS NOT NULL AND trim(release_date) != '')
+               OR (country IS NOT NULL AND trim(country) != '')
+               OR (musicbrainz_release_id IS NOT NULL AND trim(musicbrainz_release_id) != '')
+               OR discogs_release_id IS NOT NULL
+            "#
+        };
+        let mut stmt = legacy.prepare(sql)?;
+        let rows = stmt.query_map([], |r| {
+            Ok((
+                r.get::<_, String>(0)?,
+                r.get::<_, Option<String>>(1)?,
+                r.get::<_, Option<String>>(2)?,
+                r.get::<_, Option<String>>(3)?,
+                r.get::<_, Option<String>>(4)?,
+                r.get::<_, Option<String>>(5)?,
+                r.get::<_, Option<String>>(6)?,
+                r.get::<_, Option<i64>>(7)?,
+                r.get::<_, Option<i64>>(8)?,
+                r.get::<_, Option<String>>(9)?,
+            ))
+        })?;
+        for row in rows.flatten() {
+            let (
+                folder,
+                title,
+                release_date,
+                genre,
+                label,
+                country,
+                mb_id,
+                discogs_id,
+                expected_track_count,
+                discogs_extra_json,
+            ) = row;
+            let folder_key = folder.replace('\\', "/");
+            let raw_extra = discogs_extra_json
+                .as_deref()
+                .map(str::trim)
+                .filter(|s| !s.is_empty())
+                .map(|s| s.to_string());
+            let discogs_extra = raw_extra
+                .as_deref()
+                .and_then(|s| serde_json::from_str::<DiscogsAlbumExtra>(s).ok());
+            let discogs_uri = discogs_extra
+                .as_ref()
+                .and_then(|e| e.discogs_uri.clone())
+                .filter(|s| !s.trim().is_empty());
+            let meta = FetchedAlbumMeta {
+                ok: true,
+                title: title.filter(|s| !s.trim().is_empty()),
+                release_date: release_date.filter(|s| !s.trim().is_empty()),
+                genre: scrub_studio_genre(genre.filter(|s| !s.trim().is_empty())),
+                label: label.filter(|s| !s.trim().is_empty()),
+                country: country.filter(|s| !s.trim().is_empty()),
+                source: None,
+                musicbrainz_release_id: mb_id.filter(|s| !s.trim().is_empty()),
+                discogs_release_id: discogs_id.map(|n| n.to_string()),
+                discogs_uri,
+                discogs_extra,
+                discogs_extra_json: raw_extra,
+                expected_track_count,
+            };
+            if db
+                .fill_album_meta_empty(&folder_key, &meta)
+                .unwrap_or(false)
+            {
+                albums += 1;
+            }
+        }
+    }
+
+    {
+        let mut stmt = legacy.prepare(
+            r#"
+            SELECT rel_path, title, genre, release_date, lyrics, source, url
+            FROM tracks
+            WHERE (source IS NOT NULL AND trim(source) != '')
+               OR (url IS NOT NULL AND trim(url) != '')
+               OR (lyrics IS NOT NULL AND trim(lyrics) != '')
+               OR (genre IS NOT NULL AND trim(genre) != '')
+               OR (release_date IS NOT NULL AND trim(release_date) != '')
+            "#,
+        )?;
+        let rows = stmt.query_map([], |r| {
+            Ok((
+                r.get::<_, String>(0)?,
+                r.get::<_, Option<String>>(1)?,
+                r.get::<_, Option<String>>(2)?,
+                r.get::<_, Option<String>>(3)?,
+                r.get::<_, Option<String>>(4)?,
+                r.get::<_, Option<String>>(5)?,
+                r.get::<_, Option<String>>(6)?,
+            ))
+        })?;
+        for row in rows.flatten() {
+            let (rel_path, title, genre, release_date, lyrics, source, url) = row;
+            let rel = rel_path.replace('\\', "/");
+            let meta = FetchedTrackMeta {
+                ok: true,
+                // Prefer not to clobber scan titles unless empty (fill_* handles that).
+                title: title.filter(|s| !s.trim().is_empty()),
+                release_date: release_date.filter(|s| !s.trim().is_empty()),
+                genre: scrub_studio_genre(genre.filter(|s| !s.trim().is_empty())),
+                lyrics: lyrics.filter(|s| !s.trim().is_empty()),
+                track_number: None,
+                disc_number: None,
+                source: source.filter(|s| !s.trim().is_empty()),
+                url: url.filter(|s| !s.trim().is_empty()),
+                duration_ms: None,
+            };
+            if db.fill_track_meta_empty(&rel, &meta).unwrap_or(false) {
+                tracks += 1;
+            }
+        }
+    }
+
+    Ok((albums, tracks))
+}
+
+/// After a restore scan: sync metadata from sidecars + restored legacy library DB.
+pub fn sync_restored_library_metadata(db: &Db, music_root: &Path) -> Result<(u32, u32)> {
+    let (mut albums, mut tracks) = import_sidecar_metadata(db, music_root)?;
+    let legacy_db = music_root.join(".kord").join("rekord.db");
+    let (a2, t2) = import_legacy_library_db_metadata(db, &legacy_db)?;
+    albums += a2;
+    tracks += t2;
+    Ok((albums, tracks))
+}
+
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct LegacySyncReport {
+    pub album_meta_merged: u32,
+    pub track_meta_merged: u32,
+    pub accounts_moods_synced: u32,
+    pub moods_imported: u32,
+    pub favorites_linked: u32,
+    pub playlists_imported: u32,
+    pub playlist_tracks_linked: u32,
+    pub selections_imported: u32,
+    pub accounts_registry: u32,
+}
+
+#[derive(Debug, Clone, Copy)]
+pub enum MoodImportMode {
+    /// Insert missing mood keys only (safe after routine scans).
+    FillEmpty,
+    /// Replace hub moods with legacy `.kord` map (repair / one-shot sync).
+    ReplaceFromLegacy,
+}
+
+/// Import per-account moods (and fill play counts / recent gaps) from
+/// `music_root/.kord/{account}_info/user-state.json` into the hub data_dir.
+pub fn import_legacy_account_user_state(
+    data_dir: &Path,
+    music_root: &Path,
+    mode: MoodImportMode,
+) -> Result<(u32, u32)> {
+    let kord = music_root.join(".kord");
+    if !kord.is_dir() {
+        return Ok((0, 0));
+    }
+    let mut accounts = 0u32;
+    let mut moods = 0u32;
+    for entry in fs::read_dir(&kord).with_context(|| format!("read {}", kord.display()))? {
+        let entry = entry?;
+        if !entry.file_type()?.is_dir() {
+            continue;
+        }
+        let name = entry.file_name().to_string_lossy().into_owned();
+        let Some(account_id) = name.strip_suffix("_info") else {
+            continue;
+        };
+        if account_id.is_empty() || account_id == "global" {
+            continue;
+        }
+        let legacy_path = entry.path().join("user-state.json");
+        if !legacy_path.is_file() {
+            continue;
+        }
+        let raw = match fs::read_to_string(&legacy_path) {
+            Ok(s) => s,
+            Err(e) => {
+                warn!(error = %e, path = %legacy_path.display(), "skip legacy user-state");
+                continue;
+            }
+        };
+        let Ok(legacy_val) = serde_json::from_str::<Value>(&raw) else {
+            continue;
+        };
+        let has_legacy_shape = legacy_val.get("trackPlayCounts").is_some()
+            || legacy_val.get("favorites").is_some()
+            || legacy_val.get("trackMoods").is_some()
+            || legacy_val.get("recent").is_some();
+        let converted = if has_legacy_shape {
+            match user_state::user_state_from_legacy_json(&raw) {
+                Ok(s) => s,
+                Err(e) => {
+                    warn!(error = %e, path = %legacy_path.display(), "legacy user-state convert failed");
+                    continue;
+                }
+            }
+        } else if let Ok(s) = serde_json::from_str::<UserStateV1>(&raw) {
+            s
+        } else {
+            continue;
+        };
+
+        let mut hub = user_state::load_user_state(data_dir, account_id);
+        let mut changed = false;
+
+        match mode {
+            MoodImportMode::ReplaceFromLegacy => {
+                if legacy_val.get("trackMoods").is_some() || !converted.track_moods.is_empty() {
+                    if hub.track_moods != converted.track_moods {
+                        moods += converted.track_moods.len() as u32;
+                        hub.track_moods = converted.track_moods.clone();
+                        changed = true;
+                    }
+                }
+            }
+            MoodImportMode::FillEmpty => {
+                for (k, v) in &converted.track_moods {
+                    if !hub.track_moods.contains_key(k) {
+                        hub.track_moods.insert(k.clone(), v.clone());
+                        moods += 1;
+                        changed = true;
+                    }
+                }
+            }
+        }
+
+        for (k, v) in converted.play_counts {
+            let cur = hub
+                .play_counts
+                .get(&k)
+                .and_then(|x| x.as_u64())
+                .unwrap_or(0);
+            let n = v.as_u64().unwrap_or(0);
+            if n > cur {
+                hub.play_counts.insert(k, Value::from(n));
+                changed = true;
+            }
+        }
+        if hub.recent_rel_paths.is_empty() && !converted.recent_rel_paths.is_empty() {
+            hub.recent_rel_paths = converted.recent_rel_paths;
+            changed = true;
+        }
+        match mode {
+            MoodImportMode::ReplaceFromLegacy => {
+                if hub.excluded_rel_paths != converted.excluded_rel_paths {
+                    hub.excluded_rel_paths = converted.excluded_rel_paths.clone();
+                    changed = true;
+                }
+                // Full replace (including clearing hub-only album blocks).
+                // String keys remapped by `import_legacy_accounts_personal_data`.
+                if hub.excluded_album_ids != converted.excluded_album_ids {
+                    hub.excluded_album_ids = converted.excluded_album_ids.clone();
+                    changed = true;
+                }
+                if let Some(keys) = converted.settings.get("legacyExcludedAlbumKeys") {
+                    if hub.settings.get("legacyExcludedAlbumKeys") != Some(keys) {
+                        hub.settings
+                            .insert("legacyExcludedAlbumKeys".into(), keys.clone());
+                        changed = true;
+                    }
+                }
+                if !converted.settings.is_empty() {
+                    for (k, v) in &converted.settings {
+                        if k == "legacyExcludedAlbumKeys" {
+                            continue;
+                        }
+                        if hub.settings.get(k) != Some(v) {
+                            hub.settings.insert(k.clone(), v.clone());
+                            changed = true;
+                        }
+                    }
+                }
+            }
+            MoodImportMode::FillEmpty => {
+                if hub.excluded_rel_paths.is_empty() && !converted.excluded_rel_paths.is_empty() {
+                    hub.excluded_rel_paths = converted.excluded_rel_paths;
+                    changed = true;
+                }
+            }
+        }
+
+        if changed {
+            hub.revision = hub.revision.saturating_add(1).max(1);
+            user_state::save_user_state(data_dir, account_id, &hub)?;
+            accounts += 1;
+        }
+    }
+    Ok((accounts, moods))
+}
+
+fn normalize_import_rel_path(p: &str) -> String {
+    let mut s = p.trim().replace('\\', "/");
+    while s.starts_with('/') {
+        s = s[1..].to_string();
+    }
+    s = s.replace("/Tracce/", "/Tracks/");
+    if s.starts_with("Tracce/") {
+        s = format!("Tracks/{}", &s["Tracce/".len()..]);
+    }
+    s
+}
+
+fn load_legacy_accounts_registry(music_root: &Path) -> Vec<Account> {
+    let global_accounts = music_root
+        .join(".kord")
+        .join("global_info")
+        .join("accounts.json");
+    let Ok(raw) = fs::read_to_string(&global_accounts) else {
+        return Vec::new();
+    };
+    let Ok(v) = serde_json::from_str::<Value>(&raw) else {
+        return Vec::new();
+    };
+    let Some(arr) = v.get("accounts").and_then(|x| x.as_array()) else {
+        return Vec::new();
+    };
+    let mut list = Vec::new();
+    for a in arr {
+        let id = a.get("id").and_then(|x| x.as_str()).unwrap_or("").trim();
+        let name = a.get("name").and_then(|x| x.as_str()).unwrap_or("").trim();
+        if id.is_empty() {
+            continue;
+        }
+        list.push(Account {
+            id: id.to_string(),
+            name: if name.is_empty() {
+                if id == DEFAULT_ACCOUNT_ID {
+                    "Locale".to_string()
+                } else {
+                    "Account".to_string()
+                }
+            } else {
+                name.to_string()
+            },
+        });
+    }
+    list
+}
+
+/// Import registry + per-account favorites, playlists, selection, theme-bg and full user-state
+/// from `music_root/.kord` into the hub (replace semantics for personal data).
+/// Returns `(accounts, moods, favorites, playlists, playlist_tracks, selections, registry)`.
+pub fn import_legacy_accounts_personal_data(
+    db: &Db,
+    data_dir: &Path,
+    music_root: &Path,
+) -> Result<(u32, u32, u32, u32, u32, u32, u32)> {
+    let kord = music_root.join(".kord");
+    if !kord.is_dir() {
+        return Ok((0, 0, 0, 0, 0, 0, 0));
+    }
+
+    let mut registry_n = 0u32;
+    let list = load_legacy_accounts_registry(music_root);
+    if !list.is_empty() {
+        registry_n = accounts::replace_accounts_registry(data_dir, &list)?.len() as u32;
+    }
+    let _ = accounts::ensure_accounts(data_dir);
+
+    let album_folder_to_id: BTreeMap<String, i64> = db
+        .list_albums()
+        .unwrap_or_default()
+        .into_iter()
+        .map(|a| (a.folder_key.replace('\\', "/"), a.id))
+        .collect();
+
+    let mut accounts_synced = 0u32;
+    let mut moods_imported = 0u32;
+    let mut favorites_linked = 0u32;
+    let mut playlists_imported = 0u32;
+    let mut playlist_tracks_linked = 0u32;
+    let mut selections_imported = 0u32;
+
+    for entry in fs::read_dir(&kord).with_context(|| format!("read {}", kord.display()))? {
+        let entry = entry?;
+        if !entry.file_type()?.is_dir() {
+            continue;
+        }
+        let name = entry.file_name().to_string_lossy().into_owned();
+        let Some(account_id) = account_id_from_info_dir_name(&name) else {
+            continue;
+        };
+        let info_dir = entry.path();
+        let mut touched = false;
+
+        let legacy_path = info_dir.join("user-state.json");
+        if legacy_path.is_file() {
+            let raw = match fs::read_to_string(&legacy_path) {
+                Ok(s) => s,
+                Err(e) => {
+                    warn!(error = %e, path = %legacy_path.display(), "skip legacy user-state");
+                    String::new()
+                }
+            };
+            if !raw.is_empty() {
+                if let Ok((fav, pls)) = playlists_from_legacy_user_state(&raw) {
+                    let fav: Vec<String> = fav
+                        .into_iter()
+                        .map(|p| normalize_import_rel_path(&p))
+                        .filter(|p| !p.is_empty())
+                        .collect();
+                    let mut pls_norm = pls;
+                    for pl in &mut pls_norm {
+                        for t in &mut pl.tracks {
+                            t.rel_path = normalize_import_rel_path(&t.rel_path);
+                        }
+                    }
+                    favorites_linked += db.replace_favorites_by_rel_paths(&account_id, &fav)?;
+                    let (p, t) = db.replace_playlists_backup(&account_id, &pls_norm)?;
+                    playlists_imported += p;
+                    playlist_tracks_linked += t;
+                    touched = true;
+                }
+                match user_state::user_state_from_legacy_json(&raw) {
+                    Ok(mut ustate) => {
+                        moods_imported += ustate.track_moods.len() as u32;
+                        remap_legacy_excluded_albums(&mut ustate, &album_folder_to_id);
+                        user_state::save_user_state(data_dir, &account_id, &ustate)?;
+                        touched = true;
+                    }
+                    Err(e) => {
+                        warn!(
+                            error = %e,
+                            path = %legacy_path.display(),
+                            "legacy user-state convert failed"
+                        );
+                    }
+                }
+            }
+        }
+
+        // Selection may live under *_info (legacy) — next uses accounts/{id}/.
+        let sel_src = info_dir.join("library-selection.json");
+        if sel_src.is_file() {
+            if let Ok(raw) = fs::read_to_string(&sel_src) {
+                if let Ok(sel) = serde_json::from_str::<selection::LibrarySelection>(&raw) {
+                    if selection::write_library_selection(data_dir, &account_id, &sel).is_ok() {
+                        selections_imported += 1;
+                        touched = true;
+                    }
+                }
+            }
+        }
+
+        for bg in [
+            "theme-bg.jpg",
+            "theme-bg.jpeg",
+            "theme-bg.png",
+            "theme-bg.webp",
+            "theme-bg.gif",
+        ] {
+            let src = info_dir.join(bg);
+            if !src.is_file() {
+                continue;
+            }
+            let ext = Path::new(bg)
+                .extension()
+                .and_then(|e| e.to_str())
+                .unwrap_or("jpg");
+            let dest = user_state::theme_bg_path_for_ext(data_dir, &account_id, ext);
+            if let Some(parent) = dest.parent() {
+                let _ = fs::create_dir_all(parent);
+            }
+            let _ = user_state::delete_theme_bg(data_dir, &account_id);
+            if fs::copy(&src, &dest).is_ok() {
+                touched = true;
+            }
+            break;
+        }
+
+        if touched {
+            accounts_synced += 1;
+        }
+    }
+
+    Ok((
+        accounts_synced,
+        moods_imported,
+        favorites_linked,
+        playlists_imported,
+        playlist_tracks_linked,
+        selections_imported,
+        registry_n,
+    ))
+}
+
+/// One-shot: merge studio metadata from sidecars + `.kord/rekord.db`, and
+/// re-import personal data (moods, excludes, settings, favorites, playlists, selection)
+/// from `.kord/{account}_info/user-state.json`.
+pub fn sync_legacy_library_data(
+    db: &Db,
+    data_dir: &Path,
+    music_root: &Path,
+) -> Result<LegacySyncReport> {
+    let (album_meta_merged, track_meta_merged) = sync_restored_library_metadata(db, music_root)?;
+    // After import: drop stubs reintroduced by bad sidecars (e.g. genre "e").
+    let _ = db.clear_weak_studio_placeholders();
+
+    let (
+        accounts_moods_synced,
+        moods_imported,
+        favorites_linked,
+        playlists_imported,
+        playlist_tracks_linked,
+        selections_imported,
+        accounts_registry,
+    ) = import_legacy_accounts_personal_data(db, data_dir, music_root)?;
+
+    info!(
+        album_meta_merged,
+        track_meta_merged,
+        accounts_moods_synced,
+        moods_imported,
+        favorites_linked,
+        playlists_imported,
+        playlist_tracks_linked,
+        selections_imported,
+        accounts_registry,
+        "legacy library sync finished"
+    );
+    Ok(LegacySyncReport {
+        album_meta_merged,
+        track_meta_merged,
+        accounts_moods_synced,
+        moods_imported,
+        favorites_linked,
+        playlists_imported,
+        playlist_tracks_linked,
+        selections_imported,
+        accounts_registry,
+    })
 }
 
 /// Restore from ZIP bytes (next v3 or legacy v2).
@@ -906,11 +1823,7 @@ pub async fn restore_backup_zip(state: &AppState, zip_bytes: Vec<u8>) -> Result<
     // Shared config extras (cookies / activity).
     if let Some(cookies) = read_zip_string(&mut archive, "config/youtube-cookies.txt")? {
         if !cookies.trim().is_empty() {
-            let dest = state
-                .config
-                .lock()
-                .unwrap()
-                .default_youtube_cookies_path();
+            let dest = state.config.lock().unwrap().default_youtube_cookies_path();
             if let Some(parent) = dest.parent() {
                 let _ = fs::create_dir_all(parent);
             }
@@ -1033,7 +1946,8 @@ pub async fn restore_backup_zip(state: &AppState, zip_bytes: Vec<u8>) -> Result<
                     }
                 }
             }
-            "theme-bg.jpg" | "theme-bg.jpeg" | "theme-bg.png" | "theme-bg.webp" | "theme-bg.gif" => {
+            "theme-bg.jpg" | "theme-bg.jpeg" | "theme-bg.png" | "theme-bg.webp"
+            | "theme-bg.gif" => {
                 if let Ok(mut zf) = archive.by_name(name) {
                     let tmp = data_dir
                         .join("accounts")
@@ -1082,7 +1996,9 @@ pub async fn restore_backup_zip(state: &AppState, zip_bytes: Vec<u8>) -> Result<
                 // Fill gaps from legacy *_info without clobbering richer hub/ v3 data.
                 let existing = per_account.get(&acc_id);
                 let need_core = existing
-                    .map(|e| e.favorites.is_empty() && e.playlists.is_empty() && e.user_state.is_none())
+                    .map(|e| {
+                        e.favorites.is_empty() && e.playlists.is_empty() && e.user_state.is_none()
+                    })
                     .unwrap_or(true);
                 let need_state = existing.map(|e| e.user_state.is_none()).unwrap_or(true);
                 let need_sel = existing.map(|e| e.selection.is_none()).unwrap_or(true);
@@ -1187,6 +2103,22 @@ pub async fn restore_backup_zip(state: &AppState, zip_bytes: Vec<u8>) -> Result<
             name: "Imported".to_string(),
         });
     }
+
+    // Overwrite-by-name: if hub already has "Diego" with a different UUID, apply
+    // backup Diego's personal data onto that hub id (and keep the hub id).
+    let existing_hub = accounts::ensure_accounts(&data_dir).unwrap_or_default();
+    let (registry, id_map) = resolve_restore_account_targets(&registry, &existing_hub);
+    let per_account = remap_account_bundles(per_account, &id_map);
+    if !id_map.is_empty() {
+        let remaps: Vec<String> = id_map
+            .iter()
+            .filter(|(b, t)| b != t)
+            .map(|(b, t)| format!("{b}→{t}"))
+            .collect();
+        if !remaps.is_empty() {
+            info!(?remaps, "restore: remapped backup accounts by name");
+        }
+    }
     let registry = accounts::replace_accounts_registry(&data_dir, &registry)?;
 
     // Full library scan then re-link favorites/playlists
@@ -1203,6 +2135,21 @@ pub async fn restore_backup_zip(state: &AppState, zip_bytes: Vec<u8>) -> Result<
         Ok(Err(e)) => return Err(e),
         Err(e) => bail!("scan join error: {e}"),
     };
+
+    // Legacy v2 stores fetched album/track meta in `.kord/rekord.db` (and sparsely in sidecars).
+    // Next scans into its own hub DB — merge those fields after indexing paths.
+    let (album_meta_merged, track_meta_merged) =
+        match sync_restored_library_metadata(&state.db, &music_root) {
+            Ok(v) => v,
+            Err(e) => {
+                warn!(error = %e, "restore: metadata sync failed");
+                (0, 0)
+            }
+        };
+    info!(
+        album_meta_merged,
+        track_meta_merged, "restore: library metadata synced"
+    );
 
     let album_folder_to_id: BTreeMap<String, i64> = state
         .db
@@ -1267,8 +2214,12 @@ pub async fn restore_backup_zip(state: &AppState, zip_bytes: Vec<u8>) -> Result<
     let activity_dest = data_dir.join("activity.jsonl");
     if !activity_dest.is_file() {
         for cand in [
-            kord_dest.join("global_info").join("kord-activity.log.jsonl"),
-            kord_dest.join("global_info").join("rekord-activity.log.jsonl"),
+            kord_dest
+                .join("global_info")
+                .join("kord-activity.log.jsonl"),
+            kord_dest
+                .join("global_info")
+                .join("rekord-activity.log.jsonl"),
         ] {
             if cand.is_file() {
                 let _ = fs::copy(cand, &activity_dest);
@@ -1284,6 +2235,8 @@ pub async fn restore_backup_zip(state: &AppState, zip_bytes: Vec<u8>) -> Result<
         playlist_tracks = tr_n,
         library_files,
         tracks = report.indexed_tracks,
+        album_meta_merged,
+        track_meta_merged,
         "restore complete"
     );
 
@@ -1295,6 +2248,8 @@ pub async fn restore_backup_zip(state: &AppState, zip_bytes: Vec<u8>) -> Result<
         playlist_tracks: tr_n,
         library_files,
         scanned_tracks: report.indexed_tracks,
+        album_meta_merged,
+        track_meta_merged,
     })
 }
 
@@ -1369,6 +2324,67 @@ mod tests {
     }
 
     #[test]
+    fn restore_remaps_accounts_by_matching_name() {
+        let existing = vec![
+            Account {
+                id: "default".into(),
+                name: "Locale".into(),
+            },
+            Account {
+                id: "hub-diego".into(),
+                name: "Diego".into(),
+            },
+        ];
+        let backup = vec![
+            Account {
+                id: "default".into(),
+                name: "Default".into(),
+            },
+            Account {
+                id: "bak-diego".into(),
+                name: "diego".into(), // case-insensitive
+            },
+            Account {
+                id: "bak-new".into(),
+                name: "Nuovo".into(),
+            },
+        ];
+        let (reg, map) = resolve_restore_account_targets(&backup, &existing);
+        assert_eq!(map.get("default").map(String::as_str), Some("default"));
+        assert_eq!(map.get("bak-diego").map(String::as_str), Some("hub-diego"));
+        assert_eq!(map.get("bak-new").map(String::as_str), Some("bak-new"));
+        assert_eq!(reg.len(), 3);
+        assert!(reg.iter().any(|a| a.id == "hub-diego" && a.name == "diego"));
+        assert!(reg.iter().any(|a| a.id == "bak-new" && a.name == "Nuovo"));
+    }
+
+    #[test]
+    fn restore_keeps_same_id_without_name_steal() {
+        let existing = vec![
+            Account {
+                id: "default".into(),
+                name: "Default".into(),
+            },
+            Account {
+                id: "aaa".into(),
+                name: "Diego".into(),
+            },
+        ];
+        let backup = vec![
+            Account {
+                id: "default".into(),
+                name: "Default".into(),
+            },
+            Account {
+                id: "aaa".into(),
+                name: "Diego".into(),
+            },
+        ];
+        let (_reg, map) = resolve_restore_account_targets(&backup, &existing);
+        assert_eq!(map.get("aaa").map(String::as_str), Some("aaa"));
+    }
+
+    #[test]
     fn non_theme_zip_returns_none() {
         let mut cursor = Cursor::new(Vec::new());
         {
@@ -1387,7 +2403,9 @@ mod tests {
             return;
         }
         let bytes = fs::read(&path).unwrap();
-        let parsed = parse_theme_zip_payload(&bytes).unwrap().expect("fixture theme zip");
+        let parsed = parse_theme_zip_payload(&bytes)
+            .unwrap()
+            .expect("fixture theme zip");
         assert_eq!(parsed["kind"], "rekord-theme");
         assert_eq!(parsed["theme"], "custom");
         // Must not require config/manifest.json — detection is theme-only.
@@ -1395,5 +2413,235 @@ mod tests {
         assert!(read_zip_string(&mut archive, "config/manifest.json")
             .unwrap()
             .is_none());
+    }
+
+    #[test]
+    fn imports_sidecar_and_legacy_db_metadata_after_scan_shape() {
+        let tmp = tempfile_dir();
+        let music = tmp.join("music");
+        let album_dir = music.join("Artist").join("Album");
+        fs::create_dir_all(&album_dir).unwrap();
+        fs::write(
+            album_dir.join("kord-albuminfo.json"),
+            r#"{"title":"Nice Title","genre":"Rock","label":"Label X","releaseDate":"2001"}"#,
+        )
+        .unwrap();
+        fs::write(
+            album_dir.join("kord-trackinfo.json"),
+            r#"{"01 - Song.mp3":{"title":"Song","source":"deezer","url":"https://example/t/1","genre":"Rock"}}"#,
+        )
+        .unwrap();
+
+        let hub_db_path = tmp.join("hub.db");
+        let db = Db::open(&hub_db_path).unwrap();
+        let artist_id = db.upsert_artist("Artist").unwrap();
+        let album_id = db
+            .upsert_album(
+                "Album",
+                "Artist",
+                Some(artist_id),
+                "Artist/Album",
+                None,
+                false,
+            )
+            .unwrap();
+        db.upsert_track(
+            "Artist/Album/01 - Song.mp3",
+            &album_dir.join("01 - Song.mp3"),
+            "01 - Song",
+            "Artist",
+            "Album",
+            1000,
+            Some(1),
+            Some(album_id),
+            Some(artist_id),
+            10,
+            0,
+            None,
+            None,
+            None,
+        )
+        .unwrap();
+
+        let (a1, t1) = import_sidecar_metadata(&db, &music).unwrap();
+        assert!(a1 >= 1);
+        assert!(t1 >= 1);
+
+        // Build a mini legacy rekord.db with richer track meta for another album path.
+        let legacy_dir = music.join(".kord");
+        fs::create_dir_all(&legacy_dir).unwrap();
+        let legacy_path = legacy_dir.join("rekord.db");
+        {
+            let leg = Connection::open(&legacy_path).unwrap();
+            leg.execute_batch(
+                r#"
+                CREATE TABLE albums (
+                  id TEXT PRIMARY KEY,
+                  artist_id TEXT,
+                  folder_rel_path TEXT NOT NULL UNIQUE,
+                  name TEXT NOT NULL,
+                  title TEXT,
+                  release_date TEXT,
+                  genre TEXT,
+                  label TEXT,
+                  country TEXT,
+                  musicbrainz_release_id TEXT,
+                  expected_track_count INTEGER,
+                  has_album_meta INTEGER NOT NULL DEFAULT 0,
+                  discogs_release_id INTEGER
+                );
+                CREATE TABLE tracks (
+                  id TEXT PRIMARY KEY,
+                  rel_path TEXT NOT NULL UNIQUE,
+                  album_id TEXT,
+                  title TEXT NOT NULL,
+                  artist_name TEXT,
+                  album_name TEXT,
+                  genre TEXT,
+                  release_date TEXT,
+                  lyrics TEXT,
+                  source TEXT,
+                  url TEXT
+                );
+                INSERT INTO albums(id, artist_id, folder_rel_path, name, title, genre, label, has_album_meta)
+                VALUES ('A','Artist','Artist/Album','Album','Nice Title','Metal','Legacy Label',1);
+                INSERT INTO tracks(id, rel_path, album_id, title, artist_name, album_name, source, url, lyrics)
+                VALUES ('T','Artist/Album/01 - Song.mp3','A','Song','Artist','Album','musicbrainz','https://mb/1','la la');
+                "#,
+            )
+            .unwrap();
+        }
+
+        // Clear sidecar-filled genre so legacy DB can demonstrate fill-empty merge of lyrics/source.
+        {
+            let conn = Connection::open(&hub_db_path).unwrap();
+            conn.execute(
+                "UPDATE tracks SET source=NULL, url=NULL, lyrics=NULL, genre=NULL",
+                [],
+            )
+            .unwrap();
+            conn.execute("UPDATE albums SET genre=NULL, label=NULL", [])
+                .unwrap();
+        }
+        let db2 = Db::open(&hub_db_path).unwrap();
+        let (a2, t2) = import_legacy_library_db_metadata(&db2, &legacy_path).unwrap();
+        assert!(a2 >= 1);
+        assert!(t2 >= 1);
+
+        let album = db2
+            .list_albums()
+            .unwrap()
+            .into_iter()
+            .find(|a| a.folder_key == "Artist/Album")
+            .expect("album");
+        assert_eq!(album.genre.as_deref(), Some("Metal"));
+        assert_eq!(album.label.as_deref(), Some("Legacy Label"));
+
+        let tracks = db2.tracks_by_album_folder("Artist/Album").unwrap();
+        let tr = tracks
+            .iter()
+            .find(|t| t.rel_path.ends_with("Song.mp3"))
+            .unwrap();
+        // source/url/lyrics live in DB columns; list API Track may omit some — query sqlite.
+        let conn = Connection::open(&hub_db_path).unwrap();
+        let (source, url, lyrics): (Option<String>, Option<String>, Option<String>) = conn
+            .query_row(
+                "SELECT source, url, lyrics FROM tracks WHERE rel_path = ?1",
+                ["Artist/Album/01 - Song.mp3"],
+                |r| Ok((r.get(0)?, r.get(1)?, r.get(2)?)),
+            )
+            .unwrap();
+        assert_eq!(source.as_deref(), Some("musicbrainz"));
+        assert_eq!(url.as_deref(), Some("https://mb/1"));
+        assert_eq!(lyrics.as_deref(), Some("la la"));
+        let _ = tr;
+    }
+
+    #[test]
+    fn real_legacy_backup_db_merges_when_fixture_present() {
+        let zip = PathBuf::from(
+            "/home/diego-ubuntu/Scaricati/rekord-backup-2026-07-29T14-25-06.354Z.zip",
+        );
+        if !zip.is_file() {
+            return;
+        }
+        let tmp = tempfile_dir();
+        let hub_db_path = tmp.join("hub.db");
+        let legacy_path = tmp.join("rekord.db");
+        // Extract only legacy DB from the real ZIP.
+        {
+            let bytes = fs::read(&zip).unwrap();
+            let mut archive = ZipArchive::new(Cursor::new(bytes)).unwrap();
+            let mut f = archive.by_name("kord-db/rekord.db").unwrap();
+            let mut out = File::create(&legacy_path).unwrap();
+            std::io::copy(&mut f, &mut out).unwrap();
+        }
+        let db = Db::open(&hub_db_path).unwrap();
+        // Seed a few albums/tracks that exist in the fixture DB.
+        let samples: Vec<(String, String)> = {
+            let leg = Connection::open_with_flags(&legacy_path, OpenFlags::SQLITE_OPEN_READ_ONLY)
+                .unwrap();
+            let mut stmt = leg
+                .prepare(
+                    r#"
+                    SELECT a.folder_rel_path, t.rel_path
+                    FROM tracks t
+                    JOIN albums a ON a.id = t.album_id
+                    WHERE t.source IS NOT NULL AND trim(t.source) != ''
+                    LIMIT 5
+                    "#,
+                )
+                .unwrap();
+            stmt.query_map([], |r| Ok((r.get::<_, String>(0)?, r.get::<_, String>(1)?)))
+                .unwrap()
+                .filter_map(|r| r.ok())
+                .collect()
+        };
+        assert!(!samples.is_empty());
+        for (folder, rel) in &samples {
+            let folder = folder.replace('\\', "/");
+            let rel = rel.replace('\\', "/");
+            let artist = folder.split('/').next().unwrap_or("A");
+            let album = folder.split('/').nth(1).unwrap_or("B");
+            let artist_id = db.upsert_artist(artist).unwrap();
+            let album_id = db
+                .upsert_album(album, artist, Some(artist_id), &folder, None, false)
+                .unwrap();
+            db.upsert_track(
+                &rel,
+                &Path::new("/tmp").join(&rel),
+                "t",
+                artist,
+                album,
+                1,
+                None,
+                Some(album_id),
+                Some(artist_id),
+                1,
+                0,
+                None,
+                None,
+                None,
+            )
+            .unwrap();
+        }
+        let (albums, tracks) = import_legacy_library_db_metadata(&db, &legacy_path).unwrap();
+        assert!(albums > 0, "expected album meta from fixture db");
+        assert!(tracks > 0, "expected track meta from fixture db");
+        let conn = Connection::open(&hub_db_path).unwrap();
+        let with_source: i64 = conn
+            .query_row(
+                "SELECT COUNT(*) FROM tracks WHERE source IS NOT NULL AND trim(source) != ''",
+                [],
+                |r| r.get(0),
+            )
+            .unwrap();
+        assert!(with_source > 0);
+    }
+
+    fn tempfile_dir() -> PathBuf {
+        let dir = std::env::temp_dir().join(format!("rekord-backup-test-{}", uuid::Uuid::new_v4()));
+        fs::create_dir_all(&dir).unwrap();
+        dir
     }
 }

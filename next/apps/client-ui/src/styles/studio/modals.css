@@ -1,0 +1,120 @@
+/* Dialoghi di Studio: selezione Discogs e scelta della scansione. */
+.meta-edit-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: var(--rk-z-modal);
+  display: grid;
+  place-items: center;
+  padding: max(var(--rk-space-xl), env(safe-area-inset-top, 0px))
+    max(var(--rk-space-xl), env(safe-area-inset-right, 0px))
+    max(var(--rk-space-xl), env(safe-area-inset-bottom, 0px))
+    max(var(--rk-space-xl), env(safe-area-inset-left, 0px));
+  background: color-mix(in srgb, var(--rk-bg) 55%, transparent);
+  backdrop-filter: blur(4px);
+}
+
+.meta-edit-dialog {
+  width: min(36rem, 100%);
+  /* Su --rk-app-vh e non su vh: qui dentro si scrive, e la tastiera copre la
+     pagina invece di rimpicciolirla (vedi lib/viewportMetrics.ts). */
+  max-height: min(calc(var(--rk-app-vh) * 0.8), 40rem);
+  overflow: auto;
+  padding: var(--rk-space-xl) var(--rk-space-xl);
+  border: 1px solid var(--rk-line);
+  border-radius: var(--rk-radius-lg);
+  background: var(--rk-surface);
+  box-shadow: var(--rk-shadow);
+}
+
+/* Da foglio (telefono): la maniglia sta in alto al bordo e l'ultima riga di
+   comandi resta sopra la home bar, perché questi due dialoghi non hanno una
+   barra di azioni a cui appoggiarsi. */
+@media (max-width: 999.98px) {
+  .meta-edit-dialog {
+    padding-top: var(--rk-space-2xs);
+  }
+
+  .studio-scan-choice {
+    padding-bottom: calc(var(--rk-space-xl) + env(safe-area-inset-bottom, 0px));
+  }
+}
+
+.meta-edit-dialog .section-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: var(--rk-space-lg);
+  margin-bottom: var(--rk-space-lg);
+}
+
+.meta-edit-dialog .section-head h2 {
+  margin: 0 0 var(--rk-space-2xs);
+  font-size: var(--rk-fs-base);
+}
+
+.studio-scan-choice__title {
+  margin: 0 0 var(--rk-space-sm);
+  font-size: var(--rk-fs-base);
+}
+
+.studio-scan-choice__hint {
+  margin: 0 0 var(--rk-space-lg);
+}
+
+.studio-scan-choice__actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--rk-space-sm);
+}
+
+.studio-discogs-picker__list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--rk-space-xs);
+  max-height: min(55vh, 28rem);
+  overflow: auto;
+  overscroll-behavior: contain;
+}
+
+.studio-discogs-picker__item {
+  display: flex;
+  align-items: center;
+  gap: var(--rk-space-lg);
+  width: 100%;
+  text-align: left;
+  padding: var(--rk-space-md) var(--rk-space-lg);
+  border: 1px solid var(--rk-line);
+  border-radius: var(--rk-radius);
+  background: color-mix(in srgb, var(--rk-surface-2) 70%, transparent);
+  color: var(--rk-ink);
+  cursor: pointer;
+}
+
+.studio-discogs-picker__item:hover {
+  border-color: color-mix(in srgb, var(--rk-accent) 40%, var(--rk-line));
+  background: color-mix(in srgb, var(--rk-accent) 8%, var(--rk-surface));
+}
+
+.studio-discogs-picker__thumb {
+  width: 3rem;
+  height: 3rem;
+  object-fit: cover;
+  border-radius: var(--rk-radius-sm);
+  flex: 0 0 auto;
+  background: var(--rk-surface-3);
+}
+
+.studio-discogs-picker__body {
+  display: flex;
+  flex-direction: column;
+  gap: var(--rk-space-3xs);
+  min-width: 0;
+}
+
+.studio-discogs-picker__title {
+  font-weight: 700;
+  font-size: var(--rk-fs-md);
+}

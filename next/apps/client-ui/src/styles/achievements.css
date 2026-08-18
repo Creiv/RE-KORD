@@ -3,7 +3,7 @@
 .view-page__intro {
   display: flex;
   flex-direction: column;
-  gap: var(--rk-space-4);
+  gap: var(--rk-space-lg);
   min-width: 0;
   flex-shrink: 0;
 }
@@ -28,7 +28,7 @@
 .achievements-hero.rk-surface-card {
   display: flex;
   flex-direction: column;
-  gap: var(--rk-space-3);
+  gap: var(--rk-space-md);
   min-width: 0;
   box-sizing: border-box;
   padding: 1.25rem 1.35rem 1.4rem;
@@ -70,7 +70,7 @@
   display: block;
   width: 100%;
   height: 0.45rem;
-  border-radius: 999px;
+  border-radius: var(--rk-radius-round);
   background: color-mix(in srgb, var(--rk-line) 65%, transparent);
   overflow: hidden;
   box-sizing: border-box;
@@ -107,7 +107,7 @@
 
 .achievements-hero__xp-caption {
   margin: 0;
-  font-size: 0.82rem;
+  font-size: var(--rk-fs-sm);
   color: var(--rk-muted);
   display: flex;
   align-items: baseline;
@@ -134,66 +134,50 @@
   display: flex;
   align-items: baseline;
   gap: 0.35em;
-  padding: 0.25rem var(--rk-space-3) 0.25rem 0;
+  padding: 0.25rem var(--rk-space-md) 0.25rem 0;
   min-width: 0;
 }
 
 .achievements-hero__stats li + li {
-  padding-left: var(--rk-space-3);
+  padding-left: var(--rk-space-md);
   border-left: 1px solid var(--rk-line);
 }
 
 .achievements-hero__stats strong {
-  font-size: 0.95rem;
+  font-size: var(--rk-fs-md);
   color: var(--rk-ink);
 }
 
 .achievements-hero__stats span {
-  font-size: 0.78rem;
+  font-size: var(--rk-fs-xs);
   color: var(--rk-muted);
 }
 
 .achievements-hero__actions {
   display: flex;
   flex-wrap: wrap;
-  gap: var(--rk-space-3);
-  padding-top: var(--rk-space-1);
+  gap: var(--rk-space-md);
+  padding-top: var(--rk-space-2xs);
 }
 
-.achievements-board.rk-surface-card {
+.achievements-board.rk-panel {
   padding: 1.25rem 1.35rem 1.4rem;
-}
-
-.achievements-board__head {
-  display: flex;
-  align-items: baseline;
-  justify-content: space-between;
-  gap: 0.75rem;
-  min-width: 0;
-}
-
-.achievements-board__head h2 {
-  font-size: 1.1rem;
-  margin: 0;
-  font-weight: 800;
-  letter-spacing: -0.02em;
 }
 
 .achievements-board__lead {
   margin: 0;
-  margin-inline-start: auto;
   color: var(--rk-muted);
-  font-size: 0.88rem;
+  font-size: var(--rk-fs-sm);
   font-variant-numeric: tabular-nums;
   white-space: nowrap;
 }
 
 .achievements-badge-grid {
   list-style: none;
-  margin: var(--rk-space-4) 0 0;
+  margin: 0;
   padding: 0;
   display: grid;
-  gap: var(--rk-space-3);
+  gap: var(--rk-space-md);
   grid-template-columns: minmax(0, 1fr);
 }
 
@@ -206,8 +190,8 @@
 .achievements-badge {
   display: grid;
   grid-template-columns: auto 1fr auto;
-  gap: var(--rk-space-3);
-  padding: var(--rk-space-3);
+  gap: var(--rk-space-md);
+  padding: var(--rk-space-md);
   border-radius: var(--rk-radius);
   align-items: center;
   transition:
@@ -293,18 +277,18 @@
 
 .achievements-badge h3 {
   margin: 0;
-  font-size: 0.9rem;
+  font-size: var(--rk-fs-md);
 }
 
 .achievements-badge p {
   margin: 0.15rem 0 0;
-  font-size: 0.78rem;
+  font-size: var(--rk-fs-xs);
 }
 
 .achievements-badge__xp {
   display: inline-block;
   margin-top: 0.2rem;
-  font-size: 0.72rem;
+  font-size: var(--rk-fs-2xs);
   font-weight: 600;
 }
 
@@ -318,7 +302,7 @@
   border-radius: 50%;
   display: grid;
   place-items: center;
-  font-size: 0.82rem;
+  font-size: var(--rk-fs-sm);
   font-weight: 800;
   flex-shrink: 0;
 }

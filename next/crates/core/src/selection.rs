@@ -89,7 +89,10 @@ pub fn sanitize_library_selection(input: &LibrarySelection) -> LibrarySelection 
     LibrarySelection {
         version: SELECTION_VERSION,
         include_all: input.include_all,
-        artists: uniq_strings(input.artists.iter().cloned()).into_iter().take(100_000).collect(),
+        artists: uniq_strings(input.artists.iter().cloned())
+            .into_iter()
+            .take(100_000)
+            .collect(),
         albums: uniq_strings(input.albums.iter().cloned())
             .into_iter()
             .filter_map(|a| sanitize_rel_path_for_selection(&a))
@@ -117,20 +120,25 @@ pub fn legacy_global_selection_path(data_dir: &Path) -> std::path::PathBuf {
     data_dir.join("library-selection.json")
 }
 
+/// Default account always owns the full shared catalog (`includeAll`).
+fn default_account_selection() -> LibrarySelection {
+    LibrarySelection {
+        version: SELECTION_VERSION,
+        include_all: true,
+        artists: Vec::new(),
+        albums: Vec::new(),
+        tracks: Vec::new(),
+    }
+}
+
 pub fn read_library_selection(data_dir: &Path, account_id: &str) -> Result<LibrarySelection> {
     let _ = accounts::ensure_accounts(data_dir)?;
+    // Shared catalog is always associated with Default — ignore any stale filter file.
+    if account_id == DEFAULT_ACCOUNT_ID {
+        return Ok(default_account_selection());
+    }
     let path = selection_path(data_dir, account_id);
     if !path.exists() {
-        // Parity with old: missing file → includeAll for default, empty for others.
-        if account_id == DEFAULT_ACCOUNT_ID {
-            return Ok(LibrarySelection {
-                version: SELECTION_VERSION,
-                include_all: true,
-                artists: Vec::new(),
-                albums: Vec::new(),
-                tracks: Vec::new(),
-            });
-        }
         return Ok(LibrarySelection::default());
     }
     let raw = fs::read_to_string(&path).with_context(|| format!("read {}", path.display()))?;
@@ -144,7 +152,12 @@ pub fn write_library_selection(
     data: &LibrarySelection,
 ) -> Result<LibrarySelection> {
     let _ = accounts::ensure_accounts(data_dir)?;
-    let sanitized = sanitize_library_selection(data);
+    // Default cannot drop to a personal subset; non-default accounts keep their selection.
+    let sanitized = if account_id == DEFAULT_ACCOUNT_ID {
+        default_account_selection()
+    } else {
+        sanitize_library_selection(data)
+    };
     let path = selection_path(data_dir, account_id);
     if let Some(parent) = path.parent() {
         fs::create_dir_all(parent)?;
@@ -325,7 +338,10 @@ pub fn filter_albums(albums: Vec<Album>, sel: &LibrarySelection) -> Vec<Album> {
             let album_set: HashSet<&str> = sel.albums.iter().map(|s| s.as_str()).collect();
             albums
                 .into_iter()
-                .filter(|a| album_set.contains(a.folder_key.as_str()) || artist_set.contains(a.artist_name.as_str()))
+                .filter(|a| {
+                    album_set.contains(a.folder_key.as_str())
+                        || artist_set.contains(a.artist_name.as_str())
+                })
                 .collect()
         }
     }
@@ -351,7 +367,12 @@ pub fn filter_tracks(tracks: Vec<Track>, albums: &[Album], sel: &LibrarySelectio
     }
 }
 
-pub fn filter_artists(artists: Vec<Artist>, albums: &[Album], tracks: &[Track], sel: &LibrarySelection) -> Vec<Artist> {
+pub fn filter_artists(
+    artists: Vec<Artist>,
+    albums: &[Album],
+    tracks: &[Track],
+    sel: &LibrarySelection,
+) -> Vec<Artist> {
     match get_selection_filter_mode(sel) {
         SelectionFilterMode::All => artists,
         SelectionFilterMode::Empty => Vec::new(),

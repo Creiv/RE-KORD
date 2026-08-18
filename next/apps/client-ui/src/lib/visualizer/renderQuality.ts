@@ -1,5 +1,7 @@
 /** Compact render target + viz loop cadence (ported from legacy renderQuality). */
 
+import { BREAKPOINTS, mediaDown } from "../breakpoints";
+
 export type LoopCadence = { minFrameIntervalMs: number };
 
 let coarsePointerMq: MediaQueryList | null = null;
@@ -17,7 +19,7 @@ function coarsePointerMqRef(): MediaQueryList | null {
 function compactLayoutMqRef(): MediaQueryList | null {
   if (typeof window === "undefined") return null;
   if (!compactLayoutMq) {
-    compactLayoutMq = window.matchMedia("(max-width: 720px)");
+    compactLayoutMq = window.matchMedia(mediaDown("lg"));
   }
   return compactLayoutMq;
 }
@@ -36,7 +38,9 @@ export function prefersReducedMotion(): boolean {
 
 /** Touch o layout compatto: stesso tier su mobile WebView e browser stretto. */
 export function isCompactRenderTarget(): boolean {
-  if (typeof window !== "undefined" && window.innerWidth < 520) return true;
+  if (typeof window !== "undefined" && window.innerWidth < BREAKPOINTS.sm) {
+    return true;
+  }
   return (
     coarsePointerMqRef()?.matches === true ||
     compactLayoutMqRef()?.matches === true

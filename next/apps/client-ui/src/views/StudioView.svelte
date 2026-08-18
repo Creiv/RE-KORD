@@ -3,9 +3,11 @@
   import { onMount } from "svelte";
   import ListenSleepTimer from "../components/ListenSleepTimer.svelte";
   import MetaBadgeCluster from "../components/MetaBadgeCluster.svelte";
+  import PageToolbar from "../components/PageToolbar.svelte";
   import PlayCollectionButton from "../components/PlayCollectionButton.svelte";
   import SectionHeadLead from "../components/SectionHeadLead.svelte";
   import SectionNavTabs from "../components/SectionNavTabs.svelte";
+  import SyncedLyrics from "../components/SyncedLyrics.svelte";
   import TrackList from "../components/TrackList.svelte";
   import TrackLyricsIcon from "../components/TrackLyricsIcon.svelte";
   import UiIcon from "../components/icons/UiIcon.svelte";
@@ -16,25 +18,37 @@
   import ListenVisualizer from "../components/visualizer/ListenVisualizer.svelte";
   import {
     albumCoverUrl,
-    api,
     type CatalogWebItem,
     type Track,
   } from "../lib/api";
+  import { formatTrackGenresForDisplay } from "../lib/genres";
+  import { t } from "../lib/i18n.svelte";
   import { formatTime, player } from "../lib/player";
   import { session, type StudioPane } from "../lib/session.svelte";
-  import { lyricsKind, resolveTrackMoods, trackGenre } from "../lib/trackMoods";
+  import {
+    fmtDate,
+    lyricsKind,
+    resolveTrackMoods,
+    trackGenre,
+    trackHasFileMeta,
+    trackYear,
+  } from "../lib/trackMoods";
   import { loadUserPrefs } from "../lib/userPrefs";
 
-  const tabs = [
-    { id: "listen", label: "Ascolta" },
-    { id: "catalog", label: "Scopri" },
-    { id: "download", label: "Download" },
-    { id: "meta", label: "Metadati" },
-    { id: "covers", label: "Copertine" },
-  ];
+  const tabs = $derived([
+    { id: "listen", label: t("page.studio.tab.listen") },
+    { id: "catalog", label: t("page.studio.tab.catalog") },
+    { id: "download", label: t("page.studio.tab.download") },
+    { id: "meta", label: t("page.studio.tab.meta") },
+    { id: "covers", label: t("page.studio.tab.covers") },
+  ]);
 
   let recent = $state<Track[]>([]);
   let listenRecentPanel = $state<"recent" | "lyrics">("recent");
+  /** Temporary visualizer override from the KARAOKE toggle; prefs stay untouched. */
+  let karaokeMode = $state(false);
+  let autoPanelTrack: number | null = null;
+  let panelPickedByUser = false;
   let downloadSeedUrl = $state("");
   let downloadSeedMode = $state<"single" | "playlist" | "releases">("single");
 
@@ -61,7 +75,44 @@
   const currentMissingMeta = $derived.by(() => {
     const t = session.current;
     if (!t) return false;
-    return !trackGenre(t);
+    return !trackHasFileMeta(t);
+  });
+  const currentAlbum = $derived.by(() => {
+    const t = session.current;
+    if (!t?.album_id) return null;
+    return session.allAlbums.find((a) => a.id === t.album_id) ?? null;
+  });
+  const listenTrackYear = $derived(
+    session.current ? trackYear(session.current, currentAlbum) : null,
+  );
+  const listenTrackYearTitle = $derived.by(() => {
+    const t = session.current;
+    if (!listenTrackYear || !t?.release_date) return undefined;
+    return `Track ${fmtDate(t.release_date)}`;
+  });
+  const listenInfoLine = $derived.by(() => {
+    const t = session.current;
+    if (!t) return "";
+    const parts: string[] = [];
+    if (currentAlbum?.release_date) {
+      parts.push(`Album ${fmtDate(currentAlbum.release_date)}`);
+    }
+    const g = formatTrackGenresForDisplay(trackGenre(t));
+    if (g) parts.push(g);
+    if (currentAlbum?.label?.trim()) parts.push(currentAlbum.label.trim());
+    return parts.join(" · ");
+  });
+
+  // Open the lyrics tab for tracks that have a text, until the user picks a tab.
+  $effect(() => {
+    const track = session.current;
+    const id = track?.id ?? null;
+    if (id !== autoPanelTrack) {
+      autoPanelTrack = id;
+      panelPickedByUser = false;
+    }
+    if (panelPickedByUser) return;
+    listenRecentPanel = track?.lyrics?.trim() ? "lyrics" : "recent";
   });
 
   const listenQueueStart = $derived(Math.max(0, session.currentIndex - 1));
@@ -70,24 +121,26 @@
   );
 
   async function loadRecent() {
-    const ids = player.recentTrackIds().slice(0, 8);
-    const curId = session.current?.id;
-    const out: Track[] = [];
-    for (const id of ids) {
-      if (curId != null && id === curId) continue;
-      if (out.length >= 6) break;
-      const cached =
-        session.queue.find((t) => t.id === id) ||
-        session.favorites.find((t) => t.id === id);
-      if (cached) {
-        out.push(cached);
-        continue;
-      }
+    if (!session.catalogTracks.length) {
       try {
-        out.push(await api.track(id));
+        await session.loadCatalogTracks();
       } catch {
-        /* skip */
+        /* offline */
       }
+    }
+    const curRel = session.current?.rel_path;
+    const paths = player
+      .recentRelPaths()
+      .filter((p) => !curRel || p !== curRel)
+      .slice(0, 6);
+    const byPath = new Map<string, Track>();
+    for (const t of session.catalogTracks) byPath.set(t.rel_path, t);
+    for (const t of session.favorites) byPath.set(t.rel_path, t);
+    for (const t of session.queue) byPath.set(t.rel_path, t);
+    const out: Track[] = [];
+    for (const path of paths) {
+      const t = byPath.get(path);
+      if (t) out.push(t);
     }
     recent = out;
   }
@@ -115,34 +168,29 @@
   });
 </script>
 
-<section class="rk-surface-card surface-card--toolbar-only">
-  <div class="section-head section-head--page-toolbar">
-    <div class="section-head__lead">
-      <span class="section-head__icon-wrap" aria-hidden="true">
-        {#if session.studioPane === "listen"}
-          <UiIcon name="headphones" />
-        {:else if session.studioPane === "catalog"}
-          <UiIcon name="sync" />
-        {:else if session.studioPane === "download"}
-          <UiIcon name="download" />
-        {:else if session.studioPane === "meta"}
-          <UiIcon name="note" />
-        {:else}
-          <UiIcon name="image" />
-        {/if}
-      </span>
-      <div class="section-head__text">
-        <p class="rk-eyebrow">Panoramica studio</p>
-        <SectionNavTabs
-          {tabs}
-          active={session.studioPane}
-          ariaLabel="Sezioni Studio"
-          onselect={(id) => (session.studioPane = id as StudioPane)}
-        />
-      </div>
-    </div>
-  </div>
-</section>
+<div class="view-page studio-page">
+<PageToolbar
+  eyebrow={t("page.studio.eyebrow")}
+  title={t("page.studio.title")}
+  {tabs}
+  activeTab={session.studioPane}
+  tabsAriaLabel={t("page.studio.tabsAria")}
+  ontab={(id) => (session.studioPane = id as StudioPane)}
+>
+  {#snippet icon()}
+    {#if session.studioPane === "listen"}
+      <UiIcon name="headphones" class="section-head__ic" />
+    {:else if session.studioPane === "catalog"}
+      <UiIcon name="sync" class="section-head__ic" />
+    {:else if session.studioPane === "download"}
+      <UiIcon name="download" class="section-head__ic" />
+    {:else if session.studioPane === "meta"}
+      <UiIcon name="note" class="section-head__ic" />
+    {:else}
+      <UiIcon name="image" class="section-head__ic" />
+    {/if}
+  {/snippet}
+</PageToolbar>
 
 <section
   class={session.studioPane === "listen" ? "studio-listen-shell" : "rk-surface-card studio-page-card"}
@@ -174,7 +222,7 @@
                             src={session.current.album_id != null
                               ? albumCoverUrl(session.current.album_id)
                               : ""}
-                            size="xl"
+                            size="lg"
                           />
                         </div>
                         <span class="listen-stage__cover-edit-badge" aria-hidden="true">
@@ -243,6 +291,14 @@
                                 </span>
                               </button>
                             </div>
+                            {#if listenTrackYear}
+                              <span
+                                class="listen-stage__track-year"
+                                title={listenTrackYearTitle}
+                              >
+                                {listenTrackYear}
+                              </span>
+                            {/if}
                           {/if}
                         </div>
                         <h1 class="listen-stage__title">
@@ -281,6 +337,13 @@
                               missingMeta={currentMissingMeta}
                             />
                           </p>
+                          {#if listenInfoLine}
+                            <div class="listen-stage__detail">
+                              <p class="track-row__badges listen-stage__meta-badges">
+                                {listenInfoLine}
+                              </p>
+                            </div>
+                          {/if}
                         </div>
                       {/if}
                     </div>
@@ -291,6 +354,7 @@
               <div class="listen-stage__viz">
                 <ListenVisualizer
                   playing={session.playing}
+                  mode={karaokeMode ? "karaoke" : undefined}
                   lyrics={session.current?.lyrics ?? ""}
                   currentTime={session.currentTime}
                 />
@@ -327,10 +391,15 @@
                       <TrackList
                         tracks={listenQueuePreview}
                         favoriteIds={session.favoriteIds}
+                        playlistOptions={session.playlistOptions}
                         activeTrackId={session.current?.id ?? null}
-                        showQueueActions={false}
-                        onplay={(track) => session.playTrack(track, session.queue)}
+                        onplay={(track) => {
+                          const idx = session.queue.findIndex((t) => t.id === track.id);
+                          if (idx >= 0) session.playQueueIndex(idx);
+                        }}
                         ontoggleFavorite={(track) => void session.toggleFavorite(track)}
+                        onaddToPlaylist={(playlistId, track) =>
+                          void session.addToPlaylist(playlistId, track.id)}
                       />
                     </div>
                   {/if}
@@ -362,6 +431,7 @@
                         ariaLabel="Pannello recenti e testo"
                         onselect={(id) => {
                           if (id === "lyrics" && !session.current) return;
+                          panelPickedByUser = true;
                           listenRecentPanel = id as "recent" | "lyrics";
                         }}
                       />
@@ -380,12 +450,13 @@
                       <button
                         type="button"
                         class="listen-recent-panel__karaoke-btn"
+                        class:is-active={karaokeMode}
                         disabled={lyricsKind(session.current?.lyrics) !== "lrc"}
-                        title="Karaoke"
-                        aria-label="Apri karaoke"
-                        onclick={() => {
-                          /* karaoke mode uses visualizer preference */
-                        }}
+                        title={karaokeMode
+                          ? "Torna al visualizzatore"
+                          : "Karaoke nel visualizzatore"}
+                        aria-pressed={karaokeMode}
+                        onclick={() => (karaokeMode = !karaokeMode)}
                       >
                         <UiIcon name="music" />
                         <span>KARAOKE</span>
@@ -415,7 +486,7 @@
                           favoriteIds={session.favoriteIds}
                           playlistOptions={session.playlistOptions}
                           activeTrackId={session.current?.id ?? null}
-                          onplay={(track, list) => session.playTrack(track, list)}
+                          onplay={(track) => void session.playGlobalRadio(track)}
                           ontoggleFavorite={(track) => void session.toggleFavorite(track)}
                           onaddToPlaylist={(playlistId, track) =>
                             void session.addToPlaylist(playlistId, track.id)}
@@ -427,7 +498,10 @@
                       </p>
                     {/if}
                   {:else if session.current?.lyrics?.trim()}
-                    <pre class="listen-lyrics-body">{session.current.lyrics}</pre>
+                    <SyncedLyrics
+                      lyrics={session.current.lyrics}
+                      currentTime={session.currentTime}
+                    />
                   {:else}
                     <div class="panel-empty panel-empty--actions listen-recent-lyrics__empty">
                       <p>Nessun testo per questo brano.</p>
@@ -458,3 +532,4 @@
     {/if}
   </div>
 </section>
+</div>

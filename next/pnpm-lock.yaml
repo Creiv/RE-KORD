@@ -23,16 +23,13 @@ importers:
       '@rekord/ui':
         specifier: workspace:*
         version: link:../../packages/ui
-      qrcode:
-        specifier: ^1.5.4
-        version: 1.5.4
+      '@tauri-apps/plugin-barcode-scanner':
+        specifier: ^2.4.5
+        version: 2.4.5
     devDependencies:
       '@sveltejs/vite-plugin-svelte':
         specifier: ^5.0.3
         version: 5.1.1(svelte@5.56.8)(vite@6.4.3(@types/node@26.1.2))
-      '@types/qrcode':
-        specifier: ^1.5.5
-        version: 1.5.6
       svelte:
         specifier: ^5.19.0
         version: 5.56.8
@@ -63,7 +60,17 @@ importers:
         version: 6.4.3(@types/node@26.1.2)
 
   packages/ui:
+    dependencies:
+      qrcode:
+        specifier: ^1.5.4
+        version: 1.5.4
     devDependencies:
+      '@sveltejs/vite-plugin-svelte':
+        specifier: ^5.0.3
+        version: 5.1.1(svelte@5.56.8)(vite@6.4.3(@types/node@26.1.2))
+      '@types/qrcode':
+        specifier: ^1.5.5
+        version: 1.5.6
       svelte:
         specifier: ^5.19.0
         version: 5.56.8
@@ -463,6 +470,9 @@ packages:
     resolution: {integrity: sha512-R8xGtMpwyetawSqm9kYOuMmEqkhUbvcUy8n0aNXIxollKBLESUu5f4Fx+64hgASYm1H+jSWq6jCW6zqTnH6hqQ==}
     engines: {node: '>= 10'}
     hasBin: true
+
+  '@tauri-apps/plugin-barcode-scanner@2.4.5':
+    resolution: {integrity: sha512-sIPRYEfxww8/y8skZ2LcAp/h5bwvlHkQiq+3w6QEl+2BHs13xnpn7hP+pv4fkBs8DyDfpUbOBIYS5YBwP7x1QQ==}
 
   '@types/estree@1.0.9':
     resolution: {integrity: sha512-GhdPgy1el4/ImP05X05Uw4cw2/M93BCUmnEvWZNStlCzEKME4Fkk+YpoA5OiHNQmoS7Cafb8Xa3Pya8m1Qrzeg==}
@@ -1004,6 +1014,10 @@ snapshots:
       '@tauri-apps/cli-win32-arm64-msvc': 2.11.4
       '@tauri-apps/cli-win32-ia32-msvc': 2.11.4
       '@tauri-apps/cli-win32-x64-msvc': 2.11.4
+
+  '@tauri-apps/plugin-barcode-scanner@2.4.5':
+    dependencies:
+      '@tauri-apps/api': 2.11.1
 
   '@types/estree@1.0.9': {}
 

@@ -30,15 +30,18 @@
 
   function openSearch() {
     session.focusSearch();
+    // Only reaches the field when the search page is already up; on the way in
+    // from another section LibraryView focuses it as it mounts.
     queueMicrotask(() => {
-      document.querySelector<HTMLInputElement>(".search-hero input")?.focus();
+      document.getElementById("library-search-input")?.focus();
     });
   }
 
   async function sync() {
     syncSpin = true;
     try {
-      await session.refreshAll();
+      // Rescan disk so deleted artist/album folders disappear (not only API pull).
+      await session.refreshAll({ rescan: true, notify: true });
     } finally {
       setTimeout(() => (syncSpin = false), 600);
     }
@@ -88,8 +91,10 @@
     -webkit-backdrop-filter: none;
     backdrop-filter: none;
     flex-shrink: 0;
-    /* Stesso canale orizzontale di .content → .inner (padding fuori dal max-width + gutter). */
-    padding-inline: 1.25rem;
+    /* Stesso canale orizzontale di .content → .inner: gutter di pagina, tacca
+       inclusa (vedi styles/responsive.css). */
+    padding-left: var(--rk-page-pad-l);
+    padding-right: var(--rk-page-pad-r);
     scrollbar-gutter: stable;
   }
 
@@ -97,7 +102,7 @@
     display: flex;
     align-items: center;
     justify-content: space-between;
-    gap: var(--rk-space-4);
+    gap: var(--rk-space-lg);
     min-height: var(--rk-header-h);
     max-width: var(--rk-content-max);
     margin: 0 auto;
@@ -124,24 +129,24 @@
 
   .breadcrumb {
     margin: 0;
-    font-size: 0.68rem;
+    font-size: var(--rk-fs-eyebrow);
     font-weight: 650;
     letter-spacing: 0.08em;
     text-transform: uppercase;
     color: color-mix(in srgb, var(--rk-accent-2) 65%, var(--rk-muted) 35%);
-    line-height: 1.2;
+    line-height: var(--rk-lh-tight);
   }
 
   .page-title {
     margin: 0;
-    font-size: 1.22rem;
+    font-size: var(--rk-fs-subtitle);
     font-weight: 800;
     letter-spacing: -0.025em;
     color: var(--rk-ink);
     white-space: nowrap;
     overflow: hidden;
     text-overflow: ellipsis;
-    line-height: 1.2;
+    line-height: var(--rk-lh-tight);
   }
 
   .end {
@@ -153,7 +158,7 @@
 
   .status,
   .ver {
-    font-size: 0.68rem;
+    font-size: var(--rk-fs-3xs);
     letter-spacing: 0.06em;
     text-transform: uppercase;
     color: var(--rk-muted);
@@ -177,11 +182,7 @@
     }
   }
 
-  @media (max-width: 1000px) {
-    .top {
-      padding-inline: 1rem;
-    }
-
+  @media (max-width: 999.98px) {
     .brand-mobile {
       display: grid;
     }

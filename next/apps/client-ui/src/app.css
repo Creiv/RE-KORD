@@ -1,12 +1,26 @@
 @import "@rekord/ui/styles/tokens.css";
-@import "./styles/lib-cards.css";
+@import "@rekord/ui/styles/controls.css";
+@import "./styles/responsive.css";
+@import "./styles/library/track-row.css";
+@import "./styles/library/tiles.css";
+@import "./styles/library/album-hero.css";
 @import "./styles/section-chrome.css";
-@import "./styles/studio.css";
+@import "./styles/studio/shell.css";
+@import "./styles/studio/listen.css";
+@import "./styles/studio/catalog.css";
+@import "./styles/studio/download.css";
+@import "./styles/studio/meta.css";
+@import "./styles/studio/covers.css";
+@import "./styles/studio/modals.css";
 @import "./styles/collections.css";
 @import "./styles/statistics.css";
 @import "./styles/achievements.css";
 @import "./styles/settings.css";
 @import "./styles/glass-surfaces.css";
+/* Ultimi due: rimodellano quello che i fogli di dominio hanno già scritto — il
+   dialogo diventa foglio dal basso sul telefono, i bersagli crescono col dito. */
+@import "@rekord/ui/styles/sheet.css";
+@import "./styles/touch.css";
 
 * {
   box-sizing: border-box;
@@ -21,16 +35,26 @@ body,
   overflow: hidden;
 }
 
+html {
+  /* Android WebView e Safari ingrandiscono i testi da soli quando lo schermo
+     ruota: la scala tipografica è già nostra, non serve il loro aiuto. */
+  -webkit-text-size-adjust: 100%;
+  text-size-adjust: 100%;
+}
+
 body {
   font-family: var(--rk-font);
   font-size: 15px;
-  line-height: 1.45;
+  line-height: var(--rk-lh);
   color: var(--rk-ink);
   background: var(--rk-bg);
   font-synthesis: none;
   text-rendering: optimizeLegibility;
   -webkit-font-smoothing: antialiased;
   scrollbar-gutter: stable;
+  /* La shell è fissa e non scorre: il rimbalzo elastico su di essa scollerebbe
+     solo la cromatura. Scorrono i pannelli interni, che si fermano da sé. */
+  overscroll-behavior: none;
 }
 
 /* Custom theme background image / animated GIF (parity with legacy). */
@@ -71,7 +95,7 @@ html[data-custom-bg-gif="1"]:not([data-custom-bg-gif-repeat="1"])::before {
   background-image: none;
 }
 
-/* Overlay scuro leggero (legacy page-lg), NON wash accent/page-glow. */
+/* Overlay scuro leggero (legacy page-lg) — default senza wash accent. */
 html[data-custom-bg-image="1"]::after {
   content: "";
   position: fixed;
@@ -82,6 +106,25 @@ html[data-custom-bg-image="1"]::after {
     180deg,
     color-mix(in srgb, var(--rk-page-lg-1) 24%, transparent) 0%,
     color-mix(in srgb, var(--rk-page-lg-2) 36%, transparent) 100%
+  );
+}
+
+/* Optional accent wash (custom theme): accent1 → accent2 top→bottom. */
+html[data-accent-wash="1"]:not([data-custom-bg-image="1"]) body {
+  background:
+    linear-gradient(
+      180deg,
+      color-mix(in srgb, var(--rk-page-glow-1) 55%, transparent) 0%,
+      color-mix(in srgb, var(--rk-page-glow-2) 45%, transparent) 100%
+    ),
+    var(--rk-bg);
+}
+
+html[data-custom-bg-image="1"][data-accent-wash="1"]::after {
+  background: linear-gradient(
+    180deg,
+    color-mix(in srgb, var(--rk-page-glow-1) 55%, transparent) 0%,
+    color-mix(in srgb, var(--rk-page-glow-2) 45%, transparent) 100%
   );
 }
 
@@ -102,12 +145,12 @@ select {
   border-radius: var(--rk-radius);
   background: var(--rk-surface-2);
   box-shadow: var(--rk-shadow);
-  padding: var(--rk-space-3) var(--rk-space-4);
+  padding: var(--rk-space-md) var(--rk-space-lg);
 }
 
 .rk-eyebrow {
   margin: 0;
-  font-size: 0.68rem;
+  font-size: var(--rk-fs-eyebrow);
   font-weight: 650;
   letter-spacing: 0.08em;
   text-transform: uppercase;
@@ -124,4 +167,19 @@ select {
   clip: rect(0, 0, 0, 0);
   white-space: nowrap;
   border: 0;
+}
+
+/* Chi ha chiesto meno movimento lo ottiene su tutto: transizioni e animazioni
+   arrivano subito a destinazione invece di essere disattivate, così gli stati
+   finali restano quelli giusti. Lo scorrimento morbido e i canvas del
+   visualizzatore hanno controlli propri in JS. */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
 }

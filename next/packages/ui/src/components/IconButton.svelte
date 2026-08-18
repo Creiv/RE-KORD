@@ -125,4 +125,17 @@
   .rk-icon.emphasis:hover:not(:disabled) {
     filter: brightness(1.06);
   }
+
+  /* Col dito il quadrato cresce al target minimo: il glifo resta della sua
+     misura, cambia solo l'area che risponde al tocco. */
+  @media (pointer: coarse) {
+    .rk-icon,
+    .rk-icon.surface,
+    .rk-icon.emphasis {
+      width: var(--rk-tap-min);
+      height: var(--rk-tap-min);
+      min-width: var(--rk-tap-min);
+      min-height: var(--rk-tap-min);
+    }
+  }
 </style>

@@ -1,0 +1,8 @@
+<resources>
+    <string name="media_channel_name">Riproduzione</string>
+    <string name="media_channel_description">Comandi del brano in ascolto</string>
+    <string name="media_previous">Precedente</string>
+    <string name="media_play">Riproduci</string>
+    <string name="media_pause">Pausa</string>
+    <string name="media_next">Successivo</string>
+</resources>

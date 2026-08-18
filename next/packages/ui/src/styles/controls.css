@@ -1,0 +1,216 @@
+/*
+ * Control primitives — one definition for every button and field in RE-KORD.
+ *
+ * The `@rekord/ui` components (Button, TextInput, Select) emit these classes
+ * instead of carrying their own scoped copies, and plain markup can use them
+ * directly. The legacy client names (`ghost-btn`, `primary-btn`, `chip-btn`,
+ * `ghost-input`, `text-btn`, `linkbtn`) are kept as aliases so views can
+ * migrate at their own pace without the look drifting apart again.
+ *
+ * Base rules sit in `:where()` (zero specificity): a single app-level class is
+ * enough to re-shape a control in context, which is how the views already do it.
+ */
+
+/* —— Buttons —————————————————————————————————————————————— */
+
+:where(.rk-btn, .primary-btn, .ghost-btn, .chip-btn) {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.4rem;
+  min-height: var(--rk-control-h);
+  padding: var(--rk-control-pad-y) var(--rk-control-pad-x);
+  border: 1px solid transparent;
+  border-radius: var(--rk-radius);
+  background: transparent;
+  color: var(--rk-ink);
+  font: inherit;
+  font-weight: 650;
+  text-align: center;
+  cursor: pointer;
+  transition:
+    color 0.15s ease,
+    background 0.15s ease,
+    border-color 0.15s ease,
+    filter 0.15s ease,
+    opacity 0.15s ease;
+}
+
+.rk-btn--primary,
+.primary-btn {
+  border-color: transparent;
+  background: var(--rk-cta);
+  color: var(--rk-accent-ink);
+}
+
+.rk-btn--secondary {
+  border-color: var(--rk-line);
+  background: var(--rk-surface-3);
+  color: var(--rk-ink);
+}
+
+.rk-btn--ghost,
+.ghost-btn {
+  border-color: var(--rk-line);
+  background: transparent;
+  color: var(--rk-muted-strong);
+}
+
+/* Chip: a ghost button with a filled back, for row-level actions. */
+.rk-btn--chip,
+.chip-btn {
+  border-color: var(--rk-line);
+  background: color-mix(in srgb, var(--rk-surface-3) 70%, transparent);
+  color: var(--rk-ink);
+}
+
+.rk-btn--primary:hover:not(:disabled),
+.primary-btn:hover:not(:disabled),
+.ghost-btn:hover:not(:disabled) {
+  filter: brightness(1.05);
+}
+
+.rk-btn--ghost:hover:not(:disabled),
+.ghost-btn:hover:not(:disabled),
+.rk-btn--secondary:hover:not(:disabled),
+.rk-btn--chip:hover:not(:disabled),
+.chip-btn:hover:not(:disabled) {
+  border-color: var(--rk-line-strong);
+  color: var(--rk-ink);
+}
+
+.rk-btn--chip:hover:not(:disabled),
+.chip-btn:hover:not(:disabled) {
+  background: var(--rk-surface-3);
+}
+
+/* Destructive intent keeps the shape and only recolours. */
+.rk-btn--danger,
+.ghost-btn.danger,
+.chip-btn.danger {
+  color: var(--rk-danger);
+  border-color: color-mix(in srgb, var(--rk-danger) 55%, var(--rk-line) 45%);
+}
+
+.rk-btn--sm,
+.primary-btn--sm,
+.ghost-btn--sm {
+  min-height: var(--rk-control-h-sm);
+  padding: 0.3rem 0.68rem;
+  font-size: var(--rk-fs-sm);
+}
+
+:where(.rk-btn, .primary-btn, .ghost-btn, .chip-btn):disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+  filter: none;
+}
+
+/* Label-only buttons that read as links (log "Pulisci", inline "Vedi tutto"). */
+:where(.rk-btn--link, .text-btn, .linkbtn) {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.3rem;
+  min-height: 0;
+  padding: 0.2rem 0.15rem;
+  border: 0;
+  border-radius: var(--rk-radius-sm);
+  background: transparent;
+  color: color-mix(in srgb, var(--rk-accent-2) 82%, var(--rk-ink));
+  font: inherit;
+  font-size: var(--rk-fs-sm);
+  font-weight: 650;
+  cursor: pointer;
+}
+
+.rk-btn--link:hover:not(:disabled),
+.text-btn:hover:not(:disabled),
+.linkbtn:hover:not(:disabled) {
+  text-decoration: underline;
+}
+
+/* —— Fields ——————————————————————————————————————————————— */
+
+:where(.rk-input, .ghost-input, .rk-select, .rk-textarea) {
+  width: 100%;
+  box-sizing: border-box;
+  min-height: var(--rk-control-h);
+  padding: var(--rk-field-pad-y) var(--rk-field-pad-x);
+  border: 1px solid var(--rk-line);
+  border-radius: var(--rk-radius);
+  background: var(--rk-surface-3);
+  color: var(--rk-ink);
+  font: inherit;
+}
+
+:where(.rk-input, .ghost-input, .rk-textarea)::placeholder {
+  color: var(--rk-muted);
+}
+
+/* Multi-line copy reads better with room around it than a one-line field. */
+.rk-textarea {
+  min-height: 4rem;
+  padding: 0.55rem var(--rk-field-pad-x);
+  resize: vertical;
+}
+
+:where(.rk-input, .ghost-input, .rk-select, .rk-textarea):disabled {
+  opacity: 0.55;
+  color: var(--rk-muted);
+  cursor: not-allowed;
+}
+
+/* —— Focus ———————————————————————————————————————————————— */
+
+/* One ring for every control. Buttons only show it for keyboard users… */
+.rk-btn:focus-visible,
+.primary-btn:focus-visible,
+.ghost-btn:focus-visible,
+.chip-btn:focus-visible,
+.rk-btn--link:focus-visible,
+.text-btn:focus-visible,
+.linkbtn:focus-visible,
+.rk-input:focus,
+.ghost-input:focus,
+.rk-select:focus,
+.rk-textarea:focus {
+  outline: 2px solid color-mix(in srgb, var(--rk-focus) 55%, transparent);
+  outline-offset: 2px;
+}
+
+/* …while a field that holds the caret says so however it was reached. */
+.rk-input:focus,
+.ghost-input:focus,
+.rk-select:focus,
+.rk-textarea:focus {
+  border-color: color-mix(in srgb, var(--rk-accent-2) 45%, var(--rk-line) 55%);
+}
+
+/* —— Touch ———————————————————————————————————————————————— */
+
+/* On a coarse pointer every control grows to the 44px tap target. Only the
+   height changes: padding, type and colour stay put, so a form keeps its look
+   and a button row keeps lining up. Desktop is untouched. */
+@media (pointer: coarse) {
+  :where(
+    .rk-btn,
+    .primary-btn,
+    .ghost-btn,
+    .chip-btn,
+    .rk-btn--sm,
+    .primary-btn--sm,
+    .ghost-btn--sm,
+    .rk-input,
+    .ghost-input,
+    .rk-select
+  ) {
+    min-height: var(--rk-tap-min);
+  }
+
+  /* Link-shaped buttons stay inline — a 44px box would tear a sentence apart —
+     but get room around the label so the finger has something to land on. */
+  :where(.rk-btn--link, .text-btn, .linkbtn) {
+    min-height: var(--rk-control-h-sm);
+    padding-inline: 0.35rem;
+  }
+}

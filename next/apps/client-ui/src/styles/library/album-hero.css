@@ -1,0 +1,329 @@
+/* Hero album: copertina, titolo, crediti, generi e card della tracklist. */
+.album-hero {
+  display: block;
+  min-width: 0;
+}
+
+.album-hero {
+  display: block;
+  min-height: 0;
+  /* The hero is the page's headline card, so it gets the wider card padding. */
+  padding: var(--rk-space-lg) var(--rk-space-xl);
+  border-radius: var(--rk-radius);
+  box-shadow: var(--rk-shadow);
+  background: var(--rk-surface-2);
+}
+
+.album-hero__body {
+  display: grid;
+  grid-template-columns: minmax(120px, 200px) minmax(0, 1fr);
+  grid-template-rows: auto auto auto;
+  gap: var(--rk-space-xl) var(--rk-space-2xl);
+  align-items: start;
+  min-width: 0;
+  width: 100%;
+}
+
+.album-hero__top-band {
+  display: contents;
+}
+
+.album-hero__top-band .album-hero__cover-btn {
+  grid-column: 1;
+  grid-row: 1 / -1;
+  align-self: start;
+  width: 100%;
+}
+
+.album-hero__top-right {
+  grid-column: 2;
+  grid-row: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  gap: var(--rk-space-md);
+}
+
+.album-hero__titleblock {
+  grid-column: 2;
+  grid-row: 2;
+  min-width: 0;
+  width: 100%;
+  flex: 0 0 auto;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--rk-space-sm) var(--rk-space-lg);
+}
+
+.album-hero__titleblock .album-hero__h1 {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+.album-hero__meta-full {
+  grid-column: 2;
+  grid-row: 3;
+  width: 100%;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  /* Credits line and genre chips are two separate things to read. */
+  gap: var(--rk-space-lg);
+}
+
+.album-hero__meta-full .album-hero__title-meta {
+  margin: 0;
+  max-width: min(100%, 56ch);
+}
+
+.album-hero__cover-btn {
+  display: block;
+  position: sticky;
+  top: 4.5rem;
+  padding: 0;
+  margin: 0;
+  border: 0;
+  background: none;
+  cursor: pointer;
+  border-radius: var(--rk-radius-cover);
+  isolation: isolate;
+}
+
+.album-hero__cover-edit-badge {
+  position: absolute;
+  right: 10px;
+  bottom: 10px;
+  display: inline-grid;
+  place-items: center;
+  width: 32px;
+  height: 32px;
+  border-radius: var(--rk-radius-xl);
+  color: var(--rk-ink);
+  background: color-mix(in srgb, var(--rk-surface) 78%, transparent);
+  border: 1px solid var(--rk-line);
+  opacity: 0;
+  transition: opacity 0.15s ease;
+}
+
+.album-hero__cover-btn:hover .album-hero__cover-edit-badge {
+  opacity: 1;
+}
+
+.album-hero__toprow {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: var(--rk-space-lg);
+  flex-wrap: wrap;
+  margin-bottom: 0;
+  width: 100%;
+}
+
+.album-hero__toprow .page-toolbar__lead--backrow {
+  align-items: stretch;
+}
+
+.album-hero__toprow .page-toolbar__lead--backrow .page-toolbar-back-ic {
+  align-self: stretch;
+  margin-top: 0;
+}
+
+.album-hero__h1 {
+  margin: 0;
+  font-size: clamp(1.8rem, 3vw, 3rem);
+  font-weight: 800;
+  line-height: var(--rk-lh-tight);
+  letter-spacing: -0.05em;
+}
+
+.album-hero__title-meta {
+  margin: 0;
+  color: var(--rk-muted);
+  font-size: var(--rk-fs-sm);
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--rk-space-xs);
+  align-items: center;
+}
+
+.album-hero__artist-link {
+  border: 0;
+  background: transparent;
+  padding: 0;
+  font: inherit;
+  font-weight: 650;
+  color: color-mix(in srgb, var(--rk-accent-2) 85%, var(--rk-ink));
+  cursor: pointer;
+}
+
+.album-hero__artist-link:hover {
+  text-decoration: underline;
+}
+
+.album-hero__genres {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--rk-space-sm);
+  align-items: center;
+  /* Spacing towards the credits line comes from .album-hero__meta-full. */
+  margin: 0;
+}
+
+.album-hero__genre-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--rk-space-3xs);
+  max-width: 100%;
+  font-size: var(--rk-fs-2xs);
+  font-weight: 700;
+  padding: var(--rk-space-2xs) var(--rk-space-2xs) var(--rk-space-2xs)
+    var(--rk-space-md);
+  border-radius: var(--rk-radius);
+  border: 1px solid color-mix(in srgb, var(--rk-accent) 30%, var(--rk-line));
+  background: var(--rk-accent-soft);
+  color: var(--rk-ink);
+}
+
+.album-hero__genre-chip__text {
+  border: 0;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  font-weight: 700;
+  padding: 0.05rem var(--rk-space-3xs) 0.05rem 0;
+  cursor: pointer;
+  text-align: left;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  max-width: 14rem;
+}
+
+.album-hero__genre-chip__text:hover:not(:disabled) {
+  color: color-mix(in srgb, var(--rk-accent-2) 85%, var(--rk-ink));
+}
+
+.album-hero__genre-chip__text:disabled,
+.album-hero__genre-chip__x:disabled,
+.album-hero__genre-add:disabled {
+  cursor: not-allowed;
+  opacity: 0.55;
+}
+
+.album-hero__genre-chip__x {
+  flex-shrink: 0;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 1.35rem;
+  min-height: 1.35rem;
+  border: 0;
+  border-radius: calc(var(--rk-radius) - 2px);
+  background: transparent;
+  color: var(--rk-muted);
+  cursor: pointer;
+  padding: 0;
+}
+
+.album-hero__genre-chip__x:hover:not(:disabled) {
+  color: var(--rk-ink);
+  background: color-mix(in srgb, var(--rk-line) 35%, transparent);
+}
+
+.album-hero__genre-chip__x-ic {
+  width: 0.9rem;
+  height: 0.9rem;
+  display: block;
+}
+
+.album-hero__genre-add-wrap {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+}
+
+.album-hero__genre-add {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border: 1px dashed var(--rk-line);
+  background: transparent;
+  color: var(--rk-muted);
+  border-radius: var(--rk-radius);
+  padding: var(--rk-space-2xs) var(--rk-space-md);
+  font: inherit;
+  font-size: var(--rk-fs-2xs);
+  cursor: pointer;
+}
+
+.album-hero__genre-add:hover:not(:disabled) {
+  color: var(--rk-ink);
+  border-color: color-mix(in srgb, var(--rk-accent) 40%, var(--rk-line));
+}
+
+.album-hero__genre-add-ic {
+  width: 0.9rem;
+  height: 0.9rem;
+  display: block;
+}
+
+.album-hero__genre-menu {
+  left: 0;
+  right: auto;
+  bottom: auto;
+  top: calc(100% + 4px);
+  min-width: 12rem;
+  max-width: min(18rem, 90vw);
+  max-height: 12.5rem;
+}
+
+.album-hero__genre-err {
+  flex-basis: 100%;
+  margin: var(--rk-space-3xs) 0 0;
+  font-size: var(--rk-fs-2xs);
+  color: color-mix(in srgb, #e85d5d 80%, var(--rk-ink));
+}
+
+.album-hero__tracks {
+  /* Gap hero ↔ tracklist: gestito da AppShell .inner via --rk-section-gap */
+  margin-top: 0;
+  padding: var(--rk-space-lg) var(--rk-space-xl);
+}
+
+@media (max-width: 719.98px) {
+  /* One column: toolbar, cover, title, credits. The children pin themselves to
+     column 2 for the wide layout, so they have to be placed again here —
+     otherwise the narrow template just spawns an implicit second column. */
+  .album-hero__body {
+    grid-template-columns: minmax(0, 1fr);
+    grid-template-rows: repeat(4, auto);
+  }
+
+  .album-hero__top-right {
+    grid-column: 1;
+    grid-row: 1;
+  }
+
+  .album-hero__top-band .album-hero__cover-btn {
+    grid-column: 1;
+    grid-row: 2;
+  }
+
+  .album-hero__titleblock {
+    grid-column: 1;
+    grid-row: 3;
+  }
+
+  .album-hero__meta-full {
+    grid-column: 1;
+    grid-row: 4;
+  }
+
+  .album-hero__cover-btn {
+    position: static;
+    width: min(200px, 55vw);
+  }
+}

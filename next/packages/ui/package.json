@@ -12,12 +12,19 @@
       "default": "./src/index.ts"
     },
     "./styles/tokens.css": "./src/styles/tokens.css",
-    "./styles/themes.css": "./src/styles/themes.css"
+    "./styles/themes.css": "./src/styles/themes.css",
+    "./styles/controls.css": "./src/styles/controls.css",
+    "./styles/sheet.css": "./src/styles/sheet.css"
   },
   "peerDependencies": {
     "svelte": "^5.0.0"
   },
+  "dependencies": {
+    "qrcode": "^1.5.4"
+  },
   "devDependencies": {
+    "@sveltejs/vite-plugin-svelte": "^5.0.3",
+    "@types/qrcode": "^1.5.5",
     "svelte": "^5.19.0",
     "typescript": "^5.7.3"
   }

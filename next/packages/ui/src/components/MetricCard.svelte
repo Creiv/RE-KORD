@@ -24,7 +24,7 @@
   }
 
   span {
-    font-size: 0.65rem;
+    font-size: var(--rk-fs-3xs);
     font-weight: 700;
     text-transform: uppercase;
     letter-spacing: 0.12em;
@@ -35,6 +35,6 @@
     font-size: 1.65rem;
     font-weight: 800;
     letter-spacing: -0.03em;
-    line-height: 1.15;
+    line-height: var(--rk-lh-tight);
   }
 </style>

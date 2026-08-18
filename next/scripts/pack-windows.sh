@@ -45,7 +45,7 @@ Server
 
   Included here:
     server/client-ui/   full app served at http://<host>:7420/
-    server/admin-ui/    fallback if client-ui missing
+    server/admin-ui/    hub panel served at http://<host>:7420/admin
     server/modules.manifest.toml
 
 Client

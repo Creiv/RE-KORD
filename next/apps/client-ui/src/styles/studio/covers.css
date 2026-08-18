@@ -1,0 +1,115 @@
+/* Copertine: campi sorgente, griglia dei candidati e azioni di salvataggio. */
+.tools-art .studio-covers-split {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: var(--rk-space-xl) var(--rk-space-xl);
+  align-items: start;
+}
+
+@media (max-width: 899.98px) {
+  .tools-art .studio-covers-split {
+    grid-template-columns: 1fr;
+  }
+}
+
+.art-fields {
+  display: grid;
+  gap: var(--rk-space-md);
+  margin-bottom: var(--rk-space-sm);
+}
+
+.art-field {
+  display: flex;
+  min-width: 0;
+  flex-direction: column;
+  gap: var(--rk-space-xs);
+}
+
+.artgrid2 {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(min(100%, 10.5rem), 1fr));
+  gap: var(--rk-space-lg) var(--rk-space-lg);
+  margin-top: var(--rk-space-sm);
+}
+
+.artcard2 {
+  border: 1px solid var(--rk-line);
+  border-radius: var(--rk-radius);
+  overflow: hidden;
+  background: var(--rk-surface-3);
+  box-shadow: var(--rk-shadow);
+}
+
+.artcard2-img {
+  position: relative;
+  aspect-ratio: 1;
+  background: linear-gradient(
+    135deg,
+    var(--rk-art-empty-1),
+    var(--rk-art-empty-2)
+  );
+  display: grid;
+  place-items: center;
+  color: var(--rk-muted);
+}
+
+.artcard2-img img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+}
+
+.art-src {
+  position: absolute;
+  right: 6px;
+  bottom: 6px;
+  font-size: var(--rk-fs-4xs);
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  font-weight: 700;
+  padding: var(--rk-space-2xs) var(--rk-space-xs);
+  border-radius: var(--rk-radius);
+  background: rgba(4, 8, 14, 0.88);
+  color: var(--rk-accent-2);
+  border: 1px solid var(--rk-line);
+}
+
+.artcap2 {
+  padding: var(--rk-space-sm) var(--rk-space-lg);
+  font-size: var(--rk-fs-xs);
+  line-height: var(--rk-lh-snug);
+  border-top: 1px solid var(--rk-line);
+}
+
+.art-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--rk-space-sm);
+  padding: var(--rk-space-sm) var(--rk-space-md) var(--rk-space-md);
+  border-top: 1px solid var(--rk-line);
+  background: color-mix(in srgb, var(--rk-surface-2) 78%, var(--rk-bg));
+}
+
+.art-target {
+  font-size: var(--rk-fs-sm);
+  color: var(--rk-accent-2);
+  margin: var(--rk-space-xs) 0 var(--rk-space-md);
+}
+
+.art-target code {
+  font-family: var(--rk-mono);
+  font-size: var(--rk-fs-xs);
+}
+
+.extlink {
+  font-size: var(--rk-fs-xs);
+  color: var(--rk-accent-2);
+  text-decoration: none;
+}
+
+.extlink:hover {
+  text-decoration: underline;
+}

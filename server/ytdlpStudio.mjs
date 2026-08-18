@@ -44,7 +44,8 @@ export const STUDIO_DOWNLOAD_KINDS = new Set([
  * Solo formati audio già muxati: niente merge, niente postprocessori che richiedono ffmpeg
  * (--add-metadata / -x / estrazione usano ffmpeg e non sono supportati in produzione).
  */
-const YTDLP_ARGS = ["-f", "bestaudio[ext=m4a]/bestaudio[ext=webm]/bestaudio"];
+// Prefer pure audio; `/best` covers SABR sessions where standalone audio URLs vanish.
+const YTDLP_ARGS = ["-f", "bestaudio[ext=m4a]/bestaudio[ext=webm]/bestaudio/best"];
 
 export function ytdlpArgsBase() {
   if (process.env.REKORD_YTDLP_LOSSLESS === "1") {

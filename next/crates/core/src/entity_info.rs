@@ -134,10 +134,7 @@ fn sanitize_items_list(raw: Option<&Value>) -> Vec<EntityInfoItem> {
 }
 
 fn items_from_legacy(j: &Value) -> Vec<EntityInfoItem> {
-    j.get("info")
-        .and_then(sanitize_item)
-        .into_iter()
-        .collect()
+    j.get("info").and_then(sanitize_item).into_iter().collect()
 }
 
 pub fn load_artist_info_bundle(artist_dir: &Path) -> EntityInfoBundle {
@@ -211,8 +208,7 @@ pub struct EntityInfoSaveRequest {
 }
 
 pub fn save_entity_info(music_root: &Path, req: EntityInfoSaveRequest) -> Result<EntityInfoBundle> {
-    let (artist_dir, album_dir_opt) =
-        resolve_dirs(music_root, &req.artist, req.album.as_deref())?;
+    let (artist_dir, album_dir_opt) = resolve_dirs(music_root, &req.artist, req.album.as_deref())?;
     let now = chrono::Utc::now().to_rfc3339();
 
     if let Some(album_dir) = album_dir_opt {
@@ -240,10 +236,7 @@ pub fn save_entity_info(music_root: &Path, req: EntityInfoSaveRequest) -> Result
             );
         }
         fs::write(&path, serde_json::to_string_pretty(&j)?)?;
-        return Ok(EntityInfoBundle {
-            items,
-            image: None,
-        });
+        return Ok(EntityInfoBundle { items, image: None });
     }
 
     let path = artist_dir.join(FILE_ARTIST_INFO);

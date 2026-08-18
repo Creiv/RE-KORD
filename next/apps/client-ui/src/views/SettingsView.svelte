@@ -12,8 +12,8 @@
   import DiskSpaceMeter from "../components/DiskSpaceMeter.svelte";
   import IntegrationList from "../components/IntegrationList.svelte";
   import IntegrationRow from "../components/IntegrationRow.svelte";
+  import PageToolbar from "../components/PageToolbar.svelte";
   import RemoteAccessPanel from "../components/RemoteAccessPanel.svelte";
-  import SectionNavTabs from "../components/SectionNavTabs.svelte";
   import SettingsFieldsGrid from "../components/SettingsFieldsGrid.svelte";
   import ShortcutList from "../components/ShortcutList.svelte";
   import ThemePicker from "../components/ThemePicker.svelte";
@@ -22,6 +22,7 @@
     getSelectedAccountId,
     type AccountsResponse,
   } from "../lib/account";
+  import { connectGate } from "../lib/connect.svelte";
   import type { ShortcutItem } from "../lib/shortcutList";
   import { session } from "../lib/session.svelte";
   import {
@@ -96,6 +97,18 @@
   /** accountId → numeric level (legacy account-row pill) */
   let accountLevels = $state<Record<string, number>>({});
 
+  /** Hub integrations + remote access are owned by the default account (`default` / Locale). */
+  const defaultAccountId = $derived(accounts?.defaultAccountId || "default");
+  const isDefaultSessionAccount = $derived(selectedAccountId === defaultAccountId);
+  /**
+   * Host-level writes (library path, scans, credentials, restores, tunnel) live
+   * in the hub panel: from here they are read-only unless the hub says this
+   * client may run them.
+   */
+  const canManageMachine = $derived(
+    isDefaultSessionAccount && session.canManageMachine,
+  );
+
   let importBusy = $state(false);
   let importPhase = $state("");
   let importError = $state("");
@@ -133,10 +146,32 @@
   let remoteUrlCopyTimer: number | null = null;
   let remotePollTimer: number | null = null;
   let diag = $state<Awaited<ReturnType<typeof api.diagnostics>> | null>(null);
-  let activityEntries = $state<Array<{ ts: string; kind: string; message: string }>>([]);
+  let activityEntries = $state<
+    Array<{
+      ts: string;
+      kind: string;
+      message: string;
+      accountId?: string | null;
+      accountName?: string | null;
+    }>
+  >([]);
   let activityBusy = $state(false);
   let activityErr = $state("");
   let activityLoaded = $state(false);
+  /** Local calendar day `YYYY-MM-DD` — used only when session account is Default. */
+  let activityDay = $state(todayLocalYmd());
+  /** `all` | `system` | `user` | specific account id */
+  let activitySource = $state("all");
+
+  const activitySourceOptions = $derived([
+    { value: "all", label: t("settings.activityLogSourceAll") },
+    { value: "system", label: t("settings.activityLogSourceSystem") },
+    { value: "user", label: t("settings.activityLogSourceUsers") },
+    ...(accounts?.accounts ?? []).map((a) => ({
+      value: a.id,
+      label: a.name || a.id,
+    })),
+  ]);
 
   const vizLabelKeys: Record<(typeof VISUALIZER_MODES)[number], string> = {
     bars: "settings.vizBars",
@@ -190,6 +225,36 @@
     return (ev.currentTarget as HTMLSelectElement).value;
   }
 
+  function todayLocalYmd(): string {
+    const d = new Date();
+    const y = d.getFullYear();
+    const m = String(d.getMonth() + 1).padStart(2, "0");
+    const day = String(d.getDate()).padStart(2, "0");
+    return `${y}-${m}-${day}`;
+  }
+
+  function activityLogQuery(): {
+    day?: string;
+    scope?: string;
+    filterAccountId?: string;
+  } {
+    const opts: {
+      day?: string;
+      scope?: string;
+      filterAccountId?: string;
+    } = {};
+    // Day + source filters are Default-only; other accounts get last 24h / scope=all.
+    if (!isDefaultSessionAccount) return opts;
+    if (activityDay.trim()) {
+      opts.day = activityDay.trim();
+    }
+    const src = activitySource.trim();
+    if (src === "system") opts.scope = "system";
+    else if (src === "user") opts.scope = "user";
+    else if (src && src !== "all") opts.filterAccountId = src;
+    return opts;
+  }
+
   async function loadHubConfig() {
     try {
       hubConfig = await api.config();
@@ -210,6 +275,7 @@
   }
 
   async function remoteLogin() {
+    if (!canManageMachine) return;
     remoteBusy = true;
     remoteErr = "";
     try {
@@ -224,6 +290,7 @@
   }
 
   async function remoteLogout() {
+    if (!canManageMachine) return;
     remoteBusy = true;
     remoteErr = "";
     try {
@@ -236,6 +303,7 @@
   }
 
   async function remoteToggleShare() {
+    if (!canManageMachine) return;
     remoteBusy = true;
     remoteErr = "";
     try {
@@ -292,7 +360,7 @@
     activityBusy = true;
     activityErr = "";
     try {
-      const res = await api.activityLog();
+      const res = await api.activityLog(activityLogQuery());
       activityEntries = res.entries || [];
     } catch (e) {
       activityEntries = [];
@@ -312,6 +380,18 @@
     });
   }
 
+  function activityAccountLabel(e: {
+    accountId?: string | null;
+    accountName?: string | null;
+  }): string {
+    const id = (e.accountId || "").trim();
+    if (!id) return t("settings.activityLogSystem");
+    const named = (e.accountName || "").trim();
+    if (named) return named;
+    const fromList = accounts?.accounts.find((a) => a.id === id)?.name;
+    return (fromList || "").trim() || id;
+  }
+
   function activityKindClass(kind: string): string {
     const k = kind.trim().toLowerCase();
     if (k === "error" || k === "err" || k === "fail") return "activity-log-kind--err";
@@ -329,12 +409,35 @@
     }
   }
 
+  // Another tab may rebind the account while this panel is open.
   $effect(() => {
-    if (section === "Libreria") void loadHubConfig();
+    const bound = session.activeAccountId;
+    if (bound && bound !== selectedAccountId) {
+      selectedAccountId = bound;
+      themeValue = loadUserPrefs().theme;
+      customThemeValue = loadUserPrefs().customTheme;
+      refreshGlassFromPrefs();
+      localeValue = i18n.locale;
+    }
+  });
+
+  $effect(() => {
+    if (section === "Libreria") {
+      void selectedAccountId;
+      void loadHubConfig();
+    }
     if (section === "Sistema") {
       void loadDiag();
-      void loadActivity();
+      if (!accounts) void loadAccounts();
     }
+  });
+
+  $effect(() => {
+    if (section !== "Sistema") return;
+    void activityDay;
+    void activitySource;
+    void isDefaultSessionAccount;
+    void loadActivity();
   });
 
   $effect(() => {
@@ -362,7 +465,7 @@
     const input = ev.currentTarget as HTMLInputElement;
     const file = input.files?.[0];
     input.value = "";
-    if (!file) return;
+    if (!file || !canManageMachine) return;
     integBusy = true;
     integErr = "";
     integOk = "";
@@ -377,6 +480,7 @@
   }
 
   async function clearCookies() {
+    if (!canManageMachine) return;
     integBusy = true;
     integErr = "";
     integOk = "";
@@ -391,6 +495,7 @@
   }
 
   async function saveDiscogs() {
+    if (!canManageMachine) return;
     integBusy = true;
     integErr = "";
     integOk = "";
@@ -406,6 +511,7 @@
   }
 
   async function clearDiscogs() {
+    if (!canManageMachine) return;
     integBusy = true;
     integErr = "";
     integOk = "";
@@ -424,7 +530,7 @@
   });
 
   $effect(() => {
-    if (section !== "Account") return;
+    if (section !== "Account" && section !== "Libreria" && section !== "Rete") return;
     void loadAccounts();
   });
 
@@ -751,7 +857,7 @@
     const input = ev.currentTarget as HTMLInputElement;
     const file = input.files?.[0];
     input.value = "";
-    if (!file) return;
+    if (!file || !canManageMachine) return;
     if (!/\.zip$/i.test(file.name)) {
       restoreErr = t("settings.restoreZipErr");
       return;
@@ -838,26 +944,18 @@
 </script>
 
 <div class="view-page settings-page">
-  <header class="view-page__toolbar-band">
-    <section class="rk-surface-card surface-card--toolbar-only">
-      <div class="section-head section-head--page-toolbar">
-        <div class="section-head__lead">
-          <span class="section-head__icon-wrap" aria-hidden="true">
-            <UiIcon name="settings" class="section-head__ic" />
-          </span>
-          <div class="section-head__text">
-            <p class="rk-eyebrow">{t("settings.eyebrow")}</p>
-            <SectionNavTabs
-              tabs={settingsTabs}
-              active={section}
-              ariaLabel={t("settings.tabsAria")}
-              onselect={(id) => (section = id)}
-            />
-          </div>
-        </div>
-      </div>
-    </section>
-  </header>
+  <PageToolbar
+    eyebrow={t("settings.eyebrow")}
+    title={t("page.settings.title")}
+    tabs={settingsTabs}
+    activeTab={section}
+    tabsAriaLabel={t("settings.tabsAria")}
+    ontab={(id) => (section = id)}
+  >
+    {#snippet icon()}
+      <UiIcon name="settings" class="section-head__ic" />
+    {/snippet}
+  </PageToolbar>
 
   <div class="settings-page__body">
     {#if section === "Account"}
@@ -1073,9 +1171,13 @@
       </Panel>
     {:else if section === "Libreria"}
       {@const ytActionsOpen =
+        canManageMachine &&
         !hubConfig?.youtubeCookiesLockedByEnv &&
         hubConfig?.youtubeCookiesWritable !== false}
-      {@const discogsActionsOpen = !hubConfig?.discogsLockedByEnv}
+      {@const discogsActionsOpen =
+        canManageMachine &&
+        !hubConfig?.discogsLockedByEnv &&
+        hubConfig?.discogsWritable !== false}
       {#snippet youtubeActions()}
         <input
           bind:this={cookiesInput}
@@ -1141,10 +1243,25 @@
           {t("settings.libraryHint", { at: session.stats?.last_scan_at ?? "—" })}
         </p>
         <ActionRow>
-          <Button variant="ghost" onclick={() => void session.refreshAll()}
+          <Button
+            variant="ghost"
+            disabled={!canManageMachine}
+            onclick={() => void session.refreshAll({ rescan: true })}
             >{t("settings.libraryReload")}</Button
           >
         </ActionRow>
+        {#if !canManageMachine}
+          <p class="hint">
+            {t("settings.machineOpsHubOnly")}
+            {" "}
+            <a
+              class="integration-row__link"
+              href={session.hubPanelUrl}
+              target="_blank"
+              rel="noopener noreferrer">{t("settings.openHubPanel")}</a
+            >
+          </p>
+        {/if}
       </Panel>
       <Panel title={t("settings.panel.integrations")} class="settings-integrations-section">
         <IntegrationList>
@@ -1173,9 +1290,13 @@
                 <p class="integration-row__warn">
                   {t("settings.youtubeCookiesEnvLocked")}
                 </p>
-              {:else if hubConfig?.youtubeCookiesWritable === false}
+              {:else if !isDefaultSessionAccount}
                 <p class="integration-row__lead">
-                  {t("settings.integrationsReadOnly")}
+                  {t("settings.defaultAccountOnly")}
+                </p>
+              {:else if !canManageMachine || hubConfig?.youtubeCookiesWritable === false}
+                <p class="integration-row__lead">
+                  {t("settings.machineOpsHubOnly")}
                 </p>
               {/if}
             {/snippet}
@@ -1211,6 +1332,14 @@
                 <p class="integration-row__warn">
                   {t("settings.discogsEnvLocked")}
                 </p>
+              {:else if !isDefaultSessionAccount}
+                <p class="integration-row__lead">
+                  {t("settings.defaultAccountOnly")}
+                </p>
+              {:else if !canManageMachine || hubConfig?.discogsWritable === false}
+                <p class="integration-row__lead">
+                  {t("settings.machineOpsHubOnly")}
+                </p>
               {/if}
             {/snippet}
           </IntegrationRow>
@@ -1236,9 +1365,23 @@
           <Button variant="ghost" onclick={() => void session.refreshAll()}
             >{t("settings.reload")}</Button
           >
+          <Button variant="ghost" onclick={() => connectGate.open()}
+            >{t("settings.changeHub")}</Button
+          >
         </ActionRow>
+        <p class="hint">{t("settings.changeHubHint")}</p>
         <p class="hint">
           {t("settings.hubStatus", { status: session.status || "…" })}
+        </p>
+        <p class="hint">
+          {t("settings.hubPanelHint")}
+          {" "}
+          <a
+            class="integration-row__link"
+            href={session.hubPanelUrl}
+            target="_blank"
+            rel="noopener noreferrer">{t("settings.openHubPanel")}</a
+          >
         </p>
       </Panel>
       <Panel title={t("settings.panel.remote")}>
@@ -1247,6 +1390,11 @@
           busy={remoteBusy}
           error={remoteErr}
           copyOk={remoteUrlCopyOk}
+          readOnly={!canManageMachine}
+          readOnlyNote={isDefaultSessionAccount
+            ? t("settings.machineOpsHubOnly")
+            : t("settings.defaultAccountOnly")}
+          hubPanelUrl={isDefaultSessionAccount ? session.hubPanelUrl : ""}
           onLogin={() => void remoteLogin()}
           onLogout={() => void remoteLogout()}
           onToggleShare={() => void remoteToggleShare()}
@@ -1265,12 +1413,24 @@
           </Button>
           <Button
             variant="ghost"
-            disabled={backupBusy || restoreBusy || importBusy}
+            disabled={backupBusy || restoreBusy || importBusy || !canManageMachine}
             onclick={() => restoreFileInput?.click()}
           >
             {restoreBusy ? t("settings.backupRestoring") : t("settings.backupRestore")}
           </Button>
         </ActionRow>
+        {#if !canManageMachine}
+          <p class="hint">
+            {t("settings.machineOpsHubOnly")}
+            {" "}
+            <a
+              class="integration-row__link"
+              href={session.hubPanelUrl}
+              target="_blank"
+              rel="noopener noreferrer">{t("settings.openHubPanel")}</a
+            >
+          </p>
+        {/if}
         <input
           bind:this={restoreFileInput}
           class="sr-only"
@@ -1364,6 +1524,31 @@
         class="settings-activity-section"
         actions={activityActions}
       >
+        {#if isDefaultSessionAccount}
+          <div class="activity-log-filters" role="group" aria-label={t("settings.panel.activity")}>
+            <label class="activity-log-filter">
+              <span class="activity-log-filter__label">{t("settings.activityLogDay")}</span>
+              <TextInput
+                type="date"
+                bind:value={activityDay}
+                aria-label={t("settings.activityLogDay")}
+              />
+            </label>
+            <label class="activity-log-filter activity-log-filter--source">
+              <span class="activity-log-filter__label">{t("settings.activityLogSource")}</span>
+              <Select
+                options={activitySourceOptions}
+                bind:value={activitySource}
+                aria-label={t("settings.activityLogSource")}
+              />
+            </label>
+          </div>
+        {/if}
+        <p class="hint activity-log-window-hint">
+          {isDefaultSessionAccount
+            ? t("settings.activityLogWindowDay")
+            : t("settings.activityLogWindow24h")}
+        </p>
         {#if activityErr}
           <p class="hint warn">{activityErr}</p>
         {:else if activityLoaded && activityEntries.length === 0}
@@ -1375,6 +1560,7 @@
               <thead>
                 <tr>
                   <th scope="col">{t("settings.activityLogColTime")}</th>
+                  <th scope="col">{t("settings.activityLogColAccount")}</th>
                   <th scope="col">{t("settings.activityLogColKind")}</th>
                   <th scope="col">{t("settings.activityLogColDetail")}</th>
                 </tr>
@@ -1383,7 +1569,13 @@
                 {#each activityEntries as e, i (`${e.ts}-${e.kind}-${i}`)}
                   <tr>
                     <td class="activity-log-td-time">{formatActivityTs(e.ts)}</td>
-                    <td>
+                    <td
+                      class="activity-log-td-account"
+                      title={e.accountId || undefined}
+                    >
+                      {activityAccountLabel(e)}
+                    </td>
+                    <td class="activity-log-td-kind">
                       <span class="activity-log-kind {activityKindClass(e.kind)}">{e.kind}</span>
                     </td>
                     <td class="activity-log-td-msg" title={e.message}>{e.message || "—"}</td>
@@ -1457,7 +1649,7 @@
   .import-error {
     margin: 0.65rem 0 0;
     color: var(--rk-danger, #e85d5d);
-    font-size: 0.88rem;
+    font-size: var(--rk-fs-sm);
   }
 
   .import-report {
@@ -1469,7 +1661,7 @@
     border: 1px solid var(--rk-line);
     border-radius: var(--rk-radius);
     background: color-mix(in srgb, var(--rk-surface-3) 70%, transparent);
-    font-size: 0.84rem;
+    font-size: var(--rk-fs-sm);
     color: var(--rk-muted-strong);
   }
 
@@ -1495,7 +1687,7 @@
     background: none;
     color: color-mix(in srgb, var(--rk-muted) 85%, transparent);
     font: inherit;
-    font-size: 0.78rem;
+    font-size: var(--rk-fs-xs);
     letter-spacing: 0.02em;
     text-decoration: underline;
     text-underline-offset: 0.18em;

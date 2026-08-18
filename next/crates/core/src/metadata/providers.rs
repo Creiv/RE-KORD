@@ -42,6 +42,20 @@ fn theaudiodb_key() -> String {
         .unwrap_or_else(|| "2".into())
 }
 
+/// Extra Discogs fields stored in `albums.discogs_extra_json` / sidecar (camelCase, legacy parity).
+#[derive(Debug, Clone, Serialize, Deserialize, Default, PartialEq)]
+#[serde(rename_all = "camelCase")]
+pub struct DiscogsAlbumExtra {
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub master_id: Option<i64>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub discogs_uri: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub format_summary: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub catalog_no: Option<String>,
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]
 #[serde(rename_all = "camelCase")]
 pub struct FetchedAlbumMeta {
@@ -63,7 +77,31 @@ pub struct FetchedAlbumMeta {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub discogs_release_id: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
+    pub discogs_uri: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub discogs_extra: Option<DiscogsAlbumExtra>,
+    /// Raw JSON blob for DB (`discogs_extra_json`); preferred over re-serializing `discogs_extra`.
+    #[serde(skip)]
+    pub discogs_extra_json: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub expected_track_count: Option<i64>,
+}
+
+impl FetchedAlbumMeta {
+    /// JSON to persist in `albums.discogs_extra_json` (raw import blob, else typed extra).
+    pub fn discogs_extra_json_for_db(&self) -> Option<String> {
+        if let Some(raw) = self
+            .discogs_extra_json
+            .as_ref()
+            .map(|s| s.trim())
+            .filter(|s| !s.is_empty())
+        {
+            return Some(raw.to_string());
+        }
+        self.discogs_extra
+            .as_ref()
+            .and_then(|e| serde_json::to_string(e).ok())
+    }
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]
@@ -160,23 +198,22 @@ pub async fn discogs_search_releases(
         out.push(DiscogsReleaseCandidate {
             release_id: id,
             title,
-            year: r
-                .get("year")
-                .map(|v| v.as_str().map(|s| s.to_string()).unwrap_or_else(|| v.to_string())),
+            year: r.get("year").map(|v| {
+                v.as_str()
+                    .map(|s| s.to_string())
+                    .unwrap_or_else(|| v.to_string())
+            }),
             thumb: r
                 .get("thumb")
                 .and_then(|v| v.as_str())
                 .map(|s| s.to_string()),
-            uri: r
-                .get("uri")
-                .and_then(|v| v.as_str())
-                .map(|s| {
-                    if s.starts_with("http") {
-                        s.to_string()
-                    } else {
-                        format!("https://www.discogs.com{s}")
-                    }
-                }),
+            uri: r.get("uri").and_then(|v| v.as_str()).map(|s| {
+                if s.starts_with("http") {
+                    s.to_string()
+                } else {
+                    format!("https://www.discogs.com{s}")
+                }
+            }),
             score,
             country: r
                 .get("country")
@@ -211,6 +248,59 @@ fn score_candidate(artist: &str, album: &str, title: &str) -> i64 {
     score
 }
 
+fn discogs_format_summary(formats: &Value) -> Option<String> {
+    let arr = formats.as_array()?;
+    if arr.is_empty() {
+        return None;
+    }
+    let parts: Vec<String> = arr
+        .iter()
+        .filter_map(|f| {
+            let name = f.get("name").and_then(|v| v.as_str()).unwrap_or("");
+            let desc = f
+                .get("descriptions")
+                .and_then(|v| v.as_array())
+                .map(|a| {
+                    a.iter()
+                        .filter_map(|x| x.as_str())
+                        .collect::<Vec<_>>()
+                        .join(", ")
+                })
+                .unwrap_or_default();
+            let qty = f
+                .get("qty")
+                .and_then(|v| v.as_str())
+                .filter(|q| *q != "1")
+                .map(|q| format!(" x{q}"))
+                .unwrap_or_default();
+            let head = [name, desc.as_str()]
+                .into_iter()
+                .filter(|s| !s.is_empty())
+                .collect::<Vec<_>>()
+                .join(", ");
+            if head.is_empty() {
+                None
+            } else {
+                Some(format!("{head}{qty}"))
+            }
+        })
+        .collect();
+    let s = parts.join(" · ");
+    if s.is_empty() {
+        None
+    } else {
+        Some(s.chars().take(300).collect())
+    }
+}
+
+fn discogs_catalog_no(data: &Value) -> Option<String> {
+    data.pointer("/labels/0/catno")
+        .and_then(|v| v.as_str())
+        .map(|s| s.trim().to_string())
+        .filter(|s| !s.is_empty())
+        .map(|s| s.chars().take(120).collect())
+}
+
 pub async fn discogs_apply_release(
     cfg: &AppConfig,
     release_id: i64,
@@ -237,10 +327,11 @@ pub async fn discogs_apply_release(
     if score < 25 && !artist.is_empty() && !album.is_empty() {
         bail!("Discogs match score too low ({score})");
     }
-    let tracklist = data
-        .get("tracklist")
-        .and_then(|v| v.as_array())
-        .map(|a| a.iter().filter(|t| t.get("type_").and_then(|x| x.as_str()) != Some("heading")).count() as i64);
+    let tracklist = data.get("tracklist").and_then(|v| v.as_array()).map(|a| {
+        a.iter()
+            .filter(|t| t.get("type_").and_then(|x| x.as_str()) != Some("heading"))
+            .count() as i64
+    });
     let genre = data
         .get("genres")
         .and_then(|v| v.as_array())
@@ -251,6 +342,25 @@ pub async fn discogs_apply_release(
         .pointer("/labels/0/name")
         .and_then(|v| v.as_str())
         .map(|s| s.to_string());
+    let discogs_uri = data
+        .get("uri")
+        .and_then(|v| v.as_str())
+        .map(|s| s.to_string())
+        .or_else(|| {
+            data.get("resource_url")
+                .and_then(|v| v.as_str())
+                .map(|s| s.to_string())
+        })
+        .or_else(|| Some(format!("https://www.discogs.com/release/{release_id}")));
+    let format_summary = data.get("formats").and_then(discogs_format_summary);
+    let catalog_no = discogs_catalog_no(&data);
+    let master_id = data.get("master_id").and_then(|v| v.as_i64());
+    let discogs_extra = Some(DiscogsAlbumExtra {
+        master_id,
+        discogs_uri: discogs_uri.clone(),
+        format_summary,
+        catalog_no,
+    });
     Ok(FetchedAlbumMeta {
         ok: true,
         title: Some(title),
@@ -267,6 +377,9 @@ pub async fn discogs_apply_release(
         source: Some("discogs".into()),
         musicbrainz_release_id: None,
         discogs_release_id: Some(release_id.to_string()),
+        discogs_uri,
+        discogs_extra,
+        discogs_extra_json: None,
         expected_track_count: tracklist,
     })
 }
@@ -290,7 +403,11 @@ async fn musicbrainz_album(artist: &str, album: &str) -> Result<Option<FetchedAl
     else {
         return Ok(None);
     };
-    let id = rel.get("id").and_then(|v| v.as_str()).unwrap_or("").to_string();
+    let id = rel
+        .get("id")
+        .and_then(|v| v.as_str())
+        .unwrap_or("")
+        .to_string();
     Ok(Some(FetchedAlbumMeta {
         ok: true,
         title: rel
@@ -310,6 +427,9 @@ async fn musicbrainz_album(artist: &str, album: &str) -> Result<Option<FetchedAl
         source: Some("musicbrainz".into()),
         musicbrainz_release_id: if id.is_empty() { None } else { Some(id) },
         discogs_release_id: None,
+        discogs_uri: None,
+        discogs_extra: None,
+        discogs_extra_json: None,
         expected_track_count: None,
     }))
 }
@@ -356,6 +476,9 @@ async fn itunes_album(artist: &str, album: &str) -> Result<Option<FetchedAlbumMe
                 source: Some("itunes".into()),
                 musicbrainz_release_id: None,
                 discogs_release_id: None,
+                discogs_uri: None,
+                discogs_extra: None,
+                discogs_extra_json: None,
                 expected_track_count: r.get("trackCount").and_then(|v| v.as_i64()),
             }));
         }
@@ -404,6 +527,9 @@ async fn theaudiodb_album(artist: &str, album: &str) -> Result<Option<FetchedAlb
         source: Some("theaudiodb".into()),
         musicbrainz_release_id: None,
         discogs_release_id: None,
+        discogs_uri: None,
+        discogs_extra: None,
+        discogs_extra_json: None,
         expected_track_count: None,
     }))
 }
@@ -429,6 +555,15 @@ fn merge_album(base: &mut FetchedAlbumMeta, other: FetchedAlbumMeta) {
     }
     if base.discogs_release_id.is_none() {
         base.discogs_release_id = other.discogs_release_id;
+    }
+    if base.discogs_uri.is_none() {
+        base.discogs_uri = other.discogs_uri;
+    }
+    if base.discogs_extra.is_none() {
+        base.discogs_extra = other.discogs_extra;
+    }
+    if base.discogs_extra_json.is_none() {
+        base.discogs_extra_json = other.discogs_extra_json;
     }
     if base.expected_track_count.is_none() {
         base.expected_track_count = other.expected_track_count;
@@ -524,10 +659,7 @@ async fn deezer_track(artist: &str, title: &str) -> Result<Option<FetchedTrackMe
             .get("link")
             .and_then(|v| v.as_str())
             .map(|s| s.to_string()),
-        duration_ms: r
-            .get("duration")
-            .and_then(|v| v.as_i64())
-            .map(|s| s * 1000),
+        duration_ms: r.get("duration").and_then(|v| v.as_i64()).map(|s| s * 1000),
     }))
 }
 
@@ -648,12 +780,76 @@ pub async fn fetch_track_meta(
     bail!("no track metadata found");
 }
 
-/// Wikipedia search for entity-info candidates.
-pub async fn wikipedia_search(
+/// LRCLIB lyrics fetch — parity with legacy `/api/track-lyrics/fetch`.
+pub async fn fetch_track_lyrics_lrclib(
     artist: &str,
-    album: Option<&str>,
-    lang: &str,
-) -> Result<Vec<Value>> {
+    title: &str,
+    album: &str,
+    duration_ms: Option<i64>,
+) -> Result<(Option<String>, Option<String>)> {
+    let ar = artist.trim();
+    let tt = title.trim();
+    let al = album.trim();
+    if ar.is_empty() || tt.is_empty() {
+        bail!("Missing artist or title");
+    }
+    let mut url = url::Url::parse("https://lrclib.net/api/get").context("lrclib url")?;
+    {
+        let mut qp = url.query_pairs_mut();
+        qp.append_pair("artist_name", ar);
+        qp.append_pair("track_name", tt);
+        if !al.is_empty() {
+            qp.append_pair("album_name", al);
+        }
+        if let Some(ms) = duration_ms.filter(|v| *v > 0) {
+            let dur_sec = ((ms as f64) / 1000.0).round().max(1.0) as i64;
+            qp.append_pair("duration", &dur_sec.to_string());
+        }
+    }
+    let client = client()?;
+    let mut res = client.get(url.clone()).send().await?;
+    for _ in 0..2 {
+        if res.status().as_u16() != 503 && res.status().as_u16() != 429 {
+            break;
+        }
+        tokio::time::sleep(Duration::from_millis(1100)).await;
+        res = client.get(url.clone()).send().await?;
+    }
+    if res.status().as_u16() == 404 {
+        return Ok((None, None));
+    }
+    if !res.status().is_success() {
+        let status = res.status();
+        let detail = res.text().await.unwrap_or_default();
+        let short = detail.trim().chars().take(220).collect::<String>();
+        bail!(
+            "LRCLIB {}{}",
+            status.as_u16(),
+            if short.is_empty() {
+                String::new()
+            } else {
+                format!(": {short}")
+            }
+        );
+    }
+    let j: Value = res.json().await?;
+    let synced = j
+        .get("syncedLyrics")
+        .and_then(|v| v.as_str())
+        .map(str::trim)
+        .filter(|s| !s.is_empty())
+        .map(|s| s.to_string());
+    let plain = j
+        .get("plainLyrics")
+        .and_then(|v| v.as_str())
+        .map(str::trim)
+        .filter(|s| !s.is_empty())
+        .map(|s| s.to_string());
+    Ok((synced, plain))
+}
+
+/// Wikipedia search for entity-info candidates.
+pub async fn wikipedia_search(artist: &str, album: Option<&str>, lang: &str) -> Result<Vec<Value>> {
     let client = client()?;
     let lang = if lang == "en" { "en" } else { "it" };
     let query = match album {

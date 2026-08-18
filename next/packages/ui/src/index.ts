@@ -20,6 +20,8 @@ export { default as Modal } from "./components/Modal.svelte";
 export { default as HeroCard } from "./components/HeroCard.svelte";
 export { default as MetricCard } from "./components/MetricCard.svelte";
 export { default as BrandLogo } from "./components/BrandLogo.svelte";
+export { default as QrCodeImg } from "./components/QrCodeImg.svelte";
 export { coverTone, hashSeed } from "./lib/coverTone";
+export { sheetDrag, SHEET_MEDIA_QUERY } from "./lib/sheetDrag";
 export type { CoverTone } from "./lib/coverTone";
 export type { StatItem, SelectOption } from "./types";

@@ -73,10 +73,8 @@ async fn serve_media(
                         );
                         headers.insert(
                             header::CONTENT_RANGE,
-                            HeaderValue::from_str(&format!(
-                                "bytes {start}-{end}/{file_len}"
-                            ))
-                            .unwrap(),
+                            HeaderValue::from_str(&format!("bytes {start}-{end}/{file_len}"))
+                                .unwrap(),
                         );
                         (StatusCode::PARTIAL_CONTENT, headers, bytes).into_response()
                     }

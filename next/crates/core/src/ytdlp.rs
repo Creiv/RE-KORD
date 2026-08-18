@@ -97,7 +97,9 @@ pub fn is_allowed_ytdlp_url(url: &str) -> bool {
     if ALLOWED_HOSTS.iter().any(|h| host == *h) {
         return true;
     }
-    ALLOWED_HOSTS.iter().any(|h| host.ends_with(&format!(".{h}")))
+    ALLOWED_HOSTS
+        .iter()
+        .any(|h| host.ends_with(&format!(".{h}")))
 }
 
 pub fn is_uuid_download_id(value: &str) -> bool {
@@ -160,7 +162,7 @@ pub fn output_template(url: &str, download_kind: &str, output_dir: &str) -> Stri
     format!("%(title)s/{n} - {name}.%(ext)s")
 }
 
-fn javascript_args() -> Vec<String> {
+pub(crate) fn javascript_args() -> Vec<String> {
     let runtime = std::env::var("REKORD_YTDLP_JS_RUNTIME")
         .ok()
         .map(|s| s.trim().to_string())
@@ -193,11 +195,18 @@ pub fn build_download_args(
     let out_dir = safe_rel_path(output_dir)?;
     let mut tmpl = output_template(url, download_kind, &out_dir);
     if !out_dir.is_empty() {
-        tmpl = format!("{}/{}", out_dir.trim_end_matches('/'), tmpl.trim_start_matches('/'));
+        tmpl = format!(
+            "{}/{}",
+            out_dir.trim_end_matches('/'),
+            tmpl.trim_start_matches('/')
+        );
     }
+    // Prefer pure audio; fall back to progressive muxed (`/best`) when YouTube
+    // SABR hides standalone audio URLs (otherwise every track fails with
+    // "Requested format is not available" while playlist progress still advances).
     let mut args = vec![
         "-f".into(),
-        "bestaudio[ext=m4a]/bestaudio[ext=webm]/bestaudio".into(),
+        "bestaudio[ext=m4a]/bestaudio[ext=webm]/bestaudio/best".into(),
     ];
     args.extend(javascript_args());
     if let Some(cookies) = cfg.youtube_cookies_for_ytdlp() {
@@ -290,7 +299,10 @@ impl RollLog {
     }
 }
 
-pub fn item_summary_from_log(stdout: &str, stderr: &str) -> (Vec<String>, Vec<ItemFail>, Vec<ItemFail>) {
+pub fn item_summary_from_log(
+    stdout: &str,
+    stderr: &str,
+) -> (Vec<String>, Vec<ItemFail>, Vec<ItemFail>) {
     let raw = format!("{stderr}\n{stdout}");
     let mut downloaded = Vec::new();
     let mut skipped = Vec::new();
@@ -330,16 +342,14 @@ pub fn item_summary_from_log(stdout: &str, stderr: &str) -> (Vec<String>, Vec<It
             }
             continue;
         }
-        if line.starts_with("ERROR:")
-            || line.starts_with("WARNING:")
-            || line.to_ascii_lowercase().contains("unavailable")
-            || line.to_ascii_lowercase().contains("private")
-        {
-            let label = line
-                .trim_start_matches("ERROR:")
-                .trim_start_matches("WARNING:")
-                .trim()
-                .to_string();
+        // Only hard failures — WARNING / info lines (SABR, "unavailable videos"
+        // playlist refresh, version age) must not pollute the UI summary.
+        let lower = line.to_ascii_lowercase();
+        let is_error = line.starts_with("ERROR:")
+            || lower.contains("video unavailable")
+            || lower.contains("private video");
+        if is_error {
+            let label = line.trim_start_matches("ERROR:").trim().to_string();
             let key = format!("{label}\0{line}");
             if seen_f.insert(key) {
                 failed.push(ItemFail {
@@ -375,7 +385,9 @@ pub async fn run_json_probe(cfg: &AppConfig, url: &str, timeout_ms: u64) -> Resu
         .stdout(Stdio::piped())
         .stderr(Stdio::piped())
         .kill_on_drop(true);
-    let child = cmd.spawn().with_context(|| format!("spawn {}", program.display()))?;
+    let child = cmd
+        .spawn()
+        .with_context(|| format!("spawn {}", program.display()))?;
     let output = tokio::time::timeout(
         std::time::Duration::from_millis(timeout_ms),
         child.wait_with_output(),
@@ -455,7 +467,9 @@ pub async fn run_download_ndjson(
         .kill_on_drop(true)
         .env("FORCE_COLOR", "0");
 
-    let mut child = cmd.spawn().with_context(|| format!("spawn {}", program.display()))?;
+    let mut child = cmd
+        .spawn()
+        .with_context(|| format!("spawn {}", program.display()))?;
     let child_pid = child.id();
     let stdout = child.stdout.take().context("stdout")?;
     let stderr = child.stderr.take().context("stderr")?;
@@ -550,7 +564,11 @@ pub async fn run_download_ndjson(
     while tokio::time::Instant::now() < drain_deadline {
         match log_rx.try_recv() {
             Ok((is_out, s)) => {
-                if is_out { out_log.append(&s); } else { err_log.append(&s); }
+                if is_out {
+                    out_log.append(&s);
+                } else {
+                    err_log.append(&s);
+                }
             }
             Err(_) => break,
         }
@@ -563,7 +581,10 @@ pub async fn run_download_ndjson(
     let (stdout_text, log_trunc_o, stdout_total) = out_log.trim_for_done();
     let (stderr_text, log_trunc_e, stderr_total) = err_log.trim_for_done();
     let (downloaded, skipped, failed) = item_summary_from_log(&stdout_text, &stderr_text);
-    let ok = code == 0 && !cancelled;
+    // Playlist item counters advance even when every format selection fails —
+    // require at least one written/skipped file for a successful job.
+    let wrote_or_kept = !downloaded.is_empty() || !skipped.is_empty();
+    let ok = code == 0 && !cancelled && (wrote_or_kept || failed.is_empty());
     let progress = last_progress.map(|(c, t)| serde_json::json!({"current": c, "total": t}));
     let items = serde_json::json!({
         "type": "items",
@@ -596,7 +617,10 @@ pub async fn run_download_ndjson(
 
 pub fn guess_youtube_url_from_entry_id(id: &str) -> String {
     let s = id.trim();
-    if s.len() == 11 && s.chars().all(|c| c.is_ascii_alphanumeric() || c == '_' || c == '-') {
+    if s.len() == 11
+        && s.chars()
+            .all(|c| c.is_ascii_alphanumeric() || c == '_' || c == '-')
+    {
         return format!("https://www.youtube.com/watch?v={s}");
     }
     if s.starts_with("PL")

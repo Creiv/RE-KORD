@@ -1,10 +1,18 @@
-//! Local folder browser under music_root (download destination).
+//! Local folder browser under music_root (download destination), plus the
+//! deletions the Studio can ask for.
 
-use crate::path_util::{join_under_root, safe_dir_name, safe_rel_path, under_root};
+use crate::layout::is_audio_name;
+use crate::path_util::{
+    join_under_root, rel_path_looks_like_album_folder, safe_dir_name, safe_rel_path, under_root,
+};
 use anyhow::{bail, Result};
 use serde::Serialize;
 use std::fs;
 use std::path::Path;
+
+/// Symlink loops are already excluded (directory symlinks are not followed);
+/// this only keeps a pathological tree from eating the stack.
+const MAX_ALBUM_DEPTH: usize = 8;
 
 #[derive(Debug, Serialize)]
 #[serde(rename_all = "camelCase")]
@@ -178,4 +186,103 @@ pub fn search_dirs(music_root: &Path, q: &str, limit: usize) -> Result<(Vec<FsSe
         0,
     );
     Ok((results, truncated))
+}
+
+/// Outcome of a delete request: what left the disk and what the hub refused to
+/// touch, so the client can tell the user instead of pretending it all worked.
+#[derive(Debug, Default, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct DeletedAudio {
+    pub deleted: Vec<String>,
+    pub skipped: Vec<String>,
+}
+
+/// Deletes single audio files inside the library.
+///
+/// Everything else is skipped rather than fatal: a stale rel path (file already
+/// gone, renamed by hand) should not abort the rest of the list. `under_root`
+/// resolves symlinks, so a link pointing outside the library cannot be used to
+/// erase files elsewhere on the host.
+pub fn delete_audio_files(music_root: &Path, rels: &[String]) -> DeletedAudio {
+    let mut out = DeletedAudio::default();
+    for raw in rels {
+        let Ok(rel) = safe_rel_path(raw) else {
+            out.skipped.push(raw.clone());
+            continue;
+        };
+        let Ok(abs) = join_under_root(music_root, &rel) else {
+            out.skipped.push(rel);
+            continue;
+        };
+        let name = abs
+            .file_name()
+            .map(|n| n.to_string_lossy().into_owned())
+            .unwrap_or_default();
+        if rel.is_empty() || !abs.is_file() || !under_root(&abs, music_root) || !is_audio_name(&name)
+        {
+            out.skipped.push(rel);
+            continue;
+        }
+        match fs::remove_file(&abs) {
+            Ok(()) => out.deleted.push(rel),
+            Err(_) => out.skipped.push(rel),
+        }
+    }
+    out
+}
+
+#[derive(Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct DeletedAlbumFolder {
+    pub folder: String,
+    pub deleted: Vec<String>,
+}
+
+/// Deletes an album folder whole: audio, cover and sidecars.
+///
+/// Two guards keep a wrong path from taking out more than an album: the path
+/// must be at least `Artist/Album` deep, and it must actually contain audio.
+pub fn delete_album_folder(music_root: &Path, album_rel: &str) -> Result<DeletedAlbumFolder> {
+    let rel = safe_rel_path(album_rel)?;
+    if !rel_path_looks_like_album_folder(&rel) {
+        bail!("album path must be an album folder under an artist");
+    }
+    let abs = join_under_root(music_root, &rel)?;
+    if !abs.is_dir() || !under_root(&abs, music_root) {
+        bail!("album folder not found");
+    }
+    let mut deleted = Vec::new();
+    collect_audio(&abs, &rel, &mut deleted, 0);
+    if deleted.is_empty() {
+        bail!("no audio files in album folder");
+    }
+    fs::remove_dir_all(&abs)?;
+    deleted.sort();
+    Ok(DeletedAlbumFolder {
+        folder: rel,
+        deleted,
+    })
+}
+
+/// Audio rel paths under `dir`. Uses `file_type` (which does not follow links)
+/// so a symlinked directory is listed, never descended into.
+fn collect_audio(dir: &Path, prefix: &str, out: &mut Vec<String>, depth: usize) {
+    if depth > MAX_ALBUM_DEPTH {
+        return;
+    }
+    let Ok(entries) = fs::read_dir(dir) else {
+        return;
+    };
+    for entry in entries.flatten() {
+        let name = entry.file_name().to_string_lossy().into_owned();
+        let rel = format!("{prefix}/{name}");
+        let Ok(kind) = entry.file_type() else {
+            continue;
+        };
+        if kind.is_dir() {
+            collect_audio(&entry.path(), &rel, out, depth + 1);
+        } else if kind.is_file() && is_audio_name(&name) {
+            out.push(rel);
+        }
+    }
 }

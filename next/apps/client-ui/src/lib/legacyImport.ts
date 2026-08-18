@@ -286,29 +286,6 @@ export function parseLegacyImportJson(raw: string): {
   return { state, streak };
 }
 
-/** Fetch UserStateV1 from a running legacy hub. */
-export async function fetchLegacyUserState(
-  baseUrl: string,
-  accountId?: string,
-): Promise<LegacyUserState> {
-  const root = baseUrl.replace(/\/$/, "");
-  const url = new URL(`${root}/api/user-state`);
-  if (accountId?.trim()) url.searchParams.set("accountId", accountId.trim());
-  const headers: Record<string, string> = { Accept: "application/json" };
-  if (accountId?.trim()) headers["X-KORD-Account-Id"] = accountId.trim();
-  const res = await fetch(url.toString(), { headers });
-  if (!res.ok) {
-    throw new Error(`Legacy hub HTTP ${res.status}: ${res.statusText}`);
-  }
-  const body = (await res.json()) as unknown;
-  // Old API may return state directly or wrapped.
-  if (isLegacyUserState(body)) return body;
-  const wrap = body as { state?: LegacyUserState; data?: LegacyUserState; ok?: boolean };
-  if (wrap.state && isLegacyUserState(wrap.state)) return wrap.state;
-  if (wrap.data && isLegacyUserState(wrap.data)) return wrap.data;
-  throw new Error("Risposta /api/user-state non valida");
-}
-
 export async function applyLegacyUserState(
   state: LegacyUserState,
   opts: {

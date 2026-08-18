@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { onMount } from "svelte";
   import { api, type ArtworkHit, type Album } from "../../lib/api";
   import { session } from "../../lib/session.svelte";
   import UiIcon from "../icons/UiIcon.svelte";
@@ -11,6 +12,7 @@
   let busy = $state(false);
   let err = $state<string | null>(null);
   let msg = $state<string | null>(null);
+  let didAutofill = $state(false);
 
   const artistsSorted = $derived(
     session.artists.slice().sort((a, b) => a.name.localeCompare(b.name, "it")),
@@ -22,9 +24,30 @@
 
   function loadCoverAlbums(artistName: string) {
     coverAlbums = artistName
-      ? session.allAlbums.filter((a) => a.artist_name === artistName)
+      ? session.allAlbums.filter((a) => a.artist_name === artistName && !a.loose)
       : [];
   }
+
+  function fillFromPlayback() {
+    if (!session.current) return;
+    coverArtist = session.current.artist_name;
+    loadCoverAlbums(coverArtist);
+    coverAlbumId = session.current.album_id;
+    artQuery = `${session.current.artist_name} ${session.current.album_name}`;
+  }
+
+  onMount(() => {
+    if (!didAutofill && session.current) {
+      fillFromPlayback();
+      didAutofill = true;
+    }
+  });
+
+  $effect(() => {
+    if (session.studioPane === "covers" && session.current && !coverAlbumId) {
+      fillFromPlayback();
+    }
+  });
 
   async function search() {
     if (!selectedAlbum && !artQuery.trim()) {
@@ -71,6 +94,21 @@
       busy = false;
     }
   }
+
+  function openLink(hit: ArtworkHit) {
+    const href = hit.url || hit.artwork;
+    if (!href) return;
+    window.open(href, "_blank", "noopener,noreferrer");
+  }
+
+  function linkLabel(hit: ArtworkHit): string {
+    try {
+      const u = new URL(hit.url || hit.artwork);
+      return u.hostname.replace(/^www\./, "");
+    } catch {
+      return "Apri";
+    }
+  }
 </script>
 
 <div class="studio-pane tools-art" role="region" aria-label="Copertine">
@@ -82,7 +120,7 @@
           <label class="subtle sm block-label" for="cover-artist-sel">Artista</label>
           <select
             id="cover-artist-sel"
-            class="select"
+            class="rk-select"
             bind:value={coverArtist}
             onchange={() => {
               coverAlbumId = null;
@@ -100,7 +138,7 @@
           <label class="subtle sm block-label" for="cover-album-sel">Album</label>
           <select
             id="cover-album-sel"
-            class="select"
+            class="rk-select"
             value={coverAlbumId ?? ""}
             disabled={!coverArtist}
             aria-label="Album"
@@ -108,7 +146,7 @@
               const v = e.currentTarget.value;
               coverAlbumId = v ? Number(v) : null;
               const al = coverAlbums.find((a) => a.id === coverAlbumId);
-              if (al) artQuery = `${al.artist_name} — ${al.name}`;
+              if (al) artQuery = `${al.artist_name} ${al.name}`;
             }}
           >
             {#if !coverArtist}
@@ -132,7 +170,13 @@
       <div class="art-fields">
         <label class="art-field">
           <span class="subtle sm block-label">Cerca copertina</span>
-          <input type="text" bind:value={artQuery} placeholder="Artista — Album" disabled={busy} />
+          <input
+            type="text"
+            class="ghost-input"
+            bind:value={artQuery}
+            placeholder="Artista Album"
+            disabled={busy}
+          />
         </label>
       </div>
       <div class="studio-inline-actions studio-inline-actions--spaced">
@@ -140,13 +184,7 @@
           type="button"
           class="ghost-btn ghost-btn--sm"
           disabled={!session.current}
-          onclick={() => {
-            if (!session.current) return;
-            coverArtist = session.current.artist_name;
-            loadCoverAlbums(coverArtist);
-            coverAlbumId = session.current.album_id;
-            artQuery = `${session.current.artist_name} — ${session.current.album_name}`;
-          }}
+          onclick={fillFromPlayback}
         >
           Compila da riproduzione
         </button>
@@ -176,15 +214,29 @@
           <img src={hit.artwork} alt={hit.name} loading="lazy" />
           <span class="art-src">{hit.source || "—"}</span>
         </div>
-        <div class="artcap2">{hit.artist} — {hit.name}</div>
+        <div class="artcap2">
+          <strong>{hit.artist}</strong><br />{hit.name}
+        </div>
         <div class="art-actions">
+          <a
+            class="extlink"
+            href={hit.url || hit.artwork}
+            target="_blank"
+            rel="noreferrer"
+            onclick={(e) => {
+              e.preventDefault();
+              openLink(hit);
+            }}
+          >
+            {linkLabel(hit)}
+          </a>
           <button
             type="button"
             class="primary-btn primary-btn--sm"
             disabled={busy || !selectedAlbum}
             onclick={() => void apply(hit)}
           >
-            Salva
+            Salva copertina
           </button>
         </div>
       </div>

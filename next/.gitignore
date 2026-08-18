@@ -5,7 +5,15 @@ dist/
 *.db
 *.db-*
 .vite/
-apps/client-shell/src-tauri/gen/
+# `gen/*` e non `gen/`: con la barra git salta la cartella e non ci entra, e
+# l'eccezione qui sotto non verrebbe nemmeno letta.
+apps/client-shell/src-tauri/gen/*
+# Eccezione: il progetto Android nativo si versiona. Dentro ci mettiamo mano
+# (permessi del manifest, servizio in foreground per l'audio) e `tauri android init`
+# lo rigenererebbe da zero su ogni macchina, cancellando quelle modifiche. I pezzi
+# che la CLI riscrive a ogni build — .so, tauri.conf.json degli asset,
+# tauri.build.gradle.kts — restano esclusi dai .gitignore interni di gen/android.
+!apps/client-shell/src-tauri/gen/android/
 apps/client-shell/src-tauri/target/
 release/
 .env

@@ -24,8 +24,7 @@ pub fn safe_rel_path(raw: &str) -> Result<String> {
 
 pub fn safe_dir_name(raw: &str) -> Result<String> {
     let s = raw.trim();
-    if s.is_empty() || s.contains('/') || s.contains('\\') || s.contains("..") || s.contains('\0')
-    {
+    if s.is_empty() || s.contains('/') || s.contains('\\') || s.contains("..") || s.contains('\0') {
         bail!("invalid directory name");
     }
     Ok(s.to_string())

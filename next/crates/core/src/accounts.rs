@@ -379,3 +379,22 @@ pub fn account_id_from_headers_and_query(
     }
     None
 }
+
+/// Hub-wide integrations / remote-access mutations are owned by the default account.
+pub fn is_default_account_id(id: &str) -> bool {
+    id.trim() == DEFAULT_ACCOUNT_ID
+}
+
+/// Resolve the request account and require it to be the default (`default` / Locale).
+pub fn require_default_account(
+    data_dir: &Path,
+    headers: &axum::http::HeaderMap,
+    query_account_id: Option<&str>,
+) -> Result<String> {
+    let requested = account_id_from_headers_and_query(headers, query_account_id);
+    let id = resolve_account_id(data_dir, requested.as_deref())?;
+    if !is_default_account_id(&id) {
+        bail!("only the default account can manage this setting");
+    }
+    Ok(id)
+}

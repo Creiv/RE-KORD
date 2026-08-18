@@ -1,0 +1,111 @@
+/*
+ * Foglio dal basso — una sola definizione per tutti i dialoghi su telefono.
+ *
+ * Un dialogo centrato, su uno schermo alto e tenuto in una mano, arriva a metà
+ * altezza: il titolo sta dove non serve e i bottoni finiscono lontani dal pollice.
+ * Da qui in giù il pannello si incolla al bordo inferiore, prende tutta la
+ * larghezza, tiene l'intestazione ferma e le azioni in basso, e lascia sopra una
+ * striscia di fondale per chiudere toccando fuori.
+ *
+ * Un dialogo aderisce aggiungendo `rk-sheet-back` al fondale e `rk-sheet` al
+ * pannello, e marcando le sue parti con `data-sheet-grip` (maniglia e
+ * intestazione), `data-sheet-body` (la parte che scorre) e `data-sheet-foot`.
+ * Le regole di base del pannello vanno scritte in `:where()`, così questo strato
+ * può soprascriverle senza rincorrere la specificità.
+ *
+ * Soglia: la stessa della cromatura mobile (vedi tokens.css e lib/sheetDrag.ts).
+ */
+
+.rk-sheet__grip {
+  display: none;
+}
+
+@media (max-width: 999.98px) {
+  .rk-sheet-back {
+    place-items: end stretch;
+    padding-inline: 0;
+    /* Sopra resta il fondale: è lì che si tocca per chiudere. */
+    padding-top: max(
+      var(--rk-sheet-top-gap),
+      calc(env(safe-area-inset-top, 0px) + var(--rk-space-xl))
+    );
+    /* Con la tastiera aperta il viewport visibile è più corto di quello di layout
+       (interactive-widget=overlays-content): la differenza è l'altezza dei tasti,
+       e il foglio si solleva esattamente di quella. Senza tastiera fa 0. */
+    padding-bottom: max(0px, calc(100dvh - var(--rk-app-vh)));
+  }
+
+  .rk-sheet {
+    width: 100%;
+    max-width: none;
+    max-height: 100%;
+    /* Colonna invece di un blocco che scorre tutto: l'intestazione resta in vista
+       mentre il contenuto scorre sotto. */
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+    border-bottom: 0;
+    border-radius: var(--rk-radius-2xl) var(--rk-radius-2xl) 0 0;
+    box-shadow: var(--rk-shadow-3);
+    animation: rk-sheet-rise 0.2s ease-out;
+  }
+
+  /* Maniglia: dice che il foglio si può spingere giù, ed è la presa del gesto. */
+  .rk-sheet__grip {
+    display: flex;
+    flex: 0 0 auto;
+    justify-content: center;
+    align-items: center;
+    height: 1.5rem;
+    /* Il gesto è verticale e lo gestiamo noi: il browser non deve scrollare. */
+    touch-action: none;
+    cursor: grab;
+  }
+
+  .rk-sheet__grip::after {
+    content: "";
+    width: 2.5rem;
+    height: 4px;
+    border-radius: var(--rk-radius-round);
+    background: var(--rk-line-strong);
+  }
+
+  .rk-sheet [data-sheet-grip] {
+    touch-action: none;
+  }
+
+  .rk-sheet [data-sheet-body] {
+    flex: 1 1 auto;
+    min-height: 0;
+    /* L'altezza la decide il foglio: un tetto scritto per il pannello centrato
+       lascerebbe un buco sotto la lista. */
+    max-height: none;
+    overflow: auto;
+    overscroll-behavior: contain;
+  }
+
+  /* Senza barra di azioni è il contenuto a dover scavalcare la home bar. */
+  .rk-sheet [data-sheet-body]:last-child {
+    padding-bottom: calc(var(--rk-space-lg) + env(safe-area-inset-bottom, 0px));
+  }
+
+  .rk-sheet [data-sheet-foot] {
+    flex: 0 0 auto;
+    padding-bottom: calc(var(--rk-space-lg) + env(safe-area-inset-bottom, 0px));
+  }
+}
+
+@keyframes rk-sheet-rise {
+  from {
+    transform: translateY(100%);
+  }
+  to {
+    transform: translateY(0);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .rk-sheet {
+    animation: none;
+  }
+}

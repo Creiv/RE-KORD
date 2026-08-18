@@ -15,7 +15,10 @@
     "build:server": "cargo build -p rekord-server --release --manifest-path Cargo.toml",
     "pack:linux": "bash scripts/pack-linux.sh",
     "pack:windows": "bash scripts/pack-windows.sh",
-    "android:init": "bash scripts/android-init.sh"
+    "android:init": "bash scripts/android-init.sh",
+    "android:build": "bash scripts/android-build.sh",
+    "android:apk": "bash scripts/android-build.sh --release --split",
+    "android:dev": "pnpm --filter @rekord/client-shell exec tauri android dev"
   },
   "engines": {
     "node": ">=20"

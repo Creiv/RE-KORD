@@ -50,7 +50,7 @@
 
   h2 {
     margin: 0;
-    font-size: 1.22rem;
+    font-size: var(--rk-fs-subtitle);
     font-weight: 800;
     letter-spacing: -0.025em;
   }
@@ -58,7 +58,7 @@
   p {
     margin: 0.2rem 0 0;
     color: color-mix(in srgb, var(--rk-accent-2) 45%, var(--rk-muted) 55%);
-    font-size: 0.82rem;
+    font-size: var(--rk-fs-sm);
     font-weight: 550;
   }
 

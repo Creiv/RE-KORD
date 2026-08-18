@@ -102,7 +102,7 @@
     width: 2.25rem;
     height: 2.25rem;
     place-items: center;
-    border-radius: 999px;
+    border-radius: var(--rk-radius-round);
     background: color-mix(in srgb, var(--rk-accent) 18%, var(--rk-surface-3) 82%);
     color: var(--rk-accent);
     font-weight: 850;
@@ -121,22 +121,22 @@
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
-    font-size: 0.95rem;
+    font-size: var(--rk-fs-md);
     font-weight: 700;
     letter-spacing: -0.015em;
-    line-height: 1.3;
+    line-height: var(--rk-lh-snug);
   }
 
   .account-row__badge,
   .account-row__level-pill {
     flex: 0 0 auto;
-    font-size: 0.65rem;
+    font-size: var(--rk-fs-3xs);
     font-weight: 750;
     letter-spacing: 0.04em;
     text-transform: uppercase;
     line-height: 1;
     padding: 0.32em 0.62em;
-    border-radius: 999px;
+    border-radius: var(--rk-radius-round);
     border: 1px solid color-mix(in srgb, var(--rk-accent) 30%, var(--rk-line) 70%);
     background: color-mix(in srgb, var(--rk-accent) 8%, var(--rk-surface-3) 92%);
     color: color-mix(in srgb, var(--rk-accent) 80%, var(--rk-muted) 20%);
@@ -151,5 +151,16 @@
     border-color: color-mix(in srgb, var(--rk-accent) 44%, var(--rk-line) 56%);
     background: color-mix(in srgb, var(--rk-accent) 14%, var(--rk-surface-3) 86%);
     color: color-mix(in srgb, var(--rk-accent) 92%, var(--rk-ink) 8%);
+  }
+
+  /* Telefono: la pillola del livello scende sotto il nome. Accanto ad esso, in
+     150px che restano fra avatar e bottone, mangiava metà riga e i nomi finivano
+     tutti in «TestAcc…» — e il nome è l'unica cosa che distingue una riga. */
+  @media (max-width: 559.98px) {
+    .account-row__text {
+      grid-template-columns: minmax(0, 1fr);
+      justify-items: start;
+      gap: 0.2rem;
+    }
   }
 </style>

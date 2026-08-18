@@ -25,6 +25,11 @@ export type CustomThemeSettings = {
   bgImageRev?: number | null;
   /** How the background image fills the page. */
   bgImageFit?: CustomThemeBgImageFit;
+  /**
+   * Optional accent wash: accent1 (→ accent2) gradient top→bottom on the page background.
+   * Default off (preferred flat/page-lg look).
+   */
+  accentWash?: boolean;
 };
 
 export type ThemeCatalogEntry = {
@@ -43,6 +48,7 @@ export const DEFAULT_CUSTOM_THEME: CustomThemeSettings = {
   accent2: "#64d4ff",
   bgMode: "color",
   bgImageFit: "cover",
+  accentWash: false,
 };
 
 export const THEME_GROUPS: { id: ThemeGroupId; labelKey: string }[] = [
@@ -220,6 +226,7 @@ export function normalizeCustomTheme(
     section: normalizeHexColor(src.section, DEFAULT_CUSTOM_THEME.section),
     accent: normalizeHexColor(src.accent, DEFAULT_CUSTOM_THEME.accent),
     accent2: normalizeHexColor(src.accent2, DEFAULT_CUSTOM_THEME.accent2),
+    accentWash: src.accentWash === true,
   };
   const bgImage =
     typeof src.bgImage === "string" && src.bgImage.trim()

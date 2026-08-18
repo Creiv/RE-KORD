@@ -68,7 +68,7 @@
       class="lib-meta-chip lib-meta-chip--ico"
       class:lib-meta-chip--on={noteOn}
       title={noteOn
-        ? `Brani senza data/genere: ${tracksMissingMetaCount}`
+        ? `Brani senza data o genere: ${tracksMissingMetaCount}`
         : "Tutti i brani hanno data o genere nei metadati"}
     >
       <UiIcon name="music" class="lib-meta-chip__ico" />
@@ -137,6 +137,11 @@
     scrollbar-width: none;
     min-width: 0;
     max-width: 100%;
+    /* Arrivati in fondo ai badge il gesto si ferma qui: sul telefono uno scorrimento
+       orizzontale che passa alla pagina fa scattare il «torna indietro». */
+    overscroll-behavior-x: contain;
+    /* Orizzontale a noi, verticale al browser: la riga non blocca lo scorrimento. */
+    touch-action: pan-x pan-y;
   }
 
   .lib-meta-badges--tight {
@@ -171,12 +176,12 @@
     display: inline-flex;
     align-items: center;
     gap: 0.12rem;
-    font-size: 0.65rem;
+    font-size: var(--rk-fs-3xs);
     font-weight: 800;
     font-variant-numeric: tabular-nums;
-    line-height: 1.2;
+    line-height: var(--rk-lh-tight);
     padding: 0.2rem 0.38rem;
-    border-radius: 6px;
+    border-radius: var(--rk-radius);
     letter-spacing: 0.02em;
     background: color-mix(in srgb, var(--rk-muted) 3%, var(--rk-surface-2) 97%);
     color: color-mix(in srgb, var(--rk-muted) 55%, var(--rk-surface-2) 45%);

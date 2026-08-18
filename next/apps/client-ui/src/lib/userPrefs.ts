@@ -86,7 +86,7 @@ export type UserPrefs = {
   recentRelPaths: string[];
   /** @deprecated migrated → recentRelPaths */
   recentTrackIds: number[];
-  /** Mood salvati lato client: chiave = track id stringa o rel_path. */
+  /** Mood personali: chiave preferita = rel_path (id numerico solo legacy). */
   trackMoods: Record<string, string[]>;
   /**
    * Legacy import compat only. Session restore is always on in next;
@@ -256,6 +256,11 @@ export function applyTheme(
       : null;
   if (resolvedCustom) applyCustomThemeCss(resolvedCustom, root);
   applyCustomThemeBackground(resolvedCustom, t === "custom", root);
+  if (resolvedCustom?.accentWash === true) {
+    root.dataset.accentWash = "1";
+  } else {
+    delete root.dataset.accentWash;
+  }
   syncGlassSurfaceDom(root, {
     glassSurfaces: glass?.glassSurfaces ?? prefs.glassSurfaces,
     glassOpacity: glass?.glassOpacity ?? prefs.glassOpacity,
@@ -463,4 +468,47 @@ export function playCountFor(
   track: { id: number; rel_path: string },
 ): number {
   return prefs.playCounts[track.rel_path] ?? prefs.playCounts[String(track.id)] ?? 0;
+}
+
+/** Tracks that no longer exist on disk, by either key the prefs may use. */
+export type GoneTracks = { relPaths: string[]; trackIds?: number[] };
+
+/**
+ * The fields to patch so nothing keeps pointing at deleted tracks: an ascolto
+ * count or a mood left behind would come back to life on a track that reuses
+ * the same path later on.
+ *
+ * Pure on purpose (no storage): the caller decides when to persist.
+ */
+export function prefsWithoutTracks(
+  prefs: UserPrefs,
+  gone: GoneTracks,
+): Partial<UserPrefs> {
+  const paths = new Set(gone.relPaths.filter(Boolean));
+  const ids = new Set((gone.trackIds ?? []).map((id) => String(id)));
+  if (!paths.size && !ids.size) return {};
+  const keyIsGone = (key: string) => paths.has(key) || ids.has(key);
+
+  const playCounts: Record<string, number> = {};
+  for (const [key, n] of Object.entries(prefs.playCounts)) {
+    if (!keyIsGone(key)) playCounts[key] = n;
+  }
+  const trackMoods: Record<string, string[]> = {};
+  for (const [key, moods] of Object.entries(prefs.trackMoods)) {
+    if (!keyIsGone(key)) trackMoods[key] = moods;
+  }
+  return {
+    excludedRelPaths: prefs.excludedRelPaths.filter((p) => !paths.has(p)),
+    excludedTrackIds: prefs.excludedTrackIds.filter((id) => !ids.has(String(id))),
+    recentRelPaths: prefs.recentRelPaths.filter((p) => !paths.has(p)),
+    recentTrackIds: prefs.recentTrackIds.filter((id) => !ids.has(String(id))),
+    playCounts,
+    trackMoods,
+  };
+}
+
+/** Same, applied and saved. */
+export function forgetTracksInPrefs(gone: GoneTracks): UserPrefs {
+  const patch = prefsWithoutTracks(loadUserPrefs(), gone);
+  return patchUserPrefs(patch);
 }

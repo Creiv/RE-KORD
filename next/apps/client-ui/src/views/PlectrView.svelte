@@ -4,6 +4,7 @@
   import { session } from "../lib/session.svelte";
 </script>
 
+<div class="view-page plectr-page">
 <section class="hero rk-surface-card">
   <div class="lead">
     <span class="badge" aria-hidden="true"><UiIcon name="plectrum" /></span>
@@ -46,6 +47,7 @@
     <EmptyState message="Gameplay in arrivo — UI pronta" />
   </Panel>
 </div>
+</div>
 
 <style>
   .hero {
@@ -77,7 +79,7 @@
 
   h2 {
     margin: 0;
-    font-size: 1.35rem;
+    font-size: var(--rk-fs-title);
     font-weight: 800;
     letter-spacing: -0.03em;
   }
@@ -85,7 +87,7 @@
   .sub {
     margin: 0.25rem 0 0;
     color: var(--rk-muted);
-    font-size: 0.88rem;
+    font-size: var(--rk-fs-sm);
     max-width: 36rem;
   }
 
@@ -108,13 +110,13 @@
 
   .h h3 {
     margin: 0;
-    font-size: 1rem;
+    font-size: var(--rk-fs-base);
   }
 
   .h p {
     margin: 0.15rem 0 0;
     color: var(--rk-muted);
-    font-size: 0.8rem;
+    font-size: var(--rk-fs-xs);
   }
 
   .mosaic {
@@ -125,7 +127,7 @@
 
   .mosaic span {
     aspect-ratio: 1;
-    border-radius: 6px;
+    border-radius: var(--rk-radius);
     background: linear-gradient(
       135deg,
       color-mix(in srgb, var(--rk-accent) calc(20% + var(--i) * 4%), var(--rk-surface-3)),
@@ -145,7 +147,7 @@
     }
   }
 
-  @media (max-width: 800px) {
+  @media (max-width: 899.98px) {
     .grid {
       grid-template-columns: 1fr;
     }

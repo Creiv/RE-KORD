@@ -5,6 +5,70 @@ use std::path::{Path, PathBuf};
 use std::sync::{Arc, Mutex};
 use uuid::Uuid;
 
+/// Generic / stub genre values from ID3 (e.g. iTunes `"Music"`) that must not block
+/// legacy / sidecar genre repair during fill-empty sync.
+pub fn is_weak_genre(value: Option<&str>) -> bool {
+    let Some(raw) = value.map(str::trim).filter(|s| !s.is_empty()) else {
+        return true;
+    };
+    if raw.chars().count() == 1 {
+        return true;
+    }
+    if raw.len() <= 2 && raw.chars().all(|c| c.is_ascii_digit()) {
+        return true;
+    }
+    matches!(
+        raw.to_ascii_lowercase().as_str(),
+        "music"
+            | "unknown"
+            | "other"
+            | "misc"
+            | "miscellaneous"
+            | "various"
+            | "none"
+            | "n/a"
+            | "na"
+            | "undefined"
+            | "genre"
+            | "null"
+            | "unclassified"
+            | "(null)"
+            | "not classified"
+    )
+}
+
+fn genre_part_count(s: &str) -> usize {
+    s.split(|c| c == ';' || c == '/' || c == ',')
+        .map(str::trim)
+        .filter(|p| !p.is_empty())
+        .count()
+        .max(1)
+}
+
+/// Prefer legacy/incoming genre when hub is empty/stub, or when incoming is richer
+/// (more `;`/`/`/`,` parts). Never install a weak incoming over a real hub genre.
+pub fn should_replace_genre(current: Option<&str>, incoming: Option<&str>) -> bool {
+    let Some(inc) = incoming.map(str::trim).filter(|s| !s.is_empty()) else {
+        return false;
+    };
+    if is_weak_genre(Some(inc)) {
+        return false;
+    }
+    if is_weak_genre(current) {
+        return true;
+    }
+    let cur = current.map(str::trim).unwrap_or("");
+    if cur.eq_ignore_ascii_case(inc) {
+        return false;
+    }
+    let inc_parts = genre_part_count(inc);
+    let cur_parts = genre_part_count(cur);
+    if inc_parts > cur_parts {
+        return true;
+    }
+    inc_parts >= 2 && inc.len() > cur.len() + 6
+}
+
 #[derive(Clone)]
 pub struct Db {
     conn: Arc<Mutex<Connection>>,
@@ -27,6 +91,10 @@ pub struct Track {
     pub release_date: Option<String>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub lyrics: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub source: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub url: Option<String>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -39,6 +107,9 @@ pub struct Album {
     pub folder_key: String,
     pub has_cover: bool,
     pub loose: bool,
+    /// True when album sidecar / studio meta was applied (parity legacy `hasAlbumMeta`).
+    #[serde(default)]
+    pub has_album_meta: bool,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub genre: Option<String>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
@@ -46,7 +117,15 @@ pub struct Album {
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub label: Option<String>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub country: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
     pub expected_track_count: Option<i64>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub discogs_release_id: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub discogs_uri: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub discogs_extra: Option<crate::metadata::providers::DiscogsAlbumExtra>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -281,6 +360,7 @@ impl Db {
             ("albums", "country", "TEXT"),
             ("albums", "musicbrainz_release_id", "TEXT"),
             ("albums", "discogs_release_id", "TEXT"),
+            ("albums", "discogs_extra_json", "TEXT"),
             ("albums", "has_album_meta", "INTEGER NOT NULL DEFAULT 0"),
             ("albums", "expected_track_count", "INTEGER"),
             ("tracks", "genre", "TEXT"),
@@ -289,6 +369,7 @@ impl Db {
             ("tracks", "source", "TEXT"),
             ("tracks", "url", "TEXT"),
             ("tracks", "lyrics", "TEXT"),
+            ("tracks", "updated_at", "TEXT"),
         ] {
             let exists: bool = conn
                 .prepare(&format!("PRAGMA table_info({table})"))?
@@ -296,12 +377,50 @@ impl Db {
                 .filter_map(|r| r.ok())
                 .any(|name| name == col);
             if !exists {
-                conn.execute(
-                    &format!("ALTER TABLE {table} ADD COLUMN {col} {decl}"),
-                    [],
-                )?;
+                conn.execute(&format!("ALTER TABLE {table} ADD COLUMN {col} {decl}"), [])?;
             }
         }
+
+        // Delta support: touch `updated_at` on every write and keep tombstones for
+        // deleted tracks, so clients can sync without re-downloading the catalog.
+        conn.execute_batch(
+            r#"
+            CREATE TABLE IF NOT EXISTS track_tombstones (
+              rel_path TEXT PRIMARY KEY,
+              removed_at TEXT NOT NULL
+            );
+
+            DROP TRIGGER IF EXISTS tracks_touch_insert;
+            CREATE TRIGGER tracks_touch_insert
+            AFTER INSERT ON tracks BEGIN
+              UPDATE tracks SET updated_at = strftime('%Y-%m-%dT%H:%M:%fZ', 'now')
+                WHERE id = NEW.id;
+              DELETE FROM track_tombstones WHERE rel_path = NEW.rel_path;
+            END;
+
+            CREATE TRIGGER IF NOT EXISTS tracks_touch_update
+            AFTER UPDATE ON tracks BEGIN
+              UPDATE tracks SET updated_at = strftime('%Y-%m-%dT%H:%M:%fZ', 'now')
+                WHERE id = NEW.id;
+            END;
+
+            CREATE TRIGGER IF NOT EXISTS tracks_tombstone
+            AFTER DELETE ON tracks BEGIN
+              INSERT INTO track_tombstones(rel_path, removed_at)
+                VALUES (OLD.rel_path, strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))
+                ON CONFLICT(rel_path) DO UPDATE SET removed_at = excluded.removed_at;
+            END;
+
+            CREATE INDEX IF NOT EXISTS idx_tracks_updated_at ON tracks(updated_at);
+            CREATE INDEX IF NOT EXISTS idx_tracks_album ON tracks(album_id);
+            CREATE INDEX IF NOT EXISTS idx_tracks_artist ON tracks(artist_id);
+            "#,
+        )?;
+        // Backfill so the first delta call has a baseline.
+        conn.execute(
+            "UPDATE tracks SET updated_at = strftime('%Y-%m-%dT%H:%M:%fZ','now') WHERE updated_at IS NULL",
+            [],
+        )?;
         Ok(())
     }
 
@@ -384,9 +503,8 @@ impl Db {
             let mut stmt = conn.prepare(
                 "SELECT f.account_id, t.rel_path FROM favorites f JOIN tracks t ON t.id = f.track_id",
             )?;
-            let rows = stmt.query_map([], |r| {
-                Ok((r.get::<_, String>(0)?, r.get::<_, String>(1)?))
-            })?;
+            let rows =
+                stmt.query_map([], |r| Ok((r.get::<_, String>(0)?, r.get::<_, String>(1)?)))?;
             for row in rows.flatten() {
                 favs.push(row);
             }
@@ -450,6 +568,105 @@ impl Db {
             )
             .optional()?;
         Ok(id)
+    }
+
+    /// `rel_path -> (size, mtime)` for every indexed file, to skip unchanged files.
+    pub fn file_states(&self) -> Result<std::collections::HashMap<String, (i64, i64)>> {
+        let conn = self.conn.lock().unwrap();
+        let mut stmt = conn.prepare(
+            r#"
+            SELECT f.rel_path, f.size, f.mtime
+            FROM files f
+            JOIN tracks t ON t.rel_path = f.rel_path
+            "#,
+        )?;
+        let rows = stmt.query_map([], |r| {
+            Ok((
+                r.get::<_, String>(0)?,
+                (r.get::<_, i64>(1)?, r.get::<_, i64>(2)?),
+            ))
+        })?;
+        let mut map = std::collections::HashMap::new();
+        for row in rows.flatten() {
+            map.insert(row.0, row.1);
+        }
+        Ok(map)
+    }
+
+    /// Re-point an unchanged track at the current album/artist rows without
+    /// touching any metadata edited from Studio.
+    pub fn relink_track(
+        &self,
+        rel_path: &str,
+        album_id: i64,
+        artist_id: i64,
+        artist_name: &str,
+        album_name: &str,
+    ) -> Result<()> {
+        let conn = self.conn.lock().unwrap();
+        conn.execute(
+            r#"
+            UPDATE tracks SET
+              album_id = ?2,
+              artist_id = ?3,
+              artist_name = ?4,
+              album_name = ?5
+            WHERE rel_path = ?1
+              AND (album_id IS NOT ?2 OR artist_id IS NOT ?3
+                   OR artist_name <> ?4 OR album_name <> ?5)
+            "#,
+            params![rel_path, album_id, artist_id, artist_name, album_name],
+        )?;
+        Ok(())
+    }
+
+    /// Drop tracks whose files are no longer on disk. Favorites / playlist rows
+    /// cascade away with them; everything else is left alone.
+    pub fn prune_tracks_outside(&self, seen: &std::collections::HashSet<String>) -> Result<u64> {
+        let mut conn = self.conn.lock().unwrap();
+        let tx = conn.transaction()?;
+        tx.execute_batch(
+            "CREATE TEMP TABLE IF NOT EXISTS scan_seen (rel_path TEXT PRIMARY KEY); DELETE FROM scan_seen;",
+        )?;
+        {
+            let mut stmt = tx.prepare("INSERT OR IGNORE INTO scan_seen(rel_path) VALUES (?1)")?;
+            for rel in seen {
+                stmt.execute(params![rel])?;
+            }
+        }
+        let removed = tx.execute(
+            "DELETE FROM tracks WHERE rel_path NOT IN (SELECT rel_path FROM scan_seen)",
+            [],
+        )?;
+        tx.execute(
+            "DELETE FROM files WHERE rel_path NOT IN (SELECT rel_path FROM scan_seen)",
+            [],
+        )?;
+        tx.execute_batch("DELETE FROM scan_seen;")?;
+        tx.commit()?;
+        Ok(removed as u64)
+    }
+
+    pub fn prune_empty_albums(&self) -> Result<u64> {
+        let conn = self.conn.lock().unwrap();
+        let removed = conn.execute(
+            "DELETE FROM albums WHERE NOT EXISTS (SELECT 1 FROM tracks t WHERE t.album_id = albums.id)",
+            [],
+        )?;
+        Ok(removed as u64)
+    }
+
+    pub fn prune_empty_artists(&self) -> Result<u64> {
+        let conn = self.conn.lock().unwrap();
+        let removed = conn.execute(
+            r#"
+            DELETE FROM artists
+            WHERE NOT EXISTS (SELECT 1 FROM tracks t WHERE t.artist_id = artists.id)
+              AND NOT EXISTS (SELECT 1 FROM albums a WHERE a.artist_id = artists.id)
+            "#,
+            [],
+        )?;
+        Ok(removed as u64)
     }
 
     /// Wipe FS catalog only (playlists rows kept; membership restored via snapshot).
@@ -645,12 +862,9 @@ impl Db {
 
     pub fn stats(&self, music_root: Option<String>) -> Result<LibraryStats> {
         let conn = self.conn.lock().unwrap();
-        let track_count: i64 =
-            conn.query_row("SELECT COUNT(*) FROM tracks", [], |r| r.get(0))?;
-        let album_count: i64 =
-            conn.query_row("SELECT COUNT(*) FROM albums", [], |r| r.get(0))?;
-        let artist_count: i64 =
-            conn.query_row("SELECT COUNT(*) FROM artists", [], |r| r.get(0))?;
+        let track_count: i64 = conn.query_row("SELECT COUNT(*) FROM tracks", [], |r| r.get(0))?;
+        let album_count: i64 = conn.query_row("SELECT COUNT(*) FROM albums", [], |r| r.get(0))?;
+        let artist_count: i64 = conn.query_row("SELECT COUNT(*) FROM artists", [], |r| r.get(0))?;
         let last_scan_at = conn
             .query_row(
                 "SELECT value FROM library_meta WHERE key = 'last_scan_at'",
@@ -671,9 +885,9 @@ impl Db {
     }
 
     const TRACK_COLS: &'static str = "id, rel_path, title, artist_name, album_name, duration_ms, \
-         track_number, album_id, artist_id, genre, release_date, lyrics";
+         track_number, album_id, artist_id, genre, release_date, lyrics, source, url";
     const TRACK_COLS_T: &'static str = "t.id, t.rel_path, t.title, t.artist_name, t.album_name, t.duration_ms, \
-         t.track_number, t.album_id, t.artist_id, t.genre, t.release_date, t.lyrics";
+         t.track_number, t.album_id, t.artist_id, t.genre, t.release_date, t.lyrics, t.source, t.url";
 
     fn map_track(row: &rusqlite::Row<'_>) -> rusqlite::Result<Track> {
         Ok(Track {
@@ -686,15 +900,43 @@ impl Db {
             track_number: row.get(6)?,
             album_id: row.get(7)?,
             artist_id: row.get(8)?,
-            genre: row.get::<_, Option<String>>(9)?.filter(|s| !s.trim().is_empty()),
+            genre: row
+                .get::<_, Option<String>>(9)?
+                .filter(|s| !s.trim().is_empty()),
             release_date: row
                 .get::<_, Option<String>>(10)?
                 .filter(|s| !s.trim().is_empty()),
-            lyrics: row.get::<_, Option<String>>(11)?.filter(|s| !s.trim().is_empty()),
+            lyrics: row
+                .get::<_, Option<String>>(11)?
+                .filter(|s| !s.trim().is_empty()),
+            source: row
+                .get::<_, Option<String>>(12)?
+                .filter(|s| !s.trim().is_empty()),
+            url: row
+                .get::<_, Option<String>>(13)?
+                .filter(|s| !s.trim().is_empty()),
         })
     }
 
     fn map_album(row: &rusqlite::Row<'_>) -> rusqlite::Result<Album> {
+        let discogs_release_id = row
+            .get::<_, Option<String>>(14)?
+            .filter(|s| !s.trim().is_empty());
+        let discogs_extra_json = row
+            .get::<_, Option<String>>(15)?
+            .filter(|s| !s.trim().is_empty());
+        let discogs_extra = discogs_extra_json.as_deref().and_then(|s| {
+            serde_json::from_str::<crate::metadata::providers::DiscogsAlbumExtra>(s).ok()
+        });
+        let discogs_uri = discogs_extra
+            .as_ref()
+            .and_then(|e| e.discogs_uri.clone())
+            .filter(|s| !s.trim().is_empty())
+            .or_else(|| {
+                discogs_release_id
+                    .as_ref()
+                    .map(|id| format!("https://www.discogs.com/release/{id}"))
+            });
         Ok(Album {
             id: row.get(0)?,
             name: row.get(1)?,
@@ -704,17 +946,29 @@ impl Db {
             folder_key: row.get(5)?,
             has_cover: row.get::<_, i64>(6)? != 0,
             loose: row.get::<_, i64>(7)? != 0,
-            genre: row.get::<_, Option<String>>(8)?.filter(|s| !s.trim().is_empty()),
-            release_date: row
+            has_album_meta: row.get::<_, i64>(8)? != 0,
+            genre: row
                 .get::<_, Option<String>>(9)?
                 .filter(|s| !s.trim().is_empty()),
-            label: row.get::<_, Option<String>>(10)?.filter(|s| !s.trim().is_empty()),
-            expected_track_count: row.get(11)?,
+            release_date: row
+                .get::<_, Option<String>>(10)?
+                .filter(|s| !s.trim().is_empty()),
+            label: row
+                .get::<_, Option<String>>(11)?
+                .filter(|s| !s.trim().is_empty()),
+            country: row
+                .get::<_, Option<String>>(12)?
+                .filter(|s| !s.trim().is_empty()),
+            expected_track_count: row.get(13)?,
+            discogs_release_id,
+            discogs_uri,
+            discogs_extra,
         })
     }
 
     const ALBUM_COLS: &'static str = "id, name, artist_name, track_count, artist_id, folder_key, \
-         has_cover, loose, genre, release_date, label, expected_track_count";
+         has_cover, loose, has_album_meta, genre, release_date, label, country, expected_track_count, \
+         discogs_release_id, discogs_extra_json";
 
     pub fn album_cover_path(&self, album_id: i64) -> Result<Option<PathBuf>> {
         let conn = self.conn.lock().unwrap();
@@ -726,6 +980,16 @@ impl Db {
             )
             .optional()?;
         Ok(p.flatten().map(PathBuf::from))
+    }
+
+    /// Distinct cover files for thumbnail backfill.
+    pub fn all_album_cover_paths(&self) -> Result<Vec<PathBuf>> {
+        let conn = self.conn.lock().unwrap();
+        let mut stmt = conn.prepare(
+            "SELECT DISTINCT cover_path FROM albums WHERE has_cover = 1 AND cover_path IS NOT NULL",
+        )?;
+        let rows = stmt.query_map([], |r| r.get::<_, String>(0))?;
+        Ok(rows.flatten().map(PathBuf::from).collect())
     }
 
     pub fn artist_cover_path(&self, artist_id: i64) -> Result<Option<PathBuf>> {
@@ -808,6 +1072,58 @@ impl Db {
         Ok(p.map(PathBuf::from))
     }
 
+    /// Tracks changed since an RFC3339 instant, newest first, plus deletions.
+    pub fn tracks_changed_since(
+        &self,
+        since: &str,
+        limit: i64,
+    ) -> Result<(Vec<Track>, Vec<String>)> {
+        let conn = self.conn.lock().unwrap();
+        let sql = format!(
+            "SELECT {} FROM tracks WHERE updated_at > ?1 ORDER BY updated_at LIMIT ?2",
+            Self::TRACK_COLS
+        );
+        let updated = {
+            let mut stmt = conn.prepare(&sql)?;
+            let rows = stmt.query_map(params![since, limit], Self::map_track)?;
+            rows.filter_map(|r| r.ok()).collect::<Vec<_>>()
+        };
+        let removed = {
+            let mut stmt = conn.prepare(
+                "SELECT rel_path FROM track_tombstones WHERE removed_at > ?1 ORDER BY removed_at LIMIT ?2",
+            )?;
+            let rows = stmt.query_map(params![since, limit], |r| r.get::<_, String>(0))?;
+            rows.flatten().collect::<Vec<_>>()
+        };
+        Ok((updated, removed))
+    }
+
+    /// Highest `updated_at` in the catalog: the client's delta cursor.
+    pub fn library_revision(&self) -> Result<Option<String>> {
+        let conn = self.conn.lock().unwrap();
+        let track_rev: Option<String> = conn
+            .query_row("SELECT MAX(updated_at) FROM tracks", [], |r| r.get(0))
+            .optional()?
+            .flatten();
+        let tomb_rev: Option<String> = conn
+            .query_row("SELECT MAX(removed_at) FROM track_tombstones", [], |r| {
+                r.get(0)
+            })
+            .optional()?
+            .flatten();
+        Ok(match (track_rev, tomb_rev) {
+            (Some(a), Some(b)) => Some(if a >= b { a } else { b }),
+            (Some(a), None) => Some(a),
+            (None, Some(b)) => Some(b),
+            (None, None) => None,
+        })
+    }
+
+    pub fn count_tracks(&self) -> Result<i64> {
+        let conn = self.conn.lock().unwrap();
+        Ok(conn.query_row("SELECT COUNT(*) FROM tracks", [], |r| r.get(0))?)
+    }
+
     pub fn list_albums(&self) -> Result<Vec<Album>> {
         let conn = self.conn.lock().unwrap();
         let sql = format!(
@@ -821,7 +1137,10 @@ impl Db {
 
     pub fn album_tracks(&self, album_id: i64) -> Result<Vec<Track>> {
         let conn = self.conn.lock().unwrap();
-        let sql = format!("SELECT {} FROM tracks WHERE album_id = ?1", Self::TRACK_COLS);
+        let sql = format!(
+            "SELECT {} FROM tracks WHERE album_id = ?1",
+            Self::TRACK_COLS
+        );
         let mut stmt = conn.prepare(&sql)?;
         let rows = stmt.query_map(params![album_id], Self::map_track)?;
         let mut tracks: Vec<Track> = rows.filter_map(|r| r.ok()).collect();
@@ -1227,6 +1546,43 @@ impl Db {
         Ok(())
     }
 
+    /// Rewrites the order of a playlist. `track_ids` must be exactly the tracks
+    /// already in the playlist, so a stale client cannot drop or add entries.
+    pub fn reorder_playlist(
+        &self,
+        account_id: &str,
+        playlist_id: &str,
+        track_ids: &[i64],
+    ) -> Result<()> {
+        if !self.playlist_belongs(account_id, playlist_id)? {
+            anyhow::bail!("playlist not found");
+        }
+        let mut conn = self.conn.lock().unwrap();
+        let tx = conn.transaction()?;
+        let current: Vec<i64> = {
+            let mut stmt =
+                tx.prepare("SELECT track_id FROM playlist_tracks WHERE playlist_id = ?1")?;
+            let rows = stmt.query_map(params![playlist_id], |r| r.get::<_, i64>(0))?;
+            rows.filter_map(|r| r.ok()).collect()
+        };
+        let wanted: std::collections::HashSet<i64> = track_ids.iter().copied().collect();
+        if wanted.len() != track_ids.len() {
+            anyhow::bail!("duplicate track in order");
+        }
+        let existing: std::collections::HashSet<i64> = current.iter().copied().collect();
+        if wanted != existing {
+            anyhow::bail!("order does not match the playlist tracks");
+        }
+        for (pos, track_id) in track_ids.iter().enumerate() {
+            tx.execute(
+                "UPDATE playlist_tracks SET position = ?1 WHERE playlist_id = ?2 AND track_id = ?3",
+                params![pos as i64, playlist_id, track_id],
+            )?;
+        }
+        tx.commit()?;
+        Ok(())
+    }
+
     pub fn remove_from_playlist(
         &self,
         account_id: &str,
@@ -1246,7 +1602,10 @@ impl Db {
 
     pub fn track_by_rel(&self, rel: &str) -> Result<Option<Track>> {
         let conn = self.conn.lock().unwrap();
-        let sql = format!("SELECT {} FROM tracks WHERE rel_path = ?1", Self::TRACK_COLS);
+        let sql = format!(
+            "SELECT {} FROM tracks WHERE rel_path = ?1",
+            Self::TRACK_COLS
+        );
         let row = conn
             .query_row(&sql, params![rel], Self::map_track)
             .optional()?;
@@ -1358,6 +1717,13 @@ impl Db {
         let Some(id) = album_id else {
             return Ok(false);
         };
+        // Before the track rows, while the rel paths are still reachable: the two
+        // tables are kept in step everywhere else, so an album delete should not
+        // be the one place that leaves `files` rows behind.
+        conn.execute(
+            "DELETE FROM files WHERE rel_path IN (SELECT rel_path FROM tracks WHERE album_id = ?1)",
+            params![id],
+        )?;
         conn.execute("DELETE FROM tracks WHERE album_id = ?1", params![id])?;
         let n = conn.execute("DELETE FROM albums WHERE id = ?1", params![id])?;
         Ok(n > 0)
@@ -1368,6 +1734,7 @@ impl Db {
         folder_key: &str,
         meta: &crate::metadata::providers::FetchedAlbumMeta,
     ) -> Result<()> {
+        let discogs_extra_json = meta.discogs_extra_json_for_db();
         let conn = self.conn.lock().unwrap();
         conn.execute(
             r#"
@@ -1380,7 +1747,8 @@ impl Db {
               discogs_release_id = COALESCE(?7, discogs_release_id),
               expected_track_count = COALESCE(?8, expected_track_count),
               has_album_meta = 1,
-              name = COALESCE(?9, name)
+              name = COALESCE(?9, name),
+              discogs_extra_json = COALESCE(?10, discogs_extra_json)
             WHERE folder_key = ?1
             "#,
             params![
@@ -1393,9 +1761,190 @@ impl Db {
                 meta.discogs_release_id,
                 meta.expected_track_count,
                 meta.title,
+                discogs_extra_json,
             ],
         )?;
         Ok(())
+    }
+
+    /// Clear 1-char / short-numeric / generic-stub values left by bad edits or ID3
+    /// (e.g. genre `"e"`, `"Music"`). Leaves real genres intact.
+    pub fn clear_weak_studio_placeholders(&self) -> Result<(u32, u32)> {
+        let conn = self.conn.lock().unwrap();
+        let albums = conn.execute(
+            r#"
+            UPDATE albums SET
+              genre = CASE
+                WHEN genre IS NOT NULL AND (
+                  length(trim(genre)) = 1
+                  OR (length(trim(genre)) <= 2 AND trim(genre) GLOB '[0-9]*')
+                  OR lower(trim(genre)) IN (
+                    'music','unknown','other','misc','miscellaneous','various',
+                    'none','n/a','na','undefined','genre','null','unclassified',
+                    '(null)','not classified'
+                  )
+                ) THEN NULL ELSE genre END,
+              release_date = CASE
+                WHEN release_date IS NOT NULL AND (
+                  length(trim(release_date)) = 1
+                  OR (length(trim(release_date)) <= 2 AND trim(release_date) GLOB '[0-9]*')
+                ) THEN NULL ELSE release_date END,
+              label = CASE
+                WHEN label IS NOT NULL AND (
+                  length(trim(label)) = 1
+                  OR (length(trim(label)) <= 2 AND trim(label) GLOB '[0-9]*')
+                ) THEN NULL ELSE label END
+            WHERE
+              (genre IS NOT NULL AND (
+                length(trim(genre)) = 1
+                OR (length(trim(genre)) <= 2 AND trim(genre) GLOB '[0-9]*')
+                OR lower(trim(genre)) IN (
+                  'music','unknown','other','misc','miscellaneous','various',
+                  'none','n/a','na','undefined','genre','null','unclassified',
+                  '(null)','not classified'
+                )
+              ))
+              OR (release_date IS NOT NULL AND (
+                length(trim(release_date)) = 1
+                OR (length(trim(release_date)) <= 2 AND trim(release_date) GLOB '[0-9]*')
+              ))
+              OR (label IS NOT NULL AND (
+                length(trim(label)) = 1
+                OR (length(trim(label)) <= 2 AND trim(label) GLOB '[0-9]*')
+              ))
+            "#,
+            [],
+        )?;
+        let tracks = conn.execute(
+            r#"
+            UPDATE tracks SET
+              genre = CASE
+                WHEN genre IS NOT NULL AND (
+                  length(trim(genre)) = 1
+                  OR (length(trim(genre)) <= 2 AND trim(genre) GLOB '[0-9]*')
+                  OR lower(trim(genre)) IN (
+                    'music','unknown','other','misc','miscellaneous','various',
+                    'none','n/a','na','undefined','genre','null','unclassified',
+                    '(null)','not classified'
+                  )
+                ) THEN NULL ELSE genre END,
+              release_date = CASE
+                WHEN release_date IS NOT NULL AND (
+                  length(trim(release_date)) = 1
+                  OR (length(trim(release_date)) <= 2 AND trim(release_date) GLOB '[0-9]*')
+                ) THEN NULL ELSE release_date END
+            WHERE
+              (genre IS NOT NULL AND (
+                length(trim(genre)) = 1
+                OR (length(trim(genre)) <= 2 AND trim(genre) GLOB '[0-9]*')
+                OR lower(trim(genre)) IN (
+                  'music','unknown','other','misc','miscellaneous','various',
+                  'none','n/a','na','undefined','genre','null','unclassified',
+                  '(null)','not classified'
+                )
+              ))
+              OR (release_date IS NOT NULL AND (
+                length(trim(release_date)) = 1
+                OR (length(trim(release_date)) <= 2 AND trim(release_date) GLOB '[0-9]*')
+              ))
+            "#,
+            [],
+        )?;
+        Ok((albums as u32, tracks as u32))
+    }
+
+    /// Fill empty/placeholder album studio fields from backup/legacy metadata.
+    /// Does not overwrite richer existing values. Returns true if any column was written.
+    /// Genre: also replaces ID3 stubs like `"Music"` / `"e"` when legacy has a real genre,
+    /// or when legacy genre is richer (more `;`/`/`/`,` parts).
+    pub fn fill_album_meta_empty(
+        &self,
+        folder_key: &str,
+        meta: &crate::metadata::providers::FetchedAlbumMeta,
+    ) -> Result<bool> {
+        let discogs_extra_json = meta.discogs_extra_json_for_db();
+        let conn = self.conn.lock().unwrap();
+        let cur_genre: Option<String> = conn
+            .query_row(
+                "SELECT genre FROM albums WHERE folder_key = ?1",
+                params![folder_key],
+                |r| r.get(0),
+            )
+            .optional()?
+            .flatten();
+        let genre_in = if should_replace_genre(cur_genre.as_deref(), meta.genre.as_deref()) {
+            meta.genre.clone()
+        } else {
+            None
+        };
+        // Treat 1-char / short numeric stubs (e.g. date "3") as empty so legacy can repair.
+        let n = conn.execute(
+            r#"
+            UPDATE albums SET
+              release_date = CASE
+                WHEN (
+                  release_date IS NULL OR trim(release_date) = ''
+                  OR length(trim(release_date)) = 1
+                  OR (length(trim(release_date)) <= 2 AND trim(release_date) GLOB '[0-9]*')
+                ) AND ?2 IS NOT NULL THEN ?2
+                ELSE release_date END,
+              genre = CASE
+                WHEN ?3 IS NOT NULL THEN ?3
+                ELSE genre END,
+              label = CASE
+                WHEN (
+                  label IS NULL OR trim(label) = ''
+                  OR length(trim(label)) = 1
+                  OR (length(trim(label)) <= 2 AND trim(label) GLOB '[0-9]*')
+                ) AND ?4 IS NOT NULL THEN ?4
+                ELSE label END,
+              country = CASE
+                WHEN (country IS NULL OR trim(country) = '') AND ?5 IS NOT NULL THEN ?5
+                ELSE country END,
+              musicbrainz_release_id = CASE
+                WHEN (musicbrainz_release_id IS NULL OR trim(musicbrainz_release_id) = '')
+                  AND ?6 IS NOT NULL THEN ?6
+                ELSE musicbrainz_release_id END,
+              discogs_release_id = CASE
+                WHEN (discogs_release_id IS NULL OR trim(discogs_release_id) = '')
+                  AND ?7 IS NOT NULL THEN ?7
+                ELSE discogs_release_id END,
+              expected_track_count = CASE
+                WHEN expected_track_count IS NULL AND ?8 IS NOT NULL THEN ?8
+                ELSE expected_track_count END,
+              name = CASE
+                WHEN (name IS NULL OR trim(name) = '') AND ?9 IS NOT NULL AND trim(?9) != '' THEN ?9
+                ELSE name END,
+              discogs_extra_json = CASE
+                WHEN (discogs_extra_json IS NULL OR trim(discogs_extra_json) = '')
+                  AND ?10 IS NOT NULL THEN ?10
+                ELSE discogs_extra_json END,
+              has_album_meta = CASE
+                WHEN ?2 IS NOT NULL OR ?3 IS NOT NULL OR ?4 IS NOT NULL OR ?5 IS NOT NULL
+                  OR ?6 IS NOT NULL OR ?7 IS NOT NULL OR ?8 IS NOT NULL OR ?9 IS NOT NULL
+                  OR ?10 IS NOT NULL
+                THEN 1 ELSE has_album_meta END
+            WHERE folder_key = ?1
+              AND (
+                ?2 IS NOT NULL OR ?3 IS NOT NULL OR ?4 IS NOT NULL OR ?5 IS NOT NULL
+                OR ?6 IS NOT NULL OR ?7 IS NOT NULL OR ?8 IS NOT NULL OR ?9 IS NOT NULL
+                OR ?10 IS NOT NULL
+              )
+            "#,
+            params![
+                folder_key,
+                meta.release_date,
+                genre_in,
+                meta.label,
+                meta.country,
+                meta.musicbrainz_release_id,
+                meta.discogs_release_id,
+                meta.expected_track_count,
+                meta.title,
+                discogs_extra_json,
+            ],
+        )?;
+        Ok(n > 0)
     }
 
     pub fn set_album_tracks_genre(&self, folder_key: &str, genre: &str) -> Result<()> {
@@ -1442,6 +1991,123 @@ impl Db {
             ],
         )?;
         Ok(())
+    }
+
+    /// Fill empty/placeholder track studio fields from backup/legacy metadata.
+    /// Track/disc numbers are not imported (parity with legacy restore).
+    /// Genre: replaces ID3 stubs like `"Music"` when legacy has a real/richer genre.
+    pub fn fill_track_meta_empty(
+        &self,
+        rel_path: &str,
+        meta: &crate::metadata::providers::FetchedTrackMeta,
+    ) -> Result<bool> {
+        let conn = self.conn.lock().unwrap();
+        let cur_genre: Option<String> = conn
+            .query_row(
+                "SELECT genre FROM tracks WHERE rel_path = ?1",
+                params![rel_path],
+                |r| r.get(0),
+            )
+            .optional()?
+            .flatten();
+        let genre_in = if should_replace_genre(cur_genre.as_deref(), meta.genre.as_deref()) {
+            meta.genre.clone()
+        } else {
+            None
+        };
+        let n = conn.execute(
+            r#"
+            UPDATE tracks SET
+              title = CASE
+                WHEN (title IS NULL OR trim(title) = '') AND ?2 IS NOT NULL THEN ?2
+                ELSE title END,
+              genre = CASE
+                WHEN ?3 IS NOT NULL THEN ?3
+                ELSE genre END,
+              release_date = CASE
+                WHEN (
+                  release_date IS NULL OR trim(release_date) = ''
+                  OR length(trim(release_date)) = 1
+                  OR (length(trim(release_date)) <= 2 AND trim(release_date) GLOB '[0-9]*')
+                ) AND ?4 IS NOT NULL THEN ?4
+                ELSE release_date END,
+              source = CASE
+                WHEN (source IS NULL OR trim(source) = '') AND ?5 IS NOT NULL THEN ?5
+                ELSE source END,
+              url = CASE
+                WHEN (url IS NULL OR trim(url) = '') AND ?6 IS NOT NULL THEN ?6
+                ELSE url END,
+              lyrics = CASE
+                WHEN (lyrics IS NULL OR trim(lyrics) = '') AND ?7 IS NOT NULL THEN ?7
+                ELSE lyrics END
+            WHERE rel_path = ?1
+              AND (
+                ((title IS NULL OR trim(title) = '') AND ?2 IS NOT NULL)
+                OR (?3 IS NOT NULL)
+                OR ((
+                  release_date IS NULL OR trim(release_date) = ''
+                  OR length(trim(release_date)) = 1
+                  OR (length(trim(release_date)) <= 2 AND trim(release_date) GLOB '[0-9]*')
+                ) AND ?4 IS NOT NULL)
+                OR ((source IS NULL OR trim(source) = '') AND ?5 IS NOT NULL)
+                OR ((url IS NULL OR trim(url) = '') AND ?6 IS NOT NULL)
+                OR ((lyrics IS NULL OR trim(lyrics) = '') AND ?7 IS NOT NULL)
+              )
+            "#,
+            params![
+                rel_path,
+                meta.title,
+                genre_in,
+                meta.release_date,
+                meta.source,
+                meta.url,
+                meta.lyrics,
+            ],
+        )?;
+        Ok(n > 0)
+    }
+
+    /// Resolve a track under an album folder by file name (case-insensitive basename).
+    pub fn resolve_track_rel_in_album(
+        &self,
+        folder_key: &str,
+        file_name: &str,
+    ) -> Result<Option<String>> {
+        let conn = self.conn.lock().unwrap();
+        let want = file_name.to_ascii_lowercase();
+        let mut stmt = conn.prepare(
+            r#"
+            SELECT t.rel_path FROM tracks t
+            JOIN albums a ON a.id = t.album_id
+            WHERE a.folder_key = ?1
+            "#,
+        )?;
+        let rows = stmt.query_map(params![folder_key], |r| r.get::<_, String>(0))?;
+        for rel in rows.flatten() {
+            let base = Path::new(&rel)
+                .file_name()
+                .and_then(|n| n.to_str())
+                .unwrap_or("")
+                .to_ascii_lowercase();
+            if base == want {
+                return Ok(Some(rel));
+            }
+        }
+        // Fallback: relative path already includes folder
+        let joined = format!(
+            "{}/{}",
+            folder_key.trim_end_matches('/').replace('\\', "/"),
+            file_name
+        );
+        let exists: bool = conn
+            .query_row(
+                "SELECT 1 FROM tracks WHERE rel_path = ?1",
+                params![joined],
+                |_| Ok(true),
+            )
+            .optional()?
+            .unwrap_or(false);
+        Ok(if exists { Some(joined) } else { None })
     }
 
     pub fn set_album_cover_path(&self, folder_key: &str, cover: &Path) -> Result<()> {
@@ -1515,5 +2181,38 @@ fn nat_cmp(a: &str, b: &str) -> std::cmp::Ordering {
                 }
             }
         }
+    }
+}
+
+#[cfg(test)]
+mod genre_fill_tests {
+    use super::{is_weak_genre, should_replace_genre};
+
+    #[test]
+    fn music_stub_is_weak() {
+        assert!(is_weak_genre(Some("Music")));
+        assert!(is_weak_genre(Some(" music ")));
+        assert!(is_weak_genre(Some("e")));
+        assert!(is_weak_genre(None));
+        assert!(!is_weak_genre(Some("Hip Hop")));
+    }
+
+    #[test]
+    fn replace_music_with_hip_hop() {
+        assert!(should_replace_genre(Some("Music"), Some("Hip Hop")));
+        assert!(!should_replace_genre(Some("Hip Hop"), Some("Music")));
+        assert!(!should_replace_genre(Some("Hip Hop"), Some("Hip Hop")));
+    }
+
+    #[test]
+    fn prefer_richer_multi_genre() {
+        assert!(should_replace_genre(
+            Some("Hip Hop"),
+            Some("Electronic; Hip Hop; Pop Rap")
+        ));
+        assert!(!should_replace_genre(
+            Some("Electronic; Hip Hop; Pop Rap"),
+            Some("Hip Hop")
+        ));
     }
 }

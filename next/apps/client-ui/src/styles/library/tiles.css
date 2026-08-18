@@ -1,0 +1,118 @@
+/* Tile di libreria: righe artista / album / genere negli elenchi di navigazione. */
+.library-list-tile {
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  gap: var(--rk-space-lg);
+  width: 100%;
+  padding: var(--rk-space-md) var(--rk-space-lg);
+  min-height: 4.75rem;
+  box-sizing: border-box;
+  text-align: left;
+  border-radius: var(--rk-radius);
+  border: 1px solid var(--rk-line);
+  background: var(--rk-surface-2);
+  color: inherit;
+  font: inherit;
+  cursor: pointer;
+  box-shadow: none;
+  transform: none;
+  transition:
+    border-color 0.16s ease,
+    background 0.16s ease;
+}
+
+.library-list-tile:hover {
+  border-color: var(--rk-line-strong);
+  background: var(--rk-surface-2);
+  box-shadow: none;
+  transform: none;
+}
+
+.library-list-tile:focus-visible {
+  outline: 2px solid var(--rk-focus);
+  outline-offset: 2px;
+}
+
+.library-list-tile__media,
+.library-list-tile__album-wrap {
+  flex-shrink: 0;
+  width: 4.55rem;
+  height: 4.55rem;
+}
+
+.library-list-tile__badge {
+  width: 100%;
+  height: 100%;
+  border-radius: var(--rk-radius-cover);
+  display: grid;
+  place-items: center;
+  font-weight: 800;
+  font-family: var(--rk-badge-font);
+  font-size: 1.08rem;
+  background: linear-gradient(135deg, var(--rk-badge-1), var(--rk-badge-2));
+  border: 1px solid color-mix(in srgb, var(--rk-accent) 14%, var(--rk-line) 86%);
+  color: var(--rk-ink);
+}
+
+.library-list-tile__body {
+  flex: 1 1 auto;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--rk-space-3xs);
+}
+
+.library-list-tile__title-row {
+  display: flex;
+  align-items: center;
+  gap: var(--rk-space-xs);
+  min-width: 0;
+}
+
+.library-list-tile__title-row .library-list-tile__title {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+.library-list-tile__kind-ic {
+  width: 1.1rem;
+  height: 1.1rem;
+  flex-shrink: 0;
+  opacity: 0.88;
+  color: color-mix(in srgb, var(--rk-accent-2) 58%, var(--rk-accent) 42%);
+}
+
+.library-list-tile__title {
+  font-weight: 700;
+  font-size: var(--rk-fs-md);
+  letter-spacing: -0.02em;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.library-list-tile__meta {
+  font-size: var(--rk-fs-xs);
+  color: color-mix(in srgb, var(--rk-muted) 88%, var(--rk-ink) 12%);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.library-list-tile__tracks-meta {
+  margin-top: 0.08rem;
+  display: flex;
+  align-items: center;
+  gap: var(--rk-space-3xs);
+  min-width: 0;
+  line-height: var(--rk-lh-snug);
+  font-size: var(--rk-fs-2xs);
+  /* The leading icon rides with the meta text, not with the default icon size. */
+  --ui-ic-size: 1em;
+  color: var(--rk-muted);
+}
+
+.library-list-tile__tracks-meta > span {
+  min-width: 0;
+}

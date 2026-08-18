@@ -20,7 +20,7 @@
     padding: 0.65rem 0.85rem;
     border-radius: var(--rk-radius);
     border: 1px solid var(--rk-line);
-    font-size: 0.92rem;
+    font-size: var(--rk-fs-md);
   }
 
   .ok {

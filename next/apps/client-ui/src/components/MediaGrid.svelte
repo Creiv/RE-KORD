@@ -77,7 +77,7 @@
 
   .list--cols {
     grid-template-columns: repeat(auto-fill, minmax(min(19rem, 100%), 1fr));
-    gap: var(--rk-space-4) var(--rk-space-5);
+    gap: var(--rk-space-lg) var(--rk-space-xl);
   }
 
   .list--cols.list--dashboard {

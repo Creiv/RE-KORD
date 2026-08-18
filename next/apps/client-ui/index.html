@@ -2,7 +2,15 @@
 <html lang="it">
   <head>
     <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <!-- viewport-fit=cover: il layout arriva sotto tacca e barre di sistema, e i
+         bordi li recupera il CSS con env(safe-area-inset-*).
+         interactive-widget=overlays-content: la tastiera copre la pagina invece di
+         schiacciarla, così la cromatura fissa non salta; chi deve stare sopra la
+         tastiera usa --rk-app-vh (vedi lib/viewportMetrics.ts). -->
+    <meta
+      name="viewport"
+      content="width=device-width, initial-scale=1.0, viewport-fit=cover, interactive-widget=overlays-content"
+    />
     <meta name="theme-color" content="#0a0e14" />
     <title>RE-KORD 5.1.0</title>
     <link rel="icon" href="/favicon.ico" sizes="any" />

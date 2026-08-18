@@ -10,7 +10,7 @@
 .view-page__toolbar-band {
   display: flex;
   flex-direction: column;
-  gap: var(--rk-space-4);
+  gap: var(--rk-space-lg);
   min-width: 0;
   flex-shrink: 0;
 }
@@ -23,7 +23,7 @@
 .view-stack,
 .list-stack {
   display: grid;
-  gap: var(--rk-space-4);
+  gap: var(--rk-space-lg);
   min-width: 0;
 }
 
@@ -43,17 +43,9 @@
   min-height: 0;
 }
 
-/* Toolbar actions (coda / playlist create) */
-.queue-hero-actions {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  justify-content: flex-end;
-  gap: 0.5rem 0.65rem;
-  min-width: 0;
-}
-
-.queue-hero-actions .ghost-input {
+/* Toolbar actions (coda / playlist create) — the row itself is
+   `.section-head__tools.page-toolbar__actions`, see section-chrome.css. */
+.page-toolbar__actions .ghost-input {
   width: auto;
 }
 
@@ -74,46 +66,6 @@
   width: min(100%, 14rem);
 }
 
-.ghost-btn.danger {
-  color: var(--rk-danger);
-  border-color: color-mix(in srgb, var(--rk-danger) 55%, var(--rk-line) 45%);
-}
-
-.chip-btn {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  gap: 0.35rem;
-  min-height: 2.15rem;
-  padding: 0.4rem 0.75rem;
-  border-radius: var(--rk-radius);
-  border: 1px solid var(--rk-line);
-  background: color-mix(in srgb, var(--rk-surface-3) 70%, transparent);
-  color: var(--rk-ink);
-  font: inherit;
-  font-weight: 650;
-  cursor: pointer;
-  transition:
-    border-color 0.15s ease,
-    background 0.15s ease,
-    opacity 0.15s ease;
-}
-
-.chip-btn:hover:not(:disabled) {
-  border-color: var(--rk-line-strong);
-  background: var(--rk-surface-3);
-}
-
-.chip-btn:disabled {
-  opacity: 0.45;
-  cursor: not-allowed;
-}
-
-.chip-btn.danger {
-  color: var(--rk-danger);
-  border-color: color-mix(in srgb, var(--rk-danger) 55%, var(--rk-line) 45%);
-}
-
 /* Playlist rows */
 .playlists-page__main {
   display: grid;
@@ -123,7 +75,7 @@
   align-items: start;
 }
 
-@media (min-width: 901px) {
+@media (min-width: 900px) {
   .playlists-page__main {
     grid-template-columns: minmax(0, 0.95fr) minmax(0, 1.05fr);
   }
@@ -139,8 +91,8 @@
 .playlist-row {
   display: grid;
   grid-template-columns: minmax(0, 1fr) auto;
-  gap: 0.8rem;
-  padding: 0.95rem 1.05rem;
+  gap: var(--rk-space-lg) var(--rk-space-xl);
+  padding: var(--rk-space-lg) var(--rk-space-xl);
   border: 1px solid var(--rk-line);
   border-radius: var(--rk-radius);
   background: var(--rk-surface-2);
@@ -173,7 +125,7 @@
 
 .playlist-row__main {
   display: grid;
-  gap: 0.18rem;
+  gap: var(--rk-space-2xs);
   min-width: 0;
   text-align: left;
   margin: 0;
@@ -192,7 +144,7 @@
 
 .playlist-row__main span {
   color: var(--rk-muted);
-  font-size: 0.88rem;
+  font-size: var(--rk-fs-sm);
 }
 
 .playlist-row .track-row__actions {
@@ -200,38 +152,25 @@
   flex-wrap: wrap;
   align-items: center;
   justify-content: flex-end;
-  gap: 0.45rem;
+  gap: var(--rk-space-sm);
 }
 
-@media (max-width: 560px) {
-  .queue-page .surface-card--toolbar-only .section-head--page-toolbar,
-  .playlists-page .surface-card--toolbar-only .section-head--page-toolbar {
-    flex-flow: column;
-    align-items: stretch;
-  }
-
-  .queue-page .section-head__tools,
-  .playlists-page .section-head__tools {
-    margin-left: 0;
-    width: 100%;
-  }
-
-  .queue-page .queue-hero-actions,
-  .playlists-page .queue-hero-actions {
-    width: 100%;
+@media (max-width: 559.98px) {
+  .queue-page .page-toolbar__actions,
+  .playlists-page .page-toolbar__actions {
     justify-content: stretch;
   }
 
-  .queue-page .queue-hero-actions .queue-name-input,
-  .playlists-page .queue-hero-actions .queue-name-input {
+  .queue-page .page-toolbar__actions .queue-name-input,
+  .playlists-page .page-toolbar__actions .queue-name-input {
     flex: 1 1 100%;
     max-width: none;
     min-height: 44px;
   }
 
-  .queue-page .queue-hero-actions > .primary-btn,
-  .queue-page .queue-hero-actions > .ghost-btn,
-  .playlists-page .queue-hero-actions > .primary-btn {
+  .queue-page .page-toolbar__actions > .primary-btn,
+  .queue-page .page-toolbar__actions > .ghost-btn,
+  .playlists-page .page-toolbar__actions > .primary-btn {
     flex: 1 1 auto;
     min-height: 44px;
   }

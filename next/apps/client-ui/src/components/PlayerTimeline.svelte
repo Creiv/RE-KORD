@@ -135,9 +135,36 @@
   .times {
     display: flex;
     justify-content: space-between;
-    font-size: 0.72rem;
+    font-size: var(--rk-fs-2xs);
     color: var(--rk-muted);
     font-variant-numeric: tabular-nums;
     font-family: var(--rk-mono);
+  }
+
+  /* Telefono: barra più sottile e pomello più grande, perché è l'unico modo per
+     cercare un punto nel brano. */
+  @media (max-width: 999.98px) {
+    .slot {
+      height: 12px;
+    }
+
+    .rail {
+      height: 7px;
+    }
+
+    .thumb {
+      width: 14px;
+      height: 14px;
+    }
+  }
+
+  /* Col dito la fascia sensibile si alza: la barra resta sottile ma prenderla non
+     richiede precisione. Non arriva ai 44px pieni di proposito — un seek così
+     alto mangerebbe il dock e si prenderebbe lo scorrimento della pagina. Dopo il
+     blocco telefono, perché su telefono valgono entrambi. */
+  @media (pointer: coarse) {
+    .progress2 {
+      padding-block: var(--rk-space-md);
+    }
   }
 </style>

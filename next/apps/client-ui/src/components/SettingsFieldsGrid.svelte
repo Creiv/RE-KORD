@@ -23,7 +23,7 @@
     min-width: 0;
   }
 
-  @media (min-width: 760px) {
+  @media (min-width: 720px) {
     .settings-fields-grid {
       grid-template-columns: repeat(2, minmax(0, 1fr));
       align-items: start;

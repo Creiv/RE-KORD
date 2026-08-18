@@ -2,10 +2,12 @@ use anyhow::Result;
 use clap::Parser;
 use rekord_core::backup;
 use rekord_core::modules::{load_registry, write_default_manifest};
-use rekord_core::{serve, AppConfig, AppState};
+use rekord_core::{serve, AppConfig, AppState, UiDirs};
 use std::net::SocketAddr;
 use std::path::PathBuf;
 use tracing::info;
+use tracing_subscriber::layer::SubscriberExt;
+use tracing_subscriber::util::SubscriberInitExt;
 
 #[derive(Parser, Debug)]
 #[command(name = "rekord-server", about = "RE-KORD server hub")]
@@ -30,7 +32,7 @@ struct Args {
     #[arg(long, env = "REKORD_CLIENT_UI")]
     client_ui: Option<PathBuf>,
 
-    /// Directory with built admin UI (used only if client UI is not found)
+    /// Directory with built admin UI (served at `/admin`)
     #[arg(long, env = "REKORD_ADMIN_UI")]
     admin_ui: Option<PathBuf>,
 
@@ -41,50 +43,67 @@ struct Args {
     /// Exit after --restore-zip instead of serving
     #[arg(long, default_value_t = false)]
     restore_exit: bool,
+
+    /// One-shot: sync studio metadata + personal moods from music_root/.kord into the hub DB
+    #[arg(long, default_value_t = false)]
+    sync_legacy_meta: bool,
+
+    /// Exit after --sync-legacy-meta instead of serving
+    #[arg(long, default_value_t = false)]
+    sync_legacy_exit: bool,
 }
 
-fn resolve_public_ui_dir(args: &Args) -> Option<PathBuf> {
+fn resolve_client_ui_dir(args: &Args) -> Option<PathBuf> {
     if let Some(dir) = args.client_ui.clone().filter(|p| p.is_dir()) {
         return Some(dir);
     }
-
-    let mut client_candidates = vec![
+    let mut candidates = vec![
         PathBuf::from("apps/client-ui/dist"),
         PathBuf::from("next/apps/client-ui/dist"),
     ];
     if let Ok(exe) = std::env::current_exe() {
         if let Some(dir) = exe.parent() {
-            client_candidates.push(dir.join("client-ui"));
-            client_candidates.push(dir.join("web"));
+            candidates.push(dir.join("client-ui"));
+            candidates.push(dir.join("web"));
         }
     }
-    if let Some(dir) = client_candidates.into_iter().find(|p| p.is_dir()) {
-        return Some(dir);
-    }
+    candidates.into_iter().find(|p| p.is_dir())
+}
 
+fn resolve_admin_ui_dir(args: &Args) -> Option<PathBuf> {
     if let Some(dir) = args.admin_ui.clone().filter(|p| p.is_dir()) {
         return Some(dir);
     }
-
-    let mut admin_candidates = vec![
+    let mut candidates = vec![
         PathBuf::from("apps/server-ui/dist"),
         PathBuf::from("next/apps/server-ui/dist"),
     ];
     if let Ok(exe) = std::env::current_exe() {
         if let Some(dir) = exe.parent() {
-            admin_candidates.push(dir.join("admin-ui"));
+            candidates.push(dir.join("admin-ui"));
         }
     }
-    admin_candidates.into_iter().find(|p| p.is_dir())
+    candidates.into_iter().find(|p| p.is_dir())
+}
+
+/// The admin panel lives on `/admin`; when no client bundle exists it also
+/// answers on `/` so a fresh install still has a usable page.
+fn resolve_ui_dirs(args: &Args) -> UiDirs {
+    let admin = resolve_admin_ui_dir(args);
+    let client = resolve_client_ui_dir(args).or_else(|| admin.clone());
+    UiDirs { client, admin }
 }
 
 #[tokio::main]
 async fn main() -> Result<()> {
-    tracing_subscriber::fmt()
-        .with_env_filter(
+    // Structured logs + recent-errors buffer exposed via /api/v1/diagnostics.
+    tracing_subscriber::registry()
+        .with(
             tracing_subscriber::EnvFilter::try_from_default_env()
                 .unwrap_or_else(|_| "info,tower_http=info".into()),
         )
+        .with(tracing_subscriber::fmt::layer())
+        .with(rekord_core::errors::ErrorBufferLayer)
         .init();
 
     let args = Args::parse();
@@ -101,7 +120,7 @@ async fn main() -> Result<()> {
         "starting RE-KORD server"
     );
 
-    let public_ui = resolve_public_ui_dir(&args);
+    let ui = resolve_ui_dirs(&args);
 
     let bind = config.bind;
     let state = AppState::new(config, modules)?;
@@ -117,6 +136,8 @@ async fn main() -> Result<()> {
             playlist_tracks = report.playlist_tracks,
             library_files = report.library_files,
             scanned_tracks = report.scanned_tracks,
+            album_meta_merged = report.album_meta_merged,
+            track_meta_merged = report.track_meta_merged,
             "restore finished"
         );
         if args.restore_exit {
@@ -124,6 +145,33 @@ async fn main() -> Result<()> {
         }
     }
 
-    serve(state, bind, public_ui).await?;
+    if args.sync_legacy_meta {
+        let (data_dir, root) = {
+            let cfg = state.config.lock().unwrap();
+            (cfg.data_dir.clone(), cfg.music_root.clone())
+        };
+        let Some(root) = root else {
+            anyhow::bail!("--sync-legacy-meta requires music_root (set via settings or --music-root)");
+        };
+        info!(path = %root.display(), "syncing legacy library metadata + personal data");
+        let report = backup::sync_legacy_library_data(&state.db, &data_dir, &root)?;
+        info!(
+            album_meta_merged = report.album_meta_merged,
+            track_meta_merged = report.track_meta_merged,
+            accounts_moods_synced = report.accounts_moods_synced,
+            moods_imported = report.moods_imported,
+            favorites_linked = report.favorites_linked,
+            playlists_imported = report.playlists_imported,
+            playlist_tracks_linked = report.playlist_tracks_linked,
+            selections_imported = report.selections_imported,
+            accounts_registry = report.accounts_registry,
+            "legacy sync finished"
+        );
+        if args.sync_legacy_exit {
+            return Ok(());
+        }
+    }
+
+    serve(state, bind, ui).await?;
     Ok(())
 }

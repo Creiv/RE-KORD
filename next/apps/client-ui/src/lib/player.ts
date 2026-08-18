@@ -1,10 +1,24 @@
 import { mediaUrl } from "./config";
-import type { Track } from "./api";
+import { albumCoverUrl, type Track } from "./api";
 import { touchListeningActivity } from "./achievements";
 import {
+  clearMediaSessionPosition,
+  registerMediaSessionActions,
+  setMediaSessionMetadata,
+  setMediaSessionPlaybackState,
+  setMediaSessionPosition,
+  type MediaSessionBridge,
+} from "./mediaSession";
+import {
+  computeQueueInsertIndex,
+  insertTracksInQueue,
+} from "./queueInsert";
+import {
   buildRadioFromSeed,
+  buildShuffleQueueFromSeed,
   buildSmartRandomQueue,
   CARD_QUEUE_CAP,
+  shuffleTailFromCurrent,
 } from "./smartShuffle";
 import {
   loadUserPrefs,
@@ -23,6 +37,8 @@ const SLEEP_FADE_INTERVAL_MS = 180;
 /** Always-on listening session: queue + currentIndex (not seek/volume/view). */
 const SESSION_QUEUE_KEY = "rekord.next.sessionQueue";
 const SESSION_QUEUE_PERSIST_MS = 300;
+/** The OS extrapolates position between updates; this only corrects drift. */
+const MEDIA_POSITION_REFRESH_MS = 5000;
 
 type PersistedSessionQueue = {
   version: 1;
@@ -131,6 +147,8 @@ class PlayerController {
   private sleepFadeInterval = 0;
   private excludedRelPaths = new Set<string>();
   private excludedAlbumIds = new Set<number>();
+  /** Paths inserted via "add to queue" — stay ahead of auto-fill inserts. */
+  private manualQueuedPaths = new Set<string>();
   /** Legacy half-listen: count once past 50% (reset if seek < 10%). */
   private halfListenCounted = false;
   private halfListenPath: string | null = null;
@@ -138,6 +156,13 @@ class PlayerController {
   private lastQueuePersistSig = "";
   private restoringSession = false;
   private sessionRestored = false;
+  private lastMediaPositionAt = 0;
+  /**
+   * Favourites live in the session store, which already imports the player;
+   * it hands the toggle over here so the OS "like" button can reach it without
+   * an import cycle.
+   */
+  private favoriteToggle: (() => void) | null = null;
 
   constructor() {
     const prefs = loadUserPrefs();
@@ -154,7 +179,40 @@ class PlayerController {
 
     if (typeof window !== "undefined") {
       window.addEventListener("pagehide", () => this.flushPersistQueue());
+      // Registered once: the OS keeps the same handlers across track changes.
+      registerMediaSessionActions(() => this.mediaBridge());
     }
+  }
+
+  /** Lets the session store wire "like" from the lock screen to favourites. */
+  setFavoriteToggle(fn: (() => void) | null) {
+    this.favoriteToggle = fn;
+  }
+
+  private mediaBridge(): MediaSessionBridge {
+    return {
+      play: () => {
+        if (!this.playing) void this.toggle();
+      },
+      pause: () => {
+        if (this.playing) this.pause();
+      },
+      next: () => void this.next(),
+      prev: () => void this.prev(),
+      seek: (seconds) => this.seek(seconds),
+      seekBy: (delta) => {
+        const at = this.activeAudio().currentTime;
+        const max = this.duration > 0 ? this.duration : Number.POSITIVE_INFINITY;
+        this.seek(Math.min(max, Math.max(0, at + delta)));
+      },
+      toggleShuffle: () => this.toggleShuffle(),
+      cycleRepeat: () => this.cycleRepeat(),
+      toggleFavorite: () => this.favoriteToggle?.(),
+      toggleExclude: () => {
+        const track = this.current;
+        if (track) this.toggleExcludeTrack(track);
+      },
+    };
   }
 
   private bindDeck(audio: HTMLAudioElement, ix: DeckIx) {
@@ -172,6 +230,7 @@ class PlayerController {
       this.prefetchNextDeck();
       this.maybeStartCrossfade();
       this.maybeCountHalfListen();
+      this.syncMediaPosition();
       this.emitProgress();
     });
     audio.addEventListener("durationchange", () => {
@@ -182,23 +241,27 @@ class PlayerController {
       }
       if (ix !== this.active) return;
       this.duration = Number.isFinite(audio.duration) ? audio.duration : 0;
+      this.syncMediaPosition(true);
       this.emitProgress();
     });
     audio.addEventListener("play", () => {
       if (this.crossfadeBusy) {
         if (this.crossfadeInIx === ix || this.crossfadeOutIx === ix) {
           this.playing = true;
+          this.syncMediaPlaybackState();
           this.emit();
         }
         return;
       }
       if (ix !== this.active) return;
       this.playing = true;
+      this.syncMediaPlaybackState();
       this.emit();
     });
     audio.addEventListener("pause", () => {
       if (ix !== this.active || this.crossfadeBusy) return;
       this.playing = false;
+      this.syncMediaPlaybackState();
       this.emit();
     });
     audio.addEventListener("ended", () => {
@@ -273,6 +336,11 @@ class PlayerController {
       this.sessionRestored = true;
       return false;
     }
+    // User already started listening during bootstrap — keep that session.
+    if (this.playing || this.queue.length > 0) {
+      this.sessionRestored = true;
+      return false;
+    }
     this.sessionRestored = true;
     return this.hydrateQueueSnapshot(persisted.tracks, persisted.currentIndex, catalog);
   }
@@ -283,7 +351,13 @@ class PlayerController {
     currentIndex: number,
     catalog: Track[] = [],
   ): boolean {
+    // One-shot: never re-apply on Refresh / Dashboard re-nav (would stop audio).
+    if (this.sessionRestored) return false;
     if (!relPaths.length) return false;
+    if (this.playing || this.queue.length > 0) {
+      this.sessionRestored = true;
+      return false;
+    }
     const tracks = relPaths.map((rel_path, i) => ({
       id: -1 - i,
       rel_path,
@@ -305,6 +379,8 @@ class PlayerController {
     catalog: Track[] = [],
   ): boolean {
     if (!snapshot.length) return false;
+    // Never tear down a live listening session (refresh races, duplicate restore).
+    if (this.playing || this.queue.length > 0) return false;
     const byPath = new Map(catalog.map((t) => [t.rel_path, t]));
     const tracks = snapshot.map((t) => byPath.get(t.rel_path) ?? t);
     const index = Math.max(0, Math.min(currentIndex, tracks.length - 1));
@@ -555,77 +631,177 @@ class PlayerController {
     return loadUserPrefs().playCounts;
   }
 
-  filterShufflePool(tracks: Track[]) {
-    return tracks.filter((t) => !this.isTrackExcluded(t));
+  filterShufflePool(tracks: Track[], seed: Track | null = null) {
+    if (seed && this.isTrackExcluded(seed)) return [...tracks];
+    return tracks.filter(
+      (t) => (seed != null && t.rel_path === seed.rel_path) || !this.isTrackExcluded(t),
+    );
   }
 
-  playTracks(tracks: Track[], startIndex = 0) {
+  private exclusionOpts(respectExclusions = true) {
+    return {
+      respectExclusions,
+      isExcluded: (t: Track) => this.isTrackExcluded(t),
+    };
+  }
+
+  private recentRelPathSet() {
+    return new Set(loadUserPrefs().recentRelPaths.slice(0, 48));
+  }
+
+  /**
+   * Sostituisce la coda e avvia da startIndex.
+   * - preserveQueueOrder: ordine invariato anche con shuffle ON (album / playlist).
+   * - shuffle ON senza preserve: tiene il prefisso fino al brano e mescola solo il resto.
+   */
+  playTracks(
+    tracks: Track[],
+    startIndex = 0,
+    opts?: { preserveQueueOrder?: boolean },
+  ) {
     if (!tracks.length) return;
     this.cancelPendingLoad();
     this.abortCrossfade();
+    this.manualQueuedPaths.clear();
+    const idx = Math.min(Math.max(0, startIndex), tracks.length - 1);
     this.privateQueue = [...tracks];
-    const start = tracks[Math.min(Math.max(0, startIndex), tracks.length - 1)];
-    if (this.shuffle) {
-      // Play immediately; build smart shuffle off the click path.
+    const shouldShuffleTail =
+      this.shuffle && tracks.length > 1 && !opts?.preserveQueueOrder;
+    if (shouldShuffleTail) {
+      const start = tracks[idx]!;
+      // Avvio immediato sul brano cliccato; coda completa al frame successivo.
       this.queue = [start];
       this.index = 0;
       void this.loadCurrent(true);
       const gen = this.loadGen;
-      const startId = start.id;
+      const startPath = start.rel_path;
       const all = tracks;
+      const focus = idx;
       window.setTimeout(() => {
         if (this.loadGen !== gen) return;
-        if (this.current?.id !== startId) return;
-        const rest = this.filterShufflePool(all.filter((t) => t.id !== startId));
-        this.queue = [start, ...this.shuffled(rest)];
-        this.index = 0;
+        if (this.current?.rel_path !== startPath) return;
+        const ordered = shuffleTailFromCurrent(all, focus);
+        this.privateQueue = [...all];
+        this.queue = ordered;
+        this.index = focus;
         this.emit();
       }, 0);
       return;
     }
     this.queue = [...this.privateQueue];
-    this.index = Math.min(Math.max(0, startIndex), this.queue.length - 1);
+    this.index = idx;
     void this.loadCurrent(true);
   }
 
-  playTrack(track: Track, context: Track[] = [track]) {
+  playTrack(
+    track: Track,
+    context: Track[] = [track],
+    opts?: { preserveQueueOrder?: boolean },
+  ) {
     const idx = context.findIndex((t) => t.id === track.id);
-    this.playTracks(context, idx >= 0 ? idx : 0);
+    this.playTracks(context, idx >= 0 ? idx : 0, opts);
   }
 
-  playShuffled(tracks: Track[], start?: Track) {
-    const pool = this.filterShufflePool(tracks);
-    if (!pool.length) return;
-    const first = start && pool.some((t) => t.id === start.id) ? start : pool[0];
+  /** Album / playlist / coda ordinata: non rimescola anche se shuffle è ON. */
+  playSequence(tracks: Track[], startIndex = 0) {
+    this.playTracks(tracks, startIndex, { preserveQueueOrder: true });
+  }
+
+  /** Salta a un indice della coda corrente senza ricostruirla. */
+  playQueueIndex(index: number) {
+    if (index < 0 || index >= this.queue.length) return;
     this.cancelPendingLoad();
     this.abortCrossfade();
+    this.index = index;
+    void this.loadCurrent(true);
+  }
+
+  /**
+   * Shuffle intelligente di un pool.
+   * Con seed: seed primo + resto smart (collezione / genere / mood).
+   * Senza seed: tutto smart-random (Ascolta / Riproduci tutto).
+   */
+  playShuffled(tracks: Track[], start?: Track) {
+    if (!tracks.length) return;
+    const seed =
+      start && tracks.some((t) => t.rel_path === start.rel_path) ? start : null;
+    const pool = this.filterShufflePool(tracks, seed);
+    if (!pool.length) return;
+
+    this.cancelPendingLoad();
+    this.abortCrossfade();
+    this.manualQueuedPaths.clear();
     this.shuffle = true;
-    this.privateQueue = [...tracks];
+
+    const recent = this.recentRelPathSet();
+    const full = seed
+      ? buildShuffleQueueFromSeed(seed, tracks, {
+          recentRelPaths: recent,
+          ...this.exclusionOpts(true),
+        })
+      : buildSmartRandomQueue(pool, {
+          recentRelPaths: recent,
+        }).slice(0, CARD_QUEUE_CAP);
+
+    if (!full.length) return;
+    const first = full[0]!;
+    // privateQueue = ordine sorgente (per restore quando si spegne shuffle).
+    this.privateQueue = seed ? [...tracks] : [...pool];
     this.queue = [first];
     this.index = 0;
     void this.loadCurrent(true);
     const gen = this.loadGen;
-    const firstId = first.id;
-    const restSeed = pool.filter((t) => t.id !== first.id);
+    const firstPath = first.rel_path;
     window.setTimeout(() => {
       if (this.loadGen !== gen) return;
-      if (this.current?.id !== firstId) return;
-      const recent = new Set(loadUserPrefs().recentRelPaths);
-      const smartRest = buildSmartRandomQueue(restSeed, {
-        currentRelPath: first.rel_path,
-        currentArtist: first.artist_name,
-        recentRelPaths: recent,
-      });
-      this.queue = [first, ...smartRest].slice(0, CARD_QUEUE_CAP);
+      if (this.current?.rel_path !== firstPath) return;
+      this.queue = full;
       this.index = 0;
       this.emit();
     }, 0);
   }
 
-  /** Smart radio from a seed track across a library pool. */
-  playRadioFromSeed(seed: Track, library: Track[]) {
+  playCollectionShuffle(seed: Track, pool: Track[], respectExclusions = true) {
+    if (!pool.length) return;
+    const recent = this.recentRelPathSet();
+    const full = buildShuffleQueueFromSeed(seed, pool, {
+      recentRelPaths: recent,
+      ...this.exclusionOpts(respectExclusions),
+    });
+    if (!full.length) return;
     this.cancelPendingLoad();
     this.abortCrossfade();
+    this.manualQueuedPaths.clear();
+    this.shuffle = true;
+    const first = full[0]!;
+    this.privateQueue = [...pool];
+    this.queue = [first];
+    this.index = 0;
+    void this.loadCurrent(true);
+    const gen = this.loadGen;
+    const firstPath = first.rel_path;
+    window.setTimeout(() => {
+      if (this.loadGen !== gen) return;
+      if (this.current?.rel_path !== firstPath) return;
+      this.queue = full;
+      this.index = 0;
+      this.emit();
+    }, 0);
+  }
+
+  playPoolShuffle(pool: Track[], respectExclusions = true) {
+    const eligible = respectExclusions
+      ? this.filterShufflePool(pool)
+      : [...pool];
+    if (!eligible.length) return;
+    this.playShuffled(eligible);
+  }
+
+  /** Smart radio from a seed track across a library pool. */
+  playRadioFromSeed(seed: Track, library: Track[], respectExclusions = true) {
+    this.cancelPendingLoad();
+    this.abortCrossfade();
+    this.manualQueuedPaths.clear();
     this.shuffle = true;
     // Start audio on the seed immediately; score the library after paint.
     this.privateQueue = [seed];
@@ -637,11 +813,11 @@ class PlayerController {
     window.setTimeout(() => {
       if (this.loadGen !== gen) return;
       if (this.current?.rel_path !== seedPath) return;
-      const pool = this.filterShufflePool(library);
-      const recent = new Set(loadUserPrefs().recentRelPaths);
-      const queue = buildRadioFromSeed(seed, pool, {
+      const recent = this.recentRelPathSet();
+      const queue = buildRadioFromSeed(seed, library, {
         maxLength: CARD_QUEUE_CAP,
         recentRelPaths: recent,
+        ...this.exclusionOpts(respectExclusions),
       });
       if (!queue.length) return;
       this.privateQueue = [...queue];
@@ -651,23 +827,80 @@ class PlayerController {
     }, 0);
   }
 
+  /**
+   * Radio dal brano corrente: mantiene il prefisso già ascoltato e
+   * sostituisce solo la coda futura (legacy playRadioFromCurrent).
+   */
+  playRadioFromCurrent(library: Track[], respectExclusions = true) {
+    const cur = this.current;
+    if (!cur || !library.length) return;
+    const curIdx = this.index;
+    const generated = buildRadioFromSeed(cur, library, {
+      maxLength: CARD_QUEUE_CAP,
+      recentRelPaths: this.recentRelPathSet(),
+      ...this.exclusionOpts(respectExclusions),
+    });
+    const prefix = this.queue.slice(0, curIdx + 1);
+    const prefixPaths = new Set(prefix.map((t) => t.rel_path));
+    const newTail = generated.slice(1).filter((t) => !prefixPaths.has(t.rel_path));
+    const newFull = [...prefix, ...newTail].slice(0, CARD_QUEUE_CAP);
+    this.replaceQueueKeepingPlayback(newFull);
+  }
+
+  replaceQueueKeepingPlayback(fullQueue: Track[]) {
+    if (!fullQueue.length) return;
+    const currentPath = this.queue[this.index]?.rel_path ?? this.current?.rel_path;
+    if (!currentPath) return;
+    let focusIdx = fullQueue.findIndex((t) => t.rel_path === currentPath);
+    if (focusIdx < 0) focusIdx = Math.min(this.index, fullQueue.length - 1);
+    this.manualQueuedPaths.clear();
+    this.privateQueue = [...fullQueue];
+    this.queue = [...fullQueue];
+    this.index = focusIdx;
+    this.emit();
+  }
+
   addToQueue(track: Track | Track[]) {
     const list = Array.isArray(track) ? track : [track];
     if (!list.length) return;
     if (!this.queue.length) {
-      this.playTracks(list, 0);
+      this.playSequence(list, 0);
       return;
     }
-    const seen = new Set(this.queue.map((t) => t.id));
-    const add = list.filter((t) => !seen.has(t.id));
+    const seen = new Set(this.queue.map((t) => t.rel_path));
+    const add = list.filter((t) => !seen.has(t.rel_path));
     if (!add.length) return;
-    this.queue = [...this.queue, ...add];
-    this.privateQueue = [...this.privateQueue, ...add];
+    const at = computeQueueInsertIndex(this.queue, {
+      currentRelPath: this.current?.rel_path ?? null,
+      currentIndex: Math.max(0, this.index),
+      crossfadeBusy: this.crossfadeBusy,
+      crossfadeNextIndex: this.crossfadeNextIdx,
+      manualQueuedPaths: this.manualQueuedPaths,
+    });
+    for (const t of add) this.manualQueuedPaths.add(t.rel_path);
+    this.queue = insertTracksInQueue(this.queue, add, at);
+    const curPath = this.current?.rel_path;
+    const privFocus = curPath
+      ? this.privateQueue.findIndex((t) => t.rel_path === curPath)
+      : -1;
+    const privAt =
+      privFocus >= 0
+        ? computeQueueInsertIndex(this.privateQueue, {
+            currentRelPath: curPath ?? null,
+            currentIndex: privFocus,
+            crossfadeBusy: false,
+            crossfadeNextIndex: null,
+            manualQueuedPaths: this.manualQueuedPaths,
+          })
+        : this.privateQueue.length;
+    this.privateQueue = insertTracksInQueue(this.privateQueue, add, privAt);
     this.emit();
   }
 
   removeFromQueue(index: number) {
     if (index < 0 || index >= this.queue.length) return;
+    const removedPath = this.queue[index]?.rel_path;
+    if (removedPath) this.manualQueuedPaths.delete(removedPath);
     const removingCurrent = index === this.index;
     this.queue = this.queue.filter((_, i) => i !== index);
     this.privateQueue = this.queue.slice();
@@ -693,6 +926,15 @@ class PlayerController {
     if (i >= 0) this.removeFromQueue(i);
   }
 
+  /** For files gone from disk: the same path can sit in the queue more than once. */
+  removeFromQueueByRelPath(relPath: string) {
+    for (;;) {
+      const i = this.queue.findIndex((t) => t.rel_path === relPath);
+      if (i < 0) return;
+      this.removeFromQueue(i);
+    }
+  }
+
   moveQueueItem(from: number, to: number) {
     if (from === to) return;
     if (from < 0 || from >= this.queue.length) return;
@@ -713,12 +955,14 @@ class PlayerController {
   clearQueue() {
     this.cancelPendingLoad();
     this.abortCrossfade();
+    this.manualQueuedPaths.clear();
     this.queue = [];
     this.privateQueue = [];
     this.index = -1;
     this.pauseHard();
     this.currentTime = 0;
     this.duration = 0;
+    this.updateMediaSession(null);
     this.emit();
   }
 
@@ -773,6 +1017,7 @@ class PlayerController {
     const a = this.activeAudio();
     a.currentTime = seconds;
     this.currentTime = seconds;
+    this.syncMediaPosition(true);
     this.emit();
   }
 
@@ -1209,40 +1454,47 @@ class PlayerController {
     for (const t of this.queue.slice(this.index + 1, this.index + 6)) {
       if (t.album_id == null) continue;
       const img = new Image();
-      img.src = `/api/v1/covers/album/${t.album_id}`;
+      // The shade and the dock both show the 256 variant: warm that one.
+      img.src = albumCoverUrl(t.album_id, 256);
     }
   }
 
-  private updateMediaSession(track: Track) {
-    if (!("mediaSession" in navigator)) return;
-    const artwork =
-      track.album_id != null
-        ? [
-            {
-              src: `/api/v1/covers/album/${track.album_id}`,
-              sizes: "512x512",
-              type: "image/jpeg",
-            },
-          ]
-        : [];
-    navigator.mediaSession.metadata = new MediaMetadata({
+  /** Track + transport state for the lock screen / notification shade. */
+  private updateMediaSession(track: Track | null) {
+    if (!track) {
+      setMediaSessionMetadata(null);
+      setMediaSessionPlaybackState("none");
+      clearMediaSessionPosition();
+      return;
+    }
+    setMediaSessionMetadata({
       title: track.title,
       artist: track.artist_name,
       album: track.album_name,
-      artwork,
+      albumId: track.album_id,
     });
-    navigator.mediaSession.setActionHandler("play", () => void this.activeAudio().play());
-    navigator.mediaSession.setActionHandler("pause", () => this.activeAudio().pause());
-    navigator.mediaSession.setActionHandler("previoustrack", () => void this.prev());
-    navigator.mediaSession.setActionHandler("nexttrack", () => void this.next());
-    try {
-      navigator.mediaSession.setActionHandler("seekto", (d) => {
-        if (d.seekTime != null) this.seek(d.seekTime);
-      });
-    } catch {
-      /* unsupported */
-    }
+    setMediaSessionPlaybackState(this.playing ? "playing" : "paused");
+    this.syncMediaPosition(true);
     this.prefetchQueueCovers();
+  }
+
+  private syncMediaPlaybackState() {
+    if (!this.current) {
+      setMediaSessionPlaybackState("none");
+      return;
+    }
+    setMediaSessionPlaybackState(this.playing ? "playing" : "paused");
+    this.syncMediaPosition(true);
+  }
+
+  private syncMediaPosition(force = false) {
+    if (!this.current) return;
+    const now = Date.now();
+    if (!force && now - this.lastMediaPositionAt < MEDIA_POSITION_REFRESH_MS) {
+      return;
+    }
+    this.lastMediaPositionAt = now;
+    setMediaSessionPosition(this.duration, this.currentTime, 1);
   }
 }
 
