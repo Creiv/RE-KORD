@@ -137,7 +137,7 @@ export function trackFromFile({
       fileName,
       size: numOrNull(st.size),
       mtime: numOrNull(st.mtimeMs),
-      releaseDate: trackMeta?.releaseDate || null,
+      releaseDate: trackMeta?.releaseDate || tagData?.releaseDate || null,
       genre: trackMeta?.genre || tagData?.genre || null,
       lyrics:
         trackMeta?.lyrics != null && String(trackMeta.lyrics).trim()
@@ -186,14 +186,20 @@ async function entryIsAudioInDir(entry, dir) {
   return false
 }
 
-async function resolveDuration(fullPath, opts) {
-  if (opts.enrichDuration === false) return null
-  return getAudioFileDurationMs(fullPath)
-}
-
-async function resolveTagData(fullPath, opts) {
-  if (!opts.readTags) return null
-  return readAudioTags(fullPath)
+async function resolveTrackFileMeta(fullPath, opts = {}) {
+  let tagData = null
+  let fileDurationMs = null
+  if (opts.readTags) {
+    tagData = await readAudioTags(fullPath)
+  }
+  if (opts.enrichDuration !== false) {
+    if (tagData?.durationMs != null) {
+      fileDurationMs = tagData.durationMs
+    } else {
+      fileDurationMs = await getAudioFileDurationMs(fullPath)
+    }
+  }
+  return { tagData, fileDurationMs }
 }
 
 export async function readAlbumTracks(
@@ -215,10 +221,7 @@ export async function readAlbumTracks(
     if (!(await entryIsAudioInDir(entry, albumDir))) continue
     const fullPath = path.join(albumDir, entry.name)
     const filePath = relify([artistName, albumFolderName, entry.name])
-    const [fileDurationMs, tagData] = await Promise.all([
-      resolveDuration(fullPath, opts),
-      resolveTagData(fullPath, opts),
-    ])
+    const { tagData, fileDurationMs } = await resolveTrackFileMeta(fullPath, opts)
     tracks.push(
       trackFromFile({
         artistName,
@@ -232,6 +235,7 @@ export async function readAlbumTracks(
         albumMeta,
         enrichDuration: opts.enrichDuration !== false,
         existingDurationMs: existingByFile?.get(filePath) ?? null,
+        readTags: Boolean(opts.readTags),
       }),
     )
   }
@@ -246,10 +250,7 @@ export async function readLooseTracks(artistName, artistDir, opts = {}) {
     if (!(await entryIsAudioInDir(entry, artistDir))) continue
     const fullPath = path.join(artistDir, entry.name)
     const filePath = relify([artistName, entry.name])
-    const [fileDurationMs, tagData] = await Promise.all([
-      resolveDuration(fullPath, opts),
-      resolveTagData(fullPath, opts),
-    ])
+    const { tagData, fileDurationMs } = await resolveTrackFileMeta(fullPath, opts)
     tracks.push(
       trackFromFile({
         artistName,
@@ -264,6 +265,7 @@ export async function readLooseTracks(artistName, artistDir, opts = {}) {
         loose: true,
         enrichDuration: opts.enrichDuration !== false,
         existingDurationMs: existingByFile?.get(filePath) ?? null,
+        readTags: Boolean(opts.readTags),
       }),
     )
   }
@@ -404,7 +406,7 @@ async function buildFlatTracksAtRoot(musicRoot, layout, opts = {}) {
   for (const entry of entries) {
     if (!(await entryIsAudioInDir(entry, musicRoot))) continue
     const fullPath = path.join(musicRoot, entry.name)
-    const tagData = opts.readTags ? await readAudioTags(fullPath) : null
+    const { tagData, fileDurationMs } = await resolveTrackFileMeta(fullPath, opts)
     const identity = await resolveTrackIdentity(layout, {
       fileName: entry.name,
       filePath: entry.name,
@@ -416,8 +418,6 @@ async function buildFlatTracksAtRoot(musicRoot, layout, opts = {}) {
     const artistName = identity.artist
     const albumFolderName = layoutAlbumFolderName(identity.album, false)
     const key = albumKey(artistName, albumFolderName)
-    const fileDurationMs =
-      opts.enrichDuration === false ? null : await getAudioFileDurationMs(fullPath)
     const track = trackFromFile({
       artistName,
       albumFolderName,
@@ -430,6 +430,7 @@ async function buildFlatTracksAtRoot(musicRoot, layout, opts = {}) {
       albumMeta: null,
       loose: false,
       enrichDuration: opts.enrichDuration !== false,
+      readTags: Boolean(opts.readTags),
     })
     const list = byAlbum.get(key) || { artistName, albumFolderName, albumDisplayName: identity.album, tracks: [] }
     list.tracks.push(track)

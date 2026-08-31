@@ -543,6 +543,14 @@ export function PlayerProvider({ children }: { children: React.ReactNode }) {
       pendingTrackTransitionRef.current = true;
       trackLoadingRef.current = true;
       syncMediaSessionNowRef.current();
+      const knownDurationMs = track.meta?.durationMs;
+      const hasKnownDuration =
+        knownDurationMs != null &&
+        Number.isFinite(knownDurationMs) &&
+        knownDurationMs > 0;
+      if (hasKnownDuration) {
+        setDuration(knownDurationMs / 1000);
+      }
       try {
         const url = mediaUrlForTrack(track);
         const playbackKey = trackPlaybackKey(track);
@@ -554,7 +562,12 @@ export function PlayerProvider({ children }: { children: React.ReactNode }) {
           inEl.src = url;
           inEl.load();
           try {
-            await waitForAudioReady(inEl);
+            await waitForAudioReady(inEl, {
+              minReadyState: hasKnownDuration
+                ? HTMLMediaElement.HAVE_METADATA
+                : undefined,
+              timeoutMs: hasKnownDuration ? 20_000 : undefined,
+            });
           } catch {
             if (gen !== trackLoadGenRef.current) return;
             outEl.pause();

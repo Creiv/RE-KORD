@@ -1,27 +1,47 @@
 import { parseFile } from "music-metadata"
 
+const PARSE_OPTS = { duration: true, skipCovers: true, skipPostHeaders: true }
+
 /**
  * Legge tag audio embedded (lazy, solo su richiesta arricchimento).
  * @param {string} filePath
- * @returns {Promise<{ artist: string|null, album: string|null, title: string|null, trackNumber: number|null, genre: string|null, durationMs: number|null }|null>}
+ * @returns {Promise<{ artist: string|null, album: string|null, title: string|null, trackNumber: number|null, genre: string|null, releaseDate: string|null, durationMs: number|null }|null>}
  */
 export async function readAudioTags(filePath) {
   try {
-    const meta = await parseFile(filePath, { duration: true })
+    const meta = await parseFile(filePath, PARSE_OPTS)
     const common = meta.common || {}
     const artist = firstTag(common.artist, common.artists)
     const album = common.album ? String(common.album).trim() : null
     const title = common.title ? String(common.title).trim() : null
     const trackNumber = Number.isFinite(common.track?.no) ? Number(common.track.no) : null
     const genre = firstTag(common.genre, common.genres)
+    const releaseDate = releaseDateFromCommon(common)
     const durationMs =
       Number.isFinite(meta.format?.duration) && meta.format.duration > 0
         ? Math.round(meta.format.duration * 1000)
         : null
-    return { artist, album, title, trackNumber, genre, durationMs }
+    return { artist, album, title, trackNumber, genre, releaseDate, durationMs }
   } catch {
     return null
   }
+}
+
+/** @param {import('music-metadata').IAudioMetadata['common']} common */
+function releaseDateFromCommon(common) {
+  if (Number.isFinite(common?.year) && common.year > 0) {
+    return String(common.year)
+  }
+  const date = common?.date
+  if (!date) return null
+  if (typeof date === "string") {
+    const trimmed = date.trim()
+    return trimmed ? trimmed.slice(0, 10) : null
+  }
+  if (date instanceof Date && !Number.isNaN(date.getTime())) {
+    return date.toISOString().slice(0, 10)
+  }
+  return null
 }
 
 function firstTag(single, list) {

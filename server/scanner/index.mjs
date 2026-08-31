@@ -40,7 +40,11 @@ export async function runLibraryScan(libraryRoot, opts = {}) {
         if (bootstrapped) return
       }
 
-      const result = await runScanEngine(libraryRoot, opts)
+      const result = await runScanEngine(libraryRoot, {
+        ...opts,
+        enrichDuration: opts.enrichDuration !== false,
+        readTags: opts.readTags !== false,
+      })
       if (result.mode === "noop" || !result.index) return
 
       if (result.mode === "full") {
