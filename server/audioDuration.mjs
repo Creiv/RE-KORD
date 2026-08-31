@@ -1,4 +1,5 @@
 import fs from "fs/promises"
+import { parseFile } from "music-metadata"
 
 const MAX_FULL_READ_BYTES = 8 * 1024 * 1024
 const HEAD_READ_BYTES = 1024 * 1024
@@ -279,6 +280,39 @@ function parseOggOpusDuration(buf) {
   return finiteMs((granule - preSkip) / 48000)
 }
 
+async function durationFromMusicMetadata(filePath) {
+  try {
+    const meta = await parseFile(filePath, {
+      duration: true,
+      skipCovers: true,
+      skipPostHeaders: true,
+    })
+    if (Number.isFinite(meta.format?.duration) && meta.format.duration > 0) {
+      return finiteMs(meta.format.duration)
+    }
+  } catch {
+    /* ok */
+  }
+  return null
+}
+
+function durationFromSample(filePath, buf, fileSize) {
+  const lower = filePath.toLowerCase()
+  if (lower.endsWith(".flac")) return parseFlacDuration(buf)
+  if (lower.endsWith(".wav")) return parseWavDuration(buf)
+  if (lower.endsWith(".mp3")) return parseMp3Duration(buf, fileSize > buf.length ? fileSize : null)
+  if (lower.endsWith(".m4a") || lower.endsWith(".mp4") || lower.endsWith(".aac")) return parseMp4Atoms(buf)
+  if (lower.endsWith(".ogg") || lower.endsWith(".opus")) return parseOggOpusDuration(buf)
+  if (lower.endsWith(".webm")) return parseWebmDuration(buf)
+  return (
+    parseMp4Atoms(buf) ||
+    parseOggOpusDuration(buf) ||
+    parseFlacDuration(buf) ||
+    parseWavDuration(buf) ||
+    parseMp3Duration(buf, fileSize > buf.length ? fileSize : null)
+  )
+}
+
 export async function getAudioFileDurationMs(filePath) {
   let st
   try {
@@ -293,12 +327,7 @@ export async function getAudioFileDurationMs(filePath) {
   } catch {
     return null
   }
-  const lower = filePath.toLowerCase()
-  if (lower.endsWith(".flac")) return parseFlacDuration(buf)
-  if (lower.endsWith(".wav")) return parseWavDuration(buf)
-  if (lower.endsWith(".mp3")) return parseMp3Duration(buf, st.size > buf.length ? st.size : null)
-  if (lower.endsWith(".m4a") || lower.endsWith(".mp4") || lower.endsWith(".aac")) return parseMp4Atoms(buf)
-  if (lower.endsWith(".ogg") || lower.endsWith(".opus")) return parseOggOpusDuration(buf)
-  if (lower.endsWith(".webm")) return parseWebmDuration(buf)
-  return parseMp4Atoms(buf) || parseOggOpusDuration(buf) || parseFlacDuration(buf) || parseWavDuration(buf) || parseMp3Duration(buf, st.size > buf.length ? st.size : null)
+  const fast = durationFromSample(filePath, buf, st.size)
+  if (fast != null) return fast
+  return durationFromMusicMetadata(filePath)
 }

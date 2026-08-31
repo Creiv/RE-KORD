@@ -20,12 +20,25 @@ export function audioReadyEnough(audio: HTMLAudioElement): boolean {
   return audio.readyState >= HTMLMediaElement.HAVE_FUTURE_DATA;
 }
 
-export function waitForAudioReady(audio: HTMLAudioElement): Promise<void> {
+export type WaitForAudioReadyOptions = {
+  /** Minimum HTMLMediaElement.readyState before resolving (default: HAVE_FUTURE_DATA). */
+  minReadyState?: number;
+  /** Abort waiting after this many ms (default: none). */
+  timeoutMs?: number;
+};
+
+export function waitForAudioReady(
+  audio: HTMLAudioElement,
+  opts: WaitForAudioReadyOptions = {},
+): Promise<void> {
+  const minReady =
+    opts.minReadyState ?? HTMLMediaElement.HAVE_FUTURE_DATA;
   return new Promise((resolve, reject) => {
-    if (audioReadyEnough(audio)) {
+    if (audio.readyState >= minReady) {
       resolve();
       return;
     }
+    let timer: ReturnType<typeof setTimeout> | undefined;
     const done = () => {
       cleanup();
       resolve();
@@ -34,14 +47,31 @@ export function waitForAudioReady(audio: HTMLAudioElement): Promise<void> {
       cleanup();
       reject(new Error("audio load failed"));
     };
+    const onTimeout = () => {
+      if (audio.readyState >= HTMLMediaElement.HAVE_METADATA) {
+        cleanup();
+        resolve();
+        return;
+      }
+      cleanup();
+      reject(new Error("audio load timeout"));
+    };
     const cleanup = () => {
+      if (timer != null) clearTimeout(timer);
       audio.removeEventListener("canplaythrough", done);
+      audio.removeEventListener("canplay", done);
       audio.removeEventListener("loadeddata", done);
+      audio.removeEventListener("loadedmetadata", done);
       audio.removeEventListener("error", fail);
     };
     audio.addEventListener("canplaythrough", done, { once: true });
+    audio.addEventListener("canplay", done, { once: true });
     audio.addEventListener("loadeddata", done, { once: true });
+    audio.addEventListener("loadedmetadata", done, { once: true });
     audio.addEventListener("error", fail, { once: true });
+    if (opts.timeoutMs != null && opts.timeoutMs > 0) {
+      timer = setTimeout(onTimeout, opts.timeoutMs);
+    }
   });
 }
 

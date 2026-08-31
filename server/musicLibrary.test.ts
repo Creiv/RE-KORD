@@ -128,4 +128,15 @@ describe("musicLibrary", () => {
     expect(partial.albums.map((a) => a.relPath)).toEqual(["A/B1"])
     expect(partial.tracks).toHaveLength(1)
   })
+
+  it("readTags uses wav duration without a separate duration probe", async () => {
+    const musicRoot = await fs.mkdtemp(path.join(os.tmpdir(), "rekord-library-tags-"))
+    const albumDir = path.join(musicRoot, "Artist One", "Album One")
+    await fs.mkdir(albumDir, { recursive: true })
+    await fs.writeFile(path.join(albumDir, "01 Song.wav"), wavSilence({ seconds: 3 }))
+
+    const index = await buildLibraryIndex(musicRoot, { readTags: true })
+
+    expect(index.tracks[0]?.meta?.durationMs).toBe(3000)
+  })
 })
