@@ -172,7 +172,7 @@ export type VizMode =
   | "discowall"
   | "karaoke";
 
-export const APP_LOCALES = ["en", "it"] as const;
+export const APP_LOCALES = ["en", "it", "de"] as const;
 export type AppLocale = (typeof APP_LOCALES)[number];
 
 type LibraryBrowseMode = "artists" | "genres" | "moods" | "nebula";

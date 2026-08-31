@@ -518,8 +518,7 @@ export function useThemeDomEffects(settings: UserSettings) {
   }, [settings]);
 
   useEffect(() => {
-    document.documentElement.lang =
-      settings.locale === "it" ? "it" : "en";
+    document.documentElement.lang = settings.locale;
   }, [settings.locale]);
 
   useEffect(() => {

@@ -7,6 +7,7 @@ import {
 } from "../../lib/backendRecovery";
 import { useBackendRecoveryOnResume } from "../../hooks/useBackendRecoveryOnResume";
 import { parseRoute } from "../../lib/routing";
+import { DE } from "../../i18n/de";
 import { EN } from "../../i18n/en";
 import { IT } from "../../i18n/it";
 import { translate } from "../../i18n/translate";
@@ -72,9 +73,12 @@ export function LibraryRootGate({ children }: LibraryRootGateProps) {
       });
   }, []);
 
-  const table =
-    typeof navigator !== "undefined" && navigator.language.startsWith("it")
-      ? IT
+  const navLang =
+    typeof navigator !== "undefined" ? navigator.language : "";
+  const table = navLang.startsWith("it")
+    ? IT
+    : navLang.startsWith("de")
+      ? DE
       : EN;
 
   if (phase === "load") {

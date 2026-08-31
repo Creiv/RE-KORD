@@ -278,7 +278,8 @@ function normalizeAudioCrossfadeSec(src) {
 
 function sanitizeSettings(settings) {
   const src = isObj(settings) ? settings : {}
-  const loc = src.locale === "it" ? "it" : "en"
+  const loc =
+    src.locale === "it" || src.locale === "de" ? src.locale : "en"
   const libBrowse =
     src.libBrowse === "genres"
       ? "genres"
