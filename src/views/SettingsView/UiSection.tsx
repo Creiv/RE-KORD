@@ -35,7 +35,13 @@ export default function UiSection({
           >
             {APP_LOCALES.map((loc) => (
               <option key={loc} value={loc}>
-                {loc === "en" ? t("settings.langEn") : t("settings.langIt")}
+                {t(
+                  loc === "en"
+                    ? "settings.langEn"
+                    : loc === "it"
+                      ? "settings.langIt"
+                      : "settings.langDe"
+                )}
               </option>
             ))}
           </select>

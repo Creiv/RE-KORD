@@ -104,6 +104,21 @@ describe("userState", () => {
     expect(reloaded.settings.vizMode).toBe("discowall")
   })
 
+  it("conserva locale de in sanitizeSettings", async () => {
+    const musicRoot = await fs.mkdtemp(path.join(os.tmpdir(), "rekord-user-state-de-"))
+    const state = await writeUserState(
+      musicRoot,
+      {
+        ...defaultUserState(),
+        settings: { ...defaultUserState().settings, locale: "de" },
+      },
+      "deacct",
+    )
+    expect(state.settings.locale).toBe("de")
+    const reloaded = await readUserState(musicRoot, "deacct")
+    expect(reloaded.settings.locale).toBe("de")
+  })
+
   it("PATCH server-side mergea su stato fresco senza expectedRevision", async () => {
     const musicRoot = await fs.mkdtemp(path.join(os.tmpdir(), "rekord-user-state-patch-"))
     await writeUserState(

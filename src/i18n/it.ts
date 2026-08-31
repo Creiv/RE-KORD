@@ -675,6 +675,7 @@ export const IT: Record<string, string> = {
   "settings.language": "Lingua",
   "settings.langEn": "English",
   "settings.langIt": "Italiano",
+  "settings.langDe": "Deutsch",
   "accounts.switchAria": "Cambia account",
   "accounts.openSettingsTitle": "Account {{name}}: apri impostazioni",
   "accounts.eyebrow": "Account",

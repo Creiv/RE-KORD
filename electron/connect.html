@@ -604,6 +604,7 @@
       <div class="segmented segmented--joined" role="group" id="lang-seg">
         <button type="button" class="is-on" data-locale="en" aria-pressed="true">EN</button>
         <button type="button" data-locale="it" aria-pressed="false">IT</button>
+        <button type="button" data-locale="de" aria-pressed="false">DE</button>
       </div>
     </header>
 
@@ -786,6 +787,36 @@
           errNoAccounts: "Nessun account sul server.",
           errOpen: "Impossibile aprire la libreria.",
         },
+        de: {
+          title: "Verbinden",
+          subtitle: "Verbinde dich mit deinem RE-KORD-Server im lokalen Netz oder über eine öffentliche URL.",
+          connectionType: "Verbindungstyp",
+          localIp: "Lokale IP",
+          publicUrl: "Öffentliche URL",
+          host: "IP oder Hostname",
+          port: "Port",
+          publicUrlPlaceholder: "https://name.trycloudflare.com",
+          connect: "Verbinden",
+          connecting: "Verbindung…",
+          reconnectTitle: "Erneute Verbindung…",
+          reconnectLead: "Gespeicherter Server wird geprüft…",
+          reconnectOpening: "Bibliothek wird geöffnet…",
+          reconnectOpeningLead: "Verbindung erfolgreich. Bibliothek wird geladen.",
+          open: "Öffnen",
+          opening: "Wird geöffnet…",
+          accountsEyebrow: "Sitzung",
+          accountsTitle: "Konto wählen",
+          accountsHint: "Tippe ein Profil, um deine Bibliothek zu öffnen.",
+          changeServer: "Server wechseln",
+          noBridge: "Nutze die RE-KORD-Client-App zum Verbinden.",
+          errPublicUrl: "Gib eine gültige öffentliche URL ein (https://…).",
+          errHost: "Gib eine IP-Adresse oder einen Hostnamen ein.",
+          errPortMissing: "Gib eine Portnummer ein (z. B. 3001).",
+          errPortInvalid: "Ungültiger Port (1–65535, ohne http://).",
+          errConnection: "Verbindung fehlgeschlagen.",
+          errNoAccounts: "Keine Konten auf dem Server gefunden.",
+          errOpen: "Bibliothek konnte nicht geöffnet werden.",
+        },
       };
 
       if (!window.rekordClientConnect) {
@@ -868,7 +899,7 @@
       }
 
       function setLocale(next) {
-        locale = next === "it" ? "it" : "en";
+        locale = I18N[next] ? next : "en";
         localStorage.setItem(LOCALE_KEY, locale);
         document.documentElement.lang = locale;
         E("title").textContent = t("title");
@@ -1065,7 +1096,7 @@
       }
 
       const savedLocale = localStorage.getItem(LOCALE_KEY);
-      setLocale(savedLocale === "it" ? "it" : "en");
+      setLocale(savedLocale);
       langSeg.querySelectorAll("button").forEach((btn) => {
         btn.addEventListener("click", () => setLocale(btn.dataset.locale));
       });
