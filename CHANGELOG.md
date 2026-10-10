@@ -3,6 +3,15 @@
 All notable changes to RE-KORD. Versions follow [semantic versioning](https://semver.org);
 one version number covers the hub, the clients and the packages.
 
+## Unreleased
+
+### Changed
+
+- **Docker image on the GitHub Container Registry**: `ghcr.io/creiv/re-kord` (amd64 and
+  arm64, tags `latest`, the version and the release tag) is built and published at every
+  release tag (thanks to @303inmyheart for the workflow). `docker-compose.yml` now pulls it,
+  so the compose file alone is enough; building locally is still possible.
+
 ## 5.1.0 — 2026-10-09
 
 A feature and polish release on top of RE-KORD 5: podcasts and news, embedded tags and

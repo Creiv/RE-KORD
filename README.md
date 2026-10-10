@@ -136,11 +136,12 @@ Every desktop download comes in two flavors:
 ### Docker
 
 ```bash
-git clone https://github.com/Creiv/RE-KORD.git && cd RE-KORD
-REKORD_MUSIC_HOST=/path/to/Music docker compose up -d --build
+curl -O https://raw.githubusercontent.com/Creiv/RE-KORD/main/docker-compose.yml
+REKORD_MUSIC_HOST=/path/to/Music docker compose up -d
 ```
 
-The hub listens on port 7420; data lives in `./docker-data/data`. See
+Compose pulls the published image `ghcr.io/creiv/re-kord` (amd64/arm64). The hub listens on
+port 7420; data lives in `./docker-data/data`. See
 [install.md](docs/install.md#docker).
 
 ### Linux service

@@ -1,11 +1,14 @@
-# .github/workflows/docker.yml
+# Builds the hub image for amd64 and arm64 and publishes it to the GitHub
+# Container Registry (ghcr.io/creiv/re-kord), used by docker-compose.yml.
+#
+# Runs only on release tags (v*), plus a manual run from the Actions tab
+# (e.g. to publish an image for a tag pushed before this workflow existed).
+# The arm64 half is built under QEMU, which is slow: hence not on every push.
 
 name: Build Docker Image
 
 on:
   push:
-    branches:
-      - main
     tags:
       - "v*"
   workflow_dispatch:
@@ -14,13 +17,22 @@ permissions:
   contents: read
   packages: write
 
+concurrency:
+  group: docker-image
+  cancel-in-progress: false
+
 jobs:
   docker:
     runs-on: ubuntu-latest
+    timeout-minutes: 300
 
     steps:
       - name: Checkout
         uses: actions/checkout@v4
+
+      - name: Read version
+        id: version
+        run: echo "version=$(node -p "require('./package.json').version")" >> "$GITHUB_OUTPUT"
 
       - name: Set up QEMU
         uses: docker/setup-qemu-action@v3
@@ -41,9 +53,9 @@ jobs:
         with:
           images: ghcr.io/${{ github.repository }}
           tags: |
-            type=raw,value=latest,enable={{is_default_branch}}
+            type=raw,value=latest
+            type=raw,value=${{ steps.version.outputs.version }}
             type=ref,event=tag
-            type=sha
 
       - name: Build and push
         uses: docker/build-push-action@v6

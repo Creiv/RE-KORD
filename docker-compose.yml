@@ -1,16 +1,21 @@
 # RE-KORD hub with Docker Compose.
 #
-#   docker compose up -d --build              (from the repository root)
-#   open http://<host>:7420  (admin panel: http://<host>:7420/admin)
+#   docker compose up -d        (pulls ghcr.io/creiv/re-kord:latest)
+#   open http://<host>:7420     (admin panel: http://<host>:7420/admin)
+#
+# This file is all you need: no clone required. To build the image yourself
+# from a checkout instead, uncomment `build:` below and run
+#   docker compose up -d --build
 #
 # Coming from 5.0: the port moves from 3001 to 7420 and the volumes change (/config → /data).
 # See docs/upgrading-from-legacy.md.
 services:
   rekord:
-    build:
-      context: .
-      dockerfile: Dockerfile
-    image: rekord:5.0.0
+    # Pin a release instead of "latest" if you prefer, e.g. ghcr.io/creiv/re-kord:5.1.0
+    image: ghcr.io/creiv/re-kord:latest
+    # build:
+    #   context: .
+    #   dockerfile: Dockerfile
     container_name: rekord
     ports:
       - "${REKORD_PORT:-7420}:7420"

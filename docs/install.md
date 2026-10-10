@@ -167,13 +167,19 @@ through the remote-access tunnel.
 
 ## Docker
 
-The repository ships a `Dockerfile` and a `docker-compose.yml` for the hub. No image is
-published to a registry: Compose builds it locally.
+A ready-made image for amd64 and arm64 is published on the GitHub Container Registry at
+every release: `ghcr.io/creiv/re-kord` (tags `latest`, the version such as `5.1.0`, and the
+release tag such as `v5.1`). The `docker-compose.yml` uses it, so that file is all you need:
 
 ```bash
-git clone https://github.com/Creiv/RE-KORD.git && cd RE-KORD
-REKORD_MUSIC_HOST=/path/to/Music docker compose up -d --build
+mkdir rekord && cd rekord
+curl -O https://raw.githubusercontent.com/Creiv/RE-KORD/main/docker-compose.yml
+REKORD_MUSIC_HOST=/path/to/Music docker compose up -d
 ```
+
+To update: `docker compose pull && docker compose up -d`. To build the image yourself from a
+checkout instead, uncomment `build:` in `docker-compose.yml` and run
+`docker compose up -d --build`.
 
 Then open `http://<host>:7420` (admin panel at `/admin`).
 

@@ -112,9 +112,17 @@ Manual installation without the script: the steps are in the header of
 ## Docker
 
 ```bash
-REKORD_MUSIC_HOST=/path/to/Music docker compose up -d --build
+curl -O https://raw.githubusercontent.com/Creiv/RE-KORD/main/docker-compose.yml
+REKORD_MUSIC_HOST=/path/to/Music docker compose up -d
 docker compose logs -f
 ```
+
+Compose pulls `ghcr.io/creiv/re-kord:latest`, published for amd64 and arm64 by the
+*Build Docker Image* workflow (`.github/workflows/docker.yml`) on every release tag (`v*`),
+or by hand from the Actions tab. Tags: `latest`, the version (`5.1.0`) and the release tag
+(`v5.1`); pin one in the compose file to stay on a release. Update with
+`docker compose pull && docker compose up -d`. To build locally instead, uncomment `build:`
+in `docker-compose.yml` and add `--build`.
 
 The multi-stage `Dockerfile` builds the UIs with pnpm and `rekord-server` in release mode,
 fetches yt-dlp and cloudflared at pinned versions with checksum verification, and runs on
