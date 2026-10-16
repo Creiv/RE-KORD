@@ -4,8 +4,10 @@
    *
    * - `animated`: something is playing. On its own it gives a static "listening" pose
    *   (bars at different heights), with no animation at all.
-   * - `live`: this is the only instance allowed to move (the Studio entry
-   *   of the sidebar / mobile nav, like legacy `RekordNavIcon`). While
+   * - `live`: this instance may move: the Studio entry of the sidebar /
+   *   mobile nav (legacy `RekordNavIcon`), the playing row of a track list
+   *   and the playing tile of the dashboard radio (legacy `UiGraphicEq
+   *   animated`), a handful at most. While
    *   something plays the bars pulse around the centre line exactly like the
    *   legacy `UiGraphicEq` SMIL animation (same min heights, periods,
    *   delays and ease-in-out spline), on every engine. It stops when the
@@ -19,8 +21,12 @@
    * ~25% of a core while a track played). There the pose changes only on
    * `beat` — the whole second of playback the timeline already redraws
    * for — so it adds no frame of its own.
-   * Rows and dashboard cards stay static: dozens of animated icons were what
-   * kept WebKitGTK busy (perf report: 34% CPU with an icon in every row).
+   * Every stepped instance changes pose in the same update as the timeline,
+   * so the active row and the radio tile ride the rail icon's repaint instead
+   * of adding their own. Other rows never get `live`: dozens of animated icons
+   * were what kept WebKitGTK busy (perf report: 34% CPU with an icon in every
+   * row). Paused, the bars rest in the legacy pose: the plain Material
+   * "graphic_eq" glyph (full bar heights).
    */
   import { onMount } from "svelte";
   import { canAnimateLiveIndicators, platformCaps } from "../../lib/platformCaps";

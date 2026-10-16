@@ -103,8 +103,9 @@ export function applyPlatformCapsToDom(root: HTMLElement | null = typeof documen
 }
 
 /**
- * Whether the one "live" equaliser icon (the Studio entry of the sidebar /
- * mobile nav) may animate. Everything else shows a static "playing" pose.
+ * Whether the "live" equaliser icons (the Studio entry of the sidebar /
+ * mobile nav, the playing row and radio tile) may animate. Everything else
+ * shows a static "playing" pose.
  * Allowed on WebKitGTK too, like legacy: it is five tiny bars animating
  * `transform` only, inside a `contain: strict` box. Only «reduce motion»
  * stops it.

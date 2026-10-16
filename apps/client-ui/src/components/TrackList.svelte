@@ -83,6 +83,11 @@
       albumLocked: trackRowStats.albumLocked(track),
     };
   }
+  /** The one row whose equalizer moves: the first listing of the playing track. */
+  const liveIndex = $derived.by(() => {
+    const id = activeTrackId ?? session.current?.id;
+    return id == null ? -1 : tracks.findIndex((tr) => tr.id === id);
+  });
   const windowTracks = $derived(
     virtualized ? tracks.slice(win.start, win.end) : tracks,
   );
@@ -134,6 +139,7 @@
         autoFocusActive={!virtualized}
         favorited={favoriteIds.has(track.id)}
         active={activeTrackId === track.id || session.current?.id === track.id}
+        eqLive={i === liveIndex}
         {playlistOptions}
         {showQueueActions}
         {showPlaylistAction}

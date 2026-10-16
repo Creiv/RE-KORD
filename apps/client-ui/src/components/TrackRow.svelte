@@ -42,6 +42,7 @@
     coverSrc,
     favorited = false,
     active = false,
+    eqLive = true,
     playlistOptions = [],
     /** Like React TrackListRow: queue/playlist always available unless opted out. */
     showQueueActions = true,
@@ -76,6 +77,12 @@
     coverSrc?: string | null;
     favorited?: boolean;
     active?: boolean;
+    /**
+     * The active row's equalizer may move (one row per list: a track listed
+     * twice animates only once). On WebKitGTK it steps once per second of
+     * playback, with the rail icon, so it adds no frame of its own.
+     */
+    eqLive?: boolean;
     playlistOptions?: SelectOption[];
     showQueueActions?: boolean;
     showPlaylistAction?: boolean;
@@ -118,7 +125,7 @@
     inAlbum || external ? track.artist_name : `${track.artist_name} · ${track.album_name}`,
   );
   const live = $derived(isLiveTrack(track));
-  /** Active row: EQ in static pose (never animated in rows: WebKitGTK cost). */
+  /** Active row: its EQ moves while playing (`eqLive`), legacy paused pose otherwise. */
   const showStudio = $derived(active);
   const trackLyricsKind = $derived(lyricsKind(track.lyrics));
   const missingMeta = $derived(!trackHasFileMeta(track));
@@ -255,7 +262,7 @@
         aria-label={t("player.openListen")}
         onclick={openStudio}
       >
-        <GraphicEq animated={session.playing} />
+        <GraphicEq animated={session.playing} live={eqLive} beat={Math.floor(session.currentTime)} />
       </button>
     {:else}
       <button

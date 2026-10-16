@@ -184,7 +184,7 @@
                 aria-label={t("dashboard.openStudio")}
                 onclick={openListen}
               >
-                <GraphicEq animated={session.playing} />
+                <GraphicEq animated={session.playing} live beat={Math.floor(session.currentTime)} />
               </button>
             {:else}
               <button
