@@ -1106,7 +1106,7 @@
         <p>{t("studio.dl.jsRuntimeHint")}</p>
       {/if}
       {#if session.canManageMachine}
-        <button type="button" class="ghost-btn ghost-btn--sm" onclick={() => session.navigate("settings")}>
+        <button type="button" class="ghost-btn ghost-btn--sm" onclick={() => session.openSettings({ section: "Libreria", anchor: "integrations" })}>
           {t("studio.dl.openSettings")}
         </button>
       {/if}

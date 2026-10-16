@@ -77,6 +77,10 @@ export type ViewId =
   | "achievements"
   | "settings"
   | "podcasts";
+/** Settings tabs (stable ids, labels are translated). */
+export type SettingsSection = "Account" | "Interfaccia" | "Libreria" | "Rete" | "Sistema";
+/** A panel to scroll to once the settings tab is shown. */
+export type SettingsTarget = { section: SettingsSection; anchor?: "integrations" };
 export type LibraryLevel = "artists" | "artist" | "album" | "search";
 export type LibraryBrowse = "artists" | "genres" | "moods" | "nebula";
 /** Legacy `libOverviewSort`: artists / genres overview order. */
@@ -115,6 +119,8 @@ const SCAN_POLL_MAX_MS = 3000;
 
 class ClientSession {
   view = $state<ViewId>("dashboard");
+  /** Tab (and panel) Settings should open on; consumed by SettingsView. */
+  settingsTarget = $state<SettingsTarget | null>(null);
   libraryLevel = $state<LibraryLevel>("artists");
   private browseState = $state<LibraryBrowse>("artists");
   private overviewSortState = $state<LibraryOverviewSort>("name");
@@ -2360,6 +2366,12 @@ class ClientSession {
       if (!this.allAlbums.length) void this.quiet(this.loadAllAlbums());
       if (!this.artists.length) void this.quiet(this.loadArtists());
     }
+  }
+
+  /** Open Settings on a tab: "Apri Impostazioni" buttons land where the fix is. */
+  openSettings(target: SettingsTarget) {
+    this.settingsTarget = target;
+    this.navigate("settings");
   }
 
   /**

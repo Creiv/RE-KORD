@@ -270,7 +270,7 @@
         {#snippet icon()}<UiIcon name="disc" />{/snippet}
         {#snippet action()}
           {#if hubHasTracks === false}
-            <Button onclick={() => session.navigate("settings")}>
+            <Button onclick={() => session.openSettings({ section: "Libreria" })}>
               <UiIcon name="settings" />
               {t("dashboard.emptyOpenSettings")}
             </Button>
