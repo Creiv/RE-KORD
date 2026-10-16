@@ -393,8 +393,13 @@ What happens now (`RekordMediaService.requestPlay`):
 - **Media browser.** The service is a `MediaBrowserServiceCompat` (session token from the
   service, `android.media.browse.MediaBrowserService` intent filter, `exported="true"`,
   `MediaButtonReceiver` kept) and declares `res/xml/automotive_app_desc.xml` through the
-  `com.google.android.gms.car.application` meta-data. `onGetRoot` accepts every caller
-  (Android Auto, `com.google.android.projection.gearhead`; the system UI; Bluetooth). The
+  `com.google.android.gms.car.application` meta-data. `onGetRoot` lets in the app itself,
+  callers the system trusts for media control (`isTrustedForMediaControl`: system UI,
+  Bluetooth, enabled notification listeners), preinstalled apps, and a short list of known
+  media browsers (`BrowserAccess`: Android Auto `com.google.android.projection.gearhead`, the
+  Assistant, Wear OS, Automotive's media center); any other app is refused, since a
+  connection hands out the session and the last track's title. The "open and resume" start
+  action is honoured only right after the app asked for it (`ResumeTicket`). The
   root has one playable item, *Resume* (*Riprendi*, *Fortsetzen*) with the last track as
   subtitle; with `EXTRA_RECENT` (the system's media resumption) the item is the track
   itself. Playing it is a remote play as above. No queue is listed: the queue lives in the
