@@ -913,6 +913,12 @@ async fn download_preset(State(state): State<AppState>) -> impl IntoResponse {
         .file_name()
         .map(|n| n.to_string_lossy().into_owned())
         .unwrap_or_else(|| "yt-dlp".into());
+    // Like yt-dlp's (`program`), the runtime's path stays on the hub: any
+    // Studio user reads this, and it may name a home folder.
+    let mut js = crate::js_runtime::status_json(&js_runtime);
+    if let Some(o) = js.as_object_mut() {
+        o.remove("path");
+    }
     ok(json!({
         "found": ytdlp.available,
         "file": null,
@@ -921,7 +927,7 @@ async fn download_preset(State(state): State<AppState>) -> impl IntoResponse {
         "version": ytdlp.version,
         "source": ytdlp.source,
         "cookiesConfigured": cookies,
-        "jsRuntime": crate::js_runtime::status_json(&js_runtime),
+        "jsRuntime": js,
         "args": ["-f", ytdlp::AUDIO_FORMAT],
         "exampleUrl": null,
     }))

@@ -59,6 +59,19 @@ async fn diagnostics_reports_ytdlp_age_and_caches_probes() {
 }
 
 #[tokio::test]
+async fn download_preset_names_the_js_runtime_without_its_path() {
+    let hub = Hub::new("tools-preset");
+    let res = hub
+        .send(req(Method::GET, "/api/v1/download-preset").build())
+        .await;
+    assert_eq!(res.status, StatusCode::OK);
+    let js = res.json()["data"]["jsRuntime"].clone();
+    assert!(js.is_object(), "{js}");
+    assert!(js.get("available").is_some(), "{js}");
+    assert!(js.get("path").is_none(), "path leaked: {js}");
+}
+
+#[tokio::test]
 async fn stale_ytdlp_is_flagged() {
     let hub = Hub::new("tools-stale");
     let path = hub.base.join("bin/yt-dlp");
