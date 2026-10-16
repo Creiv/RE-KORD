@@ -7,6 +7,17 @@ one version number covers the hub, the clients and the packages.
 
 ### Fixed
 
+- **Android: play from the car or Bluetooth with the phone locked** (issue #99). A PLAY from
+  the car, a headset or the lock screen now puts the media service in the foreground and
+  takes the CPU and Wi-Fi locks at once, inside the window Android allows, and then hands
+  the command to the player, which gets 15 s to answer (45 s while the app is starting)
+  instead of 3 s. A service restarted by the car button no longer drops out of the
+  foreground straight away, and the last track is kept so the car can resume it after the
+  system stopped the service. If the app itself was closed, Android does not let it start
+  from the background: the notification then offers *Open RE-KORD to resume*.
+- **Android Auto and car head units**: the app is now a media browser service with a
+  *Resume* item for the last track, and declares itself to Android Auto; the system's
+  media controls can resume it too.
 - **Podcasts: "Update failed (Source unreachable)" after a refresh** (issue #99). A feed
   answering "not modified" to the hub's conditional request (the usual answer when nothing
   new is out, as with Apple Podcasts shows) was taken for a failure, so the card showed the

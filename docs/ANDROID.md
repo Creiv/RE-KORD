@@ -180,6 +180,9 @@ The Kotlin side lives in `gen/android`, all of it in versioned files:
   The foreground service is what makes that safe: the process is not frozen.
 - `RekordInterruption.kt` — `InterruptionPolicy`, the resume-after-another-app decision
   (plain Kotlin, JVM unit tests in `app/src/test`).
+- `RekordRemotePlay.kt` — `RemotePlayRequest` (a play from the car waiting for the page),
+  `ForegroundPolicy` (when to hold the foreground and the locks) and `NowPlayingStore`
+  (the last track in the app's preferences). Plain Kotlin, `RemotePlayTest`.
 
 Service lifecycle: it starts on the first track that plays or starts loading (Android 12+
 only allows a foreground service to start from the foreground, which is where that tap
@@ -189,6 +192,8 @@ long as an interruption may still be resumed; then it leaves the foreground and 
 notification. It stops when the queue empties, when the notification is dismissed or when
 the activity dies. That last one is not a detail: the audio lives in the WebView, so
 closing the app from Recents ends playback and the notification must go with it.
+A play from the car or a headset is the other way in, see
+[Play from the car with the app in the background](#play-from-the-car-with-the-app-in-the-background).
 
 Permissions in the manifest: `FOREGROUND_SERVICE`, `FOREGROUND_SERVICE_MEDIA_PLAYBACK`
 (required as a permission from Android 14), `WAKE_LOCK`, `ACCESS_NETWORK_STATE` (normal
@@ -334,11 +339,111 @@ to once a minute after five silent minutes), the CPU sleeps as soon as no audio 
   network itself: `online` / `offline` events, and sockets of a lost network are dropped
   instead of left hanging. A hub reached through its LAN address is not reachable over
   mobile data; for the car, pair the app with the tunnel address.
-- **Bluetooth / car.** The car's buttons arrive as MediaSession callbacks and go through
-  `RekordMediaBridge` (wake lock, WebView resumed, retry every 250 ms up to 3 s, all on the
-  main thread: the page's throttled timers are not involved). A car that sends PLAY on
-  connect resumes only an existing session (the service exists only after something
-  played); after the app was closed there is no page to play, and nothing starts.
+- **Bluetooth / car.** The car's buttons arrive as MediaSession callbacks (or, with the
+  service gone, as a media button that restarts it) and go through `RekordMediaBridge`.
+  A play is handled first by the service itself, see the next section.
+
+#### Play from the car with the app in the background
+
+GitHub issue #99: with the phone locked and the app in the background, the car's PLAY did
+nothing until the phone was unlocked and the app opened. What happened in 5.1:
+
+1. Ten minutes after a pause the service left the foreground and the WebView was paused.
+   About a minute later Android stops a background service of an app that is not in front
+   (background execution limits): session released, process cached and frozen.
+2. The car's PLAY went to the last media button receiver (`MediaButtonReceiver`), which
+   restarted the service. The new instance computed its pause grace from a zero timestamp,
+   so the first render left the foreground right away and put the WebView back to sleep
+   under the incoming command.
+3. With the service still alive, `onPlay` only forwarded the command; the service went back
+   to the foreground when the page reported that it meant to play. That came from the
+   background, after the window in which Android allows it, and Android 12+ refused it
+   (`foreground refused` in the log). Without the foreground the process stayed throttled,
+   with the network restricted, while the screen was locked.
+4. The command itself was dropped after 3 s (12 × 250 ms) if the page did not answer.
+5. `onBind` returned null: no media browser service, so Android Auto, car head units that
+   browse and the system's media controls could not find or resume the app.
+
+What happens now (`RekordMediaService.requestPlay`):
+
+- **Foreground first.** `onPlay`, `onPlayFromMediaId`, `onPlayFromSearch`, a media button
+  in `onStartCommand` and the "open and resume" notification run inside the short window
+  Android grants for a media button or a media controller command (about 10 s, the
+  `MediaSessionService` temporary allowlist). The service enters the foreground there, with
+  the current notification, and takes the CPU and Wi-Fi locks, **before** it talks to the
+  page. A service only bound by a media browser first starts itself
+  (`startForegroundService`, allowed in the same window). A media button also restarts the
+  pause grace, so the render that follows does not leave the foreground.
+- **The page takes over.** The request stays pending (`RemotePlayRequest`) until the page
+  reports that it plays or means to play (loading, reconnecting); from there the usual
+  rules hold the foreground and the locks. Until then the request counts as "wants to play"
+  for the foreground, the locks, the heartbeat and `keepWebViewAwake` (MainActivity does not
+  let the WebView sleep under it). A pause or stop from anywhere cancels it.
+- **Delivery.** Every command now has a 15 s window (was 3 s), with the command wake lock
+  held for the whole window and the WebView resumed before each attempt. A play gets 15 s
+  when the page is up, 45 s when the WebView is new or missing (app starting, queue being
+  restored). When the window ends with no answer the bridge reports it; with a page the
+  service keeps the usual pause grace, without one it leaves the foreground at once.
+- **Last track saved.** `NowPlayingStore` keeps title, artist, album, cover URL, duration
+  and position in the app's private preferences (on track change, play/pause, and when the
+  position moves by a minute, not on every tick). A service restarted with no page state
+  rebuilds the session from it, paused, so the car shows the track and PLAY works. The
+  page's own `stop` (queue emptied) forgets it; closing the app or dismissing the
+  notification keeps it.
+- **Media browser.** The service is a `MediaBrowserServiceCompat` (session token from the
+  service, `android.media.browse.MediaBrowserService` intent filter, `exported="true"`,
+  `MediaButtonReceiver` kept) and declares `res/xml/automotive_app_desc.xml` through the
+  `com.google.android.gms.car.application` meta-data. `onGetRoot` accepts every caller
+  (Android Auto, `com.google.android.projection.gearhead`; the system UI; Bluetooth). The
+  root has one playable item, *Resume* (*Riprendi*, *Fortsetzen*) with the last track as
+  subtitle; with `EXTRA_RECENT` (the system's media resumption) the item is the track
+  itself. Playing it is a remote play as above. No queue is listed: the queue lives in the
+  page.
+
+**Limit: no page, no music.** The audio is an `<audio>` element in the WebView, and wry
+creates that WebView inside `MainActivity`; there is no WebView without the activity. When
+the activity is gone (app removed from Recents, process killed by the system) a car PLAY
+restores the session and asks Android to start the activity in the background, and the
+page then restores its queue and plays. Android 10+ blocks activity starts from the
+background, and neither a foreground service nor a media button is an exemption
+(only a visible window, a notification tap, `SYSTEM_ALERT_WINDOW`, and a few system cases;
+full-screen intents need `USE_FULL_SCREEN_INTENT`, reserved to calls and alarms from
+Android 14, and would light up the screen). So on most phones the start is blocked
+(`Background activity launch blocked` under `ActivityTaskManager` in logcat). The
+notification then says *Open RE-KORD to resume*, and tapping it opens the app and resumes
+the track (no unlock needed for the notification itself, the app opens after it). Where
+the start is allowed (Android 9 and older, "display over other apps" granted, some OEM
+builds), the activity moves itself to the back as soon as its WebView exists, so it does
+not cover what the user was doing.
+
+Android Auto only lists apps installed from the Play Store unless *Unknown sources* is
+enabled in Android Auto's developer settings.
+
+Checked on an emulator (Android 15, x86_64 debug build with the pause grace shortened to
+one minute, screen off, `dumpsys deviceidle force-idle`), PLAY sent with
+`adb shell cmd media_session dispatch play` (the same path as a Bluetooth key):
+
+- paused past the grace, out of the foreground, WebView paused: foreground and locks at
+  once, the page plays 0.6 s later;
+- service stopped by the system (`am make-uid-idle`), process alive: `MediaButtonReceiver`
+  restarts it, playing 0.5 s later (5.1 left the foreground in the same millisecond it
+  entered it and paused the WebView under the command; it only worked because the
+  emulator's page answered within the window);
+- process killed (`am kill`): 5.1 did nothing. Now the session comes back with the saved
+  track and the activity is started; on the emulator Android allowed that start
+  (`BAL_ALLOW_PERMISSION`, the key came from adb's shell) and the track played 1.9 s later
+  with the launcher still in front;
+- process killed, PLAY from the system's media controls (the resume player in Quick
+  Settings, a media browser client): the activity start is blocked
+  (`Background activity launch blocked`), the play gives up after 45 s and leaves the
+  foreground; tapping the player opens the app, which plays the track;
+- a phone call (`adb emu gsm call/accept/cancel`) still resumes after hang-up, and locks
+  are released on pause.
+
+Whether a real car's key lets the activity start after the process died depends on what
+the Bluetooth stack passes along; it has to be checked on a phone. `adb shell input keyevent
+KEYCODE_MEDIA_PLAY` does not reach the session while the emulator's screen is off (it does
+with the screen on); use `cmd media_session dispatch` there.
 
 Logs, all under one tag:
 
@@ -349,6 +454,11 @@ adb logcat -s RekordMedia
 # page: playing / waiting to play / paused (external)
 # page: watch (heartbeat): no progress for 14s, reconnecting at 83s (attempt 1)
 # network changed: now cellular
+# play (media session): foreground and locks first, page has 15s to start
+# play: the page took it over (loading) / play: cancelled by pause
+# command play: page not ready (player not mounted yet), retrying
+# media button with no page state: last track restored (Song)
+# media browser: com.google.android.projection.gearhead connected
 # interruption: PLAYING -> INTERRUPTED, interruption over (audio change): resuming
 ```
 
@@ -356,8 +466,9 @@ Lines starting with `page:` come from the player (`nativeLog` in `nativeMedia.ts
 transitions are logged, never the 5 s position refreshes.
 
 All of these reach the player through the same `rekord:media-action` event as the
-notification buttons. `RekordMediaBridge` delivers each command with a 5 s partial wake lock
-(`WAKE_LOCK` permission) and retries every 250 ms, up to 12 times, until the page answers:
+notification buttons. `RekordMediaBridge` delivers each command with a partial wake lock
+(`WAKE_LOCK` permission) held for its whole window (15 s, 45 s for a play waiting on a page
+that is still starting) and retries every 250 ms until the page answers:
 the injected script returns `true` only when `window.__rekordNativeMediaReady` is set
 (`nativeMedia.ts` raises it after the first state reaches the shell, i.e. the player is
 mounted and listening). A newer command replaces a pending one. Same approach as the legacy
