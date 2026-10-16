@@ -17,7 +17,7 @@
 #   pnpm pack:all            all of the above
 #
 #   scripts/pack.sh <linux|windows|android|all> [server|client|all] [options]
-#     --no-tools   server flavor without yt-dlp, cloudflared and ffmpeg (uses the system ones)
+#     --no-tools   server flavor without yt-dlp, qjs, cloudflared and ffmpeg (uses the system ones)
 #     --native     no Docker: requires the full toolchain on this machine
 #
 # Linux and Windows are built in a Docker container (scripts/docker/builder.Dockerfile)
@@ -103,7 +103,7 @@ if [[ -z "${REKORD_BUILDER:-}" ]]; then
   pnpm install --frozen-lockfile
 
   if [[ "$PLATFORM" != android ]] && want server && (( TOOLS )); then
-    step "yt-dlp, cloudflared, ffmpeg for $TOOLS_PLATFORM (verified download)"
+    step "yt-dlp, QuickJS-ng, cloudflared, ffmpeg for $TOOLS_PLATFORM (verified download)"
     bash scripts/fetch-tools.sh "$TOOLS_PLATFORM"
   fi
 
@@ -262,8 +262,9 @@ linux_server() {
 # Options and variables: ./rekord-server --help (REKORD_BIND, REKORD_DATA_DIR, ...).
 set -euo pipefail
 DIR="$(cd "$(dirname "$0")" && pwd)"
-# The package's yt-dlp, cloudflared and ffmpeg, if present.
+# The package's yt-dlp (with its JavaScript runtime), cloudflared and ffmpeg, if present.
 if [[ -z "${YTDLP_PATH:-}" && -x "$DIR/bin/yt-dlp" ]]; then export YTDLP_PATH="$DIR/bin/yt-dlp"; fi
+if [[ -z "${REKORD_YTDLP_JS_BIN:-}" && -x "$DIR/bin/qjs" ]]; then export REKORD_YTDLP_JS_BIN="$DIR/bin/qjs"; fi
 if [[ -z "${REKORD_CLOUDFLARED_BIN:-}" && -x "$DIR/bin/cloudflared" ]]; then export REKORD_CLOUDFLARED_BIN="$DIR/bin/cloudflared"; fi
 if [[ -z "${REKORD_FFMPEG:-}" && -x "$DIR/bin/ffmpeg" ]]; then export REKORD_FFMPEG="$DIR/bin/ffmpeg"; fi
 exec "$DIR/rekord-server" \
@@ -282,8 +283,9 @@ Quick try:
 As a service (dedicated user, automatic start, data in /var/lib/rekord):
   sudo ./systemd/install.sh
 
-bin/ contains yt-dlp, cloudflared and ffmpeg (LGPL, license in bin/ffmpeg-LICENSE.txt);
-without it, the hub uses the ones on the PATH. For the windowed app use RE-KORD-Server-*.AppImage.
+bin/ contains yt-dlp, qjs (QuickJS-ng, the JavaScript runtime yt-dlp needs for YouTube;
+MIT, license in bin/qjs-LICENSE.txt), cloudflared and ffmpeg (LGPL, license in
+bin/ffmpeg-LICENSE.txt); without it, the hub uses the ones on the PATH. For the windowed app use RE-KORD-Server-*.AppImage.
 EOF
   tar -C "$stage_root" -czf "$OUT/$name.tar.gz" "$name"
   rm -rf "$stage_root"
@@ -331,8 +333,9 @@ windows_server() {
     'answer yes for private networks.' \
     '' \
     'Keep the exe together with the admin-ui, client-ui and bin folders: the whole folder' \
-    'can be moved anywhere. bin\ contains yt-dlp, cloudflared and ffmpeg (LGPL, license in' \
-    'bin\ffmpeg-LICENSE.txt). Data: %APPDATA%\app.rekord.server.' \
+    'can be moved anywhere. bin\ contains yt-dlp, qjs (QuickJS-ng, the JavaScript runtime' \
+    'yt-dlp needs for YouTube; MIT, license in bin\qjs-LICENSE.txt), cloudflared and ffmpeg' \
+    '(LGPL, license in bin\ffmpeg-LICENSE.txt). Data: %APPDATA%\app.rekord.server.' \
     > "$stage/README.txt"
   rm -f "$OUT/$name.zip"
   (cd "$stage_root" && zip -qr "$OUT/$name.zip" "RE-KORD Server")

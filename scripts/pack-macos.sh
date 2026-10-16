@@ -92,6 +92,7 @@ cat > "$STAGE/run.sh" <<'EOF'
 set -euo pipefail
 DIR="$(cd "$(dirname "$0")" && pwd)"
 if [[ -z "${YTDLP_PATH:-}" && -x "$DIR/bin/yt-dlp" ]]; then export YTDLP_PATH="$DIR/bin/yt-dlp"; fi
+if [[ -z "${REKORD_YTDLP_JS_BIN:-}" && -x "$DIR/bin/qjs" ]]; then export REKORD_YTDLP_JS_BIN="$DIR/bin/qjs"; fi
 if [[ -z "${REKORD_CLOUDFLARED_BIN:-}" && -x "$DIR/bin/cloudflared" ]]; then
   export REKORD_CLOUDFLARED_BIN="$DIR/bin/cloudflared"
 fi
@@ -100,10 +101,11 @@ EOF
 chmod +x "$STAGE/run.sh"
 
 if (( TOOLS )); then
-  step "yt-dlp and cloudflared (verified download)"
+  step "yt-dlp, QuickJS-ng and cloudflared (verified download)"
   # yt-dlp_macos is already universal; cloudflared isn't: take the one for this machine.
   plat="macos-$([[ "$(uname -m)" == arm64 ]] && echo arm64 || echo x64)"
   bash scripts/fetch-ytdlp.sh "$plat" "$STAGE/bin"
+  bash scripts/fetch-qjs.sh "$plat" "$STAGE/bin"
   bash scripts/fetch-cloudflared.sh "$plat" "$STAGE/bin"
 fi
 

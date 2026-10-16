@@ -98,9 +98,10 @@ fn bundled_ui(app: &AppHandle, name: &str) -> Option<PathBuf> {
     dir.join("index.html").is_file().then_some(dir)
 }
 
-/// yt-dlp, cloudflared and ffmpeg bundled in `bin/` (pnpm pack:*:server): the
-/// hub looks them up through the same environment variables as `rekord-server`,
-/// which still take priority if the user has already set them.
+/// yt-dlp, qjs (its JavaScript runtime), cloudflared and ffmpeg bundled in
+/// `bin/` (pnpm pack:*:server): the hub looks them up through the same
+/// environment variables as `rekord-server`, which still take priority if the
+/// user has already set them.
 fn export_bundled_tools(app: &AppHandle) {
     let Ok(bin) = app.path().resource_dir().map(|d| d.join("bin")) else {
         return;
@@ -115,6 +116,7 @@ fn export_bundled_tools(app: &AppHandle) {
     };
     for (var, name) in [
         ("YTDLP_PATH", "yt-dlp"),
+        ("REKORD_YTDLP_JS_BIN", "qjs"),
         ("REKORD_CLOUDFLARED_BIN", "cloudflared"),
         ("REKORD_FFMPEG", "ffmpeg"),
     ] {

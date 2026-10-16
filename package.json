@@ -24,6 +24,7 @@
     "pack:all": "bash scripts/pack.sh all",
     "pack:macos": "bash scripts/pack-macos.sh",
     "fetch:ytdlp": "bash scripts/fetch-ytdlp.sh",
+    "fetch:qjs": "bash scripts/fetch-qjs.sh",
     "fetch:cloudflared": "bash scripts/fetch-cloudflared.sh",
     "fetch:ffmpeg": "bash scripts/fetch-ffmpeg.sh",
     "fetch:tools": "bash scripts/fetch-tools.sh",

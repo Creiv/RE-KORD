@@ -6,8 +6,8 @@
 #   docker compose up -d                      (see docker-compose.yml)
 #
 # Stages: ui (client + admin panel with pnpm) → server (rekord-server in
-# release) → tools (yt-dlp and cloudflared downloaded at a pinned version and
-# verified with SHA-256, see scripts/fetch-*.sh) → runtime (debian slim with
+# release) → tools (yt-dlp, QuickJS-ng and cloudflared downloaded at a pinned
+# version and verified with SHA-256, see scripts/fetch-*.sh) → runtime (debian slim with
 # ffmpeg, non-root user, /data and /music as volumes).
 
 ARG NODE_VERSION=22
@@ -55,14 +55,16 @@ RUN apt-get update \
  && rm -rf /var/lib/apt/lists/*
 WORKDIR /src
 COPY scripts/lib/fetch-common.sh scripts/lib/
-COPY scripts/fetch-ytdlp.sh scripts/fetch-cloudflared.sh scripts/third-party.sha256 scripts/
+COPY scripts/fetch-ytdlp.sh scripts/fetch-qjs.sh scripts/fetch-cloudflared.sh scripts/third-party.sha256 scripts/
 ARG TARGETARCH
 # Empty = the versions pinned in the scripts.
 ARG YTDLP_VERSION=
+ARG QJS_VERSION=
 ARG CLOUDFLARED_VERSION=
 RUN set -eu; \
     case "${TARGETARCH:-amd64}" in arm64) plat=linux-arm64 ;; *) plat=linux-x64 ;; esac; \
     YTDLP_VERSION="${YTDLP_VERSION}" bash scripts/fetch-ytdlp.sh "$plat" /out; \
+    QJS_VERSION="${QJS_VERSION}" bash scripts/fetch-qjs.sh "$plat" /out; \
     CLOUDFLARED_VERSION="${CLOUDFLARED_VERSION}" bash scripts/fetch-cloudflared.sh "$plat" /out
 
 # ---------------------------------------------------------------- runtime
@@ -86,6 +88,7 @@ ENV REKORD_BIND=0.0.0.0:7420 \
     REKORD_CLIENT_UI=/app/client-ui \
     REKORD_ADMIN_UI=/app/admin-ui \
     YTDLP_PATH=/app/bin/yt-dlp \
+    REKORD_YTDLP_JS_BIN=/app/bin/qjs \
     REKORD_CLOUDFLARED_BIN=/app/bin/cloudflared \
     RUST_LOG=info,tower_http=info
 
