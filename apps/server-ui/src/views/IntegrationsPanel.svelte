@@ -7,6 +7,8 @@
 
   const cfg = $derived(admin.config);
   const locked = $derived(admin.busy || !admin.canManage);
+  // Only the token flag: hubs up to 5.1 sent `discogsConfigured: true` always.
+  const discogsTokenSet = $derived(!!cfg?.discogsTokenConfigured);
 
   function onCookiePicked(event: Event) {
     const input = event.currentTarget as HTMLInputElement;
@@ -86,7 +88,7 @@
     <div class="state">
       <span class="k">{t("integrations.discogs.token")}</span>
       <span class="v">
-        {cfg.discogsTokenConfigured || cfg.discogsConfigured
+        {discogsTokenSet
           ? t("integrations.discogs.set")
           : t("integrations.discogs.unset")}
       </span>
@@ -109,7 +111,7 @@
         >
           {t("integrations.discogs.save")}
         </Button>
-        {#if cfg.discogsTokenConfigured || cfg.discogsConfigured}
+        {#if discogsTokenSet}
           <Button
             variant="ghost"
             disabled={locked || cfg.discogsWritable === false}

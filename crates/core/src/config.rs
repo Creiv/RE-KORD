@@ -560,6 +560,7 @@ impl AppConfig {
             .and_then(|n| n.to_str())
             .unwrap_or("")
             .to_string();
+        let discogs_token_set = crate::metadata::providers::discogs_configured(self);
         serde_json::json!({
             "musicRoot": self.music_root.as_ref().map(|p| p.to_string_lossy()),
             "dataDir": self.data_dir.to_string_lossy(),
@@ -573,8 +574,10 @@ impl AppConfig {
             "youtubeCookiesEntries": cookie_status.entries,
             "youtubeCookiesYoutubeEntries": cookie_status.youtube_entries,
             "youtubeCookiesUpdatedAt": cookie_status.updated_at,
-            "discogsConfigured": true,
-            "discogsTokenConfigured": self.discogs_token.is_some(),
+            // Discogs search needs a token: both flags follow it (legacy sent
+            // `discogsConfigured: true` always, which read as "token set").
+            "discogsConfigured": discogs_token_set,
+            "discogsTokenConfigured": discogs_token_set,
             "discogsLockedByEnv": self.discogs_token_from_env,
             "discogsWritable": !self.discogs_token_from_env,
             "watchLibrary": self.watch_library,
@@ -586,6 +589,29 @@ impl AppConfig {
 #[cfg(test)]
 mod lenient_tests {
     use super::*;
+
+    #[test]
+    fn discogs_token_is_configured_only_when_set() {
+        let dir = std::env::temp_dir().join(format!("rekord-cfg-{}", uuid::Uuid::new_v4()));
+        fs::create_dir_all(&dir).unwrap();
+        let mut cfg = AppConfig::resolve(Some(dir.clone()), "127.0.0.1:0".parse().unwrap(), None);
+        let flags = |c: &AppConfig| {
+            let s = c.config_snapshot();
+            (
+                s["discogsConfigured"].clone(),
+                s["discogsTokenConfigured"].clone(),
+            )
+        };
+        assert_eq!(flags(&cfg), (false.into(), false.into()), "fresh data dir");
+        cfg.set_discogs_token("  tok-123 ").unwrap();
+        assert_eq!(flags(&cfg), (true.into(), true.into()));
+        cfg.clear_discogs_token().unwrap();
+        assert_eq!(flags(&cfg), (false.into(), false.into()));
+        // A blank token is not a token.
+        cfg.discogs_token = Some("   ".into());
+        assert_eq!(flags(&cfg), (false.into(), false.into()));
+        let _ = fs::remove_dir_all(&dir);
+    }
 
     #[test]
     fn a_mistyped_section_does_not_void_the_settings_file() {
