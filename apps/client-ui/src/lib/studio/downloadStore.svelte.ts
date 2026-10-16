@@ -289,6 +289,17 @@ class StudioDownloads {
           this.appendRaw(ev.line);
         }
         break;
+      case "tagged": {
+        // Tags and cover the hub wrote into the new files (5.2).
+        const tagged = typeof ev.tagged === "number" ? ev.tagged : 0;
+        if (tagged > 0) this.log("info", tp("studio.dl.logTagged", tagged));
+        if (Array.isArray(ev.coverFiles)) {
+          for (const path of ev.coverFiles) this.log("info", t("studio.dl.logCoverSaved", { path: String(path) }));
+        }
+        const failed = Array.isArray(ev.failed) ? ev.failed.length : 0;
+        if (failed > 0) this.log("warn", tp("studio.dl.logTagsFailed", failed));
+        break;
+      }
       case "indexing":
         this.refreshing = true;
         this.log("info", t("studio.dl.logIndexing"));
