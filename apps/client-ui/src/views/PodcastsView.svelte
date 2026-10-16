@@ -7,7 +7,6 @@
   import { onMount } from "svelte";
   import { Button, CoverArt, EmptyState, Skeleton } from "@rekord/ui";
   import LatestOverview from "../components/podcasts/LatestOverview.svelte";
-  import PodcastsMenu from "../components/podcasts/PodcastsMenu.svelte";
   import ShowPage from "../components/podcasts/ShowPage.svelte";
   import UiIcon from "../components/icons/UiIcon.svelte";
   import { apiUrl } from "../lib/config";
@@ -120,7 +119,6 @@
             >
               <UiIcon name="sync" />
             </Button>
-            <PodcastsMenu refreshItem />
           </div>
         {/if}
       </nav>
@@ -253,10 +251,6 @@
 
     .podcasts-chip {
       max-width: 12rem;
-    }
-
-    .podcasts-tabs :global(.podcasts-tabs__refresh) {
-      display: none;
     }
   }
 </style>

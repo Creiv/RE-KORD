@@ -17,7 +17,6 @@ import {
   mergeStates,
   minutesLeft,
   normalizeState,
-  recentEntries,
   recordProgress,
   visibleSources,
 } from "./podcastModel.ts";
@@ -107,12 +106,6 @@ test("fusione tra dispositivi: vince la modifica più recente di ogni voce", () 
   // Dati malformati non rompono nulla.
   assert.deepEqual(normalizeState({ e: { bad: { p: 1 }, "3:ok": "x" } }), emptyState());
   assert.deepEqual(normalizeState(null), emptyState());
-});
-
-test("cronologia podcast: più recenti prima", () => {
-  let s = recordProgress(emptyState(), meta, 10, 100, 1000);
-  s = recordProgress(s, { ...meta, key: "b2" }, 10, 100, 3000);
-  assert.deepEqual(recentEntries(s).map((e) => e.k), ["b2", meta.key]);
 });
 
 test("righe: durata leggibile, fonti visibili, limite episodi", () => {

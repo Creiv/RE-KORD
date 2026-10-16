@@ -16,7 +16,6 @@ import {
 } from "../externalItems";
 import { player } from "../player";
 import {
-  IN_RECENT_KEY,
   SETTING_KEY,
   emptyState,
   entryId,
@@ -115,15 +114,6 @@ class PodcastStore {
 
   progress(source: PodcastSource, ep: PodcastEpisode): EpisodeProgress {
     return episodeProgress(this.entry(source.id, ep.key), ep.durationSecs);
-  }
-
-  /** Podcast listens appear in "Recenti" (per account, default off). */
-  get inRecent(): boolean {
-    return session.syncedSetting(IN_RECENT_KEY) === true;
-  }
-
-  set inRecent(on: boolean) {
-    session.setSyncedSetting(IN_RECENT_KEY, on);
   }
 
   setListened(source: PodcastSource, ep: PodcastEpisode, listened: boolean) {

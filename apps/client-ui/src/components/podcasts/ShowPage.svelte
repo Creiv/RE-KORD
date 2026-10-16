@@ -16,7 +16,6 @@
   import UiIcon from "../icons/UiIcon.svelte";
   import EpisodeRow from "./EpisodeRow.svelte";
   import LiveTile from "./LiveTile.svelte";
-  import PodcastsMenu from "./PodcastsMenu.svelte";
 
   let { source }: { source: PodcastSource } = $props();
 
@@ -89,7 +88,6 @@
             <UiIcon name="sync" />
           </Button>
         {/if}
-        <PodcastsMenu />
       </div>
     </div>
 

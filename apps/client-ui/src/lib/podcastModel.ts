@@ -66,8 +66,6 @@ export const LISTENED_TAIL_SEC = 30;
 export const RESUME_MIN_SEC = 15;
 
 export const SETTING_KEY = "podcasts";
-/** Synced setting: podcast listens also appear in "Recenti" (default off). */
-export const IN_RECENT_KEY = "podcastsInRecent";
 
 export function entryId(sourceId: number, key: string): string {
   return `${sourceId}:${key}`;
@@ -218,14 +216,6 @@ export function episodeProgress(
       : 0;
   const ratio = entry.l ? 1 : d > 0 ? Math.min(1, entry.p / d) : 0;
   return { ratio, listened: entry.l, resumeAt, started: entry.p > 0 || entry.l };
-}
-
-/** Podcast listens for the history, newest first. */
-export function recentEntries(state: PodcastState, limit = 30): PodcastEntry[] {
-  return Object.values(state.e)
-    .filter((e) => e.at > 0)
-    .sort((a, b) => b.at - a.at)
-    .slice(0, limit);
 }
 
 /** `4:07`, `1:02:05`; empty when unknown. */

@@ -11,13 +11,6 @@
   import { player } from "../lib/player";
   import { prefsRevision } from "../lib/prefsRevision.svelte";
   import { session } from "../lib/session.svelte";
-  import { hubModules } from "../lib/hubModules.svelte";
-
-  /** Podcast listens in the history: per-account opt-in, module chunk on demand. */
-  const showPodcasts = $derived(
-    hubModules.podcasts && session.syncedSetting("podcastsInRecent") === true,
-  );
-  const loadRecentPodcasts = () => import("../components/podcasts/RecentPodcasts.svelte");
 
   let loading = $state(true);
 
@@ -59,12 +52,6 @@
       {/if}
     {/snippet}
   </PageToolbar>
-
-  {#if showPodcasts}
-    {#await loadRecentPodcasts() then mod}
-      <mod.default />
-    {/await}
-  {/if}
 
   <section class="rk-surface-card collection-page__list view-page__body">
     {#if loading && tracks.length === 0}
