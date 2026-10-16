@@ -43,6 +43,7 @@
   import type { LibraryHit } from "../lib/studio/libraryMatch";
   import { studioErrorText } from "../lib/studio/errors";
   import { toasts } from "../lib/toasts.svelte";
+  import { classicModeForUrl } from "../lib/youtubeUrl";
 
   const tabs = $derived([
     { id: "listen", label: t("page.studio.tab.listen") },
@@ -217,7 +218,7 @@
       });
       if (r === "pickDest") {
         studioDownloads.url = item.url;
-        studioDownloads.urlMode = mode;
+        studioDownloads.urlMode = classicModeForUrl(item.url, mode);
         studioDownloads.studioMode = "classic";
         session.studioPane = "download";
       } else if (r === "started") {

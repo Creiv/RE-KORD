@@ -95,6 +95,15 @@ export function detectStudioDlMode(raw: string): DlVideoMode | null {
   return null;
 }
 
+/**
+ * Classic mode for a link handed over from Scopri: the link's own kind wins (a
+ * single released as a one-track `playlist?list=` link needs "playlist", or
+ * the field flags it as incompatible), the caller's guess is the fallback.
+ */
+export function classicModeForUrl(raw: string, fallback: DlVideoMode): DlVideoMode {
+  return detectStudioDlMode(raw) ?? fallback;
+}
+
 export function looksLikeSupportedDownloadUrl(raw: string): boolean {
   try {
     const u = new URL(

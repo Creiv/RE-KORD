@@ -17,6 +17,7 @@ import {
   plannedReleaseFolders,
   summaryFromEvent,
 } from "./downloadSummary.ts";
+import { classicModeForUrl, urlMatchesStudioDlMode } from "../youtubeUrl.ts";
 
 test("il filtro tiene solo le righe d'errore, una volta sola", () => {
   const stderr = [
@@ -114,4 +115,13 @@ test("motore JavaScript di yt-dlp: etichetta e avviso solo se l'hub lo dichiara 
   assert.equal(jsRuntimeMissing(pickJsRuntime(undefined)), false);
   assert.equal(jsRuntimeMissing(pickJsRuntime({ available: false, name: null })), true);
   assert.equal(jsRuntimeMissing(pickJsRuntime({ available: false, disabled: true })), false);
+});
+
+test("un singolo di Scopri pubblicato come playlist apre il Classico in modalita' playlist", () => {
+  const single = "https://music.youtube.com/playlist?list=OLAK5uy_nAFhlQYJNwnrEuIq2W-Uw34gN4yipEHsg";
+  const mode = classicModeForUrl(single, "single");
+  assert.equal(mode, "playlist");
+  assert.equal(urlMatchesStudioDlMode(single, mode), true);
+  assert.equal(classicModeForUrl("https://music.youtube.com/watch?v=jNQXAC9IVRw", "playlist"), "single");
+  assert.equal(classicModeForUrl("not a link", "single"), "single");
 });
