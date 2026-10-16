@@ -888,6 +888,7 @@ pub async fn run_json_probe(cfg: &AppConfig, url: &str, timeout_ms: u64) -> Resu
         .stdout(Stdio::piped())
         .stderr(Stdio::piped())
         .kill_on_drop(true);
+    crate::child_group::isolate(&mut cmd);
     let child = match cmd.spawn() {
         Ok(c) => c,
         Err(e) if e.kind() == std::io::ErrorKind::NotFound => {
@@ -895,13 +896,18 @@ pub async fn run_json_probe(cfg: &AppConfig, url: &str, timeout_ms: u64) -> Resu
         }
         Err(e) => return Err(ProbeError::Failed(e.to_string()).into()),
     };
+    // A timeout or a dropped request kills yt-dlp itself, not just its launcher.
+    let mut group = crate::child_group::GroupKill::new(&child);
     let output = match tokio::time::timeout(
         std::time::Duration::from_millis(timeout_ms),
         child.wait_with_output(),
     )
     .await
     {
-        Ok(Ok(o)) => o,
+        Ok(Ok(o)) => {
+            group.disarm();
+            o
+        }
         Ok(Err(e)) => return Err(ProbeError::Failed(e.to_string()).into()),
         Err(_) => return Err(ProbeError::Timeout.into()),
     };
@@ -980,17 +986,14 @@ impl DownloadOutcome {
     }
 }
 
-/// Ask a child process to stop (SIGTERM on Unix so yt-dlp can clean up its
-/// `.part` files; `taskkill /T` on Windows to include ffmpeg children).
+/// Ask a child process to stop (SIGTERM to its process group on Unix so
+/// yt-dlp can clean up its `.part` files; `taskkill /T` on Windows to include
+/// ffmpeg children).
 async fn terminate_pid(pid: u32) {
     #[cfg(unix)]
     {
-        if let Ok(pid) = libc::pid_t::try_from(pid) {
-            // SAFETY: plain syscall on a pid we spawned; no memory involved.
-            unsafe {
-                libc::kill(pid, libc::SIGTERM);
-            }
-        }
+        // The whole group: the PyInstaller launcher, yt-dlp and its ffmpeg.
+        crate::child_group::signal_group(pid, libc::SIGTERM);
     }
     #[cfg(windows)]
     {
@@ -1041,6 +1044,7 @@ pub async fn run_download(
         .kill_on_drop(true)
         .env("FORCE_COLOR", "0")
         .env("PYTHONIOENCODING", "utf-8");
+    crate::child_group::isolate(&mut cmd);
 
     let mut child = match cmd.spawn() {
         Ok(c) => c,
@@ -1066,6 +1070,8 @@ pub async fn run_download(
         }
     };
     let child_pid = child.id();
+    // Hub shutdown (the task is dropped) stops yt-dlp, not just its launcher.
+    let mut group = crate::child_group::GroupKill::new(&child);
     let stdout = child.stdout.take().context("stdout")?;
     let stderr = child.stderr.take().context("stderr")?;
 
@@ -1176,6 +1182,7 @@ pub async fn run_download(
         tokio::select! {
             status = child.wait() => {
                 exited.store(true, Ordering::SeqCst);
+                group.disarm();
                 exit_code = Some(status.ok().and_then(|s| s.code()).unwrap_or(-1));
             }
             _ = keepalive.tick() => {

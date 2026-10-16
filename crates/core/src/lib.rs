@@ -2,6 +2,7 @@ pub mod accounts;
 pub mod api;
 pub mod backup;
 pub mod catalog_preview;
+pub mod child_group;
 pub mod config;
 pub mod cover;
 pub mod db;

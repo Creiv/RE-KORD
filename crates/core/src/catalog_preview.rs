@@ -503,6 +503,7 @@ pub async fn create_preview_token(
         .stdout(Stdio::piped())
         .stderr(Stdio::piped())
         .kill_on_drop(true);
+    crate::child_group::isolate(&mut cmd);
     let child = match cmd.spawn() {
         Ok(c) => c,
         Err(e) if e.kind() == std::io::ErrorKind::NotFound => {
@@ -515,9 +516,13 @@ pub async fn create_preview_token(
             })
         }
     };
+    let mut group = crate::child_group::GroupKill::new(&child);
     let output =
         match tokio::time::timeout(Duration::from_millis(30_000), child.wait_with_output()).await {
-            Ok(Ok(o)) => o,
+            Ok(Ok(o)) => {
+                group.disarm();
+                o
+            }
             Ok(Err(e)) => {
                 return Err(PreviewError::Resolve {
                     code: "preview_resolve_failed",
