@@ -218,7 +218,12 @@ class PodcastStore {
     if (!cur || !isExternalTrack(cur) || cur.external?.kind === "live") return;
     const p = parseExternalPath(cur.rel_path);
     if (!p) return;
-    const pos = player.currentTime;
+    // Only the episode really playing, at a position of its own: not while it
+    // buffers (the previous item still sounds), not after a failed load (a
+    // 502 from the feed), not mid-skip. A resume point never drops because of
+    // those.
+    const pos = player.positionOf(cur.rel_path);
+    if (pos == null) return;
     const dur = player.duration > 0 ? player.duration : cur.duration_ms / 1000;
     this.pending = { id: entryId(p.sourceId, p.key), pos, dur };
     const now = Date.now();
@@ -247,8 +252,8 @@ class PodcastStore {
     const source = this.sources.find((s) => s.id === sourceId);
     const ep = source?.episodes.find((e) => e.key === key);
     const cur = player.current;
-    const fromPlayer =
-      cur && parseExternalPath(cur.rel_path)?.key === key ? cur : null;
+    const curPath = cur ? parseExternalPath(cur.rel_path) : null;
+    const fromPlayer = curPath && curPath.sourceId === sourceId && curPath.key === key ? cur : null;
     this.save(
       recordProgress(
         this.state,

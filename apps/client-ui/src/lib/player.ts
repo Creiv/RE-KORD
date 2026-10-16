@@ -627,6 +627,12 @@ class PlayerController {
       // A seek is queued for the next frame: the element still reports the
       // old position and would make the timeline jump back for one tick.
       if (this.pendingSeek != null) return;
+      // The track is changing: this deck still plays the previous item while
+      // the new one buffers on the other deck. Its position is not the new
+      // track's (a podcast's 5:11 would be saved and synced for a 3:27 song,
+      // or recorded as an episode's resume point).
+      const cur = this.current;
+      if (!cur || audio.getAttribute("src") !== mediaUrl(cur.rel_path)) return;
       // A reload waiting for its metadata reports 0 until the restore seek: the
       // timeline (and the notification) keep the position it will resume at.
       if (this.restorePosition && this.restorePosition.relPath === this.current?.rel_path) return;
@@ -1317,7 +1323,7 @@ class PlayerController {
     this.lastPositionSaveAt = now;
     savePersistedPosition(this.boundAccount, {
       relPath: track.rel_path,
-      time: this.currentTime,
+      time: this.storablePosition(track, this.currentTime),
       updatedAt: now,
     });
     // A forced save marks a moment worth syncing (pause, leaving, switching).
@@ -1336,6 +1342,48 @@ class PlayerController {
     this.emitQueueSync(false, true);
   }
 
+  /**
+   * A position that may be stored for `track`: within its length. Past the
+   * end it belongs to another item (the previous one, a podcast episode),
+   * so the track starts from the top instead.
+   */
+  private storablePosition(track: Track, time: number): number {
+    const t = Number.isFinite(time) && time > 0 ? time : 0;
+    const d = this.knownDuration(track);
+    if (!(d > 0)) return t;
+    return t > d + 1 ? 0 : Math.min(t, d);
+  }
+
+  /**
+   * Where a restored track may resume: never past (or right at) its end; a
+   * saved position out of range starts it from the top (0). `length` is the
+   * best length known (the hub's, else the element's), 0 when unknown.
+   */
+  private restorablePosition(time: number, length: number): number {
+    if (!Number.isFinite(time) || time < RESTORE_POSITION_MIN_SEC) return 0;
+    if (length > 0 && time >= length - 5) return 0;
+    return time;
+  }
+
+  /**
+   * The playback position of `relPath` while it is current and the position
+   * really is its own: the active deck holds it, loaded and not failed, with
+   * no reconnect or restore seek pending. Null otherwise (the new item still
+   * buffering while the previous one plays, a load that failed, a skip under
+   * way), so a listener never records another item's or a failed load's
+   * position (podcast resume points).
+   */
+  positionOf(relPath: string): number | null {
+    const cur = this.current;
+    if (!cur || cur.rel_path !== relPath) return null;
+    if (this.remote) return this.currentTime;
+    if (this.outage || this.mediaErrorBusy || this.restorePosition || this.crossfadeBusy) return null;
+    const a = this.activeAudio();
+    if (a.getAttribute("src") !== mediaUrl(relPath) || a.error != null) return null;
+    if (a.readyState < 1) return null;
+    return Number.isFinite(this.currentTime) ? Math.max(0, this.currentTime) : null;
+  }
+
   /** Seek the restored track to where the last session stopped (once). */
   private applyRestorePosition(audio: HTMLAudioElement) {
     const pos = this.restorePosition;
@@ -1343,7 +1391,13 @@ class PlayerController {
     this.restorePosition = null;
     if (this.current?.rel_path !== pos.relPath) return;
     const d = this.deckDuration(audio, this.current);
-    if (d > 0 && pos.time >= d - 5) return;
+    if (this.restorablePosition(pos.time, d) <= 0) {
+      // Out of range (shown at once by the restore): back to the top.
+      this.currentTime = 0;
+      this.syncMediaPosition(true);
+      this.emitProgress();
+      return;
+    }
     try {
       audio.currentTime = pos.time;
       this.currentTime = pos.time;
@@ -1427,14 +1481,14 @@ class PlayerController {
     // the queue lists library tracks only (see `libraryQueueForSync`).
     const lib = libraryQueueForSync(this.queue, this.index);
     const cur = lib.currentIsLibrary ? this.current : (lib.tracks[lib.index] ?? null);
+    // The position is the current library track's own, within its length; an
+    // episode's position never rides on the library track the cursor names.
+    const time = cur && lib.currentIsLibrary ? this.storablePosition(cur, this.currentTime) : 0;
     return {
       relPaths: lib.tracks.map((t) => t.rel_path),
       index: lib.index,
       relPath: cur?.rel_path ?? null,
-      time:
-        cur && lib.currentIsLibrary
-          ? Math.max(0, Math.round((this.currentTime || 0) * 10) / 10)
-          : 0,
+      time: Math.round(time * 10) / 10,
       updatedAt: Math.max(this.queueUpdatedAt, this.lastPositionSaveAt) || Date.now(),
     };
   }
@@ -1453,9 +1507,10 @@ class PlayerController {
     const persisted = loadPersistedSessionQueue(this.boundAccount);
     if (!persisted?.tracks.length) return null;
     const index = Math.min(persisted.currentIndex, persisted.tracks.length - 1);
-    const relPath = persisted.tracks[index]?.rel_path ?? null;
+    const track = persisted.tracks[index];
+    const relPath = track?.rel_path ?? null;
     const pos = loadPersistedPosition(this.boundAccount);
-    const time = pos && pos.relPath === relPath ? pos.time : 0;
+    const time = track && pos && pos.relPath === relPath ? this.storablePosition(track, pos.time) : 0;
     return {
       relPaths: persisted.tracks.map((t) => t.rel_path),
       index,
@@ -1552,10 +1607,14 @@ class PlayerController {
         const pos = position ?? loadPersistedPosition(this.boundAccount);
         // The hub's duration is the seek bar's length at once (no wait on the file).
         if (track.duration_ms > 0) this.duration = track.duration_ms / 1000;
-        if (pos && pos.relPath === track.rel_path && pos.time >= RESTORE_POSITION_MIN_SEC) {
-          this.restorePosition = { relPath: pos.relPath, time: pos.time };
+        const at =
+          pos && pos.relPath === track.rel_path
+            ? this.restorablePosition(pos.time, this.knownDuration(track))
+            : 0;
+        if (pos && at > 0) {
+          this.restorePosition = { relPath: pos.relPath, time: at };
           // Show it at once; the element seeks when metadata arrives.
-          this.currentTime = pos.time;
+          this.currentTime = at;
         }
         audio.src = mediaUrl(track.rel_path);
         this.updateMediaSession(track);
