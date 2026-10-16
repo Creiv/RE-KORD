@@ -28,8 +28,27 @@ use std::time::{Duration, SystemTime};
 /// Copies older than this are leftovers of a crash: removed on the next run.
 const STALE_AFTER: Duration = Duration::from_secs(6 * 3600);
 
-/// Serializes write-backs (two downloads finishing together).
+/// Serializes every write to the stored file: write-backs (two downloads
+/// finishing together) and uploads / clears from Settings, so a write-back
+/// never lands between its "unchanged since the copy" check and a new upload.
 static WRITE_BACK: Mutex<()> = Mutex::new(());
+
+fn write_lock() -> std::sync::MutexGuard<'static, ()> {
+    WRITE_BACK.lock().unwrap_or_else(|e| e.into_inner())
+}
+
+/// Store an upload from Settings (validated by the caller): mode 600, atomic,
+/// under the write-back lock.
+pub fn store_upload(dest: &Path, bytes: &[u8]) -> std::io::Result<()> {
+    let _guard = write_lock();
+    write_private_atomic(dest, bytes)
+}
+
+/// Remove the stored file (Settings › clear), under the write-back lock.
+pub fn remove_stored(path: &Path) {
+    let _guard = write_lock();
+    let _ = fs::remove_file(path);
+}
 
 /// Why an uploaded file was refused.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -205,7 +224,8 @@ pub struct YtdlpCookies {
     copy: PathBuf,
     source: PathBuf,
     source_mtime: Option<SystemTime>,
-    /// The source is the hub-managed upload (not an env-provided path).
+    /// The source is the hub-managed upload (the default path, not an
+    /// env-provided or hand-configured one).
     managed: bool,
 }
 
@@ -240,11 +260,15 @@ impl YtdlpCookies {
             let _ = fs::remove_file(&copy);
             return None;
         }
+        // Only the hub's own upload is ever written back: not a file named by the
+        // environment, nor a path hand-written in settings.json (someone else's
+        // file, maybe shared with a browser export).
+        let managed = !cfg.youtube_cookies_from_env && source == cfg.default_youtube_cookies_path();
         Some(Self {
             copy,
             source,
             source_mtime,
-            managed: !cfg.youtube_cookies_from_env,
+            managed,
         })
     }
 
@@ -263,7 +287,7 @@ impl YtdlpCookies {
         if !self.managed {
             return false;
         }
-        let _guard = WRITE_BACK.lock().unwrap_or_else(|e| e.into_inner());
+        let _guard = write_lock();
         let now_mtime = fs::metadata(&self.source).and_then(|m| m.modified()).ok();
         if now_mtime.is_none() || now_mtime != self.source_mtime {
             // Cleared or replaced meanwhile: the user's newer file wins.
@@ -435,6 +459,46 @@ mod tests {
             assert_eq!(fs::read_to_string(&src).unwrap(), uploaded);
         }
         drop(jar);
+        let _ = fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn hand_configured_path_is_never_written_back() {
+        // `youtube_cookies_path` in settings.json pointing outside the data dir:
+        // used for runs, but yt-dlp's refreshed jar never replaces it.
+        let (mut cfg, dir) = temp_cfg();
+        let src = dir.join("elsewhere").join("browser-cookies.txt");
+        fs::create_dir_all(src.parent().unwrap()).unwrap();
+        fs::write(&src, SAMPLE).unwrap();
+        cfg.youtube_cookies_path = Some(src.clone());
+        cfg.youtube_cookies_from_env = false;
+        let jar = YtdlpCookies::prepare(&cfg).expect("copy");
+        fs::write(
+            jar.path(),
+            format!("{SAMPLE}.youtube.com\tTRUE\t/\tTRUE\t0\tNEW\t1\n"),
+        )
+        .unwrap();
+        assert!(!jar.write_back());
+        assert_eq!(fs::read_to_string(&src).unwrap(), SAMPLE);
+        drop(jar);
+        let _ = fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn upload_and_clear_wait_for_a_write_back_in_progress() {
+        // The stored file is only written under the write-back lock.
+        let (cfg, dir) = temp_cfg();
+        let dest = cfg.default_youtube_cookies_path();
+        let guard = write_lock();
+        let d = dest.clone();
+        let t = std::thread::spawn(move || store_upload(&d, SAMPLE.as_bytes()).unwrap());
+        std::thread::sleep(Duration::from_millis(50));
+        assert!(!dest.exists(), "upload waited for the lock");
+        drop(guard);
+        t.join().unwrap();
+        assert_eq!(fs::read_to_string(&dest).unwrap(), SAMPLE);
+        remove_stored(&dest);
+        assert!(!dest.exists());
         let _ = fs::remove_dir_all(&dir);
     }
 

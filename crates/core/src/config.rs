@@ -493,7 +493,7 @@ impl AppConfig {
         crate::ytdlp_cookies::check_cookie_text(text).map_err(|e| anyhow::anyhow!(e.message()))?;
         let dest = self.default_youtube_cookies_path();
         // Credentials: owner-only (0600), replaced atomically.
-        crate::ytdlp_cookies::write_private_atomic(&dest, bytes)?;
+        crate::ytdlp_cookies::store_upload(&dest, bytes)?;
         self.youtube_cookies_path = Some(dest.clone());
         let mut s = self.read_persisted();
         s.youtube_cookies_path = Some(dest.clone());
@@ -507,11 +507,11 @@ impl AppConfig {
         }
         if let Some(p) = self.youtube_cookies_path.take() {
             if p == self.default_youtube_cookies_path() {
-                let _ = fs::remove_file(&p);
+                crate::ytdlp_cookies::remove_stored(&p);
             }
         }
         let default = self.default_youtube_cookies_path();
-        let _ = fs::remove_file(&default);
+        crate::ytdlp_cookies::remove_stored(&default);
         let mut s = self.read_persisted();
         s.youtube_cookies_path = None;
         self.write_persisted(&s)
