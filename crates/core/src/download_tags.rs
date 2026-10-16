@@ -535,7 +535,48 @@ pub fn square_cover(bytes: &[u8]) -> Result<Vec<u8>> {
 }
 
 /// Write `values` (and the cover, as the front picture) into `path`.
+///
+/// The tags go into a copy next to the file, which then replaces it: a
+/// write that fails halfway (disk full, a file lofty cannot rewrite) leaves
+/// the download as yt-dlp wrote it, and a scan running meanwhile reads
+/// either the old file or the tagged one, never a half-written one.
 pub fn write_tags(path: &Path, values: &TagValues, cover: Option<&[u8]>) -> Result<()> {
+    let name = path
+        .file_name()
+        .context("no file name")?
+        .to_string_lossy()
+        .into_owned();
+    let tmp = path.with_file_name(format!(".{name}.rekord-tags"));
+    // Left over by a pass that was cut short (hub stopped mid-write).
+    let _ = std::fs::remove_file(&tmp);
+    let res = (|| -> Result<()> {
+        let mut src =
+            std::fs::File::open(path).with_context(|| format!("open {}", path.display()))?;
+        let perms = src.metadata()?.permissions();
+        let mut dst = std::fs::OpenOptions::new()
+            .write(true)
+            .create_new(true)
+            .open(&tmp)
+            .with_context(|| format!("create {}", tmp.display()))?;
+        std::io::copy(&mut src, &mut dst).context("copy the download")?;
+        drop(dst);
+        drop(src);
+        let _ = std::fs::set_permissions(&tmp, perms);
+        write_tags_in_place(&tmp, values, cover)?;
+        // Write access: Windows refuses to flush a read-only handle.
+        std::fs::OpenOptions::new()
+            .write(true)
+            .open(&tmp)?
+            .sync_all()?;
+        std::fs::rename(&tmp, path).with_context(|| format!("replace {}", path.display()))
+    })();
+    if res.is_err() {
+        let _ = std::fs::remove_file(&tmp);
+    }
+    res
+}
+
+fn write_tags_in_place(path: &Path, values: &TagValues, cover: Option<&[u8]>) -> Result<()> {
     let mut tagged = Probe::open(path)
         .with_context(|| format!("open {}", path.display()))?
         .guess_file_type()?
@@ -1008,6 +1049,59 @@ mod tests {
         let out = image::load_from_memory(&square_cover(&big).unwrap()).unwrap();
         assert_eq!((out.width(), out.height()), (COVER_MAX, COVER_MAX));
         assert!(square_cover(b"not an image").is_err());
+    }
+
+    #[test]
+    fn tags_replace_the_file_whole_and_a_failure_leaves_it_alone() {
+        let dir = std::env::temp_dir().join(format!("rekord-tagw-{}", uuid::Uuid::new_v4()));
+        std::fs::create_dir_all(&dir).unwrap();
+        let fixtures = Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/fixtures/embedded");
+        let song = dir.join("01 - Song.m4a");
+        std::fs::copy(fixtures.join("silent.m4a"), &song).unwrap();
+        let leftovers = || {
+            std::fs::read_dir(&dir)
+                .unwrap()
+                .flatten()
+                .map(|e| e.file_name().to_string_lossy().into_owned())
+                .filter(|n| n.contains("rekord-tags"))
+                .collect::<Vec<_>>()
+        };
+        #[cfg(unix)]
+        let inode = |p: &Path| std::os::unix::fs::MetadataExt::ino(&std::fs::metadata(p).unwrap());
+        #[cfg(unix)]
+        let before = inode(&song);
+        // A stale copy from an interrupted pass does not block the next one.
+        std::fs::write(dir.join(".01 - Song.m4a.rekord-tags"), b"stale").unwrap();
+
+        let values = TagValues {
+            title: Some("Song".into()),
+            album: Some("Album".into()),
+            track: Some(1),
+            ..Default::default()
+        };
+        write_tags(&song, &values, None).unwrap();
+        let read = crate::embedded::tags::read_file(
+            &song,
+            crate::embedded::tags::ReadRequest {
+                tags: true,
+                picture: false,
+                properties: false,
+            },
+        );
+        assert_eq!(read.tags.title.as_deref(), Some("Song"));
+        assert_eq!(read.tags.album.as_deref(), Some("Album"));
+        assert!(leftovers().is_empty(), "{:?}", leftovers());
+        // Replaced by a new file, not rewritten in place.
+        #[cfg(unix)]
+        assert_ne!(inode(&song), before);
+
+        // Not audio lofty can write: the file stays byte for byte.
+        let broken = dir.join("02 - Broken.m4a");
+        std::fs::write(&broken, b"not really an m4a file").unwrap();
+        assert!(write_tags(&broken, &values, None).is_err());
+        assert_eq!(std::fs::read(&broken).unwrap(), b"not really an m4a file");
+        assert!(leftovers().is_empty(), "{:?}", leftovers());
+        std::fs::remove_dir_all(&dir).unwrap();
     }
 
     #[test]
