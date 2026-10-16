@@ -609,17 +609,14 @@ async fn tag_downloads(
     let kind = req.kind.clone();
     let ffmpeg = toolchain.ffmpeg.clone();
     let db = state.db.clone();
-    let client = reqwest::Client::builder()
-        .user_agent("RE-KORD/5.2 (studio)")
-        .timeout(Duration::from_secs(20))
-        .build()
-        .ok();
+    // Redirects stay on the thumbnail hosts (see `download_tags`).
+    let client = download_tags::thumbnail_client();
     let rt = tokio::runtime::Handle::current();
     let report = tokio::task::spawn_blocking(move || {
         let has_cover = |folder: &str| db.album_has_cover_by_folder(folder).unwrap_or(false);
         let fetch = |url: &str| -> Option<Vec<u8>> {
             let client = client.as_ref()?;
-            rt.block_on(fetch_thumbnail(client, url))
+            rt.block_on(download_tags::fetch_thumbnail(client, url))
         };
         download_tags::finish_downloads(
             &download_tags::FinishJob {
@@ -652,19 +649,6 @@ async fn tag_downloads(
     event["type"] = json!("tagged");
     job.publish(event);
     report
-}
-
-/// One thumbnail, at most [`download_tags::THUMB_MAX_BYTES`].
-async fn fetch_thumbnail(client: &reqwest::Client, url: &str) -> Option<Vec<u8>> {
-    let mut resp = client.get(url).send().await.ok()?.error_for_status().ok()?;
-    let mut body = Vec::new();
-    while let Some(chunk) = resp.chunk().await.ok()? {
-        if body.len() + chunk.len() > download_tags::THUMB_MAX_BYTES {
-            return None;
-        }
-        body.extend_from_slice(&chunk);
-    }
-    (!body.is_empty()).then_some(body)
 }
 
 /// Re-index only the folder a download wrote to; returns the new index

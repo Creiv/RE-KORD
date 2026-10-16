@@ -70,6 +70,12 @@ const THUMB_HOSTS: &[&str] = &[
 /// Largest thumbnail accepted.
 pub const THUMB_MAX_BYTES: usize = 8 * 1024 * 1024;
 
+/// Largest thumbnail edge decoded (YouTube's biggest is 1920 px).
+const THUMB_MAX_EDGE: u32 = 8192;
+
+/// Memory one thumbnail decode may take.
+const THUMB_MAX_ALLOC: u64 = 128 * 1024 * 1024;
+
 /// `--print` value for the metadata line.
 pub fn meta_print_arg() -> String {
     format!("after_move:{META_MARKER} %(.{{{META_FIELDS}}})j")
@@ -99,14 +105,67 @@ pub fn thumbnail_urls(meta: &Value) -> Vec<String> {
 }
 
 fn is_thumbnail_url(raw: &str) -> bool {
-    let Ok(u) = url::Url::parse(raw) else {
-        return false;
-    };
+    url::Url::parse(raw).is_ok_and(|u| thumbnail_url_allowed(&u))
+}
+
+/// An https URL on one of [`THUMB_HOSTS`] (or a subdomain).
+pub fn thumbnail_url_allowed(u: &url::Url) -> bool {
     let host = u.host_str().unwrap_or("").to_ascii_lowercase();
     u.scheme() == "https"
         && THUMB_HOSTS
             .iter()
             .any(|h| host == *h || host.ends_with(&format!(".{h}")))
+}
+
+/// Redirects most thumbnail hosts use (a CDN hop or two), not more.
+const THUMB_MAX_REDIRECTS: usize = 5;
+
+/// Redirect policy of the thumbnail client: every hop must pass `allow`
+/// (reqwest's default would follow a redirect to any host, the private
+/// network included).
+pub fn thumbnail_redirect_policy<F>(allow: F) -> reqwest::redirect::Policy
+where
+    F: Fn(&url::Url) -> bool + Send + Sync + 'static,
+{
+    reqwest::redirect::Policy::custom(move |attempt| {
+        if attempt.previous().len() >= THUMB_MAX_REDIRECTS {
+            attempt.error("too many redirects")
+        } else if allow(attempt.url()) {
+            attempt.follow()
+        } else {
+            attempt.error("redirect outside the thumbnail hosts")
+        }
+    })
+}
+
+/// HTTP client for thumbnails: redirects stay on [`THUMB_HOSTS`].
+pub fn thumbnail_client() -> Option<reqwest::Client> {
+    reqwest::Client::builder()
+        .user_agent("RE-KORD/5.2 (studio)")
+        .connect_timeout(std::time::Duration::from_secs(10))
+        .timeout(std::time::Duration::from_secs(20))
+        .redirect(thumbnail_redirect_policy(thumbnail_url_allowed))
+        .build()
+        .ok()
+}
+
+/// One thumbnail, at most [`THUMB_MAX_BYTES`]; `None` on any failure.
+pub async fn fetch_thumbnail(client: &reqwest::Client, url: &str) -> Option<Vec<u8>> {
+    let mut resp = client.get(url).send().await.ok()?.error_for_status().ok()?;
+    if resp
+        .content_length()
+        .is_some_and(|n| n > THUMB_MAX_BYTES as u64)
+    {
+        return None;
+    }
+    let mut body = Vec::new();
+    while let Some(chunk) = resp.chunk().await.ok()? {
+        if body.len() + chunk.len() > THUMB_MAX_BYTES {
+            return None;
+        }
+        body.extend_from_slice(&chunk);
+    }
+    (!body.is_empty()).then_some(body)
 }
 
 /// Values written into one file.
@@ -441,7 +500,20 @@ pub fn tag_values(meta: &Value, rel_file: &str, kind: &str) -> TagValues {
 /// JPEG. Square JPEG art within the limit is returned untouched.
 pub fn square_cover(bytes: &[u8]) -> Result<Vec<u8>> {
     let format = image::guess_format(bytes).context("unknown image format")?;
-    let img = image::load_from_memory_with_format(bytes, format).context("decode thumbnail")?;
+    if !matches!(
+        format,
+        image::ImageFormat::Jpeg | image::ImageFormat::Png | image::ImageFormat::WebP
+    ) {
+        bail!("unsupported thumbnail format {format:?}");
+    }
+    // A small file can declare a huge canvas: bounded before decoding.
+    let mut reader = image::ImageReader::with_format(std::io::Cursor::new(bytes), format);
+    let mut limits = image::Limits::default();
+    limits.max_image_width = Some(THUMB_MAX_EDGE);
+    limits.max_image_height = Some(THUMB_MAX_EDGE);
+    limits.max_alloc = Some(THUMB_MAX_ALLOC);
+    reader.limits(limits);
+    let img = reader.decode().context("decode thumbnail")?;
     let (w, h) = (img.width(), img.height());
     if w == 0 || h == 0 {
         bail!("empty thumbnail");
@@ -936,6 +1008,59 @@ mod tests {
         let out = image::load_from_memory(&square_cover(&big).unwrap()).unwrap();
         assert_eq!((out.width(), out.height()), (COVER_MAX, COVER_MAX));
         assert!(square_cover(b"not an image").is_err());
+    }
+
+    #[test]
+    fn oversized_canvases_are_not_decoded() {
+        // Tiny file, huge canvas: refused before the pixels are allocated.
+        let wide = encode(
+            image::DynamicImage::ImageRgb8(image::RgbImage::new(THUMB_MAX_EDGE + 1, 1)),
+            image::ImageFormat::Png,
+        );
+        assert!(wide.len() < 64 * 1024);
+        assert!(square_cover(&wide).is_err());
+    }
+
+    #[tokio::test]
+    async fn thumbnail_redirects_stay_on_allowed_hosts() {
+        use axum::response::Redirect;
+        use axum::routing::get;
+        let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
+        let addr = listener.local_addr().unwrap();
+        let evil = format!("http://127.0.0.1:{}/private", addr.port());
+        let app = axum::Router::new()
+            .route("/ok/img", get(|| async { vec![1u8, 2, 3] }))
+            .route("/ok/hop", get(|| async { Redirect::temporary("/ok/img") }))
+            .route(
+                "/ok/loop",
+                get(|| async { Redirect::temporary("/ok/loop") }),
+            )
+            .route(
+                "/ok/out",
+                get(move || async move { Redirect::temporary(&evil) }),
+            )
+            .route("/private", get(|| async { "secret" }));
+        tokio::spawn(async move {
+            let _ = axum::serve(listener, app).await;
+        });
+
+        let client = reqwest::Client::builder()
+            .redirect(thumbnail_redirect_policy(|u| u.path().starts_with("/ok/")))
+            .build()
+            .unwrap();
+        let url = |p: &str| format!("http://{addr}{p}");
+        assert_eq!(
+            fetch_thumbnail(&client, &url("/ok/hop")).await,
+            Some(vec![1, 2, 3])
+        );
+        assert_eq!(fetch_thumbnail(&client, &url("/ok/out")).await, None);
+        assert_eq!(fetch_thumbnail(&client, &url("/ok/loop")).await, None);
+
+        // The hub's own client: a hop to a non-thumbnail host (here the
+        // loopback, plain http) is refused.
+        let hub = thumbnail_client().unwrap();
+        assert_eq!(fetch_thumbnail(&hub, &url("/ok/out")).await, None);
+        assert_eq!(fetch_thumbnail(&hub, &url("/ok/hop")).await, None);
     }
 
     #[test]
