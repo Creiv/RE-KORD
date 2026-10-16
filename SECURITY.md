@@ -103,7 +103,7 @@ changes on every start.
 - Artwork downloads from metadata providers are checked against server-side request
   forgery (no private or loopback addresses).
 - Request bodies are size-limited (2 MiB by default, 512 MiB for restores).
-- Bundled third-party tools (yt-dlp, cloudflared, ffmpeg) are pinned and verified against
+- Bundled third-party tools (yt-dlp, QuickJS-ng, cloudflared, ffmpeg) are pinned and verified against
   SHA-256 hashes in `scripts/third-party.sha256`; yt-dlp self-updates are verified against
   the release's checksums.
 

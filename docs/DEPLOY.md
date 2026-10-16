@@ -50,7 +50,8 @@ directory. When no client bundle is found, the admin panel also answers on `/`.
 | `REKORD_CLOUDFLARED_BIN` | | cloudflared executable |
 | `REKORD_TOOLS_DIR` | | Extra folder searched for the three tools |
 | `REKORD_YTDLP_COOKIES` | | YouTube cookies file for yt-dlp; locks the setting in the admin panel |
-| `REKORD_YTDLP_JS_RUNTIME` | auto | JavaScript runtime passed to yt-dlp (`deno:<path>`, `node:<path>`, or `none`) |
+| `REKORD_YTDLP_JS_RUNTIME` | auto | JavaScript runtime passed to yt-dlp: `<name>:<path>` (`quickjs`, `deno`, `node`, `bun`), an absolute path, a name looked up on `PATH`, or `none` |
+| `REKORD_YTDLP_JS_BIN` | | The bundled runtime (`qjs`); set by `run.sh`, the desktop app and the Docker image |
 | `REKORD_DISCOGS_TOKEN` | | Discogs personal token; locks the setting in the admin panel |
 | `LASTFM_API_KEY` | | Adds Last.fm biographies to curiosità searches |
 | `THEAUDIODB_API_KEY` | public test key | TheAudioDB key |
@@ -64,10 +65,12 @@ directory. When no client bundle is found, the admin panel also answers on `/`.
 |---|---|---|
 | ffmpeg | Cast transcodes, FLAC copies of WMA/AIFF/ALAC, durations of WMA/WebM, previews | Recommended |
 | yt-dlp | Studio downloads and Discover previews | Optional |
+| QuickJS-ng (`qjs`) | The JavaScript runtime yt-dlp needs for YouTube | With yt-dlp |
 | cloudflared | The remote-access tunnel | Optional |
 
-The Server packages and the Docker image include all three, downloaded from the official
-releases at pinned versions and checked against `scripts/third-party.sha256`. Each tool is
+The Server packages and the Docker image include all of them, downloaded from the official
+releases at pinned versions and checked against `scripts/third-party.sha256` (QuickJS-ng's
+MIT license is in `bin/qjs-LICENSE.txt`, ffmpeg's LGPL in `bin/ffmpeg-LICENSE.txt`). Each tool is
 looked up in the configured path, the bundled copies and `PATH`; when several exist the
 newest version wins. The admin panel's *Diagnostics* page and `GET /api/v1/diagnostics`
 show which copy is in use. The details are in [API.md](API.md#tools-yt-dlp-ffmpeg-cloudflared).
@@ -75,6 +78,17 @@ show which copy is in use. The details are in [API.md](API.md#tools-yt-dlp-ffmpe
 yt-dlp can be updated without reinstalling (client: *Settings › System › Update yt-dlp*,
 or `POST /api/v1/tools/ytdlp/update`): the hub downloads the latest official release,
 verifies its checksum and installs it in `<data dir>/tools/`.
+
+YouTube refuses yt-dlp without a JavaScript runtime ("The page needs to be reloaded").
+The hub picks one in this order and passes it as `--js-runtimes <name>:<path>` to every
+yt-dlp run: `REKORD_YTDLP_JS_RUNTIME`; the bundled `qjs` (`REKORD_YTDLP_JS_BIN`, or `qjs`
+next to the bundled tools or `YTDLP_PATH`); deno, node, bun or qjs on `PATH`; then
+`~/.deno/bin/deno`, `~/.bun/bin/bun`, nvm's newest node, `/usr/local/bin` and
+`/opt/homebrew/bin` (Windows: `%USERPROFILE%\.deno\bin`, `%USERPROFILE%\.bun\bin`,
+`%ProgramFiles%\nodejs`). Runtimes from `PATH` or those folders must meet yt-dlp's
+minimum version (Deno 2.3, Node.js 22, Bun 1.2.11). *Diagnostics* shows the choice
+(`binaries.jsRuntime`). QuickJS is slower than Deno or Node (about 7 s against 3 s per
+YouTube video on a laptop) but is a 2.5 MB static file.
 
 ## Linux, systemd
 
@@ -125,10 +139,10 @@ or by hand from the Actions tab. Tags: `latest`, the version (`5.1.0`) and the r
 in `docker-compose.yml` and add `--build`.
 
 The multi-stage `Dockerfile` builds the UIs with pnpm and `rekord-server` in release mode,
-fetches yt-dlp and cloudflared at pinned versions with checksum verification, and runs on
+fetches yt-dlp, QuickJS-ng and cloudflared at pinned versions with checksum verification, and runs on
 `debian:bookworm-slim` with ffmpeg and tini. The image runs as a non-root user (uid
 10001), declares the volumes `/data` and `/music`, and has a `HEALTHCHECK` on
-`/api/v1/health`. The build arguments `YTDLP_VERSION` and `CLOUDFLARED_VERSION` override
+`/api/v1/health`. The build arguments `YTDLP_VERSION`, `QJS_VERSION` and `CLOUDFLARED_VERSION` override
 the pinned versions. `amd64` and `arm64` are supported.
 
 `docker-compose.yml` settings: `REKORD_PORT`, `REKORD_DATA_HOST`, `REKORD_MUSIC_HOST`,
@@ -175,7 +189,7 @@ pnpm dev:client:server-flavor
 - The admin panel and the web client are bundled as resources and served on `/admin` and
   `/`, so phones and browsers on the LAN can use the hub without installing anything.
 - The bundled `bin/` tools are picked up automatically unless `YTDLP_PATH`,
-  `REKORD_CLOUDFLARED_BIN` or `REKORD_FFMPEG` are already set.
+  `REKORD_YTDLP_JS_BIN`, `REKORD_CLOUDFLARED_BIN` or `REKORD_FFMPEG` are already set.
 - If port 7420 is taken (a standalone hub is already running), the embedded hub logs the
   error and the window connects to the existing hub.
 - Sleep prevention is set in the admin panel; `REKORD_PREVENT_SLEEP` works here too.

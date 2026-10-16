@@ -11,7 +11,7 @@ Each desktop download comes in two flavors:
 
 | Flavor | Contains | Use it on |
 |---|---|---|
-| **RE-KORD Server** | The client window plus an embedded hub, with yt-dlp, cloudflared and ffmpeg bundled | The computer that holds your music |
+| **RE-KORD Server** | The client window plus an embedded hub, with yt-dlp (and QuickJS-ng, its JavaScript engine for YouTube), cloudflared and ffmpeg bundled | The computer that holds your music |
 | **RE-KORD Client** | The client window only | Every other computer |
 
 The Server flavor is a complete RE-KORD on its own: the window is a client, and the hub it
@@ -66,7 +66,8 @@ application menu as **RE-KORD Server** and **RE-KORD**.
 ### Linux headless hub (with systemd)
 
 `RE-KORD-Server-5.1.0-linux-x64-headless.tar.gz` is the hub without a window: the
-`rekord-server` binary, the web client, the admin panel and the bundled tools in `bin/`.
+`rekord-server` binary, the web client, the admin panel and the bundled tools in `bin/`
+(yt-dlp, `qjs` for yt-dlp's YouTube checks, cloudflared, ffmpeg).
 
 Try it in place:
 
@@ -126,7 +127,7 @@ double-click it.
 ```
 RE-KORD Server\
   RE-KORD Server.exe
-  admin-ui\  client-ui\  bin\     (yt-dlp, cloudflared, ffmpeg)
+  admin-ui\  client-ui\  bin\     (yt-dlp, qjs, cloudflared, ffmpeg)
   README.txt
 ```
 
@@ -196,8 +197,8 @@ The variables can go in a `.env` file next to `docker-compose.yml`.
 - The container runs as uid **10001**. Make the host folders writable for it
   (`sudo chown -R 10001:10001 docker-data`), or set `user: "<uid>:<gid>"` in the compose
   file.
-- The image includes ffmpeg, yt-dlp and cloudflared, and has a health check on
-  `/api/v1/health`.
+- The image includes ffmpeg, yt-dlp (with QuickJS-ng as its JavaScript engine) and
+  cloudflared, and has a health check on `/api/v1/health`.
 - **Machine operations** (choosing the library path, scans, restores, the tunnel) are only
   accepted from the hub machine itself, and inside a container no request is local. Either
   run them from inside the container:

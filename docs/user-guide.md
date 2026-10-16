@@ -482,12 +482,25 @@ the button that caused it, with a copy in the log.
 The download keeps running on the hub if you leave the tab; come back to see its progress.
 The **"Log"** panel shows a summary of what was downloaded, already present or failed.
 
-The yt-dlp strip shows the version in use. YouTube changes often: when yt-dlp is old,
-**"Update yt-dlp"** installs the latest verified release on the hub. For age-restricted or
-members-only content, or when YouTube answers "Sign in to confirm you're not a bot", add
-YouTube cookies (*Settings › Library › Integrations*, or the admin panel's
-**Integrations**). When a download hits that sign-in or age check, the Download tab says
-so and links to Settings.
+The yt-dlp strip shows the version in use and the **JavaScript engine** yt-dlp runs
+YouTube's checks with (for example "JS engine QuickJS 0.17.0"). YouTube changes often:
+when yt-dlp is old, **"Update yt-dlp"** installs the latest verified release on the hub.
+For age-restricted or members-only content, or when YouTube answers "Sign in to confirm
+you're not a bot", add YouTube cookies (*Settings › Library › Integrations*, or the admin
+panel's **Integrations**). When a download hits that sign-in or age check, the Download
+tab says so and links to Settings.
+
+#### YouTube needs cookies and a JavaScript engine
+
+YouTube downloads need two things on the hub:
+
+- **YouTube cookies** (see below): without them YouTube often answers "Sign in to confirm
+  you're not a bot".
+- **A JavaScript engine for yt-dlp**: without one YouTube answers "The page needs to be
+  reloaded", even with valid cookies. The Server packages and the Docker image include
+  one (QuickJS-ng); otherwise the hub uses Deno, Node.js 22+ or Bun if installed, also from
+  `~/.deno`, `~/.bun`, nvm, `/usr/local/bin` or `/opt/homebrew/bin`. When there is none,
+  the yt-dlp strip warns "YouTube requires a JavaScript engine for yt-dlp".
 
 #### YouTube cookies
 
@@ -925,6 +938,7 @@ In Docker it is not available.
 | A track will not play | WMA, AIFF and ALAC need ffmpeg on the hub; **Diagnostics** shows whether it was found. |
 | Downloads fail with error 403 | **Update yt-dlp**; if it continues, add YouTube cookies. |
 | "YouTube asks to sign in: cookies are missing or expired" | Export fresh cookies from a private window and close it, then upload them (see [YouTube cookies](#youtube-cookies)). |
+| "The page needs to be reloaded" in the log, or "YouTube requires a JavaScript engine for yt-dlp" | yt-dlp has no JavaScript engine: use a Server package or the Docker image (they include QuickJS), or install Deno or Node.js 22+ on the hub (see [YouTube needs cookies and a JavaScript engine](#youtube-needs-cookies-and-a-javascript-engine)). |
 | No Cast button | Use the Android app, or Chrome over HTTPS (the tunnel) or `localhost`. |
 | "Only available from the hub's computer" | Do it on the hub computer, or turn on **Network › Machine operations › Also allow these operations remotely**. |
 | The desktop app cannot load music from a hub on another machine | See [the mixed-content note](upgrading-from-legacy.md#known-issue-desktop-apps-and-plain-http-hubs). |

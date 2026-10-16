@@ -7,6 +7,17 @@ one version number covers the hub, the clients and the packages.
 
 ### Fixed
 
+- **YouTube downloads work out of the box again.** YouTube now refuses yt-dlp unless it can
+  run JavaScript ("The page needs to be reloaded", or "Sign in to confirm you're not a bot"
+  even with cookies). The server packages and the Docker image now bundle **QuickJS-ng**
+  (`qjs`, MIT, about 2.5 MB) as yt-dlp's JavaScript runtime, and the hub passes it to every
+  yt-dlp run (downloads, track counts, previews, podcast pages). Without the bundled copy
+  the hub uses deno, node (22+) or bun from the PATH, and also finds those installed where
+  a desktop app's PATH does not look (`~/.deno/bin`, `~/.bun/bin`, nvm's newest node,
+  `/usr/local/bin`, `/opt/homebrew/bin`). The yt-dlp strip in Studio, *Settings › System*
+  and the admin panel's *Diagnostics* show the runtime in use, or warn when there is none;
+  the Studio sign-in hint says so too. `REKORD_YTDLP_JS_RUNTIME` still overrides the choice
+  (`none` turns it off).
 - **Android: play from the car or Bluetooth with the phone locked** (issue #99). A PLAY from
   the car, a headset or the lock screen now puts the media service in the foreground and
   takes the CPU and Wi-Fi locks at once, inside the window Android allows, and then hands

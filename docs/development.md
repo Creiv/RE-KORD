@@ -86,7 +86,7 @@ without extra configuration.
 | `pnpm build:client:server-flavor` | RE-KORD Server: client plus embedded hub |
 | `pnpm dev:client:server-flavor` | The same, in development mode |
 | `pnpm docker:build` | Builds the `rekord:<version>` image |
-| `pnpm fetch:tools` | Downloads verified yt-dlp, cloudflared and ffmpeg into `release/bin/<platform>/` |
+| `pnpm fetch:tools` | Downloads verified yt-dlp, QuickJS-ng (`qjs`), cloudflared and ffmpeg into `release/bin/<platform>/` |
 
 In debug builds the hub also looks for tools in `release/bin/<platform>/`, so after
 `pnpm fetch:tools` a development hub uses the same versions as the packages.
@@ -176,14 +176,15 @@ The underlying script is `scripts/pack.sh <linux|windows|android|all> [server|cl
 (`bash scripts/pack.sh --help`). Append options directly, without a `--` separator
 (`pnpm pack:linux:server --no-tools`):
 
-- `--no-tools`: server packages without yt-dlp, cloudflared and ffmpeg (the hub then uses
-  the copies on `PATH`).
+- `--no-tools`: server packages without yt-dlp, qjs, cloudflared and ffmpeg (the hub then
+  uses the copies on `PATH`).
 - `--native`: build with the local toolchain instead of Docker.
 
 How it works:
 
-- **Bundled tools.** Server packages include yt-dlp, cloudflared and ffmpeg (LGPL build),
-  downloaded from the official releases at pinned versions and verified against
+- **Bundled tools.** Server packages include yt-dlp, QuickJS-ng (`qjs`, MIT; yt-dlp's
+  JavaScript runtime for YouTube), cloudflared and ffmpeg (LGPL build), downloaded from
+  the official releases at pinned versions and verified against
   `scripts/third-party.sha256`.
 - **Docker builder.** Linux and Windows builds run inside
   `scripts/docker/builder.Dockerfile` (Ubuntu 24.04 with WebKitGTK, GStreamer and
