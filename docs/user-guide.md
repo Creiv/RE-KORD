@@ -340,8 +340,7 @@ Your hearted tracks, most played first, with **"Play favorites"**.
 ### Recent
 
 Your listening history, newest first, with **"Play recent"** and **"Clear history"**.
-Podcast episodes appear here only when [Podcasts & news](#podcasts--news) has **"Show in
-Recent"** on.
+Podcast episodes and radio are not part of it.
 
 ## Studio › Listen: lyrics, visualizers and the sleep timer
 
@@ -622,6 +621,12 @@ after it. **"+"** adds it to the queue instead; **"✓"** marks it as listened (
 A started episode resumes where you left it, and an episode heard to the end is marked
 listened, on every device of your account (the last 200 episodes are remembered).
 
+**From Home.** Tapping a show in the **"Podcasts & news"** card never starts its newest
+episode by itself: it opens that show's page, where you pick what to hear. If you left one
+of its episodes halfway, it first asks **"Continue "…"?"**: **"Continue"** plays it from
+where you stopped, **"Open the podcast"** goes to the show's page. A live station plays at
+once, and the episode currently playing just pauses or resumes.
+
 Live radio shows **LIVE** instead of a length and cannot be seeked. Episodes and radio
 never count as plays: they stay out of statistics, achievements, the library history,
 Smart Radio and Plectr, and crossfade is off around them. Favourites, exclusions and
@@ -630,10 +635,6 @@ the album / artist links of the dock do not apply to them. Visualizers work as u
 **Refreshing.** The hub fetches a source only when someone opens the card or the
 section, and reuses what it fetched for 30 minutes (**"Cache lifetime"** in the admin
 panel). **"Refresh"** asks again now. Nothing is checked in the background.
-
-**In Recent.** The switch **"Show in Recent"** in the Podcasts & news section adds a
-"Podcasts and news you listened to" list to *Recent* for your account. It is off by
-default.
 
 ## Settings
 

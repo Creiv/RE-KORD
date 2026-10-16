@@ -5,12 +5,30 @@ one version number covers the hub, the clients and the packages.
 
 ## Unreleased
 
+### Fixed
+
+- **Podcasts: "Update failed (Source unreachable)" after a refresh** (issue #99). A feed
+  answering "not modified" to the hub's conditional request (the usual answer when nothing
+  new is out, as with Apple Podcasts shows) was taken for a failure, so the card showed the
+  error while keeping the previous episodes. The hub now also retries a fetch hit by a
+  network hiccup, a timeout or a brief server error (twice, within the time a list waits),
+  finds the feed of an Apple Podcasts or Spreaker page from its address, and moves a source
+  saved as a yt-dlp page (because Apple's lookup failed when it was added) to its feed as
+  soon as that answers.
+
 ### Changed
 
 - **Docker image on the GitHub Container Registry**: `ghcr.io/creiv/re-kord` (amd64 and
   arm64, tags `latest`, the version and the release tag) is built and published at every
   release tag (thanks to @303inmyheart for the workflow). `docker-compose.yml` now pulls it,
   so the compose file alone is enough; building locally is still possible.
+- **Podcasts on Home no longer start by themselves** (issue #99). Tapping a show in the
+  *Podcasts & news* card opens its page; if you left one of its episodes halfway, it asks
+  *Continue "…"?* with **Continue** (from where you left it) and **Open the podcast**. Live
+  stations still play at once, and the play buttons of episode rows still play.
+- **"Show in Recent" removed** (issue #99): podcast listens no longer appear in *Recent*,
+  and the podcasts "⋯" menu, which only held that switch, is gone (**Refresh** is always a
+  button).
 
 ## 5.1.0 — 2026-10-09
 
