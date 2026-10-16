@@ -1,16 +1,17 @@
 # Builds the hub image for amd64 and arm64 and publishes it to the GitHub
 # Container Registry (ghcr.io/creiv/re-kord), used by docker-compose.yml.
 #
-# Runs only on release tags (v*), plus a manual run from the Actions tab
-# (e.g. to publish an image for a tag pushed before this workflow existed).
-# The arm64 half is built under QEMU, which is slow: hence not on every push.
+# Runs when a GitHub release becomes a full release (published as one, or a
+# pre-release promoted), plus a manual run from the Actions tab (e.g. to
+# publish an image for an older tag). Pre-releases (client previews) never
+# move :latest. The arm64 half is built under QEMU, which is slow: hence not
+# on every push.
 
 name: Build Docker Image
 
 on:
-  push:
-    tags:
-      - "v*"
+  release:
+    types: [released]
   workflow_dispatch:
 
 permissions:
