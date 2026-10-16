@@ -11,9 +11,9 @@ one version number covers the hub, the clients and the packages.
   run JavaScript ("The page needs to be reloaded", or "Sign in to confirm you're not a bot"
   even with cookies). The server packages and the Docker image now bundle **QuickJS-ng**
   (`qjs`, MIT, about 2.5 MB) as yt-dlp's JavaScript runtime, and the hub passes it to every
-  yt-dlp run (downloads, track counts, previews, podcast pages). Without the bundled copy
-  the hub uses deno, node (22+) or bun from the PATH, and also finds those installed where
-  a desktop app's PATH does not look (`~/.deno/bin`, `~/.bun/bin`, nvm's newest node,
+  yt-dlp run (downloads, track counts, previews, podcast pages). A deno, node (22+) or bun
+  already installed is preferred (about twice as fast), also found where a desktop app's
+  PATH does not look (`~/.deno/bin`, `~/.bun/bin`, nvm's newest node,
   `/usr/local/bin`, `/opt/homebrew/bin`). The yt-dlp strip in Studio, *Settings › System*
   and the admin panel's *Diagnostics* show the runtime in use, or warn when there is none;
   the Studio sign-in hint says so too. `REKORD_YTDLP_JS_RUNTIME` still overrides the choice

@@ -81,11 +81,12 @@ verifies its checksum and installs it in `<data dir>/tools/`.
 
 YouTube refuses yt-dlp without a JavaScript runtime ("The page needs to be reloaded").
 The hub picks one in this order and passes it as `--js-runtimes <name>:<path>` to every
-yt-dlp run: `REKORD_YTDLP_JS_RUNTIME`; the bundled `qjs` (`REKORD_YTDLP_JS_BIN`, or `qjs`
-next to the bundled tools or `YTDLP_PATH`); deno, node, bun or qjs on `PATH`; then
-`~/.deno/bin/deno`, `~/.bun/bin/bun`, nvm's newest node, `/usr/local/bin` and
-`/opt/homebrew/bin` (Windows: `%USERPROFILE%\.deno\bin`, `%USERPROFILE%\.bun\bin`,
-`%ProgramFiles%\nodejs`). Runtimes from `PATH` or those folders must meet yt-dlp's
+yt-dlp run: `REKORD_YTDLP_JS_RUNTIME`; deno, node or bun on `PATH`; then deno, bun or node
+in `~/.deno/bin`, `~/.bun/bin`, nvm's newest node, `/usr/local/bin` and `/opt/homebrew/bin`
+(Windows: `%USERPROFILE%\.deno\bin`, `%USERPROFILE%\.bun\bin`, `%ProgramFiles%\nodejs`);
+then the bundled `qjs` (`REKORD_YTDLP_JS_BIN`, or `qjs` next to the bundled tools or
+`YTDLP_PATH`); finally any other `qjs`. An installed runtime comes first because it is
+faster; the bundled QuickJS is the fallback that is always there. Runtimes from `PATH` or those folders must meet yt-dlp's
 minimum version (Deno 2.3, Node.js 22, Bun 1.2.11). *Diagnostics* shows the choice
 (`binaries.jsRuntime`). QuickJS is slower than Deno or Node (about 7 s against 3 s per
 YouTube video on a laptop) but is a 2.5 MB static file.

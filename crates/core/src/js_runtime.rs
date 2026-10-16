@@ -6,17 +6,21 @@
 //! a desktop app launched from the menu does not see runtimes installed in a
 //! shell profile (nvm, deno, bun), so common install locations are probed too.
 //!
-//! Lookup order (the first usable one wins):
+//! Lookup order (the first usable one wins). A recent deno / node / bun already
+//! installed is preferred because it solves the challenges about twice as fast
+//! as QuickJS (~3 s against ~7 s per video); the bundled QuickJS is the
+//! always-available fallback:
 //!
 //! 1. `REKORD_YTDLP_JS_RUNTIME`: `none` / `0` / `off` disables it; otherwise
 //!    a `name:path` pair, an absolute path or a bare name looked up on PATH;
-//! 2. the bundled runtime: `REKORD_YTDLP_JS_BIN`, then `qjs` (or `deno`) in the
+//! 2. deno, node or bun on PATH;
+//! 3. deno, bun or node in common install locations missing from a GUI PATH:
+//!    `~/.deno/bin`, `~/.bun/bin`, nvm's newest node, `/usr/local/bin`,
+//!    `/opt/homebrew/bin` (Windows: `%USERPROFILE%\.deno\bin`,
+//!    `%USERPROFILE%\.bun\bin`, `%ProgramFiles%\nodejs`);
+//! 4. the bundled runtime: `REKORD_YTDLP_JS_BIN`, then `qjs` (or `deno`) in the
 //!    folders of the bundled tools and next to `YTDLP_PATH`;
-//! 3. deno, node, bun or qjs on PATH;
-//! 4. common install locations missing from a GUI PATH: `~/.deno/bin`,
-//!    `~/.bun/bin`, nvm's newest node, `/usr/local/bin`, `/opt/homebrew/bin`
-//!    (Windows: `%USERPROFILE%\.deno\bin`, `%USERPROFILE%\.bun\bin`,
-//!    `%ProgramFiles%\nodejs`).
+//! 5. a `qjs` on PATH or in those common locations.
 //!
 //! Runtimes found on PATH or in common locations must run and meet yt-dlp's
 //! minimum version (an old system node is skipped); the explicit setting is
@@ -227,40 +231,51 @@ impl Lookup {
 
     /// Candidates after the setting, in priority order (existing files only).
     fn candidates(&self) -> Vec<(&'static str, PathBuf, &'static str)> {
-        let mut out: Vec<(&'static str, PathBuf, &'static str)> = Vec::new();
-        if let Some(p) = &self.bundled_bin {
-            out.push((kind_for_file(p).unwrap_or("quickjs"), p.clone(), "bundled"));
-        }
-        for dir in &self.bundled_dirs {
-            for (name, stem) in [("quickjs", "qjs"), ("deno", "deno")] {
-                out.push((name, dir.join(self.exe(stem)), "bundled"));
+        // Installed fast runtimes first, then the bundled one, then any other qjs.
+        let mut fast: Vec<(&'static str, PathBuf, &'static str)> = Vec::new();
+        let mut slow: Vec<(&'static str, PathBuf, &'static str)> = Vec::new();
+        let mut push = |name: &'static str, p: PathBuf, source: &'static str| {
+            if name == "quickjs" {
+                slow.push((name, p, source));
+            } else {
+                fast.push((name, p, source));
             }
-        }
+        };
         for (name, stem) in KINDS {
             if let Some(p) = self.which(stem) {
-                out.push((name, p, "path"));
+                push(name, p, "path");
             }
         }
         if let Some(home) = &self.home {
-            out.push((
+            push(
                 "deno",
                 home.join(".deno").join("bin").join(self.exe("deno")),
                 "common",
-            ));
-            out.push((
+            );
+            push(
                 "bun",
                 home.join(".bun").join("bin").join(self.exe("bun")),
                 "common",
-            ));
+            );
         }
         for p in self.nvm_nodes() {
-            out.push(("node", p, "common"));
+            push("node", p, "common");
         }
         for dir in &self.extra_dirs {
             for (name, stem) in KINDS {
-                out.push((name, dir.join(self.exe(stem)), "common"));
+                push(name, dir.join(self.exe(stem)), "common");
             }
         }
+        let mut bundled: Vec<(&'static str, PathBuf, &'static str)> = Vec::new();
+        if let Some(p) = &self.bundled_bin {
+            bundled.push((kind_for_file(p).unwrap_or("quickjs"), p.clone(), "bundled"));
+        }
+        for dir in &self.bundled_dirs {
+            for (name, stem) in [("quickjs", "qjs"), ("deno", "deno")] {
+                bundled.push((name, dir.join(self.exe(stem)), "bundled"));
+            }
+        }
+        let out: Vec<_> = fast.into_iter().chain(bundled).chain(slow).collect();
         let mut seen = std::collections::HashSet::new();
         out.into_iter()
             .filter(|(_, p, _)| p.is_file())
@@ -541,16 +556,22 @@ mod tests {
             ..base.clone()
         };
         assert_eq!(pick(&name), Some(("node".into(), node.clone(), "env")));
-        // A setting pointing at nothing falls back to the lookup.
+        // A setting pointing at nothing falls back to the lookup: the
+        // installed node first, the bundled QuickJS without it.
         let missing = Lookup {
             setting: Some("bun".into()),
             ..base.clone()
         };
-        assert_eq!(pick(&missing), Some(("quickjs".into(), qjs, "bundled")));
+        assert_eq!(pick(&missing), Some(("node".into(), node, "path")));
+        let no_node = Lookup {
+            path_var: Some(OsString::new()),
+            ..missing
+        };
+        assert_eq!(pick(&no_node), Some(("quickjs".into(), qjs, "bundled")));
     }
 
     #[test]
-    fn bundled_before_path_before_common() {
+    fn installed_fast_runtimes_before_bundled_qjs() {
         let s = Scratch::new();
         let bundled = s.file("pkg/qjs");
         let env_bin = s.file("elsewhere/qjs");
@@ -564,15 +585,17 @@ mod tests {
             home: Some(s.0.join("home")),
             ..Default::default()
         };
+        // An installed deno (preferred over node) beats the bundled QuickJS.
+        assert_eq!(pick(&l), Some(("deno".into(), path_deno.clone(), "path")));
+        // Off the GUI PATH, the common locations are still found first.
+        l.path_var = Some(OsString::new());
+        assert_eq!(pick(&l), Some(("deno".into(), home_deno, "common")));
+        // Nothing installed: the bundled runtime, the explicit file first.
+        l.home = None;
         assert_eq!(pick(&l), Some(("quickjs".into(), env_bin, "bundled")));
         l.bundled_bin = None;
         assert_eq!(pick(&l), Some(("quickjs".into(), bundled, "bundled")));
-        l.bundled_dirs.clear();
-        // deno is preferred over node on PATH.
-        assert_eq!(pick(&l), Some(("deno".into(), path_deno, "path")));
-        l.path_var = Some(OsString::new());
-        assert_eq!(pick(&l), Some(("deno".into(), home_deno, "common")));
-        let _ = path_node;
+        let _ = (path_node, path_deno);
     }
 
     #[test]
