@@ -553,6 +553,8 @@
     right: 0;
     bottom: 0;
     left: var(--rk-side-w, 0px);
+    /* Between the side rail and the right edge (100% would overflow by the rail). */
+    width: auto;
     z-index: calc(var(--rk-z-player) - 1);
     box-sizing: border-box;
     border-radius: 0;
