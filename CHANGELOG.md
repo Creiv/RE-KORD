@@ -28,6 +28,20 @@ one version number covers the hub, the clients and the packages.
   count, preview or podcast lookup that is abandoned (dialog closed, timeout) now stops
   yt-dlp itself: the PyInstaller launcher was killed but yt-dlp went on as an orphan and
   could leave its copy of the cookies behind.
+- **YouTube cookies are wiped, not just deleted.** *Remove cookies* (Settings and the admin
+  panel), the per-run copies handed to yt-dlp, and the previous file replaced by an upload, a
+  write-back or a backup restore are now overwritten with zeros and synced before they are
+  unlinked, since they hold a live account session. Best effort: hard links and symlink
+  targets are left alone, and a read-only location only gets the delete attempt.
+- **Plurals in counted strings** (it/en/de): "1 album · 1 brani" under an artist, "Scaricare
+  i brani…" when confirming a single track, "1 cookies", "1 rimossi" and similar now agree
+  with the count, in the client and in the admin panel (`.one` / `.other` keys picked with
+  `Intl.PluralRules`; the admin panel gets the same `tp()` helper as the client).
+- **Studio mode switches**: the *Classico / Esplora* and *Locale / Web* labels are clickable
+  (each picks its own mode) and keyboard accessible, not only the small switch between them.
+- **Admin › Integrations no longer shows the Discogs token as configured on a fresh hub**:
+  the hub reported Discogs as configured whether or not a token was set; now only a token
+  from the environment or saved in the panel counts.
 - **Android: play from the car or Bluetooth with the phone locked** (issue #99). A PLAY from
   the car, a headset or the lock screen now puts the media service in the foreground and
   takes the CPU and Wi-Fi locks at once, inside the window Android allows, and then hands
