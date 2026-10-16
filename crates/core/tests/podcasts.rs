@@ -135,6 +135,7 @@ struct Fx {
     feed_hits: AtomicUsize,
     not_modified: AtomicUsize,
     audio_hits: AtomicUsize,
+    lookup_hits: AtomicUsize,
 }
 
 const AUDIO_LEN: usize = 40_000;
@@ -279,6 +280,19 @@ async fn plain_page() -> Response {
         .into_response()
 }
 
+/// iTunes lookup stand-in: briefly unavailable on the first call.
+async fn lookup(axum::extract::State(fx): axum::extract::State<Arc<Fx>>) -> Response {
+    if fx.lookup_hits.fetch_add(1, Ordering::SeqCst) == 0 {
+        return StatusCode::SERVICE_UNAVAILABLE.into_response();
+    }
+    let port = fx.port.load(Ordering::SeqCst);
+    axum::Json(json!({
+        "resultCount": 1,
+        "results": [{ "feedUrl": format!("http://127.0.0.1:{port}/feed.xml") }]
+    }))
+    .into_response()
+}
+
 async fn start_fixture() -> (SocketAddr, Arc<Fx>) {
     let fx = Arc::new(Fx::default());
     let app = Router::new()
@@ -290,6 +304,7 @@ async fn start_fixture() -> (SocketAddr, Arc<Fx>) {
         .route("/hls.m3u8", get(hls))
         .route("/page.html", get(page))
         .route("/plain.html", get(plain_page))
+        .route("/lookup", get(lookup))
         .with_state(fx.clone());
     let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
     let addr = listener.local_addr().unwrap();
@@ -307,6 +322,17 @@ fn hub(tag: &str) -> Hub {
     let hub = Hub::new(tag);
     hub.state.podcasts.set_policy_for_tests(NetPolicy {
         extra_allowed: vec!["127.0.0.1".parse().unwrap()],
+        ..Default::default()
+    });
+    hub
+}
+
+/// Same, with the iTunes lookup API answered by the fixture.
+fn hub_with_lookup(tag: &str, addr: SocketAddr) -> Hub {
+    let hub = hub(tag);
+    hub.state.podcasts.set_policy_for_tests(NetPolicy {
+        extra_allowed: vec!["127.0.0.1".parse().unwrap()],
+        itunes_lookup: Some(format!("http://{addr}/lookup")),
     });
     hub
 }
@@ -456,6 +482,11 @@ async fn feed_source_ttl_conditional_fetch_and_proxy() {
     assert_eq!(list.status, StatusCode::OK);
     assert_eq!(fx.feed_hits.load(Ordering::SeqCst), 3);
     assert_eq!(fx.not_modified.load(Ordering::SeqCst), 1);
+    // "Not modified" is a successful refresh, not a failure.
+    assert_eq!(
+        list.json()["data"]["sources"][0]["error"],
+        serde_json::Value::Null
+    );
     assert_eq!(
         list.json()["data"]["sources"][0]["episodes"]
             .as_array()
@@ -658,4 +689,91 @@ async fn live_stream_from_playlist_and_page_discovery() {
         .send(req(Method::GET, &format!("/api/v1/podcasts/play/{id}/live")).build())
         .await;
     assert_eq!(r.status, StatusCode::NOT_FOUND);
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn apple_page_resolves_to_its_feed_despite_a_hiccup() {
+    let (addr, fx) = start_fixture().await;
+    let hub = hub_with_lookup("pod-apple", addr);
+    enable(&hub).await;
+    // The lookup answers 503 once: retried, and the source is a plain feed
+    // (no yt-dlp, which is off in these tests anyway).
+    let src = add_source(
+        &hub,
+        "https://podcasts.apple.com/it/podcast/fixture-news/id4242",
+    )
+    .await;
+    assert_eq!(src["kind"], "rss");
+    assert_eq!(src["name"], "Fixture News");
+    assert_eq!(
+        src["url"],
+        "https://podcasts.apple.com/it/podcast/fixture-news/id4242"
+    );
+    assert_eq!(fx.lookup_hits.load(Ordering::SeqCst), 2);
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn ytdlp_apple_source_moves_to_its_feed_on_refresh() {
+    use rekord_core::podcasts::net::Validators;
+    use rekord_core::podcasts::store::{self, NewSource};
+    use rekord_core::podcasts::SourceKind;
+    let (addr, fx) = start_fixture().await;
+    let hub = hub_with_lookup("pod-upgrade", addr);
+    enable(&hub).await;
+    // Saved as a yt-dlp page because the lookup failed when it was added.
+    let page = "https://podcasts.apple.com/us/podcast/fixture-news/id4242";
+    let id = store::insert(
+        &hub.state.db,
+        &NewSource {
+            url: page,
+            name: "Old name",
+            name_custom: false,
+            kind: SourceKind::Ytdlp,
+            feed_url: page,
+            episode_count: 3,
+            artwork_url: None,
+            episodes: &[],
+            validators: &Validators::default(),
+            fetched_at: None,
+        },
+    )
+    .unwrap();
+    let list = hub.send(req(Method::GET, "/api/v1/podcasts").build()).await;
+    assert_eq!(list.status, StatusCode::OK);
+    let src = list.json()["data"]["sources"][0].clone();
+    assert_eq!(src["kind"], "rss", "{src:?}");
+    assert_eq!(src["error"], serde_json::Value::Null);
+    assert_eq!(src["name"], "Fixture News");
+    assert_eq!(src["episodes"].as_array().unwrap().len(), 2);
+    let saved = store::get(&hub.state.db, id).unwrap().unwrap();
+    assert_eq!(saved.kind, SourceKind::Rss);
+    assert_eq!(
+        saved.feed_url,
+        format!("http://127.0.0.1:{}/feed.xml", addr.port())
+    );
+    assert_eq!(saved.url, page, "the admin keeps the address they typed");
+    assert_eq!(
+        fx.lookup_hits.load(Ordering::SeqCst),
+        2,
+        "503, then the feed"
+    );
+
+    // From now on the feed is asked directly (conditionally), no lookup.
+    hub.state
+        .db
+        .with_conn(|c| {
+            c.execute(
+                "UPDATE podcast_sources SET fetched_at = fetched_at - 7200",
+                [],
+            )?;
+            Ok(())
+        })
+        .unwrap();
+    let list = hub.send(req(Method::GET, "/api/v1/podcasts").build()).await;
+    assert_eq!(
+        list.json()["data"]["sources"][0]["error"],
+        serde_json::Value::Null
+    );
+    assert_eq!(fx.lookup_hits.load(Ordering::SeqCst), 2);
+    assert_eq!(fx.not_modified.load(Ordering::SeqCst), 1);
 }

@@ -68,8 +68,10 @@ pub fn discover_feed_links(html: &str, base: &url::Url) -> (Vec<String>, Option<
 }
 
 /// Feeds well-known podcast sites keep at a predictable address.
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub enum KnownPattern {
-    /// Apple Podcasts show page: the iTunes lookup API names the feed.
+    /// Apple Podcasts show page (its numeric id): the iTunes lookup API
+    /// names the feed (see [`apple_lookup_url`]).
     AppleLookup(String),
     /// Plain feed URL derived from the page URL.
     Feed(String),
@@ -90,9 +92,7 @@ pub fn known_patterns(page: &url::Url, html: Option<&str>) -> Vec<KnownPattern> 
             .find_map(|seg| seg.strip_prefix("id"))
             .filter(|id| !id.is_empty() && id.chars().all(|c| c.is_ascii_digit()))
         {
-            out.push(KnownPattern::AppleLookup(format!(
-                "https://itunes.apple.com/lookup?id={id}&entity=podcast"
-            )));
+            out.push(KnownPattern::AppleLookup(id.to_string()));
         }
     }
     if host == "spreaker.com" {
@@ -123,6 +123,12 @@ pub fn known_patterns(page: &url::Url, html: Option<&str>) -> Vec<KnownPattern> 
         }
     }
     out
+}
+
+/// iTunes lookup API address for show `id` (`base` replaces Apple's in tests).
+pub fn apple_lookup_url(id: &str, base: Option<&str>) -> String {
+    let base = base.unwrap_or("https://itunes.apple.com/lookup");
+    format!("{base}?id={id}&entity=podcast")
 }
 
 /// Feed URL out of the iTunes lookup answer.
@@ -227,8 +233,12 @@ mod tests {
             .unwrap();
         assert!(matches!(
             known_patterns(&apple, None).first(),
-            Some(KnownPattern::AppleLookup(u)) if u.contains("id=1200361736")
+            Some(KnownPattern::AppleLookup(id)) if id == "1200361736"
         ));
+        assert_eq!(
+            apple_lookup_url("1200361736", None),
+            "https://itunes.apple.com/lookup?id=1200361736&entity=podcast"
+        );
         let wp = url::Url::parse("https://radio.example/podcast/gr/").unwrap();
         assert!(matches!(
             known_patterns(&wp, Some("<link href='/wp-content/x.css'>")).first(),

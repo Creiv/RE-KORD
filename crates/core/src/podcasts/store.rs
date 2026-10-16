@@ -232,6 +232,21 @@ pub fn replace_target(db: &Db, id: i64, s: &NewSource<'_>) -> Result<(), Podcast
     .map_err(db_err)
 }
 
+/// A source found a better way to be fetched (a yt-dlp page whose feed is
+/// now known): same address for the admin, new kind and feed URL.
+pub fn retarget(db: &Db, id: i64, kind: SourceKind, feed_url: &str) -> Result<(), PodcastError> {
+    db.with_conn(|c| {
+        c.execute(
+            "UPDATE podcast_sources
+                SET kind = ?2, feed_url = ?3, etag = NULL, last_modified = NULL
+              WHERE id = ?1",
+            params![id, kind.as_str(), feed_url],
+        )?;
+        Ok(())
+    })
+    .map_err(db_err)
+}
+
 pub fn delete(db: &Db, id: i64) -> Result<bool, PodcastError> {
     db.with_conn(|c| Ok(c.execute("DELETE FROM podcast_sources WHERE id = ?1", [id])? > 0))
         .map_err(db_err)

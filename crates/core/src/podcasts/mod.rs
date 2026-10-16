@@ -83,8 +83,12 @@ pub enum PodcastError {
     UrlNotAllowed,
     #[error("request timed out")]
     Timeout,
+    /// Network failure (connect, TLS, DNS, body cut short): worth a retry.
     #[error("{0}")]
     Fetch(String),
+    /// A redirect that cannot be followed: retrying would not help.
+    #[error("{0}")]
+    Redirect(&'static str),
     #[error("upstream HTTP {0}")]
     Http(u16),
     #[error("response too large")]
@@ -127,7 +131,7 @@ impl PodcastError {
             Self::InvalidUrl => "podcast_invalid_url",
             Self::UrlNotAllowed => "url_not_allowed",
             Self::Timeout => "podcast_fetch_timeout",
-            Self::Fetch(_) => "podcast_fetch_failed",
+            Self::Fetch(_) | Self::Redirect(_) => "podcast_fetch_failed",
             Self::Http(_) => "podcast_http_error",
             Self::TooLarge => "podcast_too_large",
             Self::Parse(_) => "podcast_parse_failed",
@@ -345,17 +349,24 @@ pub async fn refresh_source(
             artwork_url,
             episodes,
             validators,
-        }) => store::save_fetch(
-            &state.db,
-            id,
-            &store::FetchSave {
-                title: title.as_deref(),
-                artwork_url: artwork_url.as_deref(),
-                episodes: &episodes,
-                validators: &validators,
-                at: now,
-            },
-        )?,
+            retarget,
+        }) => {
+            if let Some(feed_url) = retarget {
+                store::retarget(&state.db, id, SourceKind::Rss, &feed_url)?;
+                rt.forget_source(id);
+            }
+            store::save_fetch(
+                &state.db,
+                id,
+                &store::FetchSave {
+                    title: title.as_deref(),
+                    artwork_url: artwork_url.as_deref(),
+                    episodes: &episodes,
+                    validators: &validators,
+                    at: now,
+                },
+            )?
+        }
         Err(e) => {
             tracing::warn!(source = id, code = e.code(), error = %e, "podcast source fetch failed");
             store::save_error(&state.db, id, e.code(), now)?;

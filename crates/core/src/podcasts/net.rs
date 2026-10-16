@@ -26,6 +26,9 @@ pub fn user_agent() -> String {
 #[derive(Debug, Clone, Default)]
 pub struct NetPolicy {
     pub extra_allowed: Vec<IpAddr>,
+    /// Tests only: where the iTunes lookup API is asked instead of Apple.
+    #[doc(hidden)]
+    pub itunes_lookup: Option<String>,
 }
 
 impl NetPolicy {
@@ -164,17 +167,18 @@ pub async fn open(req: Request<'_>) -> Result<Opened, PodcastError> {
                 .map_err(|_| PodcastError::Timeout)?,
         }
         .map_err(classify_reqwest)?;
-        if res.status().is_redirection() {
+        // 304 Not Modified is a 3xx too, but it is the answer, not a hop.
+        if matches!(res.status().as_u16(), 301 | 302 | 303 | 307 | 308) {
             let Some(loc) = res
                 .headers()
                 .get(reqwest::header::LOCATION)
                 .and_then(|v| v.to_str().ok())
             else {
-                return Err(PodcastError::Fetch("redirect without location".into()));
+                return Err(PodcastError::Redirect("redirect without location"));
             };
             url = url
                 .join(loc.trim())
-                .map_err(|_| PodcastError::Fetch("bad redirect location".into()))?;
+                .map_err(|_| PodcastError::Redirect("bad redirect location"))?;
             continue;
         }
         return Ok(Opened {
@@ -182,7 +186,7 @@ pub async fn open(req: Request<'_>) -> Result<Opened, PodcastError> {
             response: res,
         });
     }
-    Err(PodcastError::Fetch("too many redirects".into()))
+    Err(PodcastError::Redirect("too many redirects"))
 }
 
 /// Longest wait for an upstream's response headers on a stream.
@@ -190,11 +194,42 @@ const HEADERS_TIMEOUT: Duration = Duration::from_secs(20);
 
 pub fn classify_reqwest(e: reqwest::Error) -> PodcastError {
     if e.is_timeout() {
-        PodcastError::Timeout
-    } else {
-        // Upstream URLs (signed, tokened) stay on the hub.
-        PodcastError::Fetch(e.without_url().to_string())
+        return PodcastError::Timeout;
     }
+    // Upstream URLs (signed, tokened) stay on the hub. The cause chain
+    // ("tcp connect error: Connection refused", "unexpected EOF"…) goes to
+    // the log; clients only ever see the error code.
+    let e = e.without_url();
+    let mut text = e.to_string();
+    let mut cause = std::error::Error::source(&e);
+    while let Some(c) = cause {
+        let part = c.to_string();
+        if !text.contains(&part) {
+            text.push_str(": ");
+            text.push_str(&part);
+        }
+        cause = c.source();
+    }
+    PodcastError::Fetch(text)
+}
+
+/// Whole-request timeout of one document fetch.
+const DOC_TIMEOUT: Duration = Duration::from_secs(20);
+/// All attempts of one document fetch end within this, so a list request
+/// (which waits 25 s for its sources) still sees the outcome.
+const DOC_BUDGET: Duration = Duration::from_secs(24);
+/// Pauses before the second and third attempt.
+const RETRY_DELAYS: [Duration; 2] = [Duration::from_millis(500), Duration::from_secs(2)];
+/// A retry that could not get at least this long is not worth starting.
+const MIN_ATTEMPT: Duration = Duration::from_secs(3);
+
+/// Errors worth another try: the network hiccuped (connect, TLS, a body cut
+/// short, DNS), the upstream timed out or was briefly unavailable.
+fn is_transient(e: &PodcastError) -> bool {
+    matches!(
+        e,
+        PodcastError::Fetch(_) | PodcastError::Timeout | PodcastError::Http(500 | 502 | 503 | 504)
+    )
 }
 
 /// Validators of a previous answer, sent as `If-None-Match` / `If-Modified-Since`.
@@ -217,13 +252,48 @@ pub enum Fetched {
     },
 }
 
-/// GET a document (feed, page, playlist, JSON) up to `max_bytes`.
+/// GET a document (feed, page, playlist, JSON) up to `max_bytes`. Transient
+/// failures are retried twice (after 0.5 s, then 2 s) within `DOC_BUDGET`.
 pub async fn fetch_document(
     url: &url::Url,
     policy: &NetPolicy,
     accept: &str,
     max_bytes: usize,
     validators: Option<&Validators>,
+) -> Result<Fetched, PodcastError> {
+    let started = std::time::Instant::now();
+    let mut timeout = DOC_TIMEOUT;
+    let mut delays = RETRY_DELAYS.iter();
+    loop {
+        let err = match fetch_once(url, policy, accept, max_bytes, validators, timeout).await {
+            Ok(f) => return Ok(f),
+            Err(e) => e,
+        };
+        let Some(delay) = delays.next().filter(|_| is_transient(&err)) else {
+            return Err(err);
+        };
+        let left = DOC_BUDGET.saturating_sub(started.elapsed() + *delay);
+        if left < MIN_ATTEMPT {
+            return Err(err);
+        }
+        tracing::debug!(
+            host = url.host_str().unwrap_or(""),
+            code = err.code(),
+            error = %err,
+            "podcast fetch failed, retrying"
+        );
+        tokio::time::sleep(*delay).await;
+        timeout = left.min(DOC_TIMEOUT);
+    }
+}
+
+async fn fetch_once(
+    url: &url::Url,
+    policy: &NetPolicy,
+    accept: &str,
+    max_bytes: usize,
+    validators: Option<&Validators>,
+    timeout: Duration,
 ) -> Result<Fetched, PodcastError> {
     let mut headers = HeaderMap::new();
     if let Ok(v) = HeaderValue::from_str(accept) {
@@ -248,7 +318,7 @@ pub async fn fetch_document(
     let opened = open(Request {
         url: url.clone(),
         headers,
-        timeout: Some(Duration::from_secs(20)),
+        timeout: Some(timeout),
         policy,
     })
     .await?;
@@ -356,6 +426,8 @@ pub async fn fetch_json(
 #[cfg(test)]
 mod tests {
     use super::*;
+    use std::sync::atomic::{AtomicUsize, Ordering};
+    use std::sync::Arc;
 
     #[test]
     fn rejects_non_http_and_credentials() {
@@ -391,6 +463,7 @@ mod tests {
         }
         let allowed = NetPolicy {
             extra_allowed: vec!["127.0.0.1".parse().unwrap()],
+            ..Default::default()
         };
         let url = parse_public_url("http://127.0.0.1:9/feed").unwrap();
         assert!(resolve_allowed(&url, &allowed).await.is_ok());
@@ -405,5 +478,83 @@ mod tests {
         assert!(!is_audio_type("audio/x-mpegurl"));
         assert!(is_playlist_type("audio/x-scpls"));
         assert!(!is_audio_type("text/html"));
+    }
+
+    /// A tiny HTTP server: answers the n-th connection with `script[n]`
+    /// (`None` = drop the connection without answering), then 200 "ok".
+    async fn flaky_server(script: Vec<Option<&'static str>>) -> (url::Url, Arc<AtomicUsize>) {
+        use tokio::io::{AsyncReadExt, AsyncWriteExt};
+        let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
+        let addr = listener.local_addr().unwrap();
+        let hits = Arc::new(AtomicUsize::new(0));
+        let counter = hits.clone();
+        tokio::spawn(async move {
+            loop {
+                let Ok((mut sock, _)) = listener.accept().await else {
+                    return;
+                };
+                let n = counter.fetch_add(1, Ordering::SeqCst);
+                let mut buf = [0u8; 2048];
+                let _ = sock.read(&mut buf).await;
+                let status = match script.get(n) {
+                    Some(None) => continue, // dropped: the client sees EOF
+                    Some(Some(status)) => *status,
+                    None => "200 OK",
+                };
+                let body = "<rss><channel><title>ok</title></channel></rss>";
+                let reply = format!(
+                    "HTTP/1.1 {status}\r\ncontent-type: application/rss+xml\r\ncontent-length: {}\r\nconnection: close\r\n\r\n{body}",
+                    body.len()
+                );
+                let _ = sock.write_all(reply.as_bytes()).await;
+            }
+        });
+        let url = url::Url::parse(&format!("http://{addr}/feed.xml")).unwrap();
+        (url, hits)
+    }
+
+    fn local() -> NetPolicy {
+        NetPolicy {
+            extra_allowed: vec!["127.0.0.1".parse().unwrap()],
+            ..Default::default()
+        }
+    }
+
+    #[tokio::test]
+    async fn transient_failures_are_retried() {
+        // Connection dropped once, then a good answer.
+        let (url, hits) = flaky_server(vec![None]).await;
+        let got = fetch_document(&url, &local(), "*/*", 1 << 20, None).await;
+        assert!(matches!(got, Ok(Fetched::Body { .. })), "recovered");
+        assert_eq!(hits.load(Ordering::SeqCst), 2);
+
+        // 503 twice, then fine: three attempts in all.
+        let (url, hits) = flaky_server(vec![
+            Some("503 Service Unavailable"),
+            Some("503 Service Unavailable"),
+        ])
+        .await;
+        let got = fetch_document(&url, &local(), "*/*", 1 << 20, None).await;
+        assert!(matches!(got, Ok(Fetched::Body { .. })));
+        assert_eq!(hits.load(Ordering::SeqCst), 3);
+    }
+
+    #[tokio::test]
+    async fn lasting_and_permanent_failures_give_up() {
+        // Always failing: three attempts, then the error.
+        let (url, hits) = flaky_server(vec![None, None, None, None]).await;
+        let got = fetch_document(&url, &local(), "*/*", 1 << 20, None).await;
+        assert!(
+            matches!(&got, Err(PodcastError::Fetch(_))),
+            "{:?}",
+            got.err()
+        );
+        assert_eq!(hits.load(Ordering::SeqCst), 3);
+
+        // A 404 is an answer, not a hiccup: asked once.
+        let (url, hits) = flaky_server(vec![Some("404 Not Found")]).await;
+        let got = fetch_document(&url, &local(), "*/*", 1 << 20, None).await;
+        assert!(matches!(got, Err(PodcastError::Http(404))));
+        assert_eq!(hits.load(Ordering::SeqCst), 1);
     }
 }

@@ -2,8 +2,8 @@
 //! live stream, playlist) and how a source's latest episodes are fetched.
 
 use super::discover::{
-    apple_feed_url, discover_feed_links, is_hls, known_patterns, parse_playlist, playlist_title,
-    KnownPattern,
+    apple_feed_url, apple_lookup_url, discover_feed_links, is_hls, known_patterns, parse_playlist,
+    playlist_title, KnownPattern,
 };
 use super::feed::{looks_like_feed, parse_feed};
 use super::net::{
@@ -65,6 +65,14 @@ pub async fn detect(
     limit: u32,
 ) -> Result<Detected, PodcastError> {
     let url = parse_public_url(raw_url)?;
+    // Show pages of well-known sites (Apple Podcasts, Spreaker) name their
+    // feed in the address: no need to read the page (nor its host).
+    let known = known_patterns(&url, None);
+    if !known.is_empty() {
+        if let Some(d) = known_feed(&url, policy, limit, 2).await {
+            return Ok(d);
+        }
+    }
     // Refuse private targets before anything else (yt-dlp included).
     super::net::resolve_allowed(&url, policy).await?;
 
@@ -164,15 +172,14 @@ pub async fn detect(
         let (links, page_title) = discover_feed_links(&html, &final_url);
         let mut candidates: Vec<String> = links.into_iter().take(MAX_CANDIDATES).collect();
         for pattern in known_patterns(&final_url, Some(&html)) {
+            if known.contains(&pattern) {
+                continue; // tried above
+            }
             match pattern {
                 KnownPattern::Feed(u) => candidates.push(u),
-                KnownPattern::AppleLookup(api) => {
-                    if let Ok(api) = url::Url::parse(&api) {
-                        if let Ok(json) = fetch_json(&api, policy, 512 * 1024).await {
-                            if let Some(u) = apple_feed_url(&json) {
-                                candidates.insert(0, u);
-                            }
-                        }
+                KnownPattern::AppleLookup(id) => {
+                    if let Some(u) = apple_lookup(&id, policy, 1).await {
+                        candidates.insert(0, u);
                     }
                 }
             }
@@ -206,6 +213,71 @@ pub async fn detect(
     }
 
     via_ytdlp(cfg, &final_url, limit).await
+}
+
+/// The feed of a well-known show page, found from its address alone, or
+/// `None` (failures are logged, the caller falls back to other ways).
+/// `lookup_attempts`: how many times the iTunes lookup is asked.
+async fn known_feed(
+    page: &url::Url,
+    policy: &NetPolicy,
+    limit: u32,
+    lookup_attempts: u32,
+) -> Option<Detected> {
+    for pattern in known_patterns(page, None) {
+        let candidate = match pattern {
+            KnownPattern::Feed(u) => u,
+            KnownPattern::AppleLookup(id) => match apple_lookup(&id, policy, lookup_attempts).await
+            {
+                Some(u) => u,
+                None => continue,
+            },
+        };
+        let fetched = match parse_public_url(&candidate) {
+            Ok(u) => fetch_document(&u, policy, ACCEPT_FEED, MAX_FEED_BYTES, None).await,
+            Err(e) => Err(e),
+        };
+        let result = match fetched {
+            Ok(Fetched::Body {
+                final_url,
+                body,
+                validators,
+                ..
+            }) => feed_detected(&body, &final_url, limit, validators),
+            Ok(Fetched::NotModified) => Err(PodcastError::Unsupported),
+            Err(e) => Err(e),
+        };
+        match result {
+            Ok(d) => return Some(d),
+            Err(e) => tracing::info!(
+                page = page.host_str().unwrap_or(""),
+                code = e.code(),
+                error = %e,
+                "known podcast feed unreachable"
+            ),
+        }
+    }
+    None
+}
+
+/// Feed URL of Apple Podcasts show `id` from the iTunes lookup API.
+async fn apple_lookup(id: &str, policy: &NetPolicy, attempts: u32) -> Option<String> {
+    let api = url::Url::parse(&apple_lookup_url(id, policy.itunes_lookup.as_deref())).ok()?;
+    for attempt in 1..=attempts.max(1) {
+        if attempt > 1 {
+            tokio::time::sleep(std::time::Duration::from_secs(1)).await;
+        }
+        match fetch_json(&api, policy, 512 * 1024).await {
+            Ok(json) => match apple_feed_url(&json) {
+                Some(u) => return Some(u),
+                None => tracing::info!(id, attempt, "itunes lookup: no feed for this show"),
+            },
+            Err(e) => {
+                tracing::info!(id, attempt, code = e.code(), error = %e, "itunes lookup failed")
+            }
+        }
+    }
+    None
 }
 
 /// RTL JSON API, else the programme's RSS feed.
@@ -287,6 +359,8 @@ pub enum Refreshed {
         artwork_url: Option<String>,
         episodes: Vec<Episode>,
         validators: Validators,
+        /// The source is a plain feed from now on, at this address.
+        retarget: Option<String>,
     },
 }
 
@@ -328,6 +402,7 @@ pub async fn fetch_episodes(
                         artwork_url: d.artwork_url,
                         episodes: d.episodes,
                         validators: d.validators,
+                        retarget: None,
                     })
                 }
             }
@@ -340,10 +415,30 @@ pub async fn fetch_episodes(
                 title,
                 episodes,
                 validators: Validators::default(),
+                retarget: None,
             })
         }
         SourceKind::Ytdlp => {
             let url = parse_public_url(&src.feed_url)?;
+            // A show page whose feed could not be found when it was added
+            // (the iTunes lookup failed, say): try again, and stay on the
+            // feed once it answers — faster and sturdier than yt-dlp.
+            let known_page = [Some(url.clone()), parse_public_url(&src.url).ok()]
+                .into_iter()
+                .flatten()
+                .find(|u| !known_patterns(u, None).is_empty());
+            if let Some(page) = known_page {
+                if let Some(d) = known_feed(&page, policy, limit, 1).await {
+                    tracing::info!(source = src.id, "yt-dlp podcast source moved to its feed");
+                    return Ok(Refreshed::Fresh {
+                        title: d.title,
+                        artwork_url: d.artwork_url,
+                        episodes: d.episodes,
+                        validators: d.validators,
+                        retarget: Some(d.feed_url),
+                    });
+                }
+            }
             super::net::resolve_allowed(&url, policy).await?;
             let (title, episodes) = ytdlp_src::list(cfg, url.as_str(), limit).await?;
             Ok(Refreshed::Fresh {
@@ -351,6 +446,7 @@ pub async fn fetch_episodes(
                 title,
                 episodes,
                 validators: Validators::default(),
+                retarget: None,
             })
         }
     }
