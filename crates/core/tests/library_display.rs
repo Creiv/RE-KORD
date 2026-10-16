@@ -1055,3 +1055,46 @@ fn sidecar_user_edits_beat_legacy_and_canonical_genre_labels_apply() {
         "Typed Title"
     );
 }
+
+/// `genre_count` in the stats follows track edits and deletes at once, not
+/// only after the next scan rebuilds the genre table.
+#[test]
+fn genre_count_follows_track_edits_and_deletes() {
+    let lib = Lib::new("genre-count");
+    for (rel, genre) in [
+        ("A/X/01.mp3", "Rock"),
+        ("A/X/02.mp3", "Jazz"),
+        ("A/X/03.mp3", "Rock; rock"),
+    ] {
+        lib.file(rel, &mp3_with_tags(&[("TIT2", "t"), ("TCON", genre)]));
+    }
+    let db = lib.db();
+    scan_library(&db, &lib.root).unwrap();
+    let count = |db: &Db| db.stats(None).unwrap().genre_count;
+    assert_eq!(count(&db), 2);
+
+    // Jazz → Blues: still two genres, but a new one.
+    db.save_track_fields("A/X/02.mp3", None, Some("Blues"), None, None)
+        .unwrap();
+    assert_eq!(count(&db), 2);
+    // Both Rock tracks become Blues: Rock is gone.
+    db.save_track_fields("A/X/01.mp3", None, Some("Blues"), None, None)
+        .unwrap();
+    assert_eq!(count(&db), 2, "the other Rock track still counts");
+    db.save_track_fields("A/X/03.mp3", None, Some("Blues"), None, None)
+        .unwrap();
+    assert_eq!(count(&db), 1);
+    // A second genre on one track, a spelling variant on another.
+    db.save_track_fields("A/X/01.mp3", None, Some("Blues; Funk"), None, None)
+        .unwrap();
+    db.save_track_fields("A/X/02.mp3", None, Some("blues"), None, None)
+        .unwrap();
+    assert_eq!(count(&db), 2);
+    // The only Funk track goes away.
+    assert!(db.delete_track_by_rel("A/X/01.mp3").unwrap());
+    assert_eq!(count(&db), 1);
+
+    // What a full rebuild finds is what the edits kept.
+    db.rebuild_genres().unwrap();
+    assert_eq!(count(&db), 1);
+}

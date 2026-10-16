@@ -1275,6 +1275,7 @@ impl Db {
 
     pub fn delete_track_by_rel(&self, rel_path: &str) -> Result<bool> {
         let conn = self.lock();
+        genres::forget_track_genres(&conn, "rel_path = ?1", &rel_path)?;
         let n = conn.execute("DELETE FROM tracks WHERE rel_path = ?1", params![rel_path])?;
         let _ = conn.execute("DELETE FROM files WHERE rel_path = ?1", params![rel_path]);
         Ok(n > 0)
@@ -1299,6 +1300,7 @@ impl Db {
             "DELETE FROM files WHERE rel_path IN (SELECT rel_path FROM tracks WHERE album_id = ?1)",
             params![id],
         )?;
+        genres::forget_track_genres(&conn, "album_id = ?1", &id)?;
         conn.execute("DELETE FROM tracks WHERE album_id = ?1", params![id])?;
         let n = conn.execute("DELETE FROM albums WHERE id = ?1", params![id])?;
         Ok(n > 0)

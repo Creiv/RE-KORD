@@ -69,12 +69,19 @@ pub(super) fn rebuild_genres(conn: &Connection) -> Result<()> {
     };
 
     let mut spellings: HashMap<String, HashMap<String, u64>> = HashMap::new();
+    // Tracks per key, each track once (as the single-edit updates count them).
     let mut track_counts: HashMap<String, i64> = HashMap::new();
     for (_, genre, _) in &tracks {
+        let mut keys: Vec<String> = Vec::new();
         for token in tokens(genre.as_deref()) {
             let key = genre_key(&token);
-            *track_counts.entry(key.clone()).or_default() += 1;
+            if !keys.contains(&key) {
+                keys.push(key.clone());
+            }
             *spellings.entry(key).or_default().entry(token).or_default() += 1;
+        }
+        for key in keys {
+            *track_counts.entry(key).or_default() += 1;
         }
     }
     for (_, genre, _) in &albums {
@@ -141,6 +148,51 @@ fn label_or_register(conn: &Connection, token: &str) -> Result<String> {
     }
 }
 
+/// Keep `genres.track_count` (what `library/stats` counts as `genre_count`)
+/// in step with one track whose labels went from `old` to `new`, without a
+/// full rebuild: each key counts the tracks carrying it.
+fn adjust_track_counts(conn: &Connection, old: &[String], new: &[String]) -> Result<()> {
+    let keys = |labels: &[String]| {
+        let mut out: Vec<String> = Vec::new();
+        for l in labels {
+            let k = genre_key(l);
+            if !out.contains(&k) {
+                out.push(k);
+            }
+        }
+        out
+    };
+    let (old, new) = (keys(old), keys(new));
+    let mut upd = conn.prepare_cached(
+        "UPDATE genres SET track_count = MAX(0, track_count + ?2) WHERE key = ?1",
+    )?;
+    for k in old.iter().filter(|k| !new.contains(k)) {
+        upd.execute(params![k, -1])?;
+    }
+    for k in new.iter().filter(|k| !old.contains(k)) {
+        upd.execute(params![k, 1])?;
+    }
+    Ok(())
+}
+
+/// Tracks about to be deleted (rows matching `filter`, one `?1` parameter):
+/// their genres no longer count.
+pub(super) fn forget_track_genres(
+    conn: &Connection,
+    filter: &str,
+    value: &dyn rusqlite::ToSql,
+) -> Result<()> {
+    let rows: Vec<Option<String>> = {
+        let mut stmt = conn.prepare(&format!("SELECT genres FROM tracks WHERE {filter}"))?;
+        let rows = stmt.query_map(params![value], |r| r.get(0))?;
+        rows.flatten().collect()
+    };
+    for current in rows {
+        adjust_track_counts(conn, &parse_genres_json(current.as_deref()), &[])?;
+    }
+    Ok(())
+}
+
 /// Recompute `genres` for the rows of `table` matching `filter` (a SQL
 /// condition with one `?1` parameter) after a single edit.
 pub(super) fn refresh_genres_where(
@@ -170,6 +222,9 @@ pub(super) fn refresh_genres_where(
                 &format!("UPDATE {table} SET genres = ?2 WHERE id = ?1"),
                 params![id, json],
             )?;
+            if table == "tracks" {
+                adjust_track_counts(conn, &parse_genres_json(current.as_deref()), &labels)?;
+            }
         }
     }
     Ok(())
