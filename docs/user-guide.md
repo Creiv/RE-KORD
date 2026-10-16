@@ -482,6 +482,38 @@ the button that caused it, with a copy in the log.
 The download keeps running on the hub if you leave the tab; come back to see its progress.
 The **"Log"** panel shows a summary of what was downloaded, already present or failed.
 
+#### Tags, cover and track numbers
+
+With **"Embed tags and cover in downloaded files"** on (the default; admin panel,
+**Library › Embedded metadata**), the hub writes tags and a cover into every file the
+download just saved, after yt-dlp has finished:
+
+- **Album and album artist** are the destination folder's names (`Artist/Album`), the same
+  values the library shows, so an album is never tagged with YouTube's playlist title
+  ("Album - …"). A disc sub-folder (`CD 2`, `Disc 2`) gives the disc number.
+- **Title, artist, date, genre** come from YouTube Music: the main artist (not the
+  "Artist - Topic" channel), the release date or year when YouTube gives one (an upload date
+  is not used), the genre when the site has one. For a video without music credits the
+  title loses upload labels such as "(Official Video)", "[HD]" or "| Lyric Video" and a
+  leading "Artist - "; "(Live)", "(Remix)" or "(feat. …)" stay.
+- **Track number**: the number in the file name (release order for an album, `03/12`).
+- **Cover**: the item's thumbnail, cropped to a centred square (video thumbnails are 16:9;
+  YouTube Music album art comes back square) and at most 1200 px. An album download also
+  saves it as `cover.jpg` in the album folder when that folder has no cover yet; an existing
+  cover (yours, or one saved in Studio) is never replaced.
+- Files that were already in the folder are never touched, and nothing else lands in the
+  library. M4A files keep their format; a WebM download (YouTube's fallback when no M4A is
+  offered) has its Opus audio copied, not re-encoded, into an `.opus` file, which can hold
+  tags.
+
+**Singles** saved into an album folder are numbered after the folder's last track: a single
+downloaded into a folder holding `01`–`04` becomes `05 - Title`. A single with its own track
+number (Bandcamp) keeps it. An existing file is never overwritten: a file with the same name
+is reported as already downloaded.
+
+The library reads the new tags and cover when the folder is re-indexed at the end of the
+download (with *Read embedded metadata and covers* on); values edited in Studio still win.
+
 The yt-dlp strip shows the version in use and the **JavaScript engine** yt-dlp runs
 YouTube's checks with (for example "JS engine QuickJS 0.17.0"). YouTube changes often:
 when yt-dlp is old, **"Update yt-dlp"** installs the latest verified release on the hub.

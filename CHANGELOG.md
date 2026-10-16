@@ -5,7 +5,27 @@ one version number covers the hub, the clients and the packages.
 
 ## Unreleased
 
+### Added
+
+- **Studio downloads get tags and a cover.** Downloaded files had no tags and no picture:
+  the library knew artist, album and title only from the folders. The hub now writes title,
+  main artist (not "Artist - Topic"), album and album artist (from the destination folder,
+  not the playlist title "Album - …"), track number and total in release order, disc, release
+  date and genre into every file the download saved, with the item's thumbnail as the cover,
+  cropped to a centred square (16:9 video thumbnails) and kept at most 1200 px. Album
+  downloads also save `cover.jpg` in an album folder that has none; an existing cover is never
+  replaced. Video titles lose "(Official Video)", "[HD]" and a leading "Artist - ". Only the
+  files of the run are written: files already in the folder are left alone (yt-dlp's own
+  `--embed-metadata` would rewrite them too), and nothing but the audio and `cover.jpg` lands
+  in the library. A WebM download has its Opus stream copied (no re-encode) into `.opus` so
+  it can carry tags. Admin panel, *Library › Embedded metadata*: **"Incorpora tag e copertina
+  nei file scaricati"** (on by default). The Studio log reports what was written.
+
 ### Fixed
+
+- **Singles downloaded into an album folder were all "01 - …".** A single now takes its own
+  track number when the site gives one, otherwise the folder's next number after its last
+  track (`05 - Title` next to `01`–`04`); existing files are still never overwritten.
 
 - **YouTube downloads work out of the box again.** YouTube now refuses yt-dlp unless it can
   run JavaScript ("The page needs to be reloaded", or "Sign in to confirm you're not a bot"
