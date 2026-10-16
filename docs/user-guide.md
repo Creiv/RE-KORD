@@ -428,8 +428,10 @@ A switch between **"Local"** and **"Web"**.
   personal.
 - **Web** lists new releases from YouTube Music (albums, EPs and singles) by artists you
   have, that are not in your library yet. **"Preview"** plays the first 30 seconds of a
-  track; **"Download"** sends the release to the Download tab. **"Refresh new releases"**
-  checks again.
+  track; **"Download"** opens the same confirmation as the Download tab, into the folder
+  picked there (with no folder picked yet, **"Pick folder"** opens the Download tab with
+  the link filled in). Releases that already match an album or track of your library carry
+  an **"In library"** badge. **"Refresh new releases"** checks again.
 
 ### Download
 
@@ -444,16 +446,46 @@ Downloads use yt-dlp on the hub. Only download content you have the rights to.
    - **"Classic"**: paste a **"Link"** and pick the **"Download type"**: "Single", "Album or
      playlist" or "Artist Releases" (the type is detected when you paste). YouTube,
      YouTube Music, SoundCloud and Bandcamp links work.
-3. **"Download and import"**. Progress shows releases and tracks; **"Stop"** cancels. When
-   it finishes, the folder is re-indexed and the new music appears in the library.
+3. **"Download and import"**. A confirmation opens straight away with the destination
+   folder (**"Change"** goes back to the folder picker); for an album or playlist the
+   number of tracks fills in while yt-dlp counts them, and you can confirm without waiting.
+   The progress card (releases and tracks, **"Stop"** to cancel) sits between the form and
+   the **"Log"**, and stays at the bottom of the screen while you scroll. When it finishes,
+   the folder is re-indexed and the new music appears in the library.
+
+Results that are already in your library (same album or track title and artist, ignoring
+accents, punctuation and editions such as "Deluxe", "Remastered", "- EP" or "- Single")
+show an **"In library"** badge, in Explore, in an artist's releases and in Discover; the
+confirmation then offers **"Skip"** or **"Download anyway"**. Searches, release lists and
+Discover show a spinner or placeholder rows while they load, and a problem appears next to
+the button that caused it, with a copy in the log.
 
 The download keeps running on the hub if you leave the tab; come back to see its progress.
 The **"Log"** panel shows a summary of what was downloaded, already present or failed.
 
 The yt-dlp strip shows the version in use. YouTube changes often: when yt-dlp is old,
 **"Update yt-dlp"** installs the latest verified release on the hub. For age-restricted or
-members-only content, add YouTube cookies (*Settings › Library › Integrations*, or the
-admin panel's **Integrations**).
+members-only content, or when YouTube answers "Sign in to confirm you're not a bot", add
+YouTube cookies (*Settings › Library › Integrations*, or the admin panel's
+**Integrations**). When a download hits that sign-in or age check, the Download tab says
+so and links to Settings.
+
+#### YouTube cookies
+
+- **Export them from a private window**: open one, sign in to YouTube, export the cookies
+  in **Netscape format** (`cookies.txt`) with a browser extension, then **close the
+  window**. A window left open keeps refreshing them and the exported copy stops working.
+- The upload is checked before it replaces anything: a JSON export, an empty file or a file
+  that is not a `cookies.txt` is refused with a message, and the cookies you had stay. The
+  file is stored in the hub's data folder readable only by the hub's user.
+- Settings and the admin panel show whether a file is active, when it was updated and how
+  many of its cookies are for YouTube/Google (a warning appears when there are none).
+- yt-dlp rewrites the cookie file it is given, so every run (downloads, track counts,
+  previews, podcast pages from YouTube) works on its own private copy, deleted when the
+  run ends. A cookie file mounted read-only (Docker `:ro`, or `REKORD_YTDLP_COOKIES` on a
+  read-only path) therefore works. After a successful download, the cookies YouTube
+  refreshed are saved back into an uploaded file (never into one set by the environment,
+  and never over a newer upload).
 
 ### Metadata
 
@@ -692,7 +724,9 @@ Theme and preferences are saved on the hub, so they follow your account to every
   **"Reload index"** rescans. The music folder itself is set in the admin panel.
 - **"Integrations"**:
   - **"YouTube cookies"**: a `cookies.txt` (Netscape format) for yt-dlp, needed for
-    age-restricted or members-only content.
+    age-restricted or members-only content and when YouTube asks to sign in. The row shows
+    when the file was updated and how many YouTube cookies it holds; see
+    [YouTube cookies](#youtube-cookies) for how to export them.
   - **"Discogs"**: a personal access token from your Discogs developer settings, for
     richer metadata and artwork and higher rate limits.
 
@@ -871,6 +905,7 @@ In Docker it is not available.
 | New files do not appear | Use **Sync** in the top bar, or check **Status › Folder watching** in the admin panel. |
 | A track will not play | WMA, AIFF and ALAC need ffmpeg on the hub; **Diagnostics** shows whether it was found. |
 | Downloads fail with error 403 | **Update yt-dlp**; if it continues, add YouTube cookies. |
+| "YouTube asks to sign in: cookies are missing or expired" | Export fresh cookies from a private window and close it, then upload them (see [YouTube cookies](#youtube-cookies)). |
 | No Cast button | Use the Android app, or Chrome over HTTPS (the tunnel) or `localhost`. |
 | "Only available from the hub's computer" | Do it on the hub computer, or turn on **Network › Machine operations › Also allow these operations remotely**. |
 | The desktop app cannot load music from a hub on another machine | See [the mixed-content note](upgrading-from-legacy.md#known-issue-desktop-apps-and-plain-http-hubs). |

@@ -15,6 +15,35 @@ one version number covers the hub, the clients and the packages.
   finds the feed of an Apple Podcasts or Spreaker page from its address, and moves a source
   saved as a yt-dlp page (because Apple's lookup failed when it was added) to its feed as
   soon as that answers.
+- **Studio › Download: confirm at once, visible loading** (issue #99). Downloading an album
+  or playlist used to wait up to half a minute for yt-dlp to count its tracks, with no
+  sign of life and a button that queued a new request at every click. The confirmation now
+  opens immediately and the track count fills in when it arrives ("unknown" if it fails or
+  takes too long); the button shows a spinner and refuses duplicates. Esplora searches,
+  release lists and Scopri show spinners or placeholder rows, and errors appear next to
+  the action (with a copy in the log) instead of at the bottom of the pane.
+- **Scopri › Download** opens the same confirmation as the Download tab, on the folder
+  picked there, instead of only filling in the link.
+- **Download progress between the form and the log** (issue #99): the progress card no
+  longer sits at the top of the pane; it follows the form, precedes the log and stays at
+  the bottom of the screen while you scroll (mobile included).
+- **YouTube cookies** (issue #99): yt-dlp rewrites the cookie file when it exits, so
+  concurrent runs raced on it and a read-only file (Docker `:ro`, `REKORD_YTDLP_COOKIES`)
+  failed. Each yt-dlp run now gets a private copy (mode 600, removed afterwards); only a
+  successful download saves the refreshed cookies back into the uploaded file, never into
+  one set by the environment. Podcast pages read through yt-dlp use the cookies too. An
+  upload is validated before it replaces the current file (JSON exports and empty files
+  get their own message) and is stored with mode 600. A download stopped by YouTube's
+  sign-in or age check says so in the Download tab, with a hint and a link to Settings.
+
+### New
+
+- **"In libreria" badges in Studio** (issue #99): Esplora results, an artist's releases and
+  Scopri tiles that match an album or track of the library (title and artist, ignoring
+  accents, punctuation, "Deluxe", "Remastered", "- EP", "- Single", featuring) are marked,
+  and the download confirmation offers **Skip** or **Download anyway**.
+- **Cookie status** in Settings and in the admin panel's Integrations: file present and
+  valid, last update, number of cookies and how many are for YouTube/Google.
 
 ### Changed
 
