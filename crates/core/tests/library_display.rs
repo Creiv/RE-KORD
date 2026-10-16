@@ -809,6 +809,73 @@ async fn stats_follow_the_account_selection() {
     assert_eq!(some["data"]["artist_count"], 1);
 }
 
+/// The quality counters mean the same thing whether the hub counts them in SQL
+/// (whole library) or over an account's selection, and the selection only
+/// counts what that account sees. Definitions: `db::quality`.
+#[tokio::test]
+async fn quality_counts_agree_between_sql_and_selection() {
+    let hub = Hub::new("stats-quality");
+    hub.file("A/One/01.mp3", &mp3_with_tags(&[("TCON", "Unknown")]));
+    hub.file("A/One/02.mp3", &mp3_with_tags(&[("TDRC", "2020")]));
+    hub.file("A/One/03.mp3", &mp3_with_tags(&[("TCON", "Rock")]));
+    hub.file("B/Two/01.mp3", &mp3_with_tags(&[("TIT2", "untagged")]));
+    hub.file("B/Two/cover.jpg", b"\xFF\xD8\xFFjpeg");
+    hub.file("B/loose.mp3", &mp3_with_tags(&[("TIT2", "loose")]));
+    hub.state
+        .run_scan_mode(ScanMode::Incremental)
+        .await
+        .unwrap();
+    let snap = rekord_core::accounts::create_account(&hub.data, "Guest").unwrap();
+    let guest = snap.created_account_id.unwrap();
+    let keys = [
+        "track_count",
+        "albums_without_cover",
+        "albums_without_meta",
+        "tracks_without_meta",
+        "loose_album_count",
+    ];
+    let pick = |v: &serde_json::Value| keys.map(|k| v["data"][k].as_i64().unwrap());
+
+    // Default account: everything, counted in SQL.
+    let all = hub
+        .send(req(Method::GET, "/api/v1/library/stats").build())
+        .await
+        .json();
+    // Guest selecting both artists: the same library, counted in Rust.
+    rekord_core::selection::write_library_selection(
+        &hub.data,
+        &guest,
+        &rekord_core::selection::LibrarySelection {
+            artists: vec!["A".into(), "B".into()],
+            ..Default::default()
+        },
+    )
+    .unwrap();
+    let uri = format!("/api/v1/library/stats?accountId={guest}");
+    let sel = hub.send(req(Method::GET, &uri).build()).await.json();
+    assert_eq!(pick(&all), pick(&sel), "SQL and selection counts differ");
+    let [tracks, no_cover, _, no_meta, loose] = pick(&all);
+    assert_eq!(tracks, 5);
+    // "A/One" has no cover; "B/Two" has one; the loose folder is not counted.
+    assert_eq!(no_cover, 1);
+    // "Unknown" is no genre: A/One/01, B/Two/01 and the loose track.
+    assert_eq!(no_meta, 3);
+    assert_eq!(loose, 1);
+
+    // A partial selection counts only what the guest sees.
+    rekord_core::selection::write_library_selection(
+        &hub.data,
+        &guest,
+        &rekord_core::selection::LibrarySelection {
+            albums: vec!["B/Two".into()],
+            ..Default::default()
+        },
+    )
+    .unwrap();
+    let part = hub.send(req(Method::GET, &uri).build()).await.json();
+    assert_eq!(pick(&part), [1, 0, pick(&part)[2], 1, 0]);
+}
+
 // ------------------------------------------------- covers, media, caching
 
 #[tokio::test]

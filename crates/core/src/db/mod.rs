@@ -5,6 +5,7 @@
 //! - `user_data`: favorites and playlists
 //! - `curated`: curated (sidecar / legacy / Studio) metadata writes
 //! - `genres`: genre tokens and canonical labels
+//! - `quality`: the library quality checks (dashboard alerts)
 //! - `text`: display titles, dates, genre parsing, search folding
 //! - this file: connection, read queries, studio metadata writes
 
@@ -13,6 +14,7 @@ mod curated;
 mod embedded;
 mod genres;
 mod migrations;
+pub mod quality;
 pub mod text;
 mod user_data;
 
@@ -423,13 +425,14 @@ pub struct LibraryStats {
     /// Bumped after every scan (also subfolder rescans).
     #[serde(default)]
     pub index_epoch: u64,
-    /// Albums (not loose) without cover art, in the account's library.
+    /// Albums (not loose) without cover art, in the account's library
+    /// (definitions: [`quality`]).
     #[serde(default)]
     pub albums_without_cover: i64,
     /// Albums (not loose) without album metadata.
     #[serde(default)]
     pub albums_without_meta: i64,
-    /// Tracks with neither genre nor release date.
+    /// Tracks with neither a real genre nor a release date.
     #[serde(default)]
     pub tracks_without_meta: i64,
     #[serde(default)]
@@ -545,21 +548,23 @@ impl Db {
             .unwrap_or(0);
         let (albums_without_cover, albums_without_meta, loose_album_count): (i64, i64, i64) = conn
             .query_row(
-                r#"
-                SELECT
-                  COALESCE(SUM(CASE WHEN loose = 0 AND has_cover = 0 THEN 1 ELSE 0 END), 0),
-                  COALESCE(SUM(CASE WHEN loose = 0 AND has_album_meta = 0 THEN 1 ELSE 0 END), 0),
-                  COALESCE(SUM(loose), 0)
-                FROM albums
-                "#,
+                &format!(
+                    "SELECT
+                       COALESCE(SUM(CASE WHEN {} THEN 1 ELSE 0 END), 0),
+                       COALESCE(SUM(CASE WHEN {} THEN 1 ELSE 0 END), 0),
+                       COALESCE(SUM(loose), 0)
+                     FROM albums",
+                    quality::ALBUM_MISSING_COVER_SQL,
+                    quality::ALBUM_MISSING_META_SQL,
+                ),
                 [],
                 |r| Ok((r.get(0)?, r.get(1)?, r.get(2)?)),
             )?;
         let tracks_without_meta: i64 = conn.query_row(
-            r#"
-            SELECT COUNT(*) FROM tracks
-            WHERE (genres IS NULL OR genres = '[]') AND (release_date IS NULL OR trim(release_date) = '')
-            "#,
+            &format!(
+                "SELECT COUNT(*) FROM tracks WHERE {}",
+                quality::TRACK_MISSING_META_SQL
+            ),
             [],
             |r| r.get(0),
         )?;

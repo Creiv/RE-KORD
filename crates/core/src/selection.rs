@@ -409,14 +409,18 @@ pub fn selection_stats(
     } else {
         artists.len() as i64
     };
-    stats.albums_without_cover = albums.iter().filter(|a| !a.loose && !a.has_cover).count() as i64;
+    use crate::db::quality;
+    stats.albums_without_cover = albums
+        .iter()
+        .filter(|a| quality::album_missing_cover(a))
+        .count() as i64;
     stats.albums_without_meta = albums
         .iter()
-        .filter(|a| !a.loose && !a.has_album_meta)
+        .filter(|a| quality::album_missing_meta(a))
         .count() as i64;
     stats.tracks_without_meta = tracks
         .iter()
-        .filter(|t| t.genres.is_empty() && t.release_date.is_none())
+        .filter(|t| quality::track_missing_meta(&t.genres, t.release_date.as_deref()))
         .count() as i64;
     stats.loose_album_count = albums.iter().filter(|a| a.loose).count() as i64;
     stats.genre_count = tracks
