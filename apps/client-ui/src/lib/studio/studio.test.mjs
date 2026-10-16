@@ -15,6 +15,7 @@ import {
   batchCounts,
   jobOutcome,
   plannedReleaseFolders,
+  signInHintKeys,
   summaryFromEvent,
 } from "./downloadSummary.ts";
 import { classicModeForUrl, urlMatchesStudioDlMode } from "../youtubeUrl.ts";
@@ -124,4 +125,11 @@ test("un singolo di Scopri pubblicato come playlist apre il Classico in modalita
   assert.equal(urlMatchesStudioDlMode(single, mode), true);
   assert.equal(classicModeForUrl("https://music.youtube.com/watch?v=jNQXAC9IVRw", "playlist"), "single");
   assert.equal(classicModeForUrl("not a link", "single"), "single");
+});
+
+test("con i cookie a posto e senza motore JS il suggerimento indica il motore, non i cookie", () => {
+  assert.deepEqual(signInHintKeys(true, false), ["studio.dl.cookieHint"]);
+  assert.deepEqual(signInHintKeys(false, false), ["studio.dl.cookieHint"]);
+  assert.deepEqual(signInHintKeys(true, true), ["studio.dl.jsRuntimeHint"]);
+  assert.deepEqual(signInHintKeys(false, true), ["studio.dl.cookieHint", "studio.dl.jsRuntimeHint"]);
 });

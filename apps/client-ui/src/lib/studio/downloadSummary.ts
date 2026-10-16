@@ -109,3 +109,13 @@ export function plannedReleaseFolders(
   rows.sort((a, b) => a.path.localeCompare(b.path));
   return rows;
 }
+
+/**
+ * What a sign-in / age-gate failure asks the user to fix, as i18n keys: with
+ * cookies in place and no JavaScript runtime the runtime is the culprit
+ * (YouTube refuses yt-dlp without one even with valid cookies).
+ */
+export function signInHintKeys(cookiesConfigured: boolean, jsRuntimeMissing: boolean): string[] {
+  if (!jsRuntimeMissing) return ["studio.dl.cookieHint"];
+  return cookiesConfigured ? ["studio.dl.jsRuntimeHint"] : ["studio.dl.cookieHint", "studio.dl.jsRuntimeHint"];
+}

@@ -24,6 +24,7 @@ import type { DlVideoMode } from "../youtubeUrl";
 import {
   batchCounts,
   jobOutcome,
+  signInHintKeys,
   summaryFromEvent,
   summaryIsEmpty,
   type DownloadSummary,
@@ -103,6 +104,9 @@ class StudioDownloads {
   refreshing = $state(false);
   /** The last job hit YouTube's sign-in / age gate: cookies missing or expired. */
   cookieIssue = $state(false);
+  /** Hub setup from the download preset (the Download pane fills these in). */
+  cookiesConfigured = $state(true);
+  jsRuntimeMissing = $state(false);
 
   entries = $state<LogEntry[]>([]);
   raw = $state("");
@@ -262,7 +266,7 @@ class StudioDownloads {
     }
     if (this.cookieIssue && !cancelled && !this.cookieHintLogged) {
       this.cookieHintLogged = true;
-      this.log("warn", t("studio.dl.cookieHint"));
+      for (const key of signInHintKeys(this.cookiesConfigured, this.jsRuntimeMissing)) this.log("warn", t(key));
     }
     return { outcome, summary, indexed: typeof ev.indexEpoch === "number" };
   }

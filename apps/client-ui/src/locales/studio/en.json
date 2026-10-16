@@ -530,7 +530,7 @@
   "studio.dl.inLibraryFolder": "Already in library: {{folder}}",
   "studio.dl.exploreEmpty": "No results.",
   "studio.dl.cookieHint": "YouTube asks to sign in: cookies are missing or expired. Export them from a private window (after signing in to YouTube) and close it, then upload them in Settings › Library › Integrations.",
-  "studio.dl.jsRuntimeHint": "The JavaScript engine for yt-dlp is missing too: without it YouTube answers \"The page needs to be reloaded\" even with cookies. Use a RE-KORD server package (it includes QuickJS) or install Deno or Node.js 22+ on the hub.",
+  "studio.dl.jsRuntimeHint": "The JavaScript engine for yt-dlp is missing: without it YouTube answers \"The page needs to be reloaded\" even with cookies. Use a RE-KORD server package (it includes QuickJS) or install Deno or Node.js 22+ on the hub.",
   "studio.dl.openSettings": "Open Settings",
   "studio.dl.confirm.changeDest": "Change"
 }

@@ -7,7 +7,7 @@
   import { fmtNumber, t, tp } from "../../lib/i18n.svelte";
   import { session } from "../../lib/session.svelte";
   import { studioAccess } from "../../lib/studio/access.svelte";
-  import { plannedReleaseFolders } from "../../lib/studio/downloadSummary";
+  import { plannedReleaseFolders, signInHintKeys } from "../../lib/studio/downloadSummary";
   import { DEST_KEY, DEST_OK_KEY, downloadFlow, type DownloadAsk } from "../../lib/studio/downloadFlow.svelte";
   import { studioDownloads as dl } from "../../lib/studio/downloadStore.svelte";
   import { studioErrorText } from "../../lib/studio/errors";
@@ -67,6 +67,7 @@
   let cookiesOk = $state(false);
   /** The hub reported no JavaScript runtime for yt-dlp (YouTube blocks it). */
   let jsMissing = $state(false);
+  const signInHints = $derived(signInHintKeys(cookiesOk, jsMissing));
 
   const busy = $derived(dl.running);
   const canWrite = $derived(studioAccess.canWrite);
@@ -119,6 +120,8 @@
       .then((p) => {
         cookiesOk = !!p.cookiesConfigured;
         jsMissing = jsRuntimeMissing(pickJsRuntime(p.jsRuntime));
+        dl.cookiesConfigured = cookiesOk;
+        dl.jsRuntimeMissing = jsMissing;
       })
       .catch(() => {});
     // A job started in another tab (or before a reload) gets its Cancel back,
@@ -1101,11 +1104,10 @@
 
   {#if dl.cookieIssue}
     <div class="studio-cookie-hint" role="note">
-      <p>{t(jsMissing && cookiesOk ? "studio.dl.jsRuntimeHint" : "studio.dl.cookieHint")}</p>
-      {#if jsMissing && !cookiesOk}
-        <p>{t("studio.dl.jsRuntimeHint")}</p>
-      {/if}
-      {#if session.canManageMachine}
+      {#each signInHints as key (key)}
+        <p>{t(key)}</p>
+      {/each}
+      {#if session.canManageMachine && signInHints.includes("studio.dl.cookieHint")}
         <button type="button" class="ghost-btn ghost-btn--sm" onclick={() => session.openSettings({ section: "Libreria", anchor: "integrations" })}>
           {t("studio.dl.openSettings")}
         </button>
