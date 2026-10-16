@@ -5,7 +5,9 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 import {
+  addGenresToDraft,
   countGenreLabels,
+  genreDraftFromField,
   fieldHasGenreLabel,
   formatTrackGenresForDisplay,
   genreLabelChoices,
@@ -126,4 +128,55 @@ test("menu aggiungi genere: niente generi già sull'album, nemmeno come alias", 
   assert.deepEqual(labels.sort(), ["Jazz", "Pop"]);
   assert.ok(fieldHasGenreLabel("Rhythm & Blues; Pop", "R&B"));
   assert.ok(!fieldHasGenreLabel("Pop", "R&B"));
+});
+
+test("modifica brano: alias e doppioni diventano un chip solo, con chiavi uniche", () => {
+  const draft = genreDraftFromField("R&B; Rhythm & Blues / Hip Hop, hip-hop;; ;Hip-Hop; 8; Unknown; Rock");
+  assert.deepEqual(draft, ["R&B", "Hip Hop", "Rock"]);
+  const keys = draft.map(genreLabelKey);
+  assert.equal(new Set(keys).size, keys.length);
+  assert.deepEqual(draft.map(canonicalGenreLabel), ["R&B", "Hip Hop", "Rock"]);
+});
+
+test("modifica brano: liste lunghe senza chiavi doppie (la vecchia chiave g+i collideva)", () => {
+  const tokens = Array.from({ length: 40 }, (_, i) => `Genre${i}`);
+  // "Genre1" + 10 e "Genre11" + 0 davano la stessa chiave "Genre110".
+  const draft = genreDraftFromField(tokens.join("; "));
+  assert.equal(draft.length, 40);
+  const keys = draft.map(genreLabelKey);
+  assert.equal(new Set(keys).size, 40);
+});
+
+test("modifica brano: aggiungere un alias o un doppione non cambia la bozza", () => {
+  const draft = ["Hip-Hop", "R&B"];
+  assert.equal(addGenresToDraft(draft, "Hip Hop"), draft);
+  assert.equal(addGenresToDraft(draft, "hiphop"), draft);
+  assert.equal(addGenresToDraft(draft, "Rhythm & Blues"), draft);
+  assert.equal(addGenresToDraft(draft, "  "), draft);
+  assert.equal(addGenresToDraft(draft, "8"), draft);
+  assert.equal(addGenresToDraft(draft, "Unknown"), draft);
+});
+
+test("modifica brano: si possono incollare più generi con qualsiasi separatore", () => {
+  assert.deepEqual(addGenresToDraft(["Rock"], "Pop; Jazz / rock, Drum & Bass | Drum and Bass"), [
+    "Rock",
+    "Pop",
+    "Jazz",
+    "Drum & Bass",
+  ]);
+});
+
+test("menu della modifica brano: generi della libreria, senza quelli già sul brano", () => {
+  const fields = ["Rhythm & Blues; Trap", "R&B", "hip-hop", null, ""];
+  const draft = ["Hip Hop"];
+  const opts = genreLabelChoices(fields, ["Hip-Hop", "Rap", "R&B"], new Set(draft.map(genreLabelKey)));
+  assert.deepEqual(
+    opts.map((o) => o.label),
+    ["R&B", "Trap", "Rap"],
+  );
+  assert.equal(new Set(opts.map((o) => o.key)).size, opts.length);
+});
+
+test("a schermo gli alias compaiono una volta sola (non \"R&B · R&B\")", () => {
+  assert.equal(formatTrackGenresForDisplay("R&B; Rhythm & Blues; Hip-Hop; hip hop"), "R&B · Hip Hop");
 });

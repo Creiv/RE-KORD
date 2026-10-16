@@ -311,6 +311,7 @@
   "trackMeta.fieldGenre": "Genres",
   "trackMeta.fieldGenreAdd": "Add genre",
   "trackMeta.fieldGenreListEmpty": "No more library genres to add",
+  "trackMeta.fieldGenreAlready": "This genre is already there (maybe spelled differently)",
   "trackMeta.fieldGenreRemoveAria": "Remove {{g}}",
   "trackMeta.fieldMood": "Mood",
   "trackMeta.fieldLyrics": "Lyrics",

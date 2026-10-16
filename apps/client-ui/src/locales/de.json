@@ -296,6 +296,7 @@
   "trackMeta.fieldGenre": "Genres",
   "trackMeta.fieldGenreAdd": "Genre hinzufügen",
   "trackMeta.fieldGenreListEmpty": "Keine weiteren Bibliotheks-Genres zum Hinzufügen",
+  "trackMeta.fieldGenreAlready": "Dieses Genre ist schon da (vielleicht anders geschrieben)",
   "trackMeta.fieldGenreRemoveAria": "{{g}} entfernen",
   "trackMeta.fieldMood": "Stimmung",
   "trackMeta.fieldLyrics": "Songtext",

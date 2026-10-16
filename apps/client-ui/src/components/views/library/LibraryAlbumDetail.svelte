@@ -22,6 +22,7 @@
     genreLabelKey,
     parseTrackGenres,
     serializeTrackGenres,
+    trackGenres,
   } from "../../../lib/genres";
   import { fmtDate, i18n, t, tp } from "../../../lib/i18n.svelte";
   import { player } from "../../../lib/player";
@@ -138,7 +139,7 @@
         const serialized = serializeTrackGenres(next);
         await api.trackInfoSave(tr.rel_path, { genre: serialized ?? "" });
         // Lists are immutable ($state.raw): replace the track everywhere it appears.
-        session.patchTrack(tr.rel_path, { genre: serialized });
+        session.patchTrack(tr.rel_path, { genre: serialized, genres: trackGenres({ genre: serialized }) });
       }
     } catch (e) {
       genreErr = e instanceof Error ? e.message : String(e);

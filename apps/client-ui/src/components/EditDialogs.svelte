@@ -2,8 +2,18 @@
   import { Button, Field, FileDrop, Modal, TextInput } from "@rekord/ui";
   import { api, coverUrlFor } from "../lib/api";
   import { runAutoLrcQuickSaveForTrack } from "../lib/autoLrc";
-  import { parseTrackGenres, serializeTrackGenres } from "../lib/genres";
-  import { t } from "../lib/i18n.svelte";
+  import {
+    addGenresToDraft,
+    canonicalGenreLabel,
+    genreDraftFromField,
+    genreLabelChoices,
+    genreLabelKey,
+    normalizeGenreKey,
+    parseTrackGenres,
+    serializeTrackGenres,
+    trackGenres,
+  } from "../lib/genres";
+  import { i18n, t } from "../lib/i18n.svelte";
   import { session } from "../lib/session.svelte";
   import { toasts } from "../lib/toasts.svelte";
   import {
@@ -56,7 +66,7 @@
       const tr = session.editTrack;
       draftTitle = tr.title;
       draftMoods = resolveTrackMoods(tr.id, tr.rel_path, loadUserPrefs().trackMoods);
-      draftGenres = parseTrackGenres(tr.genre);
+      draftGenres = genreDraftFromField(tr.genre);
       draftRelease = toDateInputValue(tr.release_date);
       draftLyrics = tr.lyrics ?? "";
       lyricsOpen = false;
@@ -89,38 +99,53 @@
     }),
   );
 
-  function genreKey(raw: string): string {
-    return raw.trim().toLocaleLowerCase("it");
-  }
+  /*
+   * Genres are matched by label (`genreLabelKey`), like the album page: "R&B"
+   * and "Rhythm & Blues", or "Hip Hop" and "Hip-Hop", are one genre — one chip,
+   * no second entry in the picker, and the + button says it is already there
+   * instead of letting the save drop it.
+   */
+  const GENRE_OPTIONS_SHOWN = 100;
 
-  function addGenre(genre: string) {
-    const next = genre.trim();
-    if (!next) return;
-    const k = genreKey(next);
-    if (draftGenres.some((g) => genreKey(g) === k)) return;
-    draftGenres = [...draftGenres, next];
+  const draftGenreKeys = $derived(new Set(draftGenres.map(genreLabelKey)));
+
+  function addGenre(input: string) {
+    const next = addGenresToDraft(draftGenres, input);
+    if (next === draftGenres) return;
+    draftGenres = [...next];
     genreQuery = "";
     genreListOpen = false;
   }
 
-  function removeGenre(index: number) {
-    draftGenres = draftGenres.filter((_, i) => i !== index);
+  function removeGenre(key: string) {
+    draftGenres = draftGenres.filter((g) => genreLabelKey(g) !== key);
   }
 
-  const availableGenres = $derived(
-    GENRE_POOL.filter((g) => !draftGenres.some((s) => genreKey(s) === genreKey(g))),
-  );
-
-  const filteredGenres = $derived.by(() => {
-    const q = genreKey(genreQuery);
-    if (!q) return availableGenres;
-    return availableGenres.filter((g) => genreKey(g).includes(q));
+  /** Library genres (and the starter pool) not on the track yet. Read only while the list is open. */
+  const availableGenres = $derived.by(() => {
+    const source = session.catalogTracks.length ? session.catalogTracks : session.tracks;
+    return genreLabelChoices(
+      source.map((tr) => tr.genre),
+      GENRE_POOL,
+      draftGenreKeys,
+    ).sort((a, b) => a.label.localeCompare(b.label, i18n.sortLocale, { numeric: true }));
   });
 
-  const canAddGenre = $derived(
-    genreQuery.trim().length > 0 &&
-      !draftGenres.some((s) => genreKey(s) === genreKey(genreQuery)),
-  );
+  const filteredGenres = $derived.by(() => {
+    const q = normalizeGenreKey(genreQuery);
+    const list = q
+      ? availableGenres.filter((g) => normalizeGenreKey(g.label).includes(q))
+      : availableGenres;
+    return list.slice(0, GENRE_OPTIONS_SHOWN);
+  });
+
+  /** The typed genre is already on the track (maybe as an alias). */
+  const genreAlready = $derived.by(() => {
+    const tokens = parseTrackGenres(genreQuery);
+    return tokens.length > 0 && tokens.every((g) => draftGenreKeys.has(genreLabelKey(g)));
+  });
+
+  const canAddGenre = $derived(addGenresToDraft(draftGenres, genreQuery) !== draftGenres);
 
   function toggleMood(id: TrackMoodId) {
     if (draftMoods.includes(id)) {
@@ -155,6 +180,8 @@
       session.patchTrack(tr.rel_path, {
         title: draftTitle.trim() || tr.title,
         genre,
+        // Views read the hub's `genres` list first: keep it in step.
+        genres: trackGenres({ genre }),
         lyrics: draftLyrics || null,
         ...(releaseDate ? { release_date: releaseDate } : {}),
       });
@@ -394,14 +421,15 @@
     <div class="meta-field">
       <span class="meta-label">{t("trackMeta.fieldGenre")}</span>
       <div class="genre-chips" role="list">
-        {#each draftGenres as g, i (g + i)}
+        {#each draftGenres as g (genreLabelKey(g))}
+          {@const label = canonicalGenreLabel(g)}
           <span class="genre-chip" role="listitem">
-            <span class="genre-chip__text">{g}</span>
+            <span class="genre-chip__text" title={label !== g ? g : undefined}>{label}</span>
             <button
               type="button"
               class="genre-chip__x"
-              onclick={() => removeGenre(i)}
-              aria-label={t("trackMeta.fieldGenreRemoveAria", { g })}
+              onclick={() => removeGenre(genreLabelKey(g))}
+              aria-label={t("trackMeta.fieldGenreRemoveAria", { g: label })}
             >
               <UiIcon name="close" class="genre-chip__x-ic" />
             </button>
@@ -441,25 +469,27 @@
         {#if genreListOpen && (filteredGenres.length > 0 || genreQuery.trim())}
           {#if filteredGenres.length > 0}
             <ul class="genre-search__list rk-scroll" role="listbox" aria-label={t("editDialogs.genreAddFromLibrary")}>
-              {#each filteredGenres as g (g)}
+              {#each filteredGenres as g (g.key)}
                 <li>
                   <button
                     type="button"
                     class="genre-search__option"
                     role="option"
                     aria-selected="false"
-                    onclick={() => addGenre(g)}
+                    onclick={() => addGenre(g.label)}
                   >
-                    {g}
+                    {g.label}
                   </button>
                 </li>
               {/each}
             </ul>
           {:else}
             <p class="genre-search__empty">
-              {canAddGenre
-                ? t("editDialogs.genreNoMatch")
-                : t("trackMeta.fieldGenreListEmpty")}
+              {genreAlready
+                ? t("trackMeta.fieldGenreAlready")
+                : canAddGenre
+                  ? t("editDialogs.genreNoMatch")
+                  : t("trackMeta.fieldGenreListEmpty")}
             </p>
           {/if}
         {/if}

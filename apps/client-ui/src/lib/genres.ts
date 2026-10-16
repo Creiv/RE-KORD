@@ -170,9 +170,9 @@ export function serializeTrackGenres(genres: readonly string[] | null | undefine
   return s || null;
 }
 
+/** "Rock · Pop" for display; aliases ("R&B; Rhythm & Blues") show once. */
 export function formatTrackGenresForDisplay(raw: string | null | undefined): string {
-  const g = parseTrackGenres(raw).map(canonicalGenreLabel);
-  return g.length ? g.join(" · ") : "";
+  return genreDraftFromField(raw).map(canonicalGenreLabel).join(" · ");
 }
 
 /** Anything with a genre: a track (maybe with the hub's `genres` list) or an album. */
@@ -304,4 +304,38 @@ export function genreLabelChoices(
   for (const raw of fields) for (const g of parseTrackGenres(raw)) add(g);
   for (const g of extra) add(g);
   return [...byKey.entries()].map(([key, label]) => ({ key, label }));
+}
+
+/**
+ * Genres of a field as an edit draft: its tokens with one entry per label
+ * (`genreLabelKey`), first spelling kept. "R&B; Rhythm & Blues" is one chip,
+ * so a chip row keyed on `genreLabelKey` never sees a duplicate key.
+ */
+export function genreDraftFromField(raw: string | null | undefined): string[] {
+  const seen = new Set<string>();
+  const out: string[] = [];
+  for (const g of parseTrackGenres(raw)) {
+    const key = genreLabelKey(g);
+    if (!key || seen.has(key)) continue;
+    seen.add(key);
+    out.push(g);
+  }
+  return out;
+}
+
+/**
+ * `draft` plus the genres typed in `input` (a single genre or a list with any
+ * separator), skipping junk tokens and genres already there under any alias.
+ * Returns the same array when nothing would be added.
+ */
+export function addGenresToDraft(draft: readonly string[], input: string): readonly string[] {
+  const seen = new Set(draft.map(genreLabelKey));
+  const added: string[] = [];
+  for (const g of parseTrackGenres(input)) {
+    const key = genreLabelKey(g);
+    if (!key || seen.has(key)) continue;
+    seen.add(key);
+    added.push(g);
+  }
+  return added.length ? [...draft, ...added] : draft;
 }
