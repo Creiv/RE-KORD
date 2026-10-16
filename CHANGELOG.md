@@ -35,6 +35,22 @@ one version number covers the hub, the clients and the packages.
   upload is validated before it replaces the current file (JSON exports and empty files
   get their own message) and is stored with mode 600. A download stopped by YouTube's
   sign-in or age check says so in the Download tab, with a hint and a link to Settings.
+- **Track editor: genre list** (issue #99). The picker offered ten fixed genres instead of
+  the library's, and genres were matched by spelling only: "R&B" and "Rhythm & Blues"
+  became two chips (shown as "R&B · R&B"), "Hip-Hop" was offered for a track already
+  tagged "Hip Hop" and then dropped silently on save, a pasted "Pop; Jazz" became one chip,
+  and placeholders like "Unknown" or "8" were accepted. The editor now works like the album
+  page: the library's genres (plus the starter list), one chip per genre whatever the
+  spelling, a pasted list split on any separator, and a note when the genre is already
+  there. Long lists no longer risk a duplicate-key error.
+- **Playing row equalizer** (issue #99): the active track row animates again while music
+  plays, like 5.0 legacy, and rests on the static equalizer glyph when paused. Only the
+  first listing of the playing track moves (and the Smart Radio tile); on Linux it changes
+  pose once per second together with the sidebar icon, so it costs no extra frames.
+- **Quality alerts count the same everywhere** (issue #99): the hub and the client now share
+  one definition of each issue, always restricted to the account's library selection. A
+  track tagged only with a placeholder genre ("Unknown", "Music", "8") counts as without
+  metadata; an album with a release date, label or country counts as having metadata.
 
 ### New
 
@@ -44,6 +60,12 @@ one version number covers the hub, the clients and the packages.
   and the download confirmation offers **Skip** or **Download anyway**.
 - **Cookie status** in Settings and in the admin panel's Integrations: file present and
   valid, last update, number of cookies and how many are for YouTube/Google.
+- **"To fix" list from the quality alerts** (issue #99): the *Quality alerts* tile and the
+  rows of *Library quality* on Home open a dialog with one tab per issue (albums without
+  cover, albums without metadata, tracks without metadata, folders with loose tracks) and
+  a button on each item: **Cover** and **Metadata** open Studio with that album already
+  picked, **Edit** opens the track editor, **Open album** its page. Counts update as you
+  fix things.
 
 ### Changed
 

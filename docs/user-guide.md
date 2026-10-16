@@ -131,7 +131,8 @@ The dashboard is the starting point.
 - **Hero card**: **"Listen"** (or **"Resume listening"**) picks up where you left off, or
   starts a library shuffle when nothing is loaded, and opens Studio › Listen. The shuffle
   icon, **"Play library"**, starts a fresh shuffle.
-- **Tiles**: "Artists", "Albums", "Tracks" and "Quality alerts".
+- **Tiles**: "Artists", "Albums", "Tracks" and "Quality alerts". Click "Quality alerts" to
+  open the **"To fix"** list (below).
 - **Smart Radio, "Quick listen"**: large cover tiles picked from your recent tracks, your
   favorites and the rest of the catalog (one per album). Tap a tile to start a radio from
   that track: the seed, then the library ordered by similarity (shared moods and genres,
@@ -148,6 +149,22 @@ The dashboard is the starting point.
 - **"Library quality", "Alerts and maintenance"**: albums without cover art or metadata,
   tracks without metadata, and folders with loose tracks. **"Go to Studio"** opens Studio ›
   Metadata to fix them.
+
+The counts cover only your account's library (the artists and albums you selected). A track
+"without metadata" has neither a genre nor a release date (placeholders such as "Unknown" or
+"Music" are not a genre); an album "without metadata" has no album details from Studio and
+no release date, label or country.
+
+**"To fix"**: click the "Quality alerts" tile or a row of "Library quality" to see the items
+behind each count, one tab per issue, 60 at a time (**"Show 60 more"** for the rest). Each item
+has its fix:
+
+- albums without cover art: **"Cover"** opens Studio › Covers with the album already picked;
+- albums without metadata: **"Metadata"** opens Studio › Metadata with the album picked;
+- tracks without metadata: **"Edit"** opens the track editor on top of the list;
+- every album: **"Open album"** goes to its page.
+
+The counts and the lists update as soon as something is fixed. An empty tab says "All good".
 
 If the library is empty, the dashboard tells you why: either the hub has no music folder yet
 (set it in the admin panel), or your account has not selected any artists yet. New accounts
@@ -206,7 +223,9 @@ actions"**.
 **"Edit track details"** has:
 
 - **"Title (display)"**, **"Release date"**;
-- **"Genres"**: search your library's genres or type a new one;
+- **"Genres"**: search your library's genres or type a new one (several at once with `;`,
+  `,` or `/`). Spellings of the same genre count as one: with "Hip Hop" on the track,
+  "Hip-Hop" or "hiphop" is not added again, and "R&B" / "Rhythm & Blues" show as one chip;
 - **"Mood"**: up to three of the fourteen moods (see [Moods](#moods));
 - **"Lyrics"**: **"Edit"** to type or paste lyrics, **"Auto LRC"** to fetch synced lyrics
   from LRCLIB. When no synced version exists, plain lyrics are saved instead.
