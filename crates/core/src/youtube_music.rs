@@ -249,6 +249,62 @@ pub struct ExploreResult {
     pub thumbnail_url: Option<String>,
 }
 
+/// `MUSIC_PAGE_TYPE_…` of a browse endpoint (artist, album, podcast, …).
+fn browse_page_type(ep: &Value) -> &str {
+    ep.pointer("/browseEndpoint/browseEndpointContextSupportedConfigs/browseEndpointContextMusicConfig/pageType")
+        .and_then(|v| v.as_str())
+        .unwrap_or("")
+}
+
+/// Podcast shows and episodes are not music to download into the library.
+fn is_podcast_endpoint(ep: &Value) -> bool {
+    browse_page_type(ep).starts_with("MUSIC_PAGE_TYPE_PODCAST")
+        || ep
+            .pointer("/watchEndpoint/watchEndpointMusicSupportedConfigs/watchEndpointMusicConfig/musicVideoType")
+            .and_then(|v| v.as_str())
+            .is_some_and(|t| t.contains("PODCAST"))
+}
+
+/// An artist row (no play button, a browse endpoint to the artist page).
+fn artist_result(
+    title: String,
+    subtitle: String,
+    ep: &Value,
+    renderer: &Value,
+) -> Option<ExploreResult> {
+    if browse_page_type(ep) != "MUSIC_PAGE_TYPE_ARTIST" {
+        return None;
+    }
+    let url = url_from_browse(ep);
+    if !url.contains("/channel/") {
+        return None;
+    }
+    let id = ep
+        .pointer("/browseEndpoint/browseId")?
+        .as_str()?
+        .to_string();
+    Some(ExploreResult {
+        id,
+        kind: "artist".into(),
+        title,
+        subtitle,
+        url,
+        thumbnail_url: thumbnail_from_renderer(renderer),
+    })
+}
+
+/// The "top result" card: kept when it is an artist (songs and albums shown
+/// there are repeated in the shelves below).
+fn parse_card_shelf(renderer: &Value) -> Option<ExploreResult> {
+    let title = extract_runs_text(&renderer["title"]).trim().to_string();
+    if title.is_empty() {
+        return None;
+    }
+    let subtitle = extract_runs_text(&renderer["subtitle"]).trim().to_string();
+    let ep = &renderer["title"]["runs"][0]["navigationEndpoint"];
+    artist_result(title, subtitle, ep, renderer)
+}
+
 fn parse_responsive_list_item(renderer: &Value) -> Option<ExploreResult> {
     let title = extract_runs_text(
         &renderer["flexColumns"][0]["musicResponsiveListItemFlexColumnRenderer"]["text"],
@@ -272,6 +328,9 @@ fn parse_responsive_list_item(renderer: &Value) -> Option<ExploreResult> {
     } else {
         &renderer["navigationEndpoint"]
     };
+    if is_podcast_endpoint(ep) || is_podcast_endpoint(&renderer["navigationEndpoint"]) {
+        return None;
+    }
     let watch = url_from_watch(ep);
     let playlist = url_from_playlist(ep);
     let url = if !watch.is_empty() {
@@ -280,7 +339,7 @@ fn parse_responsive_list_item(renderer: &Value) -> Option<ExploreResult> {
         playlist.clone()
     };
     if url.is_empty() {
-        return None;
+        return artist_result(title, subtitle, &renderer["navigationEndpoint"], renderer);
     }
     let id = ep
         .pointer("/watchEndpoint/videoId")
@@ -310,6 +369,9 @@ fn parse_two_row_item(renderer: &Value) -> Option<ExploreResult> {
     }
     let subtitle = extract_runs_text(&renderer["subtitle"]).trim().to_string();
     let ep = &renderer["navigationEndpoint"];
+    if is_podcast_endpoint(ep) {
+        return None;
+    }
     let playlist = url_from_playlist(ep);
     let browse = url_from_browse(ep);
     let watch = url_from_watch(ep);
@@ -359,34 +421,43 @@ pub async fn explore_search_with(query: &str, locale: &YtmLocale) -> Result<Vec<
         "query": q,
     });
     let data = innertube_post(YTM_SEARCH_URL, body).await?;
+    Ok(parse_explore_results(&data))
+}
+
+/// Search results from an innertube search payload: artists first, then
+/// albums / playlists, then songs; podcasts and user profiles are left out.
+fn parse_explore_results(data: &Value) -> Vec<ExploreResult> {
+    let mut cards = Vec::new();
     let mut list_items = Vec::new();
     let mut two_row = Vec::new();
-    walk_collect(&data, "musicResponsiveListItemRenderer", &mut list_items);
-    walk_collect(&data, "musicTwoRowItemRenderer", &mut two_row);
+    walk_collect(data, "musicCardShelfRenderer", &mut cards);
+    walk_collect(data, "musicResponsiveListItemRenderer", &mut list_items);
+    walk_collect(data, "musicTwoRowItemRenderer", &mut two_row);
     let mut out = Vec::new();
     let mut seen = HashSet::new();
-    for r in list_items {
-        if let Some(item) = parse_responsive_list_item(r) {
-            if seen.insert(item.url.clone()) {
-                out.push(item);
-            }
+    let parsed = cards
+        .into_iter()
+        .filter_map(parse_card_shelf)
+        .chain(
+            list_items
+                .into_iter()
+                .filter_map(parse_responsive_list_item),
+        )
+        .chain(two_row.into_iter().filter_map(parse_two_row_item));
+    for item in parsed {
+        if seen.insert(item.url.clone()) {
+            out.push(item);
         }
     }
-    for r in two_row {
-        if let Some(item) = parse_two_row_item(r) {
-            if seen.insert(item.url.clone()) {
-                out.push(item);
-            }
-        }
-    }
-    // Prefer artist → album → song order like legacy.
+    // Prefer artist → album → song order like legacy (stable: the top
+    // result stays first among artists).
     out.sort_by_key(|r| match r.kind.as_str() {
         "artist" => 0,
         "album" => 1,
         _ => 2,
     });
     out.truncate(48);
-    Ok(out)
+    out
 }
 
 #[derive(Debug, Clone, Serialize)]
@@ -1080,5 +1151,83 @@ mod tests {
         assert!(!is_youtube_music_browse_url(
             "https://www.youtube.com/watch?v=dQw4w9WgXcQ"
         ));
+    }
+
+    fn browse(id: &str, page_type: &str) -> Value {
+        json!({ "browseEndpoint": { "browseId": id, "browseEndpointContextSupportedConfigs": {
+            "browseEndpointContextMusicConfig": { "pageType": page_type } } } })
+    }
+
+    fn row(title: &str, subtitle: &str, nav: Option<Value>, play: Option<Value>) -> Value {
+        let mut r = json!({ "flexColumns": [
+            { "musicResponsiveListItemFlexColumnRenderer": { "text": { "runs": [{ "text": title }] } } },
+            { "musicResponsiveListItemFlexColumnRenderer": { "text": { "runs": [{ "text": subtitle }] } } }
+        ] });
+        if let Some(nav) = nav {
+            r["navigationEndpoint"] = nav;
+        }
+        if let Some(play) = play {
+            r["overlay"] = json!({ "musicItemThumbnailOverlayRenderer": { "content": {
+                "musicPlayButtonRenderer": { "playNavigationEndpoint": play } } } });
+        }
+        json!({ "musicResponsiveListItemRenderer": r })
+    }
+
+    fn watch(id: &str, video_type: &str) -> Value {
+        json!({ "watchEndpoint": { "videoId": id, "watchEndpointMusicSupportedConfigs": {
+            "watchEndpointMusicConfig": { "musicVideoType": video_type } } } })
+    }
+
+    #[test]
+    fn explore_search_keeps_artists_and_drops_podcasts() {
+        let data = json!({ "contents": [
+            { "musicCardShelfRenderer": {
+                "title": { "runs": [{ "text": "Black Flag",
+                    "navigationEndpoint": browse("UCtop", "MUSIC_PAGE_TYPE_ARTIST") }] },
+                "subtitle": { "runs": [{ "text": "Artist • 61K subscribers" }] } } },
+            { "musicShelfRenderer": { "contents": [
+                row("Revenge", "Song • 1:00", None, Some(watch("vid00000001", "MUSIC_VIDEO_TYPE_ATV"))),
+                row("Damaged", "Album • Black Flag • 1981",
+                    Some(browse("MPREb_x", "MUSIC_PAGE_TYPE_ALBUM")),
+                    Some(json!({ "watchPlaylistEndpoint": { "playlistId": "OLAK5uy_x" } }))),
+                row("Episode", "Episode • Show", None,
+                    Some(watch("vid00000002", "MUSIC_VIDEO_TYPE_PODCAST_EPISODE"))),
+                row("Show", "Podcast • Host",
+                    Some(browse("MPSPPLx", "MUSIC_PAGE_TYPE_PODCAST_SHOW_DETAIL_PAGE")),
+                    Some(json!({ "watchPlaylistEndpoint": { "playlistId": "PLshow" } }))),
+                row("Black Flag Jack", "Artist", Some(browse("UCjack", "MUSIC_PAGE_TYPE_ARTIST")), None),
+                row("blackflag", "Profile • @blackflag", Some(browse("UCuser", "MUSIC_PAGE_TYPE_USER_CHANNEL")), None),
+                // Same artist as the top card: listed once.
+                row("Black Flag", "Artist", Some(browse("UCtop", "MUSIC_PAGE_TYPE_ARTIST")), None)
+            ] } }
+        ] });
+        let got: Vec<(String, String, String)> = parse_explore_results(&data)
+            .into_iter()
+            .map(|r| (r.kind, r.title, r.url))
+            .collect();
+        let exp = [
+            (
+                "artist",
+                "Black Flag",
+                "https://music.youtube.com/channel/UCtop",
+            ),
+            (
+                "artist",
+                "Black Flag Jack",
+                "https://music.youtube.com/channel/UCjack",
+            ),
+            (
+                "album",
+                "Damaged",
+                "https://music.youtube.com/playlist?list=OLAK5uy_x",
+            ),
+            (
+                "song",
+                "Revenge",
+                "https://music.youtube.com/watch?v=vid00000001",
+            ),
+        ]
+        .map(|(k, t, u)| (k.to_string(), t.to_string(), u.to_string()));
+        assert_eq!(got, exp);
     }
 }
