@@ -17,10 +17,17 @@
 //! since the copy was taken (a new upload always wins), when the refreshed jar
 //! still validates, and under a process-wide lock with an atomic rename.
 //! Probes and previews never write back.
+//!
+//! The files hold a live account session, so none of them is simply unlinked:
+//! [`wipe_and_remove`] overwrites the contents with zeros (and syncs) first.
+//! That covers Settings › clear, the per-run copies, and the previous stored
+//! file when an upload or a write-back replaces it. It is best effort: a
+//! copy-on-write or journaling filesystem, or an SSD, may keep old blocks
+//! around, and a read-only mount only gets the unlink attempt.
 
 use crate::config::AppConfig;
 use std::fs;
-use std::io::Write;
+use std::io::{Seek, Write};
 use std::path::{Path, PathBuf};
 use std::sync::Mutex;
 use std::time::{Duration, SystemTime};
@@ -47,6 +54,60 @@ pub fn store_upload(dest: &Path, bytes: &[u8]) -> std::io::Result<()> {
 /// Remove the stored file (Settings › clear), under the write-back lock.
 pub fn remove_stored(path: &Path) {
     let _guard = write_lock();
+    wipe_and_remove(path);
+}
+
+/// Whether zeroing `meta`'s file is safe: a regular file (never a symlink's
+/// target) that no other hard link shares.
+fn wipeable(meta: &fs::Metadata) -> bool {
+    if !meta.file_type().is_file() {
+        return false;
+    }
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::MetadataExt;
+        if meta.nlink() > 1 {
+            return false;
+        }
+    }
+    true
+}
+
+/// Overwrite `len` bytes of an open file with zeros from the start, then sync.
+fn zero_fill(f: &mut fs::File, len: u64) -> std::io::Result<()> {
+    const CHUNK: usize = 8192;
+    let zeros = [0u8; CHUNK];
+    f.rewind()?;
+    let mut left = len;
+    while left > 0 {
+        let n = left.min(CHUNK as u64) as usize;
+        f.write_all(&zeros[..n])?;
+        left -= n as u64;
+    }
+    f.sync_all()
+}
+
+/// Zero a file's contents in place (best effort; errors are ignored).
+fn wipe_contents(path: &Path) {
+    let Ok(meta) = fs::symlink_metadata(path) else {
+        return;
+    };
+    if !wipeable(&meta) || meta.len() == 0 {
+        return;
+    }
+    // No truncate: the same blocks are overwritten, not released first.
+    if let Ok(mut f) = fs::OpenOptions::new().write(true).open(path) {
+        if let Err(e) = zero_fill(&mut f, meta.len()) {
+            tracing::debug!(error = %e, "cookie wipe incomplete");
+        }
+    }
+}
+
+/// Delete a cookies file after overwriting it with zeros, so the session it
+/// held is not left in the freed blocks. Best effort: never fails, never
+/// panics (a read-only filesystem keeps the file).
+pub fn wipe_and_remove(path: &Path) {
+    wipe_contents(path);
     let _ = fs::remove_file(path);
 }
 
@@ -179,12 +240,43 @@ pub fn write_private_atomic(dest: &Path, bytes: &[u8]) -> std::io::Result<()> {
         f.write_all(bytes)?;
         f.sync_all()?;
         drop(f);
-        fs::rename(&tmp, dest)
+        replace_wiping_old(&tmp, dest)
     })();
     if res.is_err() {
-        let _ = fs::remove_file(&tmp);
+        wipe_and_remove(&tmp);
     }
     res
+}
+
+/// `rename(tmp, dest)`, then zero the file `dest` used to be. A handle to the
+/// old file is opened first, so its contents can still be overwritten once
+/// the rename has unlinked it, and the new file is in place before the old
+/// one is touched (a failed rename leaves the old cookies intact).
+fn replace_wiping_old(tmp: &Path, dest: &Path) -> std::io::Result<()> {
+    let old = fs::symlink_metadata(dest)
+        .ok()
+        .filter(|m| wipeable(m) && m.len() > 0)
+        .and_then(|m| {
+            fs::OpenOptions::new()
+                .write(true)
+                .open(dest)
+                .ok()
+                .map(|f| (f, m.len()))
+        });
+    let Some((mut old, len)) = old else {
+        return fs::rename(tmp, dest);
+    };
+    if let Err(e) = fs::rename(tmp, dest) {
+        // Some platforms refuse to replace a file that is open: retry
+        // without the handle (the old contents are then not wiped).
+        drop(old);
+        tracing::debug!(error = %e, "cookie replace retried without wipe");
+        return fs::rename(tmp, dest);
+    }
+    if let Err(e) = zero_fill(&mut old, len) {
+        tracing::debug!(error = %e, "old cookie wipe incomplete");
+    }
+    Ok(())
 }
 
 fn create_private(path: &Path) -> std::io::Result<fs::File> {
@@ -213,7 +305,7 @@ fn sweep_stale(dir: &Path) {
             .and_then(|t| now.duration_since(t).ok())
             .is_some_and(|age| age > STALE_AFTER);
         if old {
-            let _ = fs::remove_file(e.path());
+            wipe_and_remove(&e.path());
         }
     }
 }
@@ -257,7 +349,7 @@ impl YtdlpCookies {
         let written = create_private(&copy).and_then(|mut f| f.write_all(&bytes));
         if let Err(e) = written {
             tracing::warn!(error = %e, "cookie copy failed");
-            let _ = fs::remove_file(&copy);
+            wipe_and_remove(&copy);
             return None;
         }
         // Only the hub's own upload is ever written back: not a file named by the
@@ -317,7 +409,7 @@ impl YtdlpCookies {
 
 impl Drop for YtdlpCookies {
     fn drop(&mut self) {
-        let _ = fs::remove_file(&self.copy);
+        wipe_and_remove(&self.copy);
     }
 }
 
@@ -543,6 +635,111 @@ mod tests {
         let s = cookie_status(Some(&p));
         assert!(s.present && s.valid);
         assert_eq!((s.entries, s.youtube_entries), (3, 2));
+        let _ = fs::remove_dir_all(&dir);
+    }
+
+    /// The file behind a handle opened before the wipe now holds `len` zeros.
+    /// Unix keeps an unlinked inode readable through the open handle; elsewhere
+    /// only the removal is checked.
+    fn assert_zeroed(f: fs::File, len: usize) {
+        #[cfg(unix)]
+        {
+            use std::io::Read;
+            let mut f = f;
+            let mut out = Vec::new();
+            f.rewind().unwrap();
+            f.read_to_end(&mut out).unwrap();
+            assert_eq!(out, vec![0u8; len]);
+        }
+        #[cfg(not(unix))]
+        let _ = (f, len);
+    }
+
+    #[test]
+    fn wipe_zeroes_the_contents_before_removing() {
+        let (_cfg, dir) = temp_cfg();
+        let p = dir.join("youtube-cookies.txt");
+        fs::write(&p, SAMPLE).unwrap();
+        let seen = fs::File::open(&p).unwrap();
+        wipe_and_remove(&p);
+        assert!(!p.exists(), "file removed");
+        assert_zeroed(seen, SAMPLE.len());
+        // Missing file: nothing to do, no error.
+        wipe_and_remove(&p);
+        remove_stored(&p);
+        let _ = fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn clear_wipes_the_stored_cookies() {
+        let (mut cfg, dir) = temp_cfg();
+        let dest = cfg.set_youtube_cookies_bytes(SAMPLE.as_bytes()).unwrap();
+        let seen = fs::File::open(&dest).unwrap();
+        cfg.clear_youtube_cookies().unwrap();
+        assert!(!dest.exists());
+        assert_eq!(cfg.youtube_cookies_for_ytdlp(), None);
+        assert_zeroed(seen, SAMPLE.len());
+        let _ = fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn replacing_and_dropping_wipe_the_old_files() {
+        let (mut cfg, dir) = temp_cfg();
+        let dest = cfg.set_youtube_cookies_bytes(SAMPLE.as_bytes()).unwrap();
+        let old = fs::File::open(&dest).unwrap();
+        let newer = format!("{SAMPLE}.youtube.com\tTRUE\t/\tTRUE\t0\tUP\t2\n");
+        cfg.set_youtube_cookies_bytes(newer.as_bytes()).unwrap();
+        assert_eq!(fs::read_to_string(&dest).unwrap(), newer);
+        assert_zeroed(old, SAMPLE.len());
+
+        let jar = YtdlpCookies::prepare(&cfg).unwrap();
+        let copy = jar.path().to_path_buf();
+        let seen = fs::File::open(&copy).unwrap();
+        drop(jar);
+        assert!(!copy.exists());
+        assert_zeroed(seen, newer.len());
+        assert_eq!(
+            fs::read_to_string(&dest).unwrap(),
+            newer,
+            "stored file kept"
+        );
+        let _ = fs::remove_dir_all(&dir);
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn wipe_leaves_hard_links_and_symlink_targets_alone() {
+        let (_cfg, dir) = temp_cfg();
+        let shared = dir.join("browser-export.txt");
+        fs::write(&shared, SAMPLE).unwrap();
+        let link = dir.join("hard.txt");
+        fs::hard_link(&shared, &link).unwrap();
+        wipe_and_remove(&link);
+        assert!(!link.exists());
+        assert_eq!(fs::read_to_string(&shared).unwrap(), SAMPLE);
+        let sym = dir.join("sym.txt");
+        std::os::unix::fs::symlink(&shared, &sym).unwrap();
+        wipe_and_remove(&sym);
+        assert!(fs::symlink_metadata(&sym).is_err());
+        assert_eq!(fs::read_to_string(&shared).unwrap(), SAMPLE);
+        let _ = fs::remove_dir_all(&dir);
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn wipe_on_a_read_only_location_is_best_effort() {
+        use std::os::unix::fs::PermissionsExt;
+        let (_cfg, dir) = temp_cfg();
+        let ro = dir.join("ro");
+        fs::create_dir_all(&ro).unwrap();
+        let p = ro.join("cookies.txt");
+        fs::write(&p, SAMPLE).unwrap();
+        fs::set_permissions(&p, fs::Permissions::from_mode(0o400)).unwrap();
+        fs::set_permissions(&ro, fs::Permissions::from_mode(0o500)).unwrap();
+        // Neither the overwrite nor the unlink is allowed: no panic, no error.
+        wipe_and_remove(&p);
+        remove_stored(&p);
+        fs::set_permissions(&ro, fs::Permissions::from_mode(0o700)).unwrap();
         let _ = fs::remove_dir_all(&dir);
     }
 

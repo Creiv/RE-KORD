@@ -305,10 +305,10 @@ pub async fn restore_backup_zip(
     if let Some(cookies) = read_zip_string(&mut archive, "config/youtube-cookies.txt")? {
         if !cookies.trim().is_empty() {
             let dest = state.config.lock().unwrap().default_youtube_cookies_path();
-            if let Some(parent) = dest.parent() {
-                let _ = fs::create_dir_all(parent);
+            // Owner-only, atomic, and the cookies it replaces are wiped.
+            if let Err(e) = crate::ytdlp_cookies::store_upload(&dest, cookies.as_bytes()) {
+                tracing::warn!(error = %e, "restore: youtube cookies not written");
             }
-            let _ = fs::write(&dest, cookies.as_bytes());
             let mut cfg = state.config.lock().unwrap();
             if !cfg.youtube_cookies_from_env {
                 cfg.youtube_cookies_path = Some(dest);
