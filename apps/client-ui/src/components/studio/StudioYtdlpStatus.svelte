@@ -9,6 +9,7 @@
 <script lang="ts">
   import { onMount } from "svelte";
   import { ytdlpStatus, ytdlpUpdate } from "../../lib/api/studio";
+  import { jsRuntimeLabel, jsRuntimeMissing } from "../../lib/studio/jsRuntime";
   import { t } from "../../lib/i18n.svelte";
   import { studioAccess } from "../../lib/studio/access.svelte";
   import { studioErrorText } from "../../lib/studio/errors";
@@ -65,12 +66,18 @@
     }
   }
 
+  const jsMissing = $derived(status?.available === true && jsRuntimeMissing(status.jsRuntime));
+
   const canOffer = $derived(
     updateSupported && status?.available !== false && status?.updatable !== false,
   );
 </script>
 
-<div class="studio-ytdlp" class:is-stale={status?.stale} class:is-missing={status?.available === false}>
+<div
+  class="studio-ytdlp"
+  class:is-stale={status?.stale || jsMissing}
+  class:is-missing={status?.available === false}
+>
   <span class="studio-ytdlp__state">
     {#if !loaded}
       {t("studio.ytdlp.checking")}
@@ -80,11 +87,19 @@
       {t("studio.ytdlp.missing")}
     {:else}
       {t("studio.ytdlp.version", { version: status.version ?? "?" })}
+      {#if status.jsRuntime.available}
+        <span class="studio-ytdlp__js">
+          {t("studio.ytdlp.jsRuntime", { runtime: jsRuntimeLabel(status.jsRuntime) })}
+        </span>
+      {/if}
     {/if}
     {#if cookies}
       <span class="studio-ytdlp__chip">{t("studio.ytdlp.cookies")}</span>
     {/if}
   </span>
+  {#if jsMissing}
+    <span class="studio-ytdlp__warn">{t("studio.ytdlp.jsMissing")}</span>
+  {/if}
   {#if status?.stale}
     <span class="studio-ytdlp__warn">
       {status.ageDays != null

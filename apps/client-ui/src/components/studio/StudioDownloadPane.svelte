@@ -24,6 +24,7 @@
   import StudioAccessNotice from "./StudioAccessNotice.svelte";
   import StudioLog from "./StudioLog.svelte";
   import StudioYtdlpStatus from "./StudioYtdlpStatus.svelte";
+  import { jsRuntimeMissing, pickJsRuntime } from "../../lib/studio/jsRuntime";
 
   const EXPLORE_TYPES = new Set(["song", "album", "artist"]);
   /** Placeholder rows while the first Esplora results load. */
@@ -64,6 +65,8 @@
   let relQuery = $state("");
   let relAbort: AbortController | null = null;
   let cookiesOk = $state(false);
+  /** The hub reported no JavaScript runtime for yt-dlp (YouTube blocks it). */
+  let jsMissing = $state(false);
 
   const busy = $derived(dl.running);
   const canWrite = $derived(studioAccess.canWrite);
@@ -115,6 +118,7 @@
       .downloadPreset()
       .then((p) => {
         cookiesOk = !!p.cookiesConfigured;
+        jsMissing = jsRuntimeMissing(pickJsRuntime(p.jsRuntime));
       })
       .catch(() => {});
     // A job started in another tab (or before a reload) gets its Cancel back,
@@ -1097,7 +1101,10 @@
 
   {#if dl.cookieIssue}
     <div class="studio-cookie-hint" role="note">
-      <p>{t("studio.dl.cookieHint")}</p>
+      <p>{t(jsMissing && cookiesOk ? "studio.dl.jsRuntimeHint" : "studio.dl.cookieHint")}</p>
+      {#if jsMissing && !cookiesOk}
+        <p>{t("studio.dl.jsRuntimeHint")}</p>
+      {/if}
       {#if session.canManageMachine}
         <button type="button" class="ghost-btn ghost-btn--sm" onclick={() => session.navigate("settings")}>
           {t("studio.dl.openSettings")}

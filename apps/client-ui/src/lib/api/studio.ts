@@ -15,6 +15,7 @@ import {
   type Envelope,
   type RequestOptions,
 } from "./http";
+import { pickJsRuntime, type JsRuntimeInfo } from "../studio/jsRuntime";
 import { t } from "../i18n.svelte";
 
 type CallOptions = Pick<RequestOptions, "signal" | "timeoutMs">;
@@ -246,6 +247,8 @@ export type YtdlpStatus = {
   updatable: boolean | null;
   /** Where the binary comes from (`bundled`, `path`, `custom`, …), never the path. */
   source: string | null;
+  /** JavaScript runtime passed to yt-dlp (`binaries.jsRuntime`). */
+  jsRuntime: JsRuntimeInfo;
 };
 
 function pickYtdlp(diag: unknown): YtdlpStatus | null {
@@ -266,6 +269,7 @@ function pickYtdlp(diag: unknown): YtdlpStatus | null {
           ? y.canUpdate
           : null,
     source: typeof y.source === "string" ? y.source : null,
+    jsRuntime: pickJsRuntime(bins.jsRuntime),
   };
 }
 

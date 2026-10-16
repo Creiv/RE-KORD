@@ -114,6 +114,8 @@
   "core.settings.ytdlpVersion": "yt-dlp {{version}} (veröffentlicht am {{date}}).",
   "core.settings.ytdlpMissing": "yt-dlp wurde auf dem Hub nicht gefunden: Downloads funktionieren nicht.",
   "core.settings.ytdlpStale": "Die Version ist {{days}} Tage alt: YouTube könnte sie ablehnen.",
+  "core.settings.ytdlpJsRuntime": "JavaScript-Engine für yt-dlp: {{runtime}}.",
+  "core.settings.ytdlpJsMissing": "YouTube verlangt eine JavaScript-Engine für yt-dlp: auf dem Hub wurde keine gefunden, YouTube-Downloads schlagen daher fehl. Nutze ein RE-KORD-Serverpaket (enthält QuickJS) oder installiere Deno oder Node.js 22+.",
   "core.settings.ytdlpUpdate": "yt-dlp aktualisieren",
   "core.settings.ytdlpUpdating": "yt-dlp wird aktualisiert…",
   "core.settings.ytdlpUpdated": "yt-dlp auf {{version}} aktualisiert.",

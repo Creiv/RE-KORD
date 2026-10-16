@@ -567,6 +567,14 @@
   color: var(--rk-warning, #f59e0b);
 }
 
+.studio-ytdlp__js {
+  color: var(--rk-muted);
+}
+
+.studio-ytdlp__js::before {
+  content: "· ";
+}
+
 .studio-ytdlp__note {
   flex-basis: 100%;
   color: var(--rk-muted);

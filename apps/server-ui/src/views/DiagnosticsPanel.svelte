@@ -2,8 +2,21 @@
   import { Button, EmptyState, Panel } from "@rekord/ui";
   import { admin, humanBytes, humanDuration, humanTime, layoutLabel } from "../lib/admin.svelte";
   import { formatNumber, t } from "../lib/i18n.svelte";
+  import type { JsRuntimeStatus } from "../api";
 
   const diag = $derived(admin.diagnostics);
+
+  const JS_LABELS: Record<string, string> = {
+    deno: "Deno",
+    node: "Node.js",
+    bun: "Bun",
+    quickjs: "QuickJS",
+  };
+
+  function jsRuntimeLine(r: JsRuntimeStatus) {
+    const name = r.name ? (JS_LABELS[r.name] ?? r.name) : "?";
+    return r.version ? `${name} ${r.version}` : name;
+  }
 
   function binaryLine(b?: { available: boolean; path?: string | null; version?: string | null }) {
     if (!b) return "—";
@@ -56,6 +69,19 @@
       <div class="cell">
         <span class="k">yt-dlp</span><span class="v">{binaryLine(diag.binaries.ytdlp)}</span>
       </div>
+      {#if diag.binaries.jsRuntime}
+        {@const js = diag.binaries.jsRuntime}
+        <div class="cell">
+          <span class="k">{t("diag.jsRuntime")}</span>
+          {#if js.available}
+            <span class="v">{jsRuntimeLine(js)}</span>
+          {:else if js.disabled}
+            <span class="v">{t("diag.jsDisabled")}</span>
+          {:else}
+            <span class="v warn">{t("diag.jsMissing")}</span>
+          {/if}
+        </div>
+      {/if}
       <div class="cell">
         <span class="k">ffmpeg</span><span class="v">{binaryLine(diag.binaries.ffmpeg)}</span>
       </div>
@@ -128,6 +154,11 @@
   .v {
     font-weight: 600;
     overflow-wrap: anywhere;
+  }
+
+  .v.warn {
+    font-weight: 500;
+    color: var(--rk-warning, #f59e0b);
   }
 
   .count {

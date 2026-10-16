@@ -328,6 +328,8 @@
   "studio.ytdlp.unknown": "Versione yt-dlp sconosciuta",
   "studio.ytdlp.missing": "yt-dlp non trovato sull'hub",
   "studio.ytdlp.version": "yt-dlp {{version}}",
+  "studio.ytdlp.jsRuntime": "motore JS {{runtime}}",
+  "studio.ytdlp.jsMissing": "YouTube richiede un motore JavaScript per yt-dlp: nessuno trovato sull'hub. Usa un pacchetto server RE-KORD (include QuickJS) oppure installa Deno o Node.js 22+ sull'hub.",
   "studio.ytdlp.cookies": "cookie",
   "studio.ytdlp.stale": "Versione vecchia: YouTube potrebbe rifiutare i download.",
   "studio.ytdlp.staleDays": "Versione di {{n}} giorni fa: YouTube potrebbe rifiutare i download.",
@@ -528,6 +530,7 @@
   "studio.dl.inLibraryFolder": "Già in libreria: {{folder}}",
   "studio.dl.exploreEmpty": "Nessun risultato.",
   "studio.dl.cookieHint": "YouTube chiede l'accesso: cookie mancanti o scaduti. Esportali da una finestra privata (dopo l'accesso a YouTube) e chiudila, poi caricali in Impostazioni › Integrazioni.",
+  "studio.dl.jsRuntimeHint": "Manca anche il motore JavaScript per yt-dlp: senza, YouTube risponde \"The page needs to be reloaded\" anche con i cookie. Usa un pacchetto server RE-KORD (include QuickJS) oppure installa Deno o Node.js 22+ sull'hub.",
   "studio.dl.openSettings": "Apri Impostazioni",
   "studio.dl.confirm.changeDest": "Cambia"
 }

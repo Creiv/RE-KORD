@@ -114,6 +114,8 @@
   "core.settings.ytdlpVersion": "yt-dlp {{version}} (released {{date}}).",
   "core.settings.ytdlpMissing": "yt-dlp not found on the hub: downloads will not work.",
   "core.settings.ytdlpStale": "It is {{days}} days old: YouTube may reject it.",
+  "core.settings.ytdlpJsRuntime": "JavaScript engine for yt-dlp: {{runtime}}.",
+  "core.settings.ytdlpJsMissing": "YouTube requires a JavaScript engine for yt-dlp: none found on the hub, so YouTube downloads will fail. Use a RE-KORD server package (it includes QuickJS) or install Deno or Node.js 22+.",
   "core.settings.ytdlpUpdate": "Update yt-dlp",
   "core.settings.ytdlpUpdating": "Updating yt-dlp…",
   "core.settings.ytdlpUpdated": "yt-dlp updated to {{version}}.",

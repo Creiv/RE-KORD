@@ -141,7 +141,12 @@ export function detectDownloadIssue(code: string | null | undefined, log: string
     return "no_audio_format";
   }
   if (/HTTP Error 403/i.test(log)) return "http_403";
-  if (isCookieIssueCode(c) || /Sign in to confirm|confirm your age|use --cookies/i.test(log)) return "sign_in";
+  if (
+    isCookieIssueCode(c) ||
+    /Sign in to confirm|confirm your age|use --cookies|page needs to be reloaded/i.test(log)
+  ) {
+    return "sign_in";
+  }
   return null;
 }
 

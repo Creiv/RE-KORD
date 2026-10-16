@@ -401,6 +401,17 @@ export type BinaryStatus = {
   version?: string | null;
 };
 
+/** JavaScript runtime handed to yt-dlp (`binaries.jsRuntime`, 5.2+ hubs). */
+export type JsRuntimeStatus = {
+  available: boolean;
+  /** yt-dlp name: `deno`, `node`, `bun`, `quickjs`. */
+  name?: string | null;
+  version?: string | null;
+  path?: string | null;
+  source?: string | null;
+  disabled?: boolean;
+};
+
 export type ErrorEntry = {
   ts: string;
   level: string;
@@ -429,6 +440,7 @@ export type Diagnostics = {
     ffmpeg: BinaryStatus;
     ffprobe: BinaryStatus;
     cloudflared: { available: boolean };
+    jsRuntime?: JsRuntimeStatus;
   };
   layout: LibraryLayoutConfig | null;
   disk: { totalBytes: number; availableBytes: number } | null;

@@ -10,6 +10,7 @@ import {
   redactPaths,
   ytdlpLogDetailForUser,
 } from "./ytdlpLogFilter.ts";
+import { jsRuntimeLabel, jsRuntimeMissing, pickJsRuntime } from "./jsRuntime.ts";
 import {
   batchCounts,
   jobOutcome,
@@ -97,5 +98,20 @@ test("sign-in / age gate: riconosciuti da codice o log (cookie)", () => {
     detectDownloadIssue("ytdlp_failed", "ERROR: [youtube] abc: Sign in to confirm you’re not a bot. Use --cookies-from-browser or --cookies"),
     "sign_in",
   );
+  assert.equal(
+    detectDownloadIssue("ytdlp_failed", "ERROR: [youtube] jNQXAC9IVRw: The page needs to be reloaded."),
+    "sign_in",
+  );
   assert.equal(detectDownloadIssue(null, "ERROR: network unreachable"), null);
+});
+
+test("motore JavaScript di yt-dlp: etichetta e avviso solo se l'hub lo dichiara assente", () => {
+  const qjs = pickJsRuntime({ available: true, name: "quickjs", version: "0.17.0", source: "bundled" });
+  assert.equal(jsRuntimeLabel(qjs), "QuickJS 0.17.0");
+  assert.equal(jsRuntimeMissing(qjs), false);
+  assert.equal(jsRuntimeLabel(pickJsRuntime({ available: true, name: "node", version: null })), "Node.js");
+  // Older hubs don't report it: no warning.
+  assert.equal(jsRuntimeMissing(pickJsRuntime(undefined)), false);
+  assert.equal(jsRuntimeMissing(pickJsRuntime({ available: false, name: null })), true);
+  assert.equal(jsRuntimeMissing(pickJsRuntime({ available: false, disabled: true })), false);
 });

@@ -1128,6 +1128,8 @@ export const api = {
       found: boolean;
       program?: string;
       cookiesConfigured?: boolean;
+      /** JavaScript runtime for yt-dlp (5.2+ hubs). */
+      jsRuntime?: unknown;
       text?: string;
       args?: string[];
     }>("/api/v1/download-preset"),
@@ -1293,7 +1295,7 @@ export const api = {
 
   diagnostics: () =>
     request<{
-      binaries?: { ytdlp?: YtdlpInfo | null } & Record<string, unknown>;
+      binaries?: { ytdlp?: YtdlpInfo | null; jsRuntime?: unknown } & Record<string, unknown>;
       version: string;
       uptimeSecs: number;
       musicRoot: string | null;

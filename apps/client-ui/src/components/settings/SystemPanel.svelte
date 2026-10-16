@@ -11,6 +11,7 @@
     type KordAccountCandidate,
   } from "../../lib/legacyImport";
   import { session } from "../../lib/session.svelte";
+  import { jsRuntimeLabel, jsRuntimeMissing, pickJsRuntime } from "../../lib/studio/jsRuntime";
   import { APP_VERSION } from "../../lib/version";
   import type { SettingsAccounts } from "./settingsAccounts.svelte";
 
@@ -30,6 +31,7 @@
   let ytdlpMsg = $state("");
   let ytdlpErr = $state("");
   const ytdlp = $derived(diag?.binaries?.ytdlp ?? null);
+  const jsRuntime = $derived(pickJsRuntime(diag?.binaries?.jsRuntime));
 
   async function updateYtdlp() {
     if (!canManageMachine) return;
@@ -566,6 +568,13 @@
         {" "}{t("core.settings.ytdlpStale", { days: ytdlp.ageDays ?? "?" })}
       {/if}
     </p>
+    {#if ytdlp.version && jsRuntime.available}
+      <p class="hint">
+        {t("core.settings.ytdlpJsRuntime", { runtime: jsRuntimeLabel(jsRuntime) })}
+      </p>
+    {:else if ytdlp.version && jsRuntimeMissing(jsRuntime)}
+      <p class="hint warn">{t("core.settings.ytdlpJsMissing")}</p>
+    {/if}
     {#if canManageMachine && (ytdlp.stale || !ytdlp.version)}
       <ActionRow>
         <Button disabled={ytdlpBusy} onclick={() => void updateYtdlp()}>
