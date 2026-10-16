@@ -189,6 +189,8 @@ pub async fn stream(state: &AppState, sid: i64, key: &str, req_headers: &HeaderM
         }
     }
     let policy = rt.policy();
+    // Host only in the log: episode URLs often carry signed tokens.
+    let host = url.host_str().unwrap_or("").to_string();
     let opened = match super::net::open(super::net::Request {
         url,
         headers,
@@ -198,11 +200,21 @@ pub async fn stream(state: &AppState, sid: i64, key: &str, req_headers: &HeaderM
     .await
     {
         Ok(o) => o,
-        Err(e) => return error_response(&e),
+        Err(e) => {
+            tracing::warn!(source = sid, key, host = %host, code = e.code(), "podcast stream: upstream unreachable");
+            return error_response(&e);
+        }
     };
     let res = opened.response;
     let up_status = res.status().as_u16();
     if !(res.status().is_success() || up_status == 416) {
+        tracing::warn!(
+            source = sid,
+            key,
+            status = up_status,
+            host = opened.final_url.host_str().unwrap_or(""),
+            "podcast stream: upstream answered an error"
+        );
         if upstream.resolved || matches!(up_status, 403 | 404 | 410) {
             // Expired signed URL or a dropped episode: resolve again next time.
             rt.forget_resolution(sid, key);
