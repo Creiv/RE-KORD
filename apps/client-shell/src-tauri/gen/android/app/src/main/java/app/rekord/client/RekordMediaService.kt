@@ -8,6 +8,7 @@ import android.content.BroadcastReceiver
 import android.content.Context
 import android.content.Intent
 import android.content.IntentFilter
+import android.content.pm.ApplicationInfo
 import android.content.pm.ServiceInfo
 import android.graphics.Bitmap
 import android.graphics.BitmapFactory
@@ -23,6 +24,7 @@ import android.os.Bundle
 import android.os.Handler
 import android.os.Looper
 import android.os.PowerManager
+import android.os.Process
 import android.os.SystemClock
 import android.support.v4.media.MediaBrowserCompat
 import android.support.v4.media.MediaDescriptionCompat
@@ -34,6 +36,7 @@ import androidx.core.app.NotificationManagerCompat
 import androidx.core.app.ServiceCompat
 import androidx.core.content.ContextCompat
 import androidx.media.MediaBrowserServiceCompat
+import androidx.media.MediaSessionManager
 import androidx.media.VolumeProviderCompat
 import androidx.media.session.MediaButtonReceiver
 import java.net.HttpURLConnection
@@ -510,7 +513,12 @@ class RekordMediaService : MediaBrowserServiceCompat() {
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
         started = true
         val mediaButton = intent?.action == Intent.ACTION_MEDIA_BUTTON
-        val resume = intent?.action == ACTION_RESUME
+        // Only the app itself asks to "open and resume" (the service is exported).
+        val resume = intent?.action == ACTION_RESUME &&
+            (resumeTicket.take(SystemClock.elapsedRealtime()) || run {
+                RekordLog.w("service: resume request not from the app, ignored")
+                false
+            })
         if (latest == null && (mediaButton || resume)) {
             // The service (or the whole process) was gone: a car or headset button
             // restarted it. Resume the last track rather than ignoring the press.
@@ -679,10 +687,15 @@ class RekordMediaService : MediaBrowserServiceCompat() {
         editor.apply()
     }
 
-    override fun onGetRoot(clientPackageName: String, clientUid: Int, rootHints: Bundle?): BrowserRoot {
-        // Any caller: Android Auto (com.google.android.projection.gearhead), the
-        // system UI's media controls, car head units through Bluetooth. What they
-        // see is the title of the last track, what the notification shows anyway.
+    override fun onGetRoot(clientPackageName: String, clientUid: Int, rootHints: Bundle?): BrowserRoot? {
+        // Android Auto (com.google.android.projection.gearhead), the system UI's
+        // media controls, car head units through Bluetooth: they see the title of
+        // the last track (what the notification shows anyway) and get the session.
+        // Other apps get nothing (BrowserAccess).
+        if (!browserAllowed(clientPackageName, clientUid)) {
+            RekordLog.w("media browser: $clientPackageName refused")
+            return null
+        }
         val recent = rootHints?.getBoolean(BrowserRoot.EXTRA_RECENT) == true
         RekordLog.i("media browser: $clientPackageName connected${if (recent) " (recent)" else ""}")
         return if (recent) {
@@ -690,6 +703,21 @@ class RekordMediaService : MediaBrowserServiceCompat() {
         } else {
             BrowserRoot(ROOT_ID, null)
         }
+    }
+
+    private fun browserAllowed(packageName: String, uid: Int): Boolean {
+        val trusted = try {
+            MediaSessionManager.getSessionManager(this).isTrustedForMediaControl(currentBrowserInfo)
+        } catch (e: Exception) {
+            false
+        }
+        val systemApp = try {
+            val flags = packageManager.getApplicationInfo(packageName, 0).flags
+            flags and (ApplicationInfo.FLAG_SYSTEM or ApplicationInfo.FLAG_UPDATED_SYSTEM_APP) != 0
+        } catch (e: Exception) {
+            false
+        }
+        return BrowserAccess.allowed(uid, Process.myUid(), packageName, trusted, systemApp)
     }
 
     override fun onLoadChildren(parentId: String, result: Result<MutableList<MediaBrowserCompat.MediaItem>>) {
@@ -1170,6 +1198,7 @@ class RekordMediaService : MediaBrowserServiceCompat() {
             }
             // Foreground activity: starting the service is allowed. It restores the
             // last track and plays it as soon as the page answers.
+            resumeTicket.issue(SystemClock.elapsedRealtime())
             try {
                 ContextCompat.startForegroundService(
                     context,
@@ -1181,6 +1210,7 @@ class RekordMediaService : MediaBrowserServiceCompat() {
         }
 
         private const val ACTION_RESUME = "app.rekord.client.action.RESUME"
+        private val resumeTicket = ResumeTicket()
 
         /**
          * Called by the page on every track or state change: the first

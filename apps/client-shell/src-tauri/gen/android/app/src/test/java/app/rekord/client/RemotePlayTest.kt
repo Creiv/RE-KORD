@@ -152,4 +152,28 @@ class RemotePlayTest {
         assertTrue(NowPlayingStore.worthSaving(a, a.copy(title = "Other")))
         assertFalse(NowPlayingStore.worthSaving(a, a.copy(wantsPlay = false, pauseReason = "external")))
     }
+
+    @Test
+    fun mediaBrowserRefusesUnknownApps() {
+        val own = 10_123
+        // The app itself, the system's media controls / Bluetooth, Android Auto.
+        assertTrue(BrowserAccess.allowed(own, own, "app.rekord.client", trusted = false, systemApp = false))
+        assertTrue(BrowserAccess.allowed(1_000, own, "com.android.systemui", trusted = true, systemApp = true))
+        assertTrue(BrowserAccess.allowed(1_002, own, "com.android.bluetooth", trusted = false, systemApp = true))
+        assertTrue(BrowserAccess.allowed(10_200, own, "com.google.android.projection.gearhead", trusted = false, systemApp = false))
+        // Any other installed app gets no session (no control, no track title).
+        assertFalse(BrowserAccess.allowed(10_300, own, "com.example.snoop", trusted = false, systemApp = false))
+    }
+
+    @Test
+    fun resumeTicketIsOneShotAndShortLived() {
+        val ticket = ResumeTicket(validMs = 10_000L)
+        // Never issued: an "open and resume" start sent by another app.
+        assertFalse(ticket.take(now = 5_000L))
+        ticket.issue(now = 1_000L)
+        assertTrue(ticket.take(now = 2_000L))
+        assertFalse("used once", ticket.take(now = 2_100L))
+        ticket.issue(now = 1_000L)
+        assertFalse("too late", ticket.take(now = 12_000L))
+    }
 }

@@ -164,3 +164,53 @@ object NowPlayingStore {
         return kotlin.math.abs(previous.positionMs - next.positionMs) >= 60_000L
     }
 }
+
+/**
+ * Who may connect to the media browser. The service is exported (Android Auto,
+ * the system's media controls and car head units bind from other packages), and
+ * a connection hands out the media session: playback control and the title of
+ * the last track. Any other installed app is refused.
+ */
+object BrowserAccess {
+    /**
+     * Apps that browse media on the user's behalf and are not always system apps
+     * (Android Auto on Android 9, the Assistant, Wear OS, Automotive's media center).
+     */
+    val KNOWN_CALLERS = setOf(
+        "com.google.android.projection.gearhead",
+        "com.google.android.googlequicksearchbox",
+        "com.google.android.carassistant",
+        "com.google.android.wearable.app",
+        "com.android.car.media",
+    )
+
+    /**
+     * [trusted]: the system says the caller may control media sessions
+     * (MEDIA_CONTENT_CONTROL, system UI, an enabled notification listener);
+     * [systemApp]: preinstalled (Bluetooth, the OEM's car and media apps).
+     */
+    fun allowed(callerUid: Int, ownUid: Int, packageName: String, trusted: Boolean, systemApp: Boolean): Boolean =
+        callerUid == ownUid || trusted || systemApp || packageName in KNOWN_CALLERS
+}
+
+/**
+ * The "open and resume" start of the service, honoured only when this process
+ * asked for it moments ago (the app opened from the notification). The service
+ * is exported, so any app could otherwise send that action and start playback.
+ */
+class ResumeTicket(private val validMs: Long = 10_000L) {
+    private var issuedAt = 0L
+
+    @Synchronized
+    fun issue(now: Long) {
+        issuedAt = now
+    }
+
+    /** True once per [issue], within [validMs]. */
+    @Synchronized
+    fun take(now: Long): Boolean {
+        val ok = issuedAt > 0L && now >= issuedAt && now - issuedAt <= validMs
+        issuedAt = 0L
+        return ok
+    }
+}
