@@ -690,17 +690,35 @@ pub fn remux_webm(ffmpeg: &Path, path: &Path) -> Result<PathBuf> {
             .status()
             .context("run ffmpeg")?;
         if status.success() && tmp.metadata().map(|m| m.len() > 0).unwrap_or(false) {
-            if dest.exists() {
+            if let Err(e) = rename_no_clobber(&tmp, &dest) {
                 let _ = std::fs::remove_file(&tmp);
-                bail!("{} already exists", dest.display());
+                return Err(e).with_context(|| format!("move to {}", dest.display()));
             }
-            std::fs::rename(&tmp, &dest).context("rename remuxed file")?;
             let _ = std::fs::remove_file(path);
             return Ok(dest);
         }
         let _ = std::fs::remove_file(&tmp);
     }
     bail!("ffmpeg could not copy the audio stream")
+}
+
+/// `rename(from, to)` that never replaces an existing `to` (another download
+/// may have created it since the check): a hard link fails when `to` exists.
+/// Filesystems without hard links (FAT, some network shares) fall back to a
+/// check and a rename.
+fn rename_no_clobber(from: &Path, to: &Path) -> std::io::Result<()> {
+    match std::fs::hard_link(from, to) {
+        Ok(()) => {
+            let _ = std::fs::remove_file(from);
+            Ok(())
+        }
+        Err(e) if e.kind() == std::io::ErrorKind::AlreadyExists => Err(e),
+        Err(_) if to.exists() || std::fs::symlink_metadata(to).is_ok() => Err(std::io::Error::new(
+            std::io::ErrorKind::AlreadyExists,
+            "file exists",
+        )),
+        Err(_) => std::fs::rename(from, to),
+    }
 }
 
 /// What the tagging pass did, for the `tagged` event and the `done` summary.
@@ -1101,6 +1119,23 @@ mod tests {
         assert!(write_tags(&broken, &values, None).is_err());
         assert_eq!(std::fs::read(&broken).unwrap(), b"not really an m4a file");
         assert!(leftovers().is_empty(), "{:?}", leftovers());
+        std::fs::remove_dir_all(&dir).unwrap();
+    }
+
+    #[test]
+    fn remuxed_files_never_replace_an_existing_one() {
+        let dir = std::env::temp_dir().join(format!("rekord-noclob-{}", uuid::Uuid::new_v4()));
+        std::fs::create_dir_all(&dir).unwrap();
+        let (from, to) = (dir.join("a.opus.rekord-part"), dir.join("a.opus"));
+        std::fs::write(&from, b"new").unwrap();
+        std::fs::write(&to, b"theirs").unwrap();
+        let e = rename_no_clobber(&from, &to).unwrap_err();
+        assert_eq!(e.kind(), std::io::ErrorKind::AlreadyExists);
+        assert_eq!(std::fs::read(&to).unwrap(), b"theirs");
+        std::fs::remove_file(&to).unwrap();
+        rename_no_clobber(&from, &to).unwrap();
+        assert_eq!(std::fs::read(&to).unwrap(), b"new");
+        assert!(!from.exists());
         std::fs::remove_dir_all(&dir).unwrap();
     }
 
