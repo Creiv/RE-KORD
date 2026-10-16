@@ -4,7 +4,6 @@ import android.app.Notification
 import android.app.NotificationChannel
 import android.app.NotificationManager
 import android.app.PendingIntent
-import android.app.Service
 import android.content.BroadcastReceiver
 import android.content.Context
 import android.content.Intent
@@ -20,11 +19,13 @@ import android.net.Network
 import android.net.NetworkCapabilities
 import android.net.wifi.WifiManager
 import android.os.Build
+import android.os.Bundle
 import android.os.Handler
-import android.os.IBinder
 import android.os.Looper
 import android.os.PowerManager
 import android.os.SystemClock
+import android.support.v4.media.MediaBrowserCompat
+import android.support.v4.media.MediaDescriptionCompat
 import android.support.v4.media.MediaMetadataCompat
 import android.support.v4.media.session.MediaSessionCompat
 import android.support.v4.media.session.PlaybackStateCompat
@@ -32,6 +33,7 @@ import androidx.core.app.NotificationCompat
 import androidx.core.app.NotificationManagerCompat
 import androidx.core.app.ServiceCompat
 import androidx.core.content.ContextCompat
+import androidx.media.MediaBrowserServiceCompat
 import androidx.media.VolumeProviderCompat
 import androidx.media.session.MediaButtonReceiver
 import java.net.HttpURLConnection
@@ -64,10 +66,19 @@ import java.util.concurrent.Executors
  * - a watchdog sends the page a heartbeat every [WATCHDOG_MS] (its own timers are
  *   throttled while hidden), so the player can notice a stalled stream and reload it;
  * - network changes (Wi-Fi to mobile data in the car) are passed to the page;
- * - after another app's audio ends, [InterruptionPolicy] decides whether to resume.
+ * - after another app's audio ends, [InterruptionPolicy] decides whether to resume;
+ * - a play from outside (car, Bluetooth, media button, Android Auto, the system's
+ *   media controls) enters the foreground and takes the locks at once, inside the
+ *   window Android grants for it, then hands the command to the page
+ *   ([RemotePlayRequest], [requestPlay]).
+ *
+ * It is also a media browser service (Android Auto, car head units that browse,
+ * the system's media resumption): a single playable "Resume" item for the last
+ * track, kept in the app's preferences ([NowPlayingStore]) so it survives the
+ * service and the process.
  */
 @Suppress("DEPRECATION")
-class RekordMediaService : Service() {
+class RekordMediaService : MediaBrowserServiceCompat() {
     private lateinit var session: MediaSessionCompat
     private val artLoader = Executors.newSingleThreadExecutor()
     private val main = Handler(Looper.getMainLooper())
@@ -75,7 +86,16 @@ class RekordMediaService : Service() {
     @Volatile
     private var artUrl: String? = null
     private var art: Bitmap? = null
+    /** 128 px copy of [art] for the media browser item (binder-friendly). */
+    private var thumb: Bitmap? = null
     private var inForeground = false
+    private var sessionOpensToResume = false
+    /** Started (not only bound by a media browser): may show the notification. */
+    private var started = false
+
+    /** A play from outside that the page has not taken over yet. */
+    private val remotePlay = RemotePlayRequest()
+    private var saved: NowPlaying? = null
 
     private lateinit var audioManager: AudioManager
     private var noisyRegistered = false
@@ -150,6 +170,9 @@ class RekordMediaService : Service() {
         }
     }
 
+    /** The page did not take a play from outside over in time. */
+    private val remotePlayCheck = Runnable { checkRemotePlay() }
+
     /** Re-evaluates the foreground state when the pause grace runs out. */
     private val graceCheck = Runnable { latest?.let { render(it) } }
 
@@ -180,9 +203,19 @@ class RekordMediaService : Service() {
         session = MediaSessionCompat(this, "RE-KORD").apply {
             // Notification, lock screen, headset, Bluetooth / car controls.
             setCallback(object : MediaSessionCompat.Callback() {
-                override fun onPlay() = RekordMediaBridge.send("play", source = "media session")
+                override fun onPlay() = requestPlay("media session")
+
+                override fun onPlayFromMediaId(mediaId: String?, extras: Bundle?) =
+                    requestPlay("media browser item ${mediaId ?: ""}")
+
+                // "Play RE-KORD" from the Assistant or the car: there is no search
+                // here, the closest thing is resuming the last track.
+                override fun onPlayFromSearch(query: String?, extras: Bundle?) =
+                    requestPlay("play from search")
+
                 override fun onPause() {
                     policy.onUserPause()?.let { RekordLog.i("interruption: $it") }
+                    cancelRemotePlay("pause")
                     RekordMediaBridge.send("pause", source = "media session")
                 }
 
@@ -197,17 +230,28 @@ class RekordMediaService : Service() {
 
                 override fun onStop() {
                     policy.onUserPause()
+                    cancelRemotePlay("stop")
                     RekordMediaBridge.send("pause", source = "media session stop")
                     stop(this@RekordMediaService)
                 }
             })
+            setSessionActivity(openAppIntent(resume = false))
             isActive = true
         }
+        // Media browser clients (Android Auto, the system's media controls) get the
+        // session from the service.
+        sessionToken = session.sessionToken
         running = this
         createLocks()
         watchSystem()
-        // onStartCommand does the first render.
+        RekordMediaBridge.onDropped = { action -> if (action == "play") checkRemotePlay(dropped = true) }
         applyCastTarget(rerender = false)
+        // Recreated with no page state (media button, media browser after the system
+        // stopped the service or the process): rebuild the session with the last track,
+        // paused, so the car shows it and can press play. Session only: onStartCommand
+        // decides about the notification.
+        val state = latest ?: restoreSaved()
+        if (state != null) render(state)
     }
 
     private fun createLocks() {
@@ -390,7 +434,13 @@ class RekordMediaService : Service() {
             lastTitle = state.title
             lastPositionMs = -1L
             RekordLog.i("track: ${state.title.take(80)}")
+            notifyChildrenChanged(ROOT_ID)
         }
+        if (remotePlay.onPageState(state.playing, state.wantsPlay)) {
+            main.removeCallbacks(remotePlayCheck)
+            RekordLog.i("play: the page took it over (${if (state.playing) "playing" else "loading"})")
+        }
+        save(state)
         if (!state.playing || state.positionMs != lastPositionMs) {
             lastPositionMs = state.positionMs
             lastProgressAt = now
@@ -458,23 +508,215 @@ class RekordMediaService : Service() {
     }
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
-        MediaButtonReceiver.handleIntent(session, intent)
+        started = true
+        val mediaButton = intent?.action == Intent.ACTION_MEDIA_BUTTON
+        val resume = intent?.action == ACTION_RESUME
+        if (latest == null && (mediaButton || resume)) {
+            // The service (or the whole process) was gone: a car or headset button
+            // restarted it. Resume the last track rather than ignoring the press.
+            latest = restoreSaved()?.also {
+                RekordLog.i("media button with no page state: last track restored (${it.title.take(80)})")
+            }
+        }
         val state = latest
         if (state == null) {
             // The music ended in the meantime (queue cleared right before play), or a
-            // media button woke us with no page to play (the car connecting after the
-            // app was closed: nothing to resume, no autoplay).
+            // media button woke us with nothing ever played (nothing to resume).
             // A service started with startForegroundService must still go into the
             // foreground, otherwise Android kills it with an exception: enter and
             // leave immediately.
+            RekordLog.i(if (mediaButton) "media button: nothing to resume" else "service: started with nothing to show")
             enterForeground(buildNotification(idle()))
             stop(this)
+            return START_NOT_STICKY
+        }
+        if (resume) {
+            if (!inForeground) enterForeground(buildNotification(state))
+            requestPlay("notification: open and resume")
+            return START_NOT_STICKY
+        }
+        if (mediaButton) {
+            // We are inside the window Android grants for a media button: enter the
+            // foreground first, then let the command through (the session delivers
+            // it asynchronously, onPlay comes after this returns). A button is user
+            // activity: the pause grace starts again, so the render below does not
+            // leave the foreground under the incoming play.
+            lastActiveAt = SystemClock.elapsedRealtime()
+            if (!inForeground) enterForeground(buildNotification(state))
+            MediaButtonReceiver.handleIntent(session, intent)
+            render(state)
             return START_NOT_STICKY
         }
         // Started with startForegroundService: startForeground is owed in any case.
         if (!inForeground) enterForeground(buildNotification(state))
         accept(state)
         return START_NOT_STICKY
+    }
+
+    /**
+     * Play from outside the app: car, Bluetooth, headset, lock screen, Android
+     * Auto, the system's media controls. Runs inside the short window in which
+     * Android lets a service enter the foreground from the background, so it does
+     * that first, with the CPU and Wi-Fi locks, and only then talks to the page,
+     * which may be paused, just unfrozen, or not there at all.
+     */
+    private fun requestPlay(source: String) {
+        val state = latest ?: restoreSaved()?.also {
+            latest = it
+            RekordLog.i("play ($source): no page state, last track restored")
+        }
+        if (state == null) {
+            RekordLog.i("play ($source): nothing to resume")
+            return
+        }
+        if (state.playing) {
+            RekordMediaBridge.send("play", source = source)
+            return
+        }
+        val now = SystemClock.elapsedRealtime()
+        val pageAlive = RekordMediaBridge.webView != null && RekordMediaBridge.pageSeen
+        val window = remotePlay.begin(now, pageAlive)
+        lastActiveAt = now
+        RekordLog.i(
+            "play ($source): foreground and locks first, page has ${window / 1000}s to start" +
+                when {
+                    pageAlive -> ""
+                    RekordMediaBridge.webView != null || MainActivity.alive -> " (page still loading)"
+                    else -> " (no page: starting the app)"
+                },
+        )
+        ensureStarted()
+        if (!inForeground) enterForeground(buildNotification(state))
+        applyLocks(state)
+        main.removeCallbacks(remotePlayCheck)
+        main.postDelayed(remotePlayCheck, window + 500L)
+        RekordMediaBridge.send("play", source = source, windowMs = window)
+        // Opened from the notification, or still starting: the activity is there.
+        if (RekordMediaBridge.webView == null && !MainActivity.alive) launchApp()
+        render(state)
+    }
+
+    private fun cancelRemotePlay(reason: String) {
+        if (!remotePlay.cancel()) return
+        main.removeCallbacks(remotePlayCheck)
+        RekordLog.i("play: cancelled by $reason")
+    }
+
+    /** The window of a play from outside ran out (or the bridge gave up). */
+    private fun checkRemotePlay(dropped: Boolean = false) {
+        if (!remotePlay.pending) return
+        val left = if (dropped) 0L.also { remotePlay.cancel() } else remotePlay.remaining(SystemClock.elapsedRealtime())
+        if (left > 0) {
+            main.removeCallbacks(remotePlayCheck)
+            main.postDelayed(remotePlayCheck, left + 500L)
+            return
+        }
+        main.removeCallbacks(remotePlayCheck)
+        val pageAlive = RekordMediaBridge.webView != null
+        if (pageAlive) {
+            RekordLog.w("play: the page did not start (paused grace from here)")
+        } else {
+            // No page to keep alive: no reason to hold the foreground. The
+            // notification stays, and tapping it opens the app and resumes.
+            RekordLog.w("play: no page, the app could not be started from the background; tap the notification to resume")
+            lastActiveAt = 0L
+        }
+        latest?.let { render(it) }
+    }
+
+    /**
+     * The WebView, and the audio, live in MainActivity: with the activity gone
+     * there is nothing to play with. Android 10+ blocks activity starts from the
+     * background (a foreground service or a media button is not an exemption), so
+     * this works only where the system allows it (Android 9 and older, "display
+     * over other apps" granted, some OEM builds). When it is blocked the system logs
+     * "Background activity launch blocked" under ActivityTaskManager.
+     */
+    private fun launchApp() {
+        try {
+            startActivity(
+                Intent(this, MainActivity::class.java)
+                    .setAction(MainActivity.ACTION_RESUME_IN_BACKGROUND)
+                    .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_NO_ANIMATION),
+            )
+            RekordLog.i("no page: asked Android to start the app in the background")
+        } catch (e: Exception) {
+            RekordLog.w("no page: app not started: ${e.javaClass.simpleName}: ${e.message}")
+        }
+    }
+
+    /** Bound only (media browser): become a started service before the foreground. */
+    private fun ensureStarted() {
+        if (started) return
+        try {
+            ContextCompat.startForegroundService(this, Intent(this, RekordMediaService::class.java))
+            started = true
+        } catch (e: Exception) {
+            RekordLog.w("service not started: ${e.javaClass.simpleName}: ${e.message}")
+        }
+    }
+
+    private fun prefs() = getSharedPreferences(PREFS, Context.MODE_PRIVATE)
+
+    private fun restoreSaved(): NowPlaying? {
+        val p = prefs()
+        return NowPlayingStore.decode { p.getString(it, null) }.also { saved = it }
+    }
+
+    /** Keeps the last track for a resume after the service or the process died. */
+    private fun save(state: NowPlaying) {
+        if (!NowPlayingStore.worthSaving(saved, state)) return
+        saved = state
+        val editor = prefs().edit()
+        for ((k, v) in NowPlayingStore.encode(state, System.currentTimeMillis())) editor.putString(k, v)
+        editor.apply()
+    }
+
+    private fun forgetSaved() {
+        saved = null
+        val editor = prefs().edit()
+        for (k in NowPlayingStore.KEYS) editor.remove(k)
+        editor.apply()
+    }
+
+    override fun onGetRoot(clientPackageName: String, clientUid: Int, rootHints: Bundle?): BrowserRoot {
+        // Any caller: Android Auto (com.google.android.projection.gearhead), the
+        // system UI's media controls, car head units through Bluetooth. What they
+        // see is the title of the last track, what the notification shows anyway.
+        val recent = rootHints?.getBoolean(BrowserRoot.EXTRA_RECENT) == true
+        RekordLog.i("media browser: $clientPackageName connected${if (recent) " (recent)" else ""}")
+        return if (recent) {
+            BrowserRoot(ROOT_RECENT, Bundle().apply { putBoolean(BrowserRoot.EXTRA_RECENT, true) })
+        } else {
+            BrowserRoot(ROOT_ID, null)
+        }
+    }
+
+    override fun onLoadChildren(parentId: String, result: Result<MutableList<MediaBrowserCompat.MediaItem>>) {
+        val state = latest ?: saved ?: restoreSaved()
+        if (state == null || (parentId != ROOT_ID && parentId != ROOT_RECENT)) {
+            result.sendResult(mutableListOf())
+            return
+        }
+        val details = listOf(state.artist, state.album).filter { it.isNotEmpty() }.joinToString(" · ")
+        // The system's media resumption shows the item as the player: the track is
+        // the title. In a browsing UI (Android Auto) the action is.
+        val description = MediaDescriptionCompat.Builder()
+            .setMediaId(RESUME_ID)
+            .apply {
+                if (parentId == ROOT_RECENT) {
+                    setTitle(state.title)
+                    setSubtitle(details)
+                } else {
+                    setTitle(getString(R.string.media_resume))
+                    setSubtitle(listOf(state.title, state.artist).filter { it.isNotEmpty() }.joinToString(" · "))
+                }
+            }
+            .setIconBitmap(thumb)
+            .build()
+        result.sendResult(
+            mutableListOf(MediaBrowserCompat.MediaItem(description, MediaBrowserCompat.MediaItem.FLAG_PLAYABLE)),
+        )
     }
 
     /** Rewrites the session and notification with the state just received from the page. */
@@ -499,6 +741,8 @@ class RekordMediaService : Service() {
                 )
                 .setActions(
                     PlaybackStateCompat.ACTION_PLAY or
+                        PlaybackStateCompat.ACTION_PLAY_FROM_MEDIA_ID or
+                        PlaybackStateCompat.ACTION_PLAY_FROM_SEARCH or
                         PlaybackStateCompat.ACTION_PAUSE or
                         PlaybackStateCompat.ACTION_PLAY_PAUSE or
                         PlaybackStateCompat.ACTION_SKIP_TO_NEXT or
@@ -508,6 +752,21 @@ class RekordMediaService : Service() {
                 )
                 .build(),
         )
+        val now = SystemClock.elapsedRealtime()
+        val graceLeft = ForegroundPolicy.graceLeft(now, lastActiveAt, PAUSE_GRACE_MS)
+        val hold = ForegroundPolicy.holdForeground(
+            playing = state.playing,
+            wantsPlay = state.wantsPlay,
+            interruptionArmed = policy.armed,
+            remotePlayPending = remotePlay.pending,
+            graceLeft = graceLeft,
+        )
+        if (!started && !inForeground) {
+            // Bound by a media browser only (system media controls, Android Auto) and
+            // nothing to play: the session is enough, no notification, no locks.
+            if (!hold) return
+            ensureStarted()
+        }
         if ((state.playing || policy.armed) && castTarget == null) {
             registerNoisy()
         } else {
@@ -516,15 +775,13 @@ class RekordMediaService : Service() {
         applyLocks(state)
         val notification = buildNotification(state)
         main.removeCallbacks(graceCheck)
-        val now = SystemClock.elapsedRealtime()
-        val graceLeft = PAUSE_GRACE_MS - (now - lastActiveAt)
-        if (state.playing || state.wantsPlay || policy.armed || graceLeft > 0) {
+        if (hold) {
             if (inForeground) {
                 NotificationManagerCompat.from(this).notify(NOTIFICATION_ID, notification)
             } else {
                 enterForeground(notification)
             }
-            if (!state.playing && !state.wantsPlay && !policy.armed) {
+            if (!state.playing && !state.wantsPlay && !policy.armed && !remotePlay.pending && graceLeft > 0) {
                 main.postDelayed(graceCheck, graceLeft + 1_000L)
             }
         } else {
@@ -537,7 +794,10 @@ class RekordMediaService : Service() {
             if (inForeground) {
                 ServiceCompat.stopForeground(this, ServiceCompat.STOP_FOREGROUND_DETACH)
                 inForeground = false
-                RekordLog.i("service: out of the foreground (paused for ${PAUSE_GRACE_MS / 60_000} min)")
+                RekordLog.i(
+                    if (lastActiveAt > 0L) "service: out of the foreground (paused for ${PAUSE_GRACE_MS / 60_000} min)"
+                    else "service: out of the foreground",
+                )
                 // MainActivity kept the WebView running for a possible resume: with
                 // the app still in the background, let it sleep now. Every command
                 // from the notification wakes it first.
@@ -557,7 +817,15 @@ class RekordMediaService : Service() {
         // While casting the sound comes out of the Chromecast: no stream through
         // the phone, nothing to keep awake for a whole session (RekordCast wakes
         // the CPU briefly on the events the page must answer).
-        val want = castTarget == null && (state.playing || (state.wantsPlay && !silentTooLong))
+        // A play from outside holds them before the page answers: the page needs
+        // the CPU and the network to load the track it is about to play.
+        val want = ForegroundPolicy.holdLocks(
+            casting = castTarget != null,
+            playing = state.playing,
+            wantsPlay = state.wantsPlay,
+            silentTooLong = silentTooLong,
+            remotePlayPending = remotePlay.pending,
+        )
         if (want == locksHeld) return
         locksHeld = want
         if (want) {
@@ -653,13 +921,29 @@ class RekordMediaService : Service() {
         positionMs = 0L,
     )
 
+    /**
+     * Opens the app. With [resume] (no page: the app was closed or could not be
+     * started from the background) the app also resumes the track once open.
+     */
+    private fun openAppIntent(resume: Boolean): PendingIntent = PendingIntent.getActivity(
+        this,
+        if (resume) 1 else 0,
+        Intent(this, MainActivity::class.java).apply {
+            if (resume) action = MainActivity.ACTION_RESUME
+        },
+        PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE,
+    )
+
     private fun buildNotification(state: NowPlaying): Notification {
-        val open = PendingIntent.getActivity(
-            this,
-            0,
-            Intent(this, MainActivity::class.java),
-            PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE,
-        )
+        val noPage = RekordMediaBridge.webView == null && latest != null
+        val open = openAppIntent(resume = noPage)
+        // Android 13+ draws the media player from the session, not from the
+        // notification text: tapping it opens the session activity, so that one
+        // resumes too when there is no page.
+        if (noPage != sessionOpensToResume) {
+            sessionOpensToResume = noPage
+            session.setSessionActivity(open)
+        }
         val stop = MediaButtonReceiver.buildMediaButtonPendingIntent(
             this,
             PlaybackStateCompat.ACTION_STOP,
@@ -670,7 +954,7 @@ class RekordMediaService : Service() {
         return NotificationCompat.Builder(this, CHANNEL_ID)
             .setSmallIcon(R.drawable.ic_rekord_note)
             .setContentTitle(state.title)
-            .setContentText(subtitle)
+            .setContentText(if (noPage && !state.playing) getString(R.string.media_open_to_resume) else subtitle)
             .setSubText(castTarget?.let { getString(R.string.cast_playing_on, it) })
             .setLargeIcon(art)
             .setContentIntent(open)
@@ -722,11 +1006,13 @@ class RekordMediaService : Service() {
         if (url == null) {
             artUrl = null
             art = null
+            thumb = null
             return
         }
         if (url == artUrl) return
         artUrl = url
         art = null
+        thumb = null
         artLoader.execute {
             val bitmap = downloadArt(url)
             // If the track changed in the meantime, this cover art is no longer needed.
@@ -734,7 +1020,13 @@ class RekordMediaService : Service() {
             main.post {
                 if (url != artUrl) return@post
                 art = bitmap
+                thumb = try {
+                    Bitmap.createScaledBitmap(bitmap, 128, 128, true)
+                } catch (e: Exception) {
+                    null
+                }
                 latest?.let { render(it) }
+                notifyChildrenChanged(ROOT_ID)
             }
         }
     }
@@ -780,6 +1072,7 @@ class RekordMediaService : Service() {
     override fun onDestroy() {
         running = null
         RekordLog.i("service: stopped")
+        RekordMediaBridge.onDropped = null
         releaseLocks()
         try {
             if (resumeWakeLock?.isHeld == true) resumeWakeLock?.release()
@@ -799,8 +1092,6 @@ class RekordMediaService : Service() {
         super.onDestroy()
     }
 
-    override fun onBind(intent: Intent?): IBinder? = null
-
     companion object {
         private const val CHANNEL_ID = "rekord.playback"
         private const val NOTIFICATION_ID = 1
@@ -819,6 +1110,11 @@ class RekordMediaService : Service() {
         private const val ARMED_RECHECK_MS = 30_000L
         private const val RESUME_WAKE_MS = 15_000L
         private const val RESUME_RECHECK_MS = 10_500L
+
+        private const val PREFS = "rekord.media"
+        private const val ROOT_ID = "rekord.root"
+        private const val ROOT_RECENT = "rekord.recent"
+        private const val RESUME_ID = "rekord.resume"
 
         @Volatile
         private var running: RekordMediaService? = null
@@ -844,6 +1140,10 @@ class RekordMediaService : Service() {
         val isPlaying: Boolean
             get() = latest?.playing == true
 
+        /** A play from outside is waiting for the page (read by MainActivity). */
+        val awaitingPage: Boolean
+            get() = running?.remotePlay?.pending == true
+
         /**
          * Used by MainActivity to decide whether to keep the WebView running when it
          * goes to the background: while the page plays or means to, and while the
@@ -853,8 +1153,34 @@ class RekordMediaService : Service() {
         val keepWebViewAwake: Boolean
             get() {
                 val state = latest ?: return false
-                return state.playing || state.wantsPlay || running?.inForeground == true
+                val service = running
+                return state.playing || state.wantsPlay || service?.inForeground == true ||
+                    service?.remotePlay?.pending == true
             }
+
+        /**
+         * The app was opened from the notification after a play from outside found
+         * no page (or the user asked to resume it): play once the page is up.
+         */
+        fun resumeFromApp(context: Context) {
+            val service = running
+            if (service != null) {
+                service.requestPlay("notification: open and resume")
+                return
+            }
+            // Foreground activity: starting the service is allowed. It restores the
+            // last track and plays it as soon as the page answers.
+            try {
+                ContextCompat.startForegroundService(
+                    context,
+                    Intent(context, RekordMediaService::class.java).setAction(ACTION_RESUME),
+                )
+            } catch (e: Exception) {
+                RekordLog.w("service not started for resume: ${e.javaClass.simpleName}: ${e.message}")
+            }
+        }
+
+        private const val ACTION_RESUME = "app.rekord.client.action.RESUME"
 
         /**
          * Called by the page on every track or state change: the first
@@ -884,14 +1210,38 @@ class RekordMediaService : Service() {
             }
         }
 
-        fun stop(context: Context) {
+        /**
+         * Ends the session. [forget] (the queue emptied in the page) also drops the
+         * saved last track; otherwise (app closed, notification dismissed) it stays
+         * for a later resume from the car or the system's media controls.
+         */
+        fun stop(context: Context, forget: Boolean = false) {
             latest = null
             val service = running
             if (service != null) {
+                if (forget) service.forgetSaved()
+                service.cancelRemotePlay("stop")
+                service.locksHeld = false
+                service.releaseLocks()
+                service.unregisterNoisy()
                 ServiceCompat.stopForeground(service, ServiceCompat.STOP_FOREGROUND_REMOVE)
                 service.inForeground = false
+                service.started = false
+                // A media browser may keep the service bound: leave its session
+                // paused, not "playing" a track that is gone.
+                service.session.setPlaybackState(
+                    PlaybackStateCompat.Builder()
+                        .setState(PlaybackStateCompat.STATE_PAUSED, 0L, 0f)
+                        .setActions(PlaybackStateCompat.ACTION_PLAY or PlaybackStateCompat.ACTION_PLAY_FROM_MEDIA_ID)
+                        .build(),
+                )
                 service.stopSelf()
             } else {
+                if (forget) {
+                    val editor = context.getSharedPreferences(PREFS, Context.MODE_PRIVATE).edit()
+                    for (k in NowPlayingStore.KEYS) editor.remove(k)
+                    editor.apply()
+                }
                 context.stopService(Intent(context, RekordMediaService::class.java))
             }
         }

@@ -82,15 +82,26 @@
         <!--
           Media notification and controls: the MEDIA_BUTTON filter serves both the
           headphone button and the notification buttons, which go through MediaButtonReceiver.
+          MediaBrowserService: Android Auto, car head units that browse (AVRCP) and the
+          system's media controls find the app, connect to its session and can resume
+          the last track. Exported for that reason (they bind from other packages).
         -->
         <service
             android:name=".RekordMediaService"
-            android:exported="false"
+            android:exported="true"
             android:foregroundServiceType="mediaPlayback">
             <intent-filter>
                 <action android:name="android.intent.action.MEDIA_BUTTON" />
             </intent-filter>
+            <intent-filter>
+                <action android:name="android.media.browse.MediaBrowserService" />
+            </intent-filter>
         </service>
+
+        <!-- Android Auto lists media apps that declare this. -->
+        <meta-data
+            android:name="com.google.android.gms.car.application"
+            android:resource="@xml/automotive_app_desc" />
 
         <receiver
             android:name="androidx.media.session.MediaButtonReceiver"

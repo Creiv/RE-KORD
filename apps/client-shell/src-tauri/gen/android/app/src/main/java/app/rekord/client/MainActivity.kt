@@ -1,6 +1,7 @@
 package app.rekord.client
 
 import android.Manifest
+import android.content.Intent
 import android.content.pm.ActivityInfo
 import android.content.pm.PackageManager
 import android.content.res.Configuration
@@ -17,6 +18,7 @@ import androidx.lifecycle.Lifecycle
 class MainActivity : TauriActivity() {
   private var webView: WebView? = null
   private var notificationAsked = false
+  private var sendToBackOnce = false
 
   /**
    * We handle the Back button ourselves (see [installBackHandler]): WryActivity's
@@ -38,10 +40,42 @@ class MainActivity : TauriActivity() {
     applyOrientationPolicy()
     enableEdgeToEdge()
     super.onCreate(savedInstanceState)
+    alive = true
     RekordMediaBridge.attach(applicationContext)
     // Google Cast: without Play Services it stays off and the page doesn't show the button.
     RekordCast.init(applicationContext)
     RekordCast.bindActivity(this)
+    handleMediaIntent(intent)
+  }
+
+  override fun onNewIntent(intent: Intent) {
+    super.onNewIntent(intent)
+    setIntent(intent)
+    handleMediaIntent(intent)
+  }
+
+  /**
+   * Started by the media service: a car or headset PLAY found no page
+   * ([ACTION_RESUME_IN_BACKGROUND]), or the user tapped the notification that
+   * says to open the app to resume ([ACTION_RESUME]). The service holds the
+   * command and delivers it as soon as the page has restored its queue.
+   */
+  private fun handleMediaIntent(intent: Intent?) {
+    when (intent?.action) {
+      ACTION_RESUME -> RekordMediaService.resumeFromApp(this)
+      ACTION_RESUME_IN_BACKGROUND -> {
+        // Only while the service is really waiting on a page: an activity recreated
+        // later from its task keeps this intent, and must then simply open.
+        if (!RekordMediaService.awaitingPage) return
+        RekordLog.i("activity: started by the media service to resume playback")
+        // The WebView may already exist (wry creates it inside super.onCreate).
+        val view = webView
+        if (view != null) view.post { moveTaskToBack(true) } else sendToBackOnce = true
+      }
+      else -> return
+    }
+    // Consumed: a configuration change or a re-delivery must not resume again.
+    intent.action = Intent.ACTION_MAIN
   }
 
   /**
@@ -72,6 +106,14 @@ class MainActivity : TauriActivity() {
     // `src/lib/cast/androidCast.ts`.
     webView.addJavascriptInterface(RekordCastJs(), "RekordCastNative")
     installBackHandler(webView)
+    // Started from the background for a car PLAY (where Android allows it): the
+    // WebView exists now, so get out of the way of whatever the user was doing.
+    // The page keeps loading and plays (keepWebViewAwake holds while the service
+    // waits on the play).
+    if (sendToBackOnce) {
+      sendToBackOnce = false
+      webView.post { moveTaskToBack(true) }
+    }
   }
 
   /**
@@ -157,6 +199,14 @@ class MainActivity : TauriActivity() {
   }
 
   companion object {
+    const val ACTION_RESUME = "app.rekord.client.action.OPEN_AND_RESUME"
+    const val ACTION_RESUME_IN_BACKGROUND = "app.rekord.client.action.RESUME_IN_BACKGROUND"
+
+    /** Created and not destroyed: the WebView exists or is being created. */
+    @Volatile
+    var alive = false
+      private set
+
     /** Activity resumed (read by [RekordMediaBridge.sleepIfHidden]). */
     @Volatile
     var inFront = false
@@ -171,6 +221,7 @@ class MainActivity : TauriActivity() {
     // A configuration change doesn't come through here (configChanges in the manifest).
     if (RekordMediaBridge.webView === webView) RekordMediaBridge.webView = null
     webView = null
+    alive = false
     RekordCast.bindActivity(null)
     if (!isChangingConfigurations) RekordMediaService.stop(this)
     super.onDestroy()

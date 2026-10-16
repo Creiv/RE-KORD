@@ -4,6 +4,7 @@ import android.content.Context
 import android.os.Handler
 import android.os.Looper
 import android.os.PowerManager
+import android.os.SystemClock
 import android.util.Log
 import android.webkit.JavascriptInterface
 import android.webkit.WebView
@@ -81,19 +82,34 @@ data class NowPlaying(
  * Media Session (see `src/lib/mediaSession.ts`).
  *
  * With the screen off, delivery is not guaranteed: the WebView may be suspended,
- * the CPU may fall back asleep before the script runs, the page may still be
- * loading. As in 5.0: a wake lock of a few seconds, the WebView woken up, and a
- * script that answers `true` only if the player is there
- * (`window.__rekordNativeMediaReady`, set by `nativeMedia.ts` on the first state
- * sent). Otherwise it retries a few times, then gives up.
+ * the CPU may fall back asleep before the script runs, the process may have been
+ * frozen until a moment ago, the page may still be loading (or, after the
+ * activity was started for a car PLAY, not exist yet). So: a wake lock for the
+ * whole delivery window, the WebView woken up before every attempt, and a script
+ * that answers `true` only if the player is there (`window.__rekordNativeMediaReady`,
+ * set by `nativeMedia.ts` on the first state sent). It retries every
+ * [RETRY_MS] until the window ends ([DEFAULT_WINDOW_MS], longer for a play the
+ * service is waiting on), then gives up and tells [onDropped].
  */
 object RekordMediaBridge {
     @Volatile
     var webView: WebView? = null
+        set(value) {
+            field = value
+            pageSeen = false
+        }
 
-    private const val WAKE_MS = 5_000L
+    /**
+     * The page in [webView] has sent a state at least once: its player is up. A
+     * WebView that has just been created is still loading the app and restoring
+     * the queue, which takes longer than a page that only slept.
+     */
+    @Volatile
+    var pageSeen = false
+
+    /** Delivery window of a command (5.1 gave up after 3 s). */
+    const val DEFAULT_WINDOW_MS = 15_000L
     private const val RETRY_MS = 250L
-    private const val MAX_ATTEMPTS = 12
 
     private val main = Handler(Looper.getMainLooper())
     private var wakeLock: PowerManager.WakeLock? = null
@@ -101,7 +117,14 @@ object RekordMediaBridge {
     /** Only one command in flight: a "play" followed by "pause" counts as "pause". */
     private var pending: Pair<String, Double?>? = null
     private var attempts = 0
+    private var startedAt = 0L
+    private var deadline = 0L
+    /** Last reason an attempt failed, logged once per reason. */
+    private var lastMiss = ""
     private val retry = Runnable { deliver() }
+
+    /** Main thread: a command was dropped without reaching the page. */
+    var onDropped: ((action: String) -> Unit)? = null
 
     fun attach(context: Context) {
         if (wakeLock != null) return
@@ -111,14 +134,26 @@ object RekordMediaBridge {
         }
     }
 
-    fun send(action: String, value: Double? = null, source: String = "") {
+    /** True while a command waits for the page. */
+    val busy: Boolean
+        get() = pending != null
+
+    fun send(
+        action: String,
+        value: Double? = null,
+        source: String = "",
+        windowMs: Long = DEFAULT_WINDOW_MS,
+    ) {
         main.post {
             if (source.isNotEmpty()) RekordLog.i("command $action ($source)")
             pending = action to value
             attempts = 0
+            lastMiss = ""
+            startedAt = SystemClock.elapsedRealtime()
+            deadline = startedAt + windowMs
             main.removeCallbacks(retry)
             try {
-                wakeLock?.acquire(WAKE_MS)
+                wakeLock?.acquire(windowMs + 1_000L)
             } catch (e: Exception) {
                 RekordLog.w("command wake lock unavailable: ${e.message}")
             }
@@ -130,7 +165,7 @@ object RekordMediaBridge {
         val command = pending ?: return
         val view = webView
         if (view == null) {
-            scheduleRetry()
+            miss("no WebView yet (activity not created)")
             return
         }
         val (action, value) = command
@@ -150,10 +185,11 @@ object RekordMediaBridge {
         view.evaluateJavascript(script) { result ->
             if (pending !== command) return@evaluateJavascript
             if (result == "true") {
-                if (attempts > 0) RekordLog.i("command $action delivered after ${attempts + 1} attempts")
+                val ms = SystemClock.elapsedRealtime() - startedAt
+                if (attempts > 0) RekordLog.i("command $action delivered after ${attempts + 1} attempts (${ms} ms)")
                 done()
             } else {
-                scheduleRetry()
+                miss("page not ready (player not mounted yet)")
             }
         }
     }
@@ -194,11 +230,17 @@ object RekordMediaBridge {
         }
     }
 
-    private fun scheduleRetry() {
+    private fun miss(reason: String) {
+        if (reason != lastMiss) {
+            lastMiss = reason
+            RekordLog.i("command ${pending?.first}: $reason, retrying")
+        }
         attempts += 1
-        if (attempts >= MAX_ATTEMPTS) {
-            RekordLog.w("command ${pending?.first} not delivered: the page did not answer")
+        if (SystemClock.elapsedRealtime() >= deadline) {
+            val action = pending?.first
+            RekordLog.w("command $action not delivered after ${attempts} attempts: $reason")
             done()
+            if (action != null) onDropped?.invoke(action)
             return
         }
         main.removeCallbacks(retry)
@@ -227,6 +269,7 @@ class RekordMedia(private val activity: MainActivity) {
     fun update(json: String) {
         val state = NowPlaying.fromJson(json) ?: return
         activity.runOnUiThread {
+            RekordMediaBridge.pageSeen = true
             // The permission is requested on the first track, not at startup: first
             // there is something to show, then we ask to be allowed to show it.
             if (state.playing) activity.ensureNotificationPermission()
@@ -244,8 +287,9 @@ class RekordMedia(private val activity: MainActivity) {
         RekordLog.i("page: ${message.take(400)}")
     }
 
+    /** The queue emptied: end the session and forget the last track. */
     @JavascriptInterface
     fun stop() {
-        activity.runOnUiThread { RekordMediaService.stop(activity) }
+        activity.runOnUiThread { RekordMediaService.stop(activity, forget = true) }
     }
 }

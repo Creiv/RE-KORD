@@ -6,4 +6,6 @@
     <string name="media_pause">Pause</string>
     <string name="media_next">Weiter</string>
     <string name="cast_playing_on">Auf %1$s</string>
+    <string name="media_resume">Fortsetzen</string>
+    <string name="media_open_to_resume">RE-KORD öffnen, um fortzufahren</string>
 </resources>

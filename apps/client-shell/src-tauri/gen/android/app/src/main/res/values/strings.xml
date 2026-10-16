@@ -10,4 +10,6 @@
     <string name="media_pause">Pause</string>
     <string name="media_next">Next</string>
     <string name="cast_playing_on">On %1$s</string>
+    <string name="media_resume">Resume</string>
+    <string name="media_open_to_resume">Open RE-KORD to resume</string>
 </resources>

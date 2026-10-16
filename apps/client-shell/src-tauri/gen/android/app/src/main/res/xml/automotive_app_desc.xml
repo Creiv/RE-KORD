@@ -1,0 +1,5 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Android Auto: RE-KORD is a media app (RekordMediaService is its MediaBrowserService). -->
+<automotiveApp>
+    <uses name="media" />
+</automotiveApp>
