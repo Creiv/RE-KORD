@@ -481,5 +481,10 @@
   "connect.errNoAccounts": "Nessun account su questo hub.",
   "connect.errQrNotHub": "Il QR non contiene un indirizzo dell’hub.",
   "connect.errCameraDenied": "Serve il permesso della fotocamera per leggere il QR.",
-  "connect.errScan": "Lettura del QR non riuscita."
+  "connect.errScan": "Lettura del QR non riuscita.",
+  "settings.youtubeCookiesHowTo": "Come esportarli: apri una finestra privata, accedi a YouTube, esporta i cookie in formato Netscape (cookies.txt) con un'estensione del browser e chiudi la finestra. Se resta aperta, YouTube li rinnova e quelli esportati smettono di funzionare.",
+  "settings.youtubeCookiesUpdated": "aggiornati {{when}}",
+  "settings.youtubeCookiesEntries": "{{n}} cookie, {{yt}} di YouTube/Google",
+  "settings.youtubeCookiesInvalid": "Il file salvato non è un cookies.txt valido (formato Netscape): caricane uno nuovo.",
+  "settings.youtubeCookiesNoYoutube": "Il file non contiene cookie di YouTube o Google: esportali mentre sei su youtube.com."
 }

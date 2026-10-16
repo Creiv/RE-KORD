@@ -158,5 +158,7 @@
   "core.api.errorCode.tunnel_start_timeout": "Avvio del tunnel scaduto: cloudflared non ha restituito un indirizzo pubblico.",
   "core.api.errorCode.tunnel_exited_early": "Il tunnel si è chiuso prima di essere pronto.",
   "core.api.errorCode.tunnel_exited": "Il tunnel si è chiuso.",
-  "core.api.errorCode.tunnel_failed": "Il tunnel non è riuscito ad avviarsi."
+  "core.api.errorCode.tunnel_failed": "Il tunnel non è riuscito ad avviarsi.",
+  "core.api.errorCode.cookies_json": "Il file dei cookie è in formato JSON: esportali in formato Netscape (cookies.txt).",
+  "core.api.errorCode.cookies_empty": "Il file dei cookie non contiene cookie."
 }

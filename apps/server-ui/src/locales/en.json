@@ -525,5 +525,15 @@
   "hub.activity.power.settings": "Prevent sleep: mode {{mode}}, grace {{graceMinutes}} min",
   "hub.activity.power.inhibited": "Computer sleep blocked ({{reason}})",
   "hub.activity.power.released": "Computer sleep allowed again",
-  "hub.activity.power.failed": "Blocking sleep failed ({{code}})"
+  "hub.activity.power.failed": "Blocking sleep failed ({{code}})",
+  "integrations.yt.cookiesInvalid": "invalid file",
+  "integrations.yt.cookiesEntriesLabel": "Contents",
+  "integrations.yt.cookiesEntries": "{{n}} cookies, {{yt}} for YouTube/Google",
+  "integrations.yt.cookiesUpdated": "Updated",
+  "integrations.yt.cookiesNoYoutube": "The file holds no YouTube or Google cookies: export them while on youtube.com.",
+  "integrations.yt.howTo": "Export them from a private window after signing in to YouTube, then close it: if it stays open, YouTube rotates them and the exported ones stop working.",
+  "errors.code.cookies_invalid": "The file is not a Netscape-format cookies.txt.",
+  "errors.code.cookies_json": "The file is JSON: export the cookies in Netscape format (cookies.txt).",
+  "errors.code.cookies_empty": "The file contains no cookies.",
+  "errors.code.cookies_locked_by_env": "The cookies come from an environment variable: change them on the system."
 }

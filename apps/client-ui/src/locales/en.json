@@ -481,5 +481,10 @@
   "connect.errNoAccounts": "No accounts on this hub.",
   "connect.errQrNotHub": "The QR does not contain a hub address.",
   "connect.errCameraDenied": "Reading the QR needs camera permission.",
-  "connect.errScan": "Could not read the QR."
+  "connect.errScan": "Could not read the QR.",
+  "settings.youtubeCookiesHowTo": "How to export them: open a private window, sign in to YouTube, export the cookies in Netscape format (cookies.txt) with a browser extension and close the window. If it stays open, YouTube rotates them and the exported ones stop working.",
+  "settings.youtubeCookiesUpdated": "updated {{when}}",
+  "settings.youtubeCookiesEntries": "{{n}} cookies, {{yt}} for YouTube/Google",
+  "settings.youtubeCookiesInvalid": "The stored file is not a valid cookies.txt (Netscape format): upload a new one.",
+  "settings.youtubeCookiesNoYoutube": "The file holds no YouTube or Google cookies: export them while on youtube.com."
 }

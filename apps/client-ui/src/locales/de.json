@@ -456,5 +456,10 @@
   "connect.errNoAccounts": "Keine Konten auf diesem Hub.",
   "connect.errQrNotHub": "Der QR-Code enthält keine Hub-Adresse.",
   "connect.errCameraDenied": "Zum Lesen des QR-Codes ist die Kameraberechtigung nötig.",
-  "connect.errScan": "Der QR-Code konnte nicht gelesen werden."
+  "connect.errScan": "Der QR-Code konnte nicht gelesen werden.",
+  "settings.youtubeCookiesHowTo": "So exportierst du sie: öffne ein privates Fenster, melde dich bei YouTube an, exportiere die Cookies im Netscape-Format (cookies.txt) mit einer Browser-Erweiterung und schließe das Fenster. Bleibt es offen, erneuert YouTube sie und die exportierten funktionieren nicht mehr.",
+  "settings.youtubeCookiesUpdated": "aktualisiert {{when}}",
+  "settings.youtubeCookiesEntries": "{{n}} Cookies, {{yt}} für YouTube/Google",
+  "settings.youtubeCookiesInvalid": "Die gespeicherte Datei ist keine gültige cookies.txt (Netscape-Format): lade eine neue hoch.",
+  "settings.youtubeCookiesNoYoutube": "Die Datei enthält keine YouTube- oder Google-Cookies: exportiere sie, während du auf youtube.com bist."
 }

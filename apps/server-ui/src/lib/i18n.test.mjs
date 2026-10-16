@@ -7,7 +7,7 @@ import { readdirSync, readFileSync, statSync } from "node:fs";
 import { join } from "node:path";
 import { describe, test } from "node:test";
 import { fileURLToPath } from "node:url";
-import { PODCAST_CODES, POWER_CODES, hubErrorKey } from "./hubErrors.ts";
+import { COOKIE_CODES, PODCAST_CODES, POWER_CODES, hubErrorKey } from "./hubErrors.ts";
 import { hubActivityCode, hubActivityText, hubText } from "../../../../packages/ui/src/lib/hubText.ts";
 import { intlTag, interpolate, normalizeLocale, pickLocale } from "./locale.ts";
 
@@ -199,6 +199,16 @@ describe("hub errors", () => {
   test("sleep prevention codes have their own text, in every language", () => {
     for (const code of POWER_CODES) {
       const k = hubErrorKey(409, code, true);
+      assert.deepEqual(k, { key: `errors.code.${code}` });
+      for (const [name, table] of [["it", it], ["en", en], ["de", de]]) {
+        assert.ok(k.key in table, `${name}.json: missing ${k.key}`);
+      }
+    }
+  });
+
+  test("refused cookie uploads have their own text, in every language", () => {
+    for (const code of COOKIE_CODES) {
+      const k = hubErrorKey(400, code, true);
       assert.deepEqual(k, { key: `errors.code.${code}` });
       for (const [name, table] of [["it", it], ["en", en], ["de", de]]) {
         assert.ok(k.key in table, `${name}.json: missing ${k.key}`);

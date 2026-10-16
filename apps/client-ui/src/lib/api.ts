@@ -354,6 +354,14 @@ export type HubConfig = {
   youtubeCookiesLockedByEnv?: boolean;
   youtubeCookiesLabel?: string;
   youtubeCookiesWritable?: boolean;
+  /** A file is stored (valid or not); hub ≥ 5.2. */
+  youtubeCookiesPresent?: boolean;
+  youtubeCookiesValid?: boolean;
+  youtubeCookiesEntries?: number;
+  /** Entries for youtube.com / google.com. */
+  youtubeCookiesYoutubeEntries?: number;
+  /** RFC 3339 modification time of the stored file. */
+  youtubeCookiesUpdatedAt?: string | null;
   discogsConfigured?: boolean;
   discogsTokenConfigured?: boolean;
   discogsLockedByEnv?: boolean;

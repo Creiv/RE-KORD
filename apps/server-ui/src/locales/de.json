@@ -525,5 +525,15 @@
   "hub.activity.power.settings": "Ruhezustand verhindern: Modus {{mode}}, Wartezeit {{graceMinutes}} Min.",
   "hub.activity.power.inhibited": "Ruhezustand des Computers blockiert ({{reason}})",
   "hub.activity.power.released": "Ruhezustand des Computers wieder erlaubt",
-  "hub.activity.power.failed": "Blockieren des Ruhezustands fehlgeschlagen ({{code}})"
+  "hub.activity.power.failed": "Blockieren des Ruhezustands fehlgeschlagen ({{code}})",
+  "integrations.yt.cookiesInvalid": "ungültige Datei",
+  "integrations.yt.cookiesEntriesLabel": "Inhalt",
+  "integrations.yt.cookiesEntries": "{{n}} Cookies, {{yt}} für YouTube/Google",
+  "integrations.yt.cookiesUpdated": "Aktualisiert",
+  "integrations.yt.cookiesNoYoutube": "Die Datei enthält keine YouTube- oder Google-Cookies: exportiere sie, während du auf youtube.com bist.",
+  "integrations.yt.howTo": "Exportiere sie aus einem privaten Fenster nach der Anmeldung bei YouTube und schließe es dann: bleibt es offen, erneuert YouTube sie und die exportierten funktionieren nicht mehr.",
+  "errors.code.cookies_invalid": "Die Datei ist keine cookies.txt im Netscape-Format.",
+  "errors.code.cookies_json": "Die Datei ist im JSON-Format: exportiere die Cookies im Netscape-Format (cookies.txt).",
+  "errors.code.cookies_empty": "Die Datei enthält keine Cookies.",
+  "errors.code.cookies_locked_by_env": "Die Cookies kommen aus einer Umgebungsvariable: ändere sie auf dem System."
 }

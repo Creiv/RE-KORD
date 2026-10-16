@@ -191,17 +191,34 @@
         <p class="integration-row__lead">
           {t("settings.youtubeCookiesLead")}
         </p>
+        <p class="integration-row__lead">{t("settings.youtubeCookiesHowTo")}</p>
       {/snippet}
       {#snippet status()}
         {#if hubConfig?.youtubeCookiesConfigured}
           {t("settings.youtubeCookiesActive", {
             name: hubConfig.youtubeCookiesLabel || "cookies.txt",
           })}
+          {#if hubConfig.youtubeCookiesUpdatedAt}
+            {" · "}{t("settings.youtubeCookiesUpdated", {
+              when: fmtRelative(hubConfig.youtubeCookiesUpdatedAt),
+            })}
+          {/if}
+          {#if hubConfig.youtubeCookiesEntries != null}
+            {" · "}{t("settings.youtubeCookiesEntries", {
+              n: hubConfig.youtubeCookiesEntries,
+              yt: hubConfig.youtubeCookiesYoutubeEntries ?? 0,
+            })}
+          {/if}
+        {:else if hubConfig?.youtubeCookiesPresent}
+          {t("settings.youtubeCookiesInvalid")}
         {:else}
           {t("settings.youtubeCookiesMissing")}
         {/if}
       {/snippet}
       {#snippet aside()}
+        {#if hubConfig?.youtubeCookiesConfigured && hubConfig.youtubeCookiesYoutubeEntries === 0}
+          <p class="integration-row__warn">{t("settings.youtubeCookiesNoYoutube")}</p>
+        {/if}
         {#if hubConfig?.youtubeCookiesLockedByEnv}
           <p class="integration-row__warn">
             {t("settings.youtubeCookiesEnvLocked")}

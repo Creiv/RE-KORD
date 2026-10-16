@@ -1,7 +1,7 @@
 <script lang="ts">
   import { ActionRow, Banner, Button, Field, Panel, TextInput } from "@rekord/ui";
   import { admin } from "../lib/admin.svelte";
-  import { t } from "../lib/i18n.svelte";
+  import { formatDateTime, t } from "../lib/i18n.svelte";
 
   let cookieInput = $state<HTMLInputElement | null>(null);
 
@@ -27,9 +27,27 @@
       <span class="v">
         {cfg.youtubeCookiesConfigured
           ? cfg.youtubeCookiesLabel || t("integrations.yt.cookiesSet")
-          : t("integrations.yt.cookiesUnset")}
+          : cfg.youtubeCookiesPresent
+            ? t("integrations.yt.cookiesInvalid")
+            : t("integrations.yt.cookiesUnset")}
       </span>
+      {#if cfg.youtubeCookiesConfigured && cfg.youtubeCookiesEntries != null}
+        <span class="k">{t("integrations.yt.cookiesEntriesLabel")}</span>
+        <span class="v">
+          {t("integrations.yt.cookiesEntries", {
+            n: cfg.youtubeCookiesEntries,
+            yt: cfg.youtubeCookiesYoutubeEntries ?? 0,
+          })}
+        </span>
+      {/if}
+      {#if cfg.youtubeCookiesPresent && cfg.youtubeCookiesUpdatedAt}
+        <span class="k">{t("integrations.yt.cookiesUpdated")}</span>
+        <span class="v">{formatDateTime(cfg.youtubeCookiesUpdatedAt)}</span>
+      {/if}
     </div>
+    {#if cfg.youtubeCookiesConfigured && cfg.youtubeCookiesYoutubeEntries === 0}
+      <Banner tone="error">{t("integrations.yt.cookiesNoYoutube")}</Banner>
+    {/if}
     {#if cfg.youtubeCookiesLockedByEnv}
       <Banner tone="info">{t("integrations.yt.lockedByEnv")}</Banner>
     {:else}
@@ -59,6 +77,7 @@
       onchange={onCookiePicked}
     />
     <p class="hint">{t("integrations.yt.hint")}</p>
+    <p class="hint">{t("integrations.yt.howTo")}</p>
   {/if}
 </Panel>
 

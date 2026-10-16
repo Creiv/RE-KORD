@@ -42,6 +42,14 @@ export const POWER_CODES: ReadonlySet<string> = new Set([
   "settings_save_failed",
 ]);
 
+/** Refused cookie uploads (`/config/youtube-cookies`). */
+export const COOKIE_CODES: ReadonlySet<string> = new Set([
+  "cookies_invalid",
+  "cookies_json",
+  "cookies_empty",
+  "cookies_locked_by_env",
+]);
+
 /** Statuses a reverse proxy (Vite dev, Cloudflare) answers for a hub that is down. */
 export function isGatewayStatus(status: number): boolean {
   return status === 500 || status === 502 || status === 503 || status === 504;
@@ -67,6 +75,7 @@ export function hubErrorKey(
   // Podcasts module codes (and the yt-dlp / SSRF ones its URLs can hit).
   if (code && PODCAST_CODES.has(code)) return { key: `errors.code.${code}` };
   if (code && POWER_CODES.has(code)) return { key: `errors.code.${code}` };
+  if (code && COOKIE_CODES.has(code)) return { key: `errors.code.${code}` };
 
   if (status === 403) {
     if (text.includes("default")) return { key: "errors.forbiddenDefault" };

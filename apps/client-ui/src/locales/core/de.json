@@ -158,5 +158,7 @@
   "core.api.errorCode.tunnel_start_timeout": "Tunnel-Start abgelaufen: cloudflared hat keine öffentliche URL geliefert.",
   "core.api.errorCode.tunnel_exited_early": "Der Tunnel wurde beendet, bevor er bereit war.",
   "core.api.errorCode.tunnel_exited": "Der Tunnel wurde beendet.",
-  "core.api.errorCode.tunnel_failed": "Der Tunnel konnte nicht gestartet werden."
+  "core.api.errorCode.tunnel_failed": "Der Tunnel konnte nicht gestartet werden.",
+  "core.api.errorCode.cookies_json": "Die Cookie-Datei ist im JSON-Format: exportiere die Cookies im Netscape-Format (cookies.txt).",
+  "core.api.errorCode.cookies_empty": "Die Cookie-Datei enthält keine Cookies."
 }

@@ -158,5 +158,7 @@
   "core.api.errorCode.tunnel_start_timeout": "Tunnel start timed out: cloudflared did not return a public URL.",
   "core.api.errorCode.tunnel_exited_early": "The tunnel closed before it was ready.",
   "core.api.errorCode.tunnel_exited": "The tunnel closed.",
-  "core.api.errorCode.tunnel_failed": "The tunnel failed to start."
+  "core.api.errorCode.tunnel_failed": "The tunnel failed to start.",
+  "core.api.errorCode.cookies_json": "The cookie file is JSON: export the cookies in Netscape format (cookies.txt).",
+  "core.api.errorCode.cookies_empty": "The cookie file contains no cookies."
 }

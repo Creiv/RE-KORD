@@ -525,5 +525,15 @@
   "hub.activity.power.settings": "Blocco della sospensione: modalità {{mode}}, attesa {{graceMinutes}} min",
   "hub.activity.power.inhibited": "Sospensione del computer bloccata ({{reason}})",
   "hub.activity.power.released": "Sospensione del computer di nuovo consentita",
-  "hub.activity.power.failed": "Blocco della sospensione non riuscito ({{code}})"
+  "hub.activity.power.failed": "Blocco della sospensione non riuscito ({{code}})",
+  "integrations.yt.cookiesInvalid": "file non valido",
+  "integrations.yt.cookiesEntriesLabel": "Contenuto",
+  "integrations.yt.cookiesEntries": "{{n}} cookie, {{yt}} di YouTube/Google",
+  "integrations.yt.cookiesUpdated": "Aggiornati",
+  "integrations.yt.cookiesNoYoutube": "Il file non contiene cookie di YouTube o Google: esportali mentre sei su youtube.com.",
+  "integrations.yt.howTo": "Esportali da una finestra privata dopo l'accesso a YouTube, poi chiudila: se resta aperta, YouTube li rinnova e quelli esportati smettono di funzionare.",
+  "errors.code.cookies_invalid": "Il file non è un cookies.txt in formato Netscape.",
+  "errors.code.cookies_json": "Il file è in formato JSON: esporta i cookie in formato Netscape (cookies.txt).",
+  "errors.code.cookies_empty": "Il file non contiene cookie.",
+  "errors.code.cookies_locked_by_env": "I cookie arrivano da una variabile d'ambiente: modificali sul sistema."
 }
