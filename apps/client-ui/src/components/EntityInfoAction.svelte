@@ -11,7 +11,7 @@
   import { Button, CoverArt, Modal } from "@rekord/ui";
   import { api, type EntityInfoBundle } from "../lib/api";
   import { mediaUrl } from "../lib/config";
-  import { i18n, t } from "../lib/i18n.svelte";
+  import { i18n, t, tp } from "../lib/i18n.svelte";
   import UiIcon from "./icons/UiIcon.svelte";
 
   let {
@@ -58,9 +58,7 @@
   const itemsLede = $derived(
     loading || loadError || items.length === 0
       ? ""
-      : items.length === 1
-        ? t("entityInfo.itemsCountOne")
-        : t("entityInfo.itemsCount", { n: items.length }),
+      : tp("entityInfo.itemsCount", items.length),
   );
 
   function artistImageUrl(dir: string, src: EntityInfoBundle): string | null {

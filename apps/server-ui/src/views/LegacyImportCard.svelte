@@ -1,6 +1,6 @@
 <script lang="ts">
   import type { LegacyAccountReport, LegacyImportCounts, LegacyImportReport } from "../api";
-  import { formatDateTime, formatNumber, t } from "../lib/i18n.svelte";
+  import { formatDateTime, formatNumber, t, tp } from "../lib/i18n.svelte";
 
   let { report }: { report: LegacyImportReport } = $props();
 
@@ -66,7 +66,7 @@
     {/each}
   </dl>
   {#if report.accountsAdded > 0}
-    <p class="note">{t("backup.legacy.accountsAdded", { n: formatNumber(report.accountsAdded) })}</p>
+    <p class="note">{tp("backup.legacy.accountsAdded", report.accountsAdded)}</p>
   {/if}
   {#if report.metadataError}
     <p class="note warn">{t("backup.legacy.metadataError", { error: report.metadataError })}</p>
@@ -94,9 +94,7 @@
               {#if a.unmatchedCount > 0 || a.unmatchedAlbumKeys.length > 0}
                 <details class="detail">
                   <summary>
-                    {t("backup.legacy.unmatched", {
-                      n: formatNumber(a.unmatchedCount + a.unmatchedAlbumKeys.length),
-                    })}
+                    {tp("backup.legacy.unmatched", a.unmatchedCount + a.unmatchedAlbumKeys.length)}
                   </summary>
                   <ul class="paths">
                     {#each a.unmatchedPaths.slice(0, MAX_PATHS) as p (p)}
@@ -123,7 +121,7 @@
   {/if}
   {#if notRegistered.length > 0}
     <p class="note">
-      {t("backup.legacy.notRegistered", { n: formatNumber(notRegistered.length) })}
+      {tp("backup.legacy.notRegistered", notRegistered.length)}
     </p>
   {/if}
 </div>

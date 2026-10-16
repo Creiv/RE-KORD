@@ -1,7 +1,7 @@
 <script lang="ts">
   import { ActionRow, Banner, Button, Field, Panel, TextInput } from "@rekord/ui";
   import { admin } from "../lib/admin.svelte";
-  import { formatDateTime, t } from "../lib/i18n.svelte";
+  import { formatDateTime, t, tp } from "../lib/i18n.svelte";
 
   let cookieInput = $state<HTMLInputElement | null>(null);
 
@@ -36,8 +36,7 @@
       {#if cfg.youtubeCookiesConfigured && cfg.youtubeCookiesEntries != null}
         <span class="k">{t("integrations.yt.cookiesEntriesLabel")}</span>
         <span class="v">
-          {t("integrations.yt.cookiesEntries", {
-            n: cfg.youtubeCookiesEntries,
+          {tp("integrations.yt.cookiesEntries", cfg.youtubeCookiesEntries, {
             yt: cfg.youtubeCookiesYoutubeEntries ?? 0,
           })}
         </span>

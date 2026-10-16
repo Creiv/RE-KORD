@@ -5,7 +5,7 @@
  */
 import { api, errorText, type PodcastPreview, type PodcastsAdmin } from "../api";
 import { admin } from "./admin.svelte";
-import { t } from "./i18n.svelte";
+import { t, tp } from "./i18n.svelte";
 
 class PodcastsAdminStore {
   data = $state<PodcastsAdmin | null>(null);
@@ -66,7 +66,7 @@ class PodcastsAdminStore {
   saveTtl() {
     return this.run(async () => {
       this.apply(await api.setPodcastSettings({ cacheTtlMinutes: Math.round(this.ttl) }));
-      return t("podcasts.msg.ttlSaved", { minutes: this.data?.cacheTtlMinutes ?? this.ttl });
+      return tp("podcasts.msg.ttlSaved", this.data?.cacheTtlMinutes ?? this.ttl);
     });
   }
 

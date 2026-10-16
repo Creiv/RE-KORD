@@ -399,7 +399,7 @@
     }
     savingAll = false;
     note = errors
-      ? t("studio.einfo.savePartial", { saved: tp("studio.einfo.savedEntries", added), n: errors })
+      ? tp("studio.einfo.savePartial", errors, { saved: tp("studio.einfo.savedEntries", added) })
       : tp("studio.einfo.savedEntries", added);
     onlog?.(errors ? "warn" : "ok", note);
   }

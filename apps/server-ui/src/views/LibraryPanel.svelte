@@ -10,7 +10,7 @@
   } from "@rekord/ui";
   import type { EmbeddedPriority, PreferredLayout } from "../api";
   import { admin, humanTime, LAYOUT_IDS, layoutLabel } from "../lib/admin.svelte";
-  import { formatNumber, formatPercent, t } from "../lib/i18n.svelte";
+  import { formatNumber, formatPercent, t, tp } from "../lib/i18n.svelte";
   import ScanReportCard from "./ScanReportCard.svelte";
 
   let {
@@ -102,8 +102,8 @@
     <div class="probe">
       <p class="probe-line">
         {t("library.probe.summary", {
-          tracks: formatNumber(probe.stats.estimatedTracks),
-          dirs: formatNumber(probe.stats.dirsAtRoot),
+          tracks: tp("count.tracks", probe.stats.estimatedTracks),
+          dirs: tp("count.topDirs", probe.stats.dirsAtRoot),
           depth: formatNumber(probe.stats.maxDepth),
         })}
       </p>
@@ -199,8 +199,8 @@
     {#if embedded.running || embedded.pendingTracks > 0 || embedded.pendingAlbums > 0}
       <p class="hint">
         {t(embedded.running ? "library.embedded.running" : "library.embedded.pending", {
-          tracks: formatNumber(embedded.pendingTracks),
-          albums: formatNumber(embedded.pendingAlbums),
+          tracks: tp("count.tracks", embedded.pendingTracks),
+          albums: tp("count.albums", embedded.pendingAlbums),
         })}
       </p>
     {/if}

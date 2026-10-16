@@ -8,6 +8,8 @@
   const req = $derived(downloadFlow.current);
   const inLibrary = $derived(req?.ask.library ?? null);
   const danger = $derived(!!req && (req.artistFolderTarget || !!inLibrary));
+  /** Tracks the confirm sentence talks about: one for a single, else the count (unknown reads as plural). */
+  const confirmCount = $derived(req?.ask.scope === "single" ? 1 : (req?.trackCount ?? 0));
   const kindLabel = $derived(
     req?.ask.scope === "playlist" ? t("studio.dl.kind.playlist") : t("studio.dl.kind.single"),
   );
@@ -74,7 +76,7 @@
         <p class="studio-dl-confirm__msg">
           {req.artistFolderTarget
             ? t("studio.dl.confirmArtistFolder", { path: req.outputDir })
-            : t("studio.dl.confirmAlbumFolder", { path: req.outputDir })}
+            : tp("studio.dl.confirmAlbumFolder", confirmCount, { path: req.outputDir })}
         </p>
         {#if inLibrary}
           <p class="studio-dl-confirm__warn" role="note">

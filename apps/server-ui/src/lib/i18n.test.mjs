@@ -9,6 +9,7 @@ import { describe, test } from "node:test";
 import { fileURLToPath } from "node:url";
 import { COOKIE_CODES, PODCAST_CODES, POWER_CODES, hubErrorKey } from "./hubErrors.ts";
 import { hubActivityCode, hubActivityText, hubText } from "../../../../packages/ui/src/lib/hubText.ts";
+import { pluralCategory, pluralKey } from "../../../../packages/ui/src/lib/plural.ts";
 import { intlTag, interpolate, normalizeLocale, pickLocale } from "./locale.ts";
 
 const SRC = fileURLToPath(new URL("..", import.meta.url));
@@ -88,6 +89,38 @@ describe("locale tables", () => {
     assert.deepEqual(missing, [], `keys used but not translated: ${missing.join(", ")}`);
   });
 
+  test("every literal tp(\"…\", n) key has its plural forms", () => {
+    const used = new Set();
+    for (const file of sourceFiles(SRC)) {
+      // Comments quote calls as examples (`tp("x", n)`): skip them.
+      const text = readFileSync(file, "utf8")
+        .replace(/\/\*[\s\S]*?\*\//g, "")
+        .replace(/(^|[^:"'`\\])\/\/[^\n]*/g, "$1");
+      for (const m of text.matchAll(/\btp\(\s*"([^"]+)"/g)) used.add(m[1]);
+    }
+    assert.ok(used.size > 10, `found only ${used.size} plural keys`);
+    const missing = [];
+    for (const key of used) {
+      for (const [name, table] of [["it", it], ["en", en], ["de", de]]) {
+        for (const form of ["one", "other"]) {
+          if (!(`${key}.${form}` in table)) missing.push(`${name}: ${key}.${form}`);
+        }
+      }
+    }
+    assert.deepEqual(missing.sort(), []);
+  });
+
+  test("plural families are complete and never shadow a plain key", () => {
+    for (const [name, table] of [["it", it], ["en", en], ["de", de]]) {
+      for (const key of Object.keys(table)) {
+        const one = /^(.*)\.one$/.exec(key);
+        if (one) assert.ok(`${one[1]}.other` in table, `${name}: ${key} without .other`);
+        const other = /^(.*)\.other$/.exec(key);
+        if (other) assert.ok(!(other[1] in table), `${name}: ${other[1]} is plain and plural`);
+      }
+    }
+  });
+
   test("dynamic key families are complete", () => {
     const families = {
       nav: ["status", "library", "jobs", "diagnostics", "activity", "backup", "accounts", "integrations", "podcasts", "network"],
@@ -139,6 +172,26 @@ describe("locale choice", () => {
     assert.equal(intlTag("it", []), "it-IT");
     assert.equal(intlTag("de", ["de-AT"]), "de-AT");
     assert.equal(intlTag("de", ["en-US"]), "de-DE");
+  });
+
+  test("plural forms follow Intl.PluralRules, .other as the fallback", () => {
+    const has = (k) => k in it;
+    assert.equal(pluralKey("count.tracks", 1, "it-IT", has), "count.tracks.one");
+    assert.equal(pluralKey("count.tracks", 0, "it-IT", has), "count.tracks.other");
+    assert.equal(pluralKey("count.tracks", 2, "en-GB", has), "count.tracks.other");
+    assert.equal(pluralKey("count.tracks", 1, "de-DE", has), "count.tracks.one");
+    assert.equal(pluralKey("no.such", 1, "it-IT", has), "no.such.other");
+    assert.equal(pluralCategory("pl", 3), "few");
+    assert.equal(pluralKey("count.tracks", 3, "pl", has), "count.tracks.other");
+    const tp = (table, key, n, vars) =>
+      interpolate(table[pluralKey(key, n, "it-IT", (k) => k in table)], { n, ...vars });
+    assert.equal(tp(it, "count.tracks", 1), "1 brano");
+    assert.equal(tp(it, "count.tracks", 12), "12 brani");
+    assert.equal(
+      interpolate(it["msg.libraryReady"], { tracks: tp(it, "count.tracks", 1) }),
+      "Libreria pronta: 1 brano.",
+    );
+    assert.equal(tp(en, "integrations.yt.cookiesEntries", 1, { yt: 1 }), "1 cookie, 1 for YouTube/Google");
   });
 
   test("interpolate replaces every occurrence", () => {

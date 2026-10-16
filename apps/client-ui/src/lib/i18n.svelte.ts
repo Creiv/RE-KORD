@@ -1,3 +1,5 @@
+// The subpath keeps the component library out of node tests that load this store.
+import { pluralKey } from "@rekord/ui/plural";
 import it from "../locales/it.json";
 import {
   loadUserPrefs,
@@ -177,9 +179,7 @@ class I18nStore {
    */
   tp = (key: string, n: number, vars?: Record<string, string | number>): string => {
     const table = TABLES[this.locale] ?? TABLES.it!;
-    const cat = new Intl.PluralRules(this.formatLocale).select(n);
-    const full = `${key}.${cat}`;
-    const pick = full in table || full in TABLES.it! ? full : `${key}.other`;
+    const pick = pluralKey(key, n, this.formatLocale, this.has);
     return translate(table, pick, { n: this.formatNumber(n), ...vars });
   };
 

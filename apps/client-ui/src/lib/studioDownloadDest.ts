@@ -77,7 +77,12 @@ export function buildStudioDownloadConfirm(
   if (msg) msg += "\n\n";
   msg += artistFolderTarget
     ? tr("studio.dl.confirmArtistFolder", { path: outputDir })
-    : tr("studio.dl.confirmAlbumFolder", { path: outputDir });
+    : tr(
+        args.scope === "single" || args.trackCount === 1
+          ? "studio.dl.confirmAlbumFolder.one"
+          : "studio.dl.confirmAlbumFolder.other",
+        { path: outputDir },
+      );
   if (
     args.scope === "playlist" &&
     args.trackCount != null &&

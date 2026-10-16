@@ -285,8 +285,8 @@
       appendLog(
         "warn",
         t("ui.studioMeta.log.trackCountMismatch", {
-          expected: r.expectedTracks,
-          local: r.localTrackCount,
+          expected: tp("core.count.tracks", r.expectedTracks),
+          local: tp("core.count.tracks", r.localTrackCount),
         }),
       );
     }

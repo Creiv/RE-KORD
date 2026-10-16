@@ -53,6 +53,7 @@ export {
 } from "./lib/backStack";
 export { uiLabels, setUiLabels } from "./lib/uiLabels.svelte";
 export { hubActivityCode, hubActivityText, hubText } from "./lib/hubText";
+export { pluralCategory, pluralKey } from "./lib/plural";
 export type {
   HubActivityEntry,
   HubParams,

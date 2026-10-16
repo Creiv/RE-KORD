@@ -133,7 +133,10 @@
               id: a.id,
               kind: "artist" as const,
               title: a.name,
-              subtitle: t("library.artistSubtitle", { albums: a.album_count, tracks: a.track_count }),
+              subtitle: t("library.artistSubtitle", {
+                albums: tp("library.albumsCount", a.album_count),
+                tracks: tp("library.tracksCount", a.track_count),
+              }),
               coverSrc: album ? coverUrlFor(album, 256) : null,
               coverSeed: a.name,
             };

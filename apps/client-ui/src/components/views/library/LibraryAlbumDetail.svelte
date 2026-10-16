@@ -160,7 +160,7 @@
   async function fillGenre(g: string) {
     const missing = tracks.filter((tr) => !fieldHasGenreLabel(tr.genre, g));
     if (!missing.length) return;
-    const ok = await confirmDialog({ title: t("albumMeta.addGenreMissingConfirm", { g, n: missing.length }) });
+    const ok = await confirmDialog({ title: tp("albumMeta.addGenreMissingConfirm", missing.length, { g }) });
     if (ok) await applyGenre(g, "add", missing);
   }
 
@@ -331,7 +331,7 @@
         <UiIcon name="music" />
       </SectionHeadLead>
       {#if expected != null}
-        <span class="album-detail__expected" title={t("library.expectedTracksTitle", { n: tracks.length, total: expected })}>
+        <span class="album-detail__expected" title={tp("library.expectedTracksTitle", tracks.length, { total: expected })}>
           <UiIcon name="queueMusic" />
           {tracks.length}/{expected}
         </span>

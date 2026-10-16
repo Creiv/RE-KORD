@@ -236,7 +236,7 @@
       const grade = relPath ? lookupByRelPathAliases(plectrBests, relPath)?.grade : undefined;
       return grade
         ? t("stats.plectrScoreWithGrade", { n: fmtN(n), grade })
-        : t("stats.plectrScore", { n: fmtN(n) });
+        : tp("stats.plectrScore", n);
     }
     return tp("stats.blockedCount", n);
   }

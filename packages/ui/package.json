@@ -11,6 +11,7 @@
       "import": "./src/index.ts",
       "default": "./src/index.ts"
     },
+    "./plural": "./src/lib/plural.ts",
     "./styles/tokens.css": "./src/styles/tokens.css",
     "./styles/themes.css": "./src/styles/themes.css",
     "./styles/controls.css": "./src/styles/controls.css",

@@ -26,7 +26,7 @@ import { getServerBaseUrl, setServerBaseUrl } from "./config";
 import { connectGate } from "./connect.svelte";
 import { hubModules } from "./hubModules.svelte";
 import { isExternalTrack } from "./externalItems";
-import { i18n, t } from "./i18n.svelte";
+import { i18n, t, tp } from "./i18n.svelte";
 import { player, type QueueSnapshot, type QueueSyncChange } from "./player";
 import { parseHubQueue } from "./queueSync";
 import { buildSearchIndex, searchTracks, trackMatchesQuery, type SearchIndex } from "./search";
@@ -1135,14 +1135,15 @@ class ClientSession {
     const tracks = this.stats?.track_count ?? this.catalogTracks.length;
     const detail: string[] = [];
     if (report && report.indexedTracks > 0) {
-      detail.push(t("toast.syncAdded", { count: report.indexedTracks }));
+      detail.push(tp("toast.syncAdded", report.indexedTracks));
     }
     if (report && report.removedTracks > 0) {
-      detail.push(t("toast.syncRemoved", { count: report.removedTracks }));
+      detail.push(tp("toast.syncRemoved", report.removedTracks));
     }
+    const total = tp("core.count.tracks", tracks);
     return detail.length
-      ? t("toast.syncDoneDetail", { tracks, detail: detail.join(", ") })
-      : t("toast.syncDone", { tracks });
+      ? t("toast.syncDoneDetail", { tracks: total, detail: detail.join(", ") })
+      : t("toast.syncDone", { tracks: total });
   }
 
   /**
@@ -1244,8 +1245,7 @@ class ClientSession {
       }
       this.status = this.stats?.scanning ? "indexing" : "online";
       if (failures.length) {
-        const message = t("core.refresh.partial", {
-          count: failures.length,
+        const message = tp("core.refresh.partial", failures.length, {
           error: describeError(failures[0]),
         });
         if (job) job.done(message, "error");
@@ -2337,14 +2337,16 @@ class ClientSession {
     this.view = "playlists";
     await this.openPlaylist(pl.id);
     if (firstError == null) {
-      const message = t("toast.queueSaved", { playlist: name, tracks: added });
+      const message = t("toast.queueSaved", {
+        playlist: name,
+        tracks: tp("core.count.tracks", added),
+      });
       if (job) job.done(message);
       else toasts.ok(message);
     } else {
-      const message = t("core.queueSave.partial", {
+      const message = tp("core.queueSave.partial", added, {
         playlist: name,
-        added,
-        total: queue.length,
+        total: i18n.formatNumber(queue.length),
         error: describeError(firstError),
       });
       if (job) job.done(message, "error");

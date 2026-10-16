@@ -5,7 +5,7 @@
   import IntegrationList from "../IntegrationList.svelte";
   import IntegrationRow from "../IntegrationRow.svelte";
   import { api, formatBytes, type HubConfig } from "../../lib/api";
-  import { fmtDate, fmtRelative, t } from "../../lib/i18n.svelte";
+  import { fmtDate, fmtRelative, t, tp } from "../../lib/i18n.svelte";
   import { session } from "../../lib/session.svelte";
   import type { SettingsAccounts } from "./settingsAccounts.svelte";
 
@@ -204,8 +204,7 @@
             })}
           {/if}
           {#if hubConfig.youtubeCookiesEntries != null}
-            {" · "}{t("settings.youtubeCookiesEntries", {
-              n: hubConfig.youtubeCookiesEntries,
+            {" · "}{tp("settings.youtubeCookiesEntries", hubConfig.youtubeCookiesEntries, {
               yt: hubConfig.youtubeCookiesYoutubeEntries ?? 0,
             })}
           {/if}

@@ -3,7 +3,7 @@
   import { ActionRow, Button, Panel, Select, TextInput } from "@rekord/ui";
   import { api, type Track } from "../../lib/api";
   import { hubActivityMsg, hubKind } from "../../lib/hubText";
-  import { fmtDate, t } from "../../lib/i18n.svelte";
+  import { fmtDate, t, tp } from "../../lib/i18n.svelte";
   import {
     applyLegacyUserState,
     listKordFolderAccounts,
@@ -302,9 +302,9 @@
       }
       j.restoreOk = t("settings.restoreOk", {
         version: data.version ?? "?",
-        tracks: data.scanned_tracks ?? 0,
-        favorites: data.favorites ?? 0,
-        playlists: data.playlists ?? 0,
+        tracks: tp("core.count.tracks", data.scanned_tracks ?? 0),
+        favorites: tp("stats.favoriteCount", data.favorites ?? 0),
+        playlists: tp("core.count.playlists", data.playlists ?? 0),
       });
       await session.refreshAll();
       window.setTimeout(() => (j.restoreOk = ""), 8000);
@@ -429,12 +429,17 @@
   {#if jobs.importReport}
     {@const r = jobs.importReport}
     <ul class="import-report">
-      <li>{t("ui.settings.importFavorites", { ok: r.favoritesOk, skip: r.favoritesSkip })}</li>
+      <li>
+        {t("ui.settings.importFavorites", {
+          ok: r.favoritesOk,
+          skip: tp("ui.settings.importSkipped", r.favoritesSkip),
+        })}
+      </li>
       <li>
         {t("ui.settings.importPlaylists", {
           ok: r.playlistOk,
           tracks: r.playlistTracksOk,
-          skip: r.playlistTracksSkip,
+          skip: tp("ui.settings.importSkipped", r.playlistTracksSkip),
         })}
       </li>
       <li>
@@ -445,12 +450,12 @@
         })}
       </li>
       {#if r.plectrBests}
-        <li>{t("core.import.plectrBests", { n: r.plectrBests })}</li>
+        <li>{tp("core.import.plectrBests", r.plectrBests)}</li>
       {/if}
       <li>
         {t("ui.settings.importExclusions", {
-          tracks: r.excludedTracks,
-          albums: r.excludedAlbums,
+          tracks: tp("library.tracksCount", r.excludedTracks),
+          albums: tp("library.albumsCount", r.excludedAlbums),
           theme: r.theme,
         })}
       </li>

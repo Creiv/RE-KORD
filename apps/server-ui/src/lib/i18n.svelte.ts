@@ -5,6 +5,7 @@
 import {
   hubActivityText,
   hubText,
+  pluralKey,
   setUiLabels,
   uiLabels,
   type HubActivityEntry,
@@ -58,6 +59,16 @@ class I18nStore {
     return interpolate(table[key] ?? TABLES.it[key] ?? key, vars);
   };
 
+  /**
+   * Plural-aware lookup: `tp("x", n)` reads `x.one` / `x.other` (by
+   * `Intl.PluralRules`), with `{{n}}` set to the formatted count.
+   */
+  tp = (key: string, n: number, vars?: Record<string, string | number>): string =>
+    this.t(pluralKey(key, n, this.intl, this.has), {
+      n: new Intl.NumberFormat(this.intl).format(n),
+      ...vars,
+    });
+
   /** Whether a key exists (current locale or the Italian fallback). */
   has = (key: string): boolean => {
     const table = TABLES[this.locale] ?? TABLES.it;
@@ -98,6 +109,11 @@ export const i18n = new I18nStore();
 /** Reactive when called from templates and `$derived`. */
 export function t(key: string, vars?: Record<string, string | number>): string {
   return i18n.t(key, vars);
+}
+
+/** Plural helper: `tp("x.count", n)` reads `x.count.one` / `x.count.other`. */
+export function tp(key: string, n: number, vars?: Record<string, string | number>): string {
+  return i18n.tp(key, n, vars);
 }
 
 const hubTranslator: HubTextTranslator = {

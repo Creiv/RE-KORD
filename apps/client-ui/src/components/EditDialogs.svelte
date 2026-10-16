@@ -13,7 +13,7 @@
     serializeTrackGenres,
     trackGenres,
   } from "../lib/genres";
-  import { i18n, t } from "../lib/i18n.svelte";
+  import { i18n, t, tp } from "../lib/i18n.svelte";
   import { session } from "../lib/session.svelte";
   import { toasts } from "../lib/toasts.svelte";
   import {
@@ -662,7 +662,7 @@
     {#if deleteAsk}
       <div class="meta-danger" role="alert">
         <p class="meta-danger__text">
-          {t("albumMeta.deleteWarn", { count: a.track_count })}
+          {tp("albumMeta.deleteWarn", a.track_count)}
         </p>
         <p class="meta-danger__path">{a.folder_key}</p>
         <div class="meta-danger__actions">

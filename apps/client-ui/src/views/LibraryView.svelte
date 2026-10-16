@@ -290,11 +290,11 @@
   /** The page title says what the active tab is showing, not the tab name. */
   const browseSummary = $derived.by(() => {
     if (session.libraryBrowse === "genres") {
-      return t("page.library.summaryGenres", { count: sortedGenreBuckets.length });
+      return tp("page.library.summaryGenres", sortedGenreBuckets.length);
     }
     if (session.libraryBrowse === "moods") return t("page.library.summaryMoods");
     if (session.libraryBrowse === "nebula") {
-      return t("nebula.summary", { count: session.catalogTracks.length });
+      return t("nebula.summary", { tracks: tp("library.tracksCount", session.catalogTracks.length) });
     }
     return `${tp("library.artistsCount", session.artists.length)} · ${tp("library.albumsCount", session.allAlbums.length)}`;
   });
@@ -370,7 +370,10 @@
       return {
         id: a.id,
         title: a.name,
-        subtitle: t("library.artistSubtitle", { albums: a.album_count, tracks: a.track_count }),
+        subtitle: t("library.artistSubtitle", {
+          albums: tp("library.albumsCount", a.album_count),
+          tracks: tp("library.tracksCount", a.track_count),
+        }),
         coverSrc: coverAlbum ? coverUrlFor(coverAlbum, 256) : null,
         coverSeed: a.name,
         favoriteCount: catalogAgg.favByArtist.get(a.id) ?? 0,

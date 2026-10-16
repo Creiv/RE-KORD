@@ -32,6 +32,7 @@ import {
   formatNumber,
   formatPercent,
   t,
+  tp,
 } from "./i18n.svelte";
 
 export type SectionId =
@@ -365,7 +366,7 @@ class AdminSession {
           await this.loadScanActivity();
         }
         this.message = t("msg.libraryReady", {
-          count: formatNumber(this.stats?.track_count ?? 0),
+          tracks: tp("count.tracks", this.stats?.track_count ?? 0),
         });
       }
     } catch (e) {
@@ -394,14 +395,14 @@ class AdminSession {
         this.lastScanFinishedAt = new Date().toISOString();
         await this.refresh();
         const parts = [
-          t("msg.scanIndexed", { count: formatNumber(r.indexedTracks) }),
-          t("msg.scanUnchanged", { count: formatNumber(r.unchanged) }),
+          tp("msg.scanIndexed", r.indexedTracks),
+          tp("msg.scanUnchanged", r.unchanged),
         ];
         if (r.removedTracks > 0) {
-          parts.push(t("msg.scanRemoved", { count: formatNumber(r.removedTracks) }));
+          parts.push(tp("msg.scanRemoved", r.removedTracks));
         }
         if (r.pruneSkipped && (r.missingTracks ?? 0) > 0) {
-          parts.push(t("msg.scanKept", { count: formatNumber(r.missingTracks ?? 0) }));
+          parts.push(tp("msg.scanKept", r.missingTracks ?? 0));
         }
         return t("msg.scanDone", {
           mode: t(`scan.mode.${r.mode === "full" ? "full" : "incremental"}`),
@@ -514,11 +515,11 @@ class AdminSession {
       if (!r.dryRun) await this.refresh();
       if (this.canManage) this.legacy = await api.legacyImportStatus();
       const params = {
-        accounts: formatNumber(r.accounts.filter((a) => a.status === "imported").length),
-        favorites: formatNumber(r.totals.favorites),
-        playlists: formatNumber(r.totals.playlists),
-        moods: formatNumber(r.totals.moods),
-        blocked: formatNumber(r.totals.excludedTracks + r.totals.excludedAlbums),
+        accounts: tp("count.accounts", r.accounts.filter((a) => a.status === "imported").length),
+        favorites: tp("count.favorites", r.totals.favorites),
+        playlists: tp("count.playlists", r.totals.playlists),
+        moods: tp("count.moods", r.totals.moods),
+        blocked: tp("count.blocked", r.totals.excludedTracks + r.totals.excludedAlbums),
       };
       return t(r.dryRun ? "msg.legacyPreview" : "msg.legacyImported", params);
     });
@@ -609,9 +610,9 @@ class AdminSession {
       if (r.themeOnly) return t("msg.themeImported");
       return t("msg.backupRestored", {
         version: r.version ?? "?",
-        tracks: formatNumber(r.scanned_tracks ?? 0),
-        favorites: formatNumber(r.favorites ?? 0),
-        playlists: formatNumber(r.playlists ?? 0),
+        tracks: tp("count.tracks", r.scanned_tracks ?? 0),
+        favorites: tp("count.favorites", r.favorites ?? 0),
+        playlists: tp("count.playlists", r.playlists ?? 0),
       });
     });
   }

@@ -84,6 +84,7 @@ test("in una cartella album basta la conferma normale", () => {
   assert.equal(c.variant, "warning");
   assert.match(c.message, /«Skrillex\/Bangarang»/);
   assert.doesNotMatch(c.message, /cartella artista/);
+  assert.match(c.message, /^Scaricare il brano in/, "a single is one track");
 });
 
 test("per l'album conta la cartella dove si finisce, non quella scelta", () => {
@@ -95,6 +96,7 @@ test("per l'album conta la cartella dove si finisce, non quella scelta", () => {
   }, tr);
   assert.equal(c.variant, "warning");
   assert.match(c.message, /«Skrillex\/Bangarang EP»/);
+  assert.match(c.message, /Scaricare i brani in/);
   assert.match(c.message, /Brani previsti: 7\./);
 });
 

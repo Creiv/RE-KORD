@@ -1,7 +1,7 @@
 <script lang="ts">
   import { Button } from "@rekord/ui";
   import { admin } from "../lib/admin.svelte";
-  import { formatDateTime, formatNumber, t } from "../lib/i18n.svelte";
+  import { formatDateTime, formatNumber, t, tp } from "../lib/i18n.svelte";
 
   let {
     /** Only the warnings (status page); the library page also shows the counts. */
@@ -107,8 +107,8 @@
     <p class="warn-title">{t("scan.parked.title")}</p>
     <p>
       {t("scan.parked.body", {
-        favorites: formatNumber(parked.favorites),
-        playlistTracks: formatNumber(parked.playlistTracks),
+        favorites: tp("count.favorites", parked.favorites),
+        playlistTracks: tp("count.playlistEntries", parked.playlistTracks),
       })}
     </p>
   </div>
