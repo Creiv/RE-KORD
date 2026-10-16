@@ -1007,6 +1007,7 @@ async fn get_embedded(State(state): State<AppState>) -> Response {
 struct EmbeddedBody {
     enabled: Option<bool>,
     priority: Option<String>,
+    embed_downloads: Option<bool>,
 }
 
 /// "Leggi metadati e copertine incorporati" and its priority. A change
@@ -1029,11 +1030,35 @@ async fn set_embedded(
             None => return err(StatusCode::BAD_REQUEST, "invalid_embedded_priority"),
         }
     }
+    if let Some(embed) = body.embed_downloads {
+        next.embed_downloads = embed;
+    }
     if next != current {
         if let Err(e) = state.config.lock().unwrap().save_embedded_settings(next) {
             tracing::warn!(error = %e, "could not save embedded metadata settings");
             return err(StatusCode::INTERNAL_SERVER_ERROR, "settings_save_failed");
         }
+    }
+    if next.embed_downloads != current.embed_downloads {
+        crate::diagnostics::log_activity(
+            &data_dir(&state),
+            crate::diagnostics::ActivityEvent::new(
+                "library",
+                "downloadTagsSettings",
+                format!(
+                    "tag e copertina nei download: {}",
+                    if next.embed_downloads {
+                        "attivi"
+                    } else {
+                        "spenti"
+                    }
+                ),
+            )
+            .params(json!({ "embedDownloads": next.embed_downloads })),
+        );
+    }
+    // Reading settings changed: re-read the library.
+    if next.enabled != current.enabled || next.priority != current.priority {
         state.db.set_prefer_embedded(
             next.enabled && next.priority == crate::embedded::EmbeddedPriority::Embedded,
         );

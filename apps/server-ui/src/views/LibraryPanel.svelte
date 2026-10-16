@@ -196,6 +196,18 @@
       />
     </Field>
     <p class="hint">{t("library.embedded.hint")}</p>
+    {#if embedded.embedDownloads !== undefined}
+      <label class="check">
+        <input
+          type="checkbox"
+          checked={embedded.embedDownloads}
+          disabled={locked}
+          onchange={(e) => void admin.setEmbedded({ embedDownloads: e.currentTarget.checked })}
+        />
+        <span>{t("library.embedded.downloadsToggle")}</span>
+      </label>
+      <p class="hint">{t("library.embedded.downloadsHint")}</p>
+    {/if}
     {#if embedded.running || embedded.pendingTracks > 0 || embedded.pendingAlbums > 0}
       <p class="hint">
         {t(embedded.running ? "library.embedded.running" : "library.embedded.pending", {

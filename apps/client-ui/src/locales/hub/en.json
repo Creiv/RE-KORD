@@ -11,6 +11,7 @@
   "hub.activity.library.watchOff": "Library folder watching turned off",
   "hub.activity.library.embeddedSettings": "Embedded metadata settings changed",
   "hub.activity.library.embeddedReread": "Embedded metadata re-read started",
+  "hub.activity.library.downloadTagsSettings": "Download tags and cover setting changed",
   "hub.activity.library.selection": "Library selection updated",
   "hub.activity.system.remoteAdminOn": "Machine operations allowed from other devices",
   "hub.activity.system.remoteAdminOff": "Machine operations limited to the hub's computer",

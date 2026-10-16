@@ -11,6 +11,7 @@
   "hub.activity.library.watchOff": "Überwachung des Bibliotheksordners ausgeschaltet",
   "hub.activity.library.embeddedSettings": "Einstellungen für eingebettete Metadaten geändert",
   "hub.activity.library.embeddedReread": "Neulesen der eingebetteten Metadaten gestartet",
+  "hub.activity.library.downloadTagsSettings": "Einstellung für Tags und Cover in Downloads geändert",
   "hub.activity.library.selection": "Bibliotheksauswahl aktualisiert",
   "hub.activity.system.remoteAdminOn": "Systemvorgänge von anderen Geräten erlaubt",
   "hub.activity.system.remoteAdminOff": "Systemvorgänge auf den Rechner des Hubs beschränkt",

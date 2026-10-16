@@ -44,6 +44,8 @@ pub struct EmbeddedStatus {
     pub running: bool,
     /// The pending re-read also replaces values typed in Studio.
     pub override_studio: bool,
+    /// "Incorpora tag e copertina nei file scaricati".
+    pub embed_downloads: bool,
 }
 
 pub fn status(state: &AppState) -> Result<EmbeddedStatus> {
@@ -56,6 +58,7 @@ pub fn status(state: &AppState) -> Result<EmbeddedStatus> {
         pending_albums,
         running: state.embedded_backfill.load(Ordering::SeqCst),
         override_studio: state.db.get_meta(OVERRIDE_META_KEY)?.as_deref() == Some("1"),
+        embed_downloads: settings.embed_downloads,
     })
 }
 

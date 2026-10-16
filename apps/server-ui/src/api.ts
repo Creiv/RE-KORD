@@ -364,6 +364,8 @@ export type EmbeddedStatus = {
   pendingAlbums: number;
   running: boolean;
   overrideStudio: boolean;
+  /** "Incorpora tag e copertina nei file scaricati" (hubs from 5.2). */
+  embedDownloads?: boolean;
 };
 
 export type WatcherStatus = {
@@ -623,7 +625,7 @@ export const api = {
     request<{ started: boolean }>("/api/v1/library/thumbnails", { method: "POST" }),
 
   embedded: () => request<EmbeddedStatus>("/api/v1/library/embedded"),
-  setEmbedded: (next: { enabled?: boolean; priority?: EmbeddedPriority }) =>
+  setEmbedded: (next: { enabled?: boolean; priority?: EmbeddedPriority; embedDownloads?: boolean }) =>
     request<EmbeddedStatus>("/api/v1/library/embedded", {
       method: "PUT",
       body: JSON.stringify(next),

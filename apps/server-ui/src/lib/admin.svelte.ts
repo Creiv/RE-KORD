@@ -474,9 +474,11 @@ class AdminSession {
     });
   }
 
-  setEmbedded(next: { enabled?: boolean; priority?: EmbeddedPriority }) {
+  setEmbedded(next: { enabled?: boolean; priority?: EmbeddedPriority; embedDownloads?: boolean }) {
     return this.run(async () => {
       this.embedded = await api.setEmbedded(next);
+      // Only the reading settings re-read the library.
+      if (next.enabled === undefined && next.priority === undefined) return t("msg.downloadTagsSaved");
       this.startPolling();
       return t("msg.embeddedSaved");
     });
