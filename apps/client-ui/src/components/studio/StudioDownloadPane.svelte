@@ -23,6 +23,7 @@
   import { partitionYoutubeReleaseEntries } from "../../lib/youtubeReleases";
   import StudioAccessNotice from "./StudioAccessNotice.svelte";
   import StudioLog from "./StudioLog.svelte";
+  import StudioModeSwitch from "./StudioModeSwitch.svelte";
   import StudioYtdlpStatus from "./StudioYtdlpStatus.svelte";
   import { jsRuntimeMissing, pickJsRuntime } from "../../lib/studio/jsRuntime";
 
@@ -619,24 +620,14 @@
           {t("studio.dl.saveFolderLead")}
         </p>
       </div>
-      <div class="tools-dl-studio-switch tools-dl-dest__mode-switch" role="group" aria-label={t("studio.dl.modeAria")}>
-        <span class="tools-dl-studio-switch__label" class:is-active={dl.studioMode === "classic"}>
-          {t("studio.dl.modeClassic")}
-        </span>
-        <button
-          type="button"
-          role="switch"
-          class="tools-dl-studio-switch__track"
-          aria-checked={dl.studioMode === "explore"}
-          aria-label={t("studio.dl.modeAria")}
-          onclick={() => (dl.studioMode = dl.studioMode === "classic" ? "explore" : "classic")}
-        >
-          <span class="tools-dl-studio-switch__thumb" aria-hidden="true"></span>
-        </button>
-        <span class="tools-dl-studio-switch__label" class:is-active={dl.studioMode === "explore"}>
-          {t("studio.dl.modeExplore")}
-        </span>
-      </div>
+      <StudioModeSwitch
+        class="tools-dl-dest__mode-switch"
+        label={t("studio.dl.modeAria")}
+        left={t("studio.dl.modeClassic")}
+        right={t("studio.dl.modeExplore")}
+        rightActive={dl.studioMode === "explore"}
+        onchange={(explore) => (dl.studioMode = explore ? "explore" : "classic")}
+      />
     </div>
     <div class="tools-dl-dest__shell">
       <div class="tools-dl-dest__pathheader">

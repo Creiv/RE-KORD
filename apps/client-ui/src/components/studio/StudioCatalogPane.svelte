@@ -25,6 +25,7 @@
   import type { LibraryHit } from "../../lib/studio/libraryMatch";
   import UiIcon from "../icons/UiIcon.svelte";
   import StudioCatalogPreviewDialog from "./StudioCatalogPreviewDialog.svelte";
+  import StudioModeSwitch from "./StudioModeSwitch.svelte";
 
   let {
     onSendToDownload,
@@ -316,31 +317,17 @@
           ? t("studio.catalog.leadWeb")
           : t("studio.catalog.leadLocal")}
       </p>
-      <div
-        class="tools-dl-studio-switch studio-catalog-head__mode-switch"
-        role="group"
-        aria-label={t("studio.catalog.modeAria")}
-      >
-        <span class="tools-dl-studio-switch__label" class:is-active={catalogMode === "local"}>
-          {t("studio.catalog.modeLocal")}
-        </span>
-        <button
-          type="button"
-          role="switch"
-          class="tools-dl-studio-switch__track"
-          aria-checked={catalogMode === "web"}
-          aria-label={t("studio.catalog.modeAria")}
-          onclick={() => {
-            catalogMode = catalogMode === "local" ? "web" : "local";
-            if (catalogMode === "web") catalogArtistDetail = null;
-          }}
-        >
-          <span class="tools-dl-studio-switch__thumb" aria-hidden="true"></span>
-        </button>
-        <span class="tools-dl-studio-switch__label" class:is-active={catalogMode === "web"}>
-          {t("studio.catalog.modeWeb")}
-        </span>
-      </div>
+      <StudioModeSwitch
+        class="studio-catalog-head__mode-switch"
+        label={t("studio.catalog.modeAria")}
+        left={t("studio.catalog.modeLocal")}
+        right={t("studio.catalog.modeWeb")}
+        rightActive={catalogMode === "web"}
+        onchange={(web) => {
+          catalogMode = web ? "web" : "local";
+          if (web) catalogArtistDetail = null;
+        }}
+      />
     </div>
 
     {#if catalogMode === "web"}

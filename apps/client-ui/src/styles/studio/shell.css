@@ -119,11 +119,23 @@
   background: color-mix(in srgb, var(--rk-surface-2) 50%, var(--rk-bg));
 }
 
+/* The side labels are buttons: each picks its own mode (StudioModeSwitch). */
 .tools-dl-studio-switch__label {
+  margin: 0;
+  padding: var(--rk-space-2xs) var(--rk-space-xs);
+  border: 0;
+  border-radius: var(--rk-radius-sm);
+  background: none;
+  font: inherit;
   font-size: var(--rk-fs-2xs);
   font-weight: 650;
   color: var(--rk-muted);
   white-space: nowrap;
+  cursor: pointer;
+}
+
+.tools-dl-studio-switch__label:hover {
+  color: var(--rk-ink);
 }
 
 .tools-dl-studio-switch__label.is-active {
@@ -142,7 +154,7 @@
   cursor: pointer;
 }
 
-.tools-dl-studio-switch__track[aria-checked="true"] {
+.tools-dl-studio-switch__track[data-on="true"] {
   border-color: color-mix(in srgb, var(--rk-accent) 55%, var(--rk-line));
   background: color-mix(in srgb, var(--rk-accent) 22%, var(--rk-surface-2));
 }
@@ -160,7 +172,7 @@
   box-shadow: 0 1px 3px rgba(0, 0, 0, 0.22);
 }
 
-.tools-dl-studio-switch__track[aria-checked="true"]
+.tools-dl-studio-switch__track[data-on="true"]
   .tools-dl-studio-switch__thumb {
   left: calc(100% - 1.05rem - 0.14rem);
   background: color-mix(in srgb, var(--rk-accent-2) 85%, #fff);
