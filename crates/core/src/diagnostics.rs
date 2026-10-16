@@ -174,11 +174,12 @@ async fn diagnostics(State(state): State<AppState>) -> Response {
         state.db.parked_user_link_counts().unwrap_or((0, 0));
     // Tool versions: cached (10 min), probed off the async workers.
     let ctx = crate::tools::ToolContext::from_config(&cfg);
-    let (ytdlp, ffmpeg, ffprobe, cloudflared) = tokio::join!(
+    let (ytdlp, ffmpeg, ffprobe, cloudflared, js_runtime) = tokio::join!(
         crate::tools::resolve(crate::tools::Tool::Ytdlp, &ctx),
         crate::tools::resolve(crate::tools::Tool::Ffmpeg, &ctx),
         crate::tools::resolve(crate::tools::Tool::Ffprobe, &ctx),
         crate::tools::resolve(crate::tools::Tool::Cloudflared, &ctx),
+        crate::js_runtime::resolve(),
     );
 
     ok(json!({
@@ -210,6 +211,7 @@ async fn diagnostics(State(state): State<AppState>) -> Response {
             "ffmpeg": crate::tools::status_json(&ffmpeg),
             "ffprobe": crate::tools::status_json(&ffprobe),
             "cloudflared": crate::tools::status_json(&cloudflared),
+            "jsRuntime": crate::js_runtime::status_json(&js_runtime),
         },
         "versionCacheTtlSecs": crate::tools::VERSION_TTL.as_secs(),
         "layout": layout,

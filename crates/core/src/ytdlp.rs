@@ -53,7 +53,7 @@ pub struct ItemFail {
 pub struct Toolchain {
     pub ytdlp: PathBuf,
     pub ffmpeg: Option<PathBuf>,
-    /// `--js-runtimes` value (`node:/abs/node`, `deno:/abs/deno`).
+    /// `--js-runtimes` value (`quickjs:/abs/qjs`, `node:/abs/node`, …).
     pub js_runtime: Option<String>,
 }
 
@@ -61,14 +61,15 @@ impl Toolchain {
     /// Resolve yt-dlp / ffmpeg (cached, off the async workers) and the JS runtime.
     pub async fn resolve(cfg: &AppConfig) -> Self {
         let ctx = ToolContext::from_config(cfg);
-        let (ytdlp, ffmpeg) = tokio::join!(
+        let (ytdlp, ffmpeg, js) = tokio::join!(
             tools::resolve(Tool::Ytdlp, &ctx),
-            tools::resolve(Tool::Ffmpeg, &ctx)
+            tools::resolve(Tool::Ffmpeg, &ctx),
+            crate::js_runtime::resolve()
         );
         Self {
             ytdlp: ytdlp.path,
             ffmpeg: ffmpeg.available.then_some(ffmpeg.path),
-            js_runtime: js_runtime_arg(),
+            js_runtime: js.runtime.map(|r| r.arg()),
         }
     }
 }
@@ -80,52 +81,11 @@ pub async fn ytdlp_program(cfg: &AppConfig) -> PathBuf {
         .path
 }
 
-fn which(name: &str) -> Option<PathBuf> {
-    let path_var = std::env::var_os("PATH")?;
-    let names: Vec<String> = if cfg!(windows) && !name.ends_with(".exe") {
-        vec![format!("{name}.exe"), name.to_string()]
-    } else {
-        vec![name.to_string()]
-    };
-    std::env::split_paths(&path_var).find_map(|dir| {
-        names
-            .iter()
-            .map(|n| dir.join(n))
-            .find(|candidate| candidate.is_file())
-    })
-}
-
-/// `--js-runtimes` value. `REKORD_YTDLP_JS_RUNTIME` may name a runtime
-/// (`node`, `deno`), a `runtime:path` pair or an absolute node path;
-/// otherwise deno then node are looked up on PATH. `None` when no runtime is
-/// installed (the flag is then omitted; a bare `node:node` would fail).
+/// `--js-runtimes` value (`quickjs:/abs/qjs`, `node:/abs/node`, …) from the
+/// cached lookup, see [`crate::js_runtime`]. `None` when no runtime is usable
+/// (the flag is then omitted; a bare `node:node` would fail).
 pub fn js_runtime_arg() -> Option<String> {
-    if let Some(v) = std::env::var("REKORD_YTDLP_JS_RUNTIME")
-        .ok()
-        .map(|s| s.trim().to_string())
-        .filter(|s| !s.is_empty())
-    {
-        if v == "none" || v == "0" {
-            return None;
-        }
-        if let Some((rt, path)) = v.split_once(':') {
-            let windows_drive = cfg!(windows) && rt.len() == 1;
-            if !path.is_empty() && !windows_drive {
-                return Some(v);
-            }
-        }
-        let p = PathBuf::from(&v);
-        if p.is_absolute() {
-            return p.is_file().then(|| format!("node:{}", p.display()));
-        }
-        return which(&v).map(|abs| format!("{v}:{}", abs.display()));
-    }
-    for rt in ["deno", "node"] {
-        if let Some(abs) = which(rt) {
-            return Some(format!("{rt}:{}", abs.display()));
-        }
-    }
-    None
+    crate::js_runtime::quick().map(|rt| rt.arg())
 }
 
 /// `--js-runtimes` (when a runtime exists) and `--remote-components`.
@@ -145,8 +105,15 @@ pub fn javascript_args_for(js_runtime: Option<&str>) -> Vec<String> {
     args
 }
 
+/// JS arguments without waiting (cached or filesystem-only lookup).
 pub(crate) fn javascript_args() -> Vec<String> {
     javascript_args_for(js_runtime_arg().as_deref())
+}
+
+/// JS arguments from a probed lookup (off the async workers, cached).
+pub(crate) async fn javascript_args_resolved() -> Vec<String> {
+    let rt = crate::js_runtime::resolve().await.runtime;
+    javascript_args_for(rt.map(|r| r.arg()).as_deref())
 }
 
 pub fn ytdlp_enabled() -> bool {
@@ -555,7 +522,13 @@ pub fn classify_ytdlp_error(message: &str) -> &'static str {
         || m.contains("geo-restrict")
     {
         "geo_blocked"
-    } else if m.contains("sign in to confirm") || m.contains("sign in") || m.contains("--cookies") {
+    } else if m.contains("sign in to confirm")
+        || m.contains("sign in")
+        || m.contains("--cookies")
+        // YouTube's bot gate when the player challenge was not solved (no JS
+        // runtime for yt-dlp, or cookies without one).
+        || m.contains("page needs to be reloaded")
+    {
         "sign_in_required"
     } else if m.contains("unavailable")
         || m.contains("this video is not available")
@@ -902,7 +875,7 @@ pub async fn run_json_probe(cfg: &AppConfig, url: &str, timeout_ms: u64) -> Resu
         "--no-download".into(),
         "--no-warnings".into(),
     ];
-    args.extend(javascript_args());
+    args.extend(javascript_args_resolved().await);
     // Held until the probe is over; the copy is removed on drop.
     let cookies = crate::ytdlp_cookies::YtdlpCookies::prepare(cfg);
     if let Some(jar) = &cookies {
@@ -1399,6 +1372,16 @@ mod tests {
         assert_eq!(
             classify_ytdlp_error("unable to download video data: HTTP Error 403: Forbidden"),
             "http_forbidden"
+        );
+        assert_eq!(
+            classify_ytdlp_error("ERROR: [youtube] jNQXAC9IVRw: The page needs to be reloaded."),
+            "sign_in_required"
+        );
+        assert_eq!(
+            classify_ytdlp_error(
+                "ERROR: [youtube] x: Sign in to confirm you're not a bot. Use --cookies-from-browser"
+            ),
+            "sign_in_required"
         );
     }
 }

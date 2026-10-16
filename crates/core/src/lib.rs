@@ -12,6 +12,7 @@ pub mod embedded;
 pub mod entity_info;
 pub mod errors;
 pub mod jobs;
+pub mod js_runtime;
 pub mod layout;
 pub mod media;
 pub mod metadata;

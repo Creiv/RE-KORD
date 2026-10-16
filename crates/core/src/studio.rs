@@ -902,7 +902,11 @@ async fn download_flat_count(State(state): State<AppState>, Json(body): Json<Url
 
 async fn download_preset(State(state): State<AppState>) -> impl IntoResponse {
     let cfg = state.config.lock().unwrap().clone();
-    let ytdlp = tools::resolve(tools::Tool::Ytdlp, &tools::ToolContext::from_config(&cfg)).await;
+    let ctx = tools::ToolContext::from_config(&cfg);
+    let (ytdlp, js_runtime) = tokio::join!(
+        tools::resolve(tools::Tool::Ytdlp, &ctx),
+        crate::js_runtime::resolve()
+    );
     let cookies = cfg.youtube_cookies_for_ytdlp().is_some();
     let program = ytdlp
         .path
@@ -917,6 +921,7 @@ async fn download_preset(State(state): State<AppState>) -> impl IntoResponse {
         "version": ytdlp.version,
         "source": ytdlp.source,
         "cookiesConfigured": cookies,
+        "jsRuntime": crate::js_runtime::status_json(&js_runtime),
         "args": ["-f", ytdlp::AUDIO_FORMAT],
         "exampleUrl": null,
     }))

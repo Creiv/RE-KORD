@@ -7,8 +7,8 @@
 use crate::config::AppConfig;
 use crate::youtube_music::{browse_payload, browse_response_title, walk_collect};
 use crate::ytdlp::{
-    classify_ytdlp_error, guess_youtube_url_from_entry_id, javascript_args, pick_flat_entry_url,
-    run_json_probe, ytdlp_program,
+    classify_ytdlp_error, guess_youtube_url_from_entry_id, javascript_args_resolved,
+    pick_flat_entry_url, run_json_probe, ytdlp_program,
 };
 use anyhow::Result;
 use serde::Serialize;
@@ -489,7 +489,7 @@ pub async fn create_preview_token(
         args.push("--no-playlist".into());
     }
     args.push("--no-warnings".into());
-    args.extend(javascript_args());
+    args.extend(javascript_args_resolved().await);
     // Per-run copy of the cookies, removed when this function returns.
     let cookies = crate::ytdlp_cookies::YtdlpCookies::prepare(cfg);
     if let Some(jar) = &cookies {

@@ -209,7 +209,7 @@ fn configured_path(raw: &str) -> PathBuf {
 }
 
 /// Bundled / development directories, in lookup order.
-fn bundled_dirs() -> Vec<(PathBuf, &'static str)> {
+pub(crate) fn bundled_dirs() -> Vec<(PathBuf, &'static str)> {
     let mut out = Vec::new();
     if let Ok(exe) = std::env::current_exe() {
         if let Some(dir) = exe.parent() {
@@ -397,8 +397,14 @@ fn hide_window(cmd: &mut std::process::Command) {
 /// Run `<path> --version` (blocking, with a timeout). `Some(text)` when the
 /// binary ran and exited successfully.
 pub fn probe_version_blocking(tool: Tool, path: &Path) -> Option<String> {
+    probe_program_blocking(path, tool.version_args())
+}
+
+/// Run `<path> <args>` (blocking, with a timeout) and return the first output
+/// line when the program ran and exited successfully.
+pub(crate) fn probe_program_blocking(path: &Path, args: &[&str]) -> Option<String> {
     let mut cmd = std::process::Command::new(path);
-    cmd.args(tool.version_args())
+    cmd.args(args)
         .stdin(Stdio::null())
         .stdout(Stdio::piped())
         .stderr(Stdio::piped());
@@ -638,6 +644,7 @@ pub fn spawn_warmup(cfg: &AppConfig) {
     for tool in [Tool::Ytdlp, Tool::Ffmpeg, Tool::Ffprobe, Tool::Cloudflared] {
         spawn_refresh(tool, &ctx);
     }
+    crate::js_runtime::spawn_refresh();
 }
 
 /// JSON status for diagnostics (`ageDays` / `stale` for yt-dlp).
