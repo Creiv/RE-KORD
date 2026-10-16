@@ -18,6 +18,16 @@ one version number covers the hub, the clients and the packages.
   and the admin panel's *Diagnostics* show the runtime in use, or warn when there is none;
   the Studio sign-in hint says so too. `REKORD_YTDLP_JS_RUNTIME` still overrides the choice
   (`none` turns it off).
+- **Studio downloads, found while testing with real cookies.** *Explore* search shows
+  artists again (the top result and the Artists shelf were dropped, so *Releases* was out of
+  reach from a search) and no longer lists podcast shows and episodes as albums and songs. A
+  Scopri single sent to the Download tab before a folder was picked no longer has its link
+  marked incompatible. With valid cookies and no JavaScript runtime, the failure now points
+  at the runtime instead of asking to re-export the cookies, and *Open Settings* from the
+  cookie hint lands on *Library › Integrations*, where the cookies are uploaded. A track
+  count, preview or podcast lookup that is abandoned (dialog closed, timeout) now stops
+  yt-dlp itself: the PyInstaller launcher was killed but yt-dlp went on as an orphan and
+  could leave its copy of the cookies behind.
 - **Android: play from the car or Bluetooth with the phone locked** (issue #99). A PLAY from
   the car, a headset or the lock screen now puts the media service in the foreground and
   takes the CPU and Wi-Fi locks at once, inside the window Android allows, and then hands
