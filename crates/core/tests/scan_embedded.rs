@@ -878,7 +878,6 @@ fn root_files_keep_their_5_0_group() {
 /// writes over a row a scan changed (or removed) since it was listed.
 #[test]
 fn the_backfill_skips_unreadable_files_and_rows_changed_meanwhile() {
-    use std::os::unix::fs::PermissionsExt;
     let lib = Lib::new("bfguard");
     let rel = "A/B/01 - x.flac";
     let path = lib.add("silent.flac", rel);
@@ -887,7 +886,7 @@ fn the_backfill_skips_unreadable_files_and_rows_changed_meanwhile() {
     let path2 = lib.add("silent.flac", rel2);
     write_tags(&path2, &Tags::full());
     lib.scan();
-    let before = lib.track(rel);
+    let opts = lib.options(EmbeddedPriority::Studio);
     let set_pending = || {
         lib.db
             .with_conn(|c| {
@@ -898,17 +897,22 @@ fn the_backfill_skips_unreadable_files_and_rows_changed_meanwhile() {
     };
 
     // Unreadable (no permission): values kept, the track is not re-read.
-    set_pending();
-    fs::set_permissions(&path, fs::Permissions::from_mode(0o000)).unwrap();
-    let readable_anyway = fs::File::open(&path).is_ok(); // running as root
-    let opts = lib.options(EmbeddedPriority::Studio);
-    while backfill::tag_batch(&lib.db, &opts, opts.merge_policy()).unwrap() > 0 {}
-    fs::set_permissions(&path, fs::Permissions::from_mode(0o644)).unwrap();
-    if !readable_anyway {
-        let after = lib.track(rel);
-        assert_eq!(after.title, before.title);
-        assert_eq!(after.genres, before.genres);
-        assert_eq!(after.album_name, before.album_name);
+    // Unix only: mode bits are how the test makes a file unreadable.
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::PermissionsExt;
+        let before = lib.track(rel);
+        set_pending();
+        fs::set_permissions(&path, fs::Permissions::from_mode(0o000)).unwrap();
+        let readable_anyway = fs::File::open(&path).is_ok(); // running as root
+        while backfill::tag_batch(&lib.db, &opts, opts.merge_policy()).unwrap() > 0 {}
+        fs::set_permissions(&path, fs::Permissions::from_mode(0o644)).unwrap();
+        if !readable_anyway {
+            let after = lib.track(rel);
+            assert_eq!(after.title, before.title);
+            assert_eq!(after.genres, before.genres);
+            assert_eq!(after.album_name, before.album_name);
+        }
     }
 
     // A row the scan rewrote since it was listed: the scan's values stay.
