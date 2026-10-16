@@ -2520,6 +2520,7 @@ const SETTINGS_PREF_KEYS = new Set([
   "glassOpacity",
   "locale",
   "visualizerMode",
+  "karaokeBackdrop",
   "crossfadeSec",
 ]);
 
@@ -2622,6 +2623,7 @@ function settingsFromPrefs(p: UserPrefs): Record<string, unknown> {
     glassOpacity: p.glassOpacity,
     locale: p.locale,
     visualizerMode: p.visualizerMode,
+    karaokeBackdrop: p.karaokeBackdrop,
   };
 }
 
@@ -2672,6 +2674,9 @@ function prefsPatchFromSettings(
   }
   if (!keep.has("visualizerMode") && typeof vizRaw === "string" && vizRaw.trim()) {
     patch.visualizerMode = normalizeVisualizerMode(vizRaw);
+  }
+  if (!keep.has("karaokeBackdrop") && typeof settings.karaokeBackdrop === "boolean") {
+    patch.karaokeBackdrop = settings.karaokeBackdrop;
   }
   return patch;
 }

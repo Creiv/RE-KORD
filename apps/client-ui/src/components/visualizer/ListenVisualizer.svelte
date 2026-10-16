@@ -5,10 +5,13 @@
   import { session } from "../../lib/session.svelte";
   import {
     loadUserPrefs,
+    patchUserPrefs,
     subscribeUserPrefs,
     type VisualizerMode,
   } from "../../lib/userPrefs";
   import { currentLrcLineIndex, parseLrcLyrics } from "../../lib/visualizer/lrc";
+  import UiIcon from "../icons/UiIcon.svelte";
+  import KaraokeWords from "./KaraokeWords.svelte";
   import {
     AdaptiveQuality,
     scaledDpr,
@@ -41,6 +44,7 @@
   let canvas: HTMLCanvasElement | null = $state(null);
   let expanded = $state(false);
   let prefsMode = $state<VisualizerMode>(loadUserPrefs().visualizerMode);
+  let backdropOn = $state(loadUserPrefs().karaokeBackdrop);
 
   const engine = new VizCanvasEngine();
   /**
@@ -132,6 +136,11 @@
   });
   /** The line the column is centred on (the first one before the song starts). */
   const karaokeFocus = $derived(Math.max(0, karaokeActive));
+  /** Fullscreen backdrop: line start times when synced. */
+  const karaokeStarts = $derived(karaokeSynced ? parsedLrc.map((l) => l.atSec) : null);
+  const karaokePlainSpan = $derived(
+    (session.duration > 0 ? session.duration : 180) / Math.max(1, plainLines.length),
+  );
   const karaokeActiveText = $derived(
     karaokeActive >= 0 ? karaokeLines[karaokeActive] || "" : "",
   );
@@ -348,6 +357,7 @@
   onMount(() => {
     unsubPrefs = subscribeUserPrefs((p) => {
       prefsMode = p.visualizerMode;
+      backdropOn = p.karaokeBackdrop;
     });
 
     const c = canvas;
@@ -460,7 +470,22 @@
     <canvas class="viz-canvas listen-viz" bind:this={canvas} aria-hidden="true"></canvas>
 
     {#if activeMode === "karaoke"}
-      <div class="viz-karaoke-overlay" class:is-expanded={expanded}>
+      <div
+        class="viz-karaoke-overlay"
+        class:is-expanded={expanded}
+        class:has-backdrop={backdropOn && expanded}
+      >
+        {#if backdropOn && expanded && karaokeLines.length}
+          <KaraokeWords
+            lines={karaokeLines}
+            active={karaokeActive}
+            starts={karaokeStarts}
+            fallbackSpan={karaokePlainSpan}
+            currentTime={currentTime + (karaokeSynced ? KARAOKE_LEAD_SEC : 0)}
+            {playing}
+            title={session.current?.title ?? ""}
+          />
+        {/if}
         {#if karaokeLines.length}
           <div class="kara-viewport" bind:this={karaokeViewport}>
             <div
@@ -484,6 +509,24 @@
               {/each}
             </div>
           </div>
+          {#if expanded}
+            <!-- The backdrop's on/off, saved per account. -->
+            <button
+              type="button"
+              class="kara-backdrop-toggle"
+              class:is-on={backdropOn}
+              aria-pressed={backdropOn}
+              title={backdropOn ? t("listen.karaokeBackdropOn") : t("listen.karaokeBackdropOff")}
+              onclick={(event) => {
+                event.stopPropagation();
+                patchUserPrefs({ karaokeBackdrop: !backdropOn });
+              }}
+              onkeydown={(event) => event.stopPropagation()}
+            >
+              <UiIcon name="sparkle" />
+              <span>{t("listen.karaokeBackdrop")}</span>
+            </button>
+          {/if}
           <!-- Screen readers get the sung line only, not the moving column. -->
           <p class="kara-sr" aria-live="polite">{karaokeActiveText}</p>
         {:else}
@@ -762,6 +805,29 @@
     font-weight: 600;
   }
 
+  /*
+   * Backdrop on: the dim neighbour lines sit over big words, so they get a
+   * dark halo to stand apart and a little more light.
+   */
+  .has-backdrop .kara-line:not(.is-active) {
+    text-shadow:
+      0 0 6px rgba(0, 0, 0, 0.9),
+      0 0 18px rgba(0, 0, 0, 0.75),
+      0 2px 3px rgba(0, 0, 0, 0.6);
+  }
+
+  .has-backdrop .kara-line.is-near {
+    opacity: 0.72;
+  }
+
+  .has-backdrop .kara-line.is-far {
+    opacity: 0.38;
+  }
+
+  .has-backdrop .kara-line.is-gone {
+    opacity: 0;
+  }
+
   .kara-line.is-active {
     opacity: 1;
     transform: scale(1);
@@ -788,6 +854,45 @@
     font-weight: 600;
     color: color-mix(in srgb, var(--rk-ink) 58%, transparent);
     text-shadow: 0 1px 2px rgba(0, 0, 0, 0.6);
+  }
+
+  .kara-backdrop-toggle {
+    position: absolute;
+    top: max(0.9rem, env(safe-area-inset-top, 0px) + 0.6rem);
+    right: max(0.9rem, env(safe-area-inset-right, 0px) + 0.6rem);
+    z-index: 3;
+    pointer-events: auto;
+    display: inline-flex;
+    align-items: center;
+    gap: 0.4rem;
+    padding: 0.4rem 0.8rem;
+    border: 1px solid color-mix(in srgb, var(--rk-ink) 22%, transparent);
+    border-radius: 999px;
+    background: rgba(0, 0, 0, 0.38);
+    color: color-mix(in srgb, var(--rk-ink) 62%, transparent);
+    font: inherit;
+    font-size: var(--rk-fs-sm);
+    font-weight: 650;
+    cursor: pointer;
+    transition:
+      color 0.2s ease,
+      border-color 0.2s ease,
+      background 0.2s ease;
+  }
+
+  .kara-backdrop-toggle.is-on {
+    color: var(--rk-ink);
+    border-color: color-mix(in srgb, var(--rk-accent-2) 70%, transparent);
+    background: color-mix(in srgb, var(--rk-accent-2) 26%, rgba(0, 0, 0, 0.38));
+  }
+
+  .kara-backdrop-toggle:hover {
+    color: var(--rk-ink);
+  }
+
+  .kara-backdrop-toggle:focus-visible {
+    outline: 2px solid var(--rk-accent-2);
+    outline-offset: 2px;
   }
 
   .kara-sr {

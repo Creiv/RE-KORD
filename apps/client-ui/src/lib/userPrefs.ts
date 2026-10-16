@@ -115,6 +115,8 @@ export type UserPrefs = {
   glassOpacity: number;
   locale: AppLocale;
   visualizerMode: VisualizerMode;
+  /** Fullscreen karaoke: the sung words, huge, behind the lyrics. */
+  karaokeBackdrop: boolean;
 };
 
 const LEGACY_GLOBAL_KEY = "rekord.next.userPrefs";
@@ -164,6 +166,7 @@ const DEFAULTS: UserPrefs = {
   glassOpacity: DEFAULT_GLASS_OPACITY,
   locale: "it",
   visualizerMode: "bars",
+  karaokeBackdrop: true,
 };
 
 /** Clamp glass opacity percent (legacy normalizeGlassOpacity). */
@@ -419,6 +422,7 @@ function parsePrefs(raw: string | null): UserPrefs {
         parsed.visualizerMode ??
           (parsed as { vizMode?: unknown }).vizMode,
       ),
+      karaokeBackdrop: parsed.karaokeBackdrop !== false,
     };
   } catch {
     return defaultPrefs();
