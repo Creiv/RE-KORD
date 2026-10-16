@@ -10,14 +10,16 @@
 </script>
 
 <script lang="ts">
-  import { onMount } from "svelte";
+  import { onMount, untrack } from "svelte";
   import { Button, Modal, Segmented } from "@rekord/ui";
   import UiIcon from "../icons/UiIcon.svelte";
   import { api, type DiscogsCandidate, type Track } from "../../lib/api";
   import { confirmDialog } from "../../lib/confirm.svelte";
   import { fmtNumber, i18n, t, tp } from "../../lib/i18n.svelte";
   import { session } from "../../lib/session.svelte";
+  import { trackHasFileMeta } from "../../lib/trackMoods";
   import { studioAccess } from "../../lib/studio/access.svelte";
+  import { studioFocus, takeStudioAlbum } from "../../lib/studio/focus.svelte";
   import { studioCodeText, studioErrorCode, studioErrorText } from "../../lib/studio/errors";
   import StudioAccessNotice from "./StudioAccessNotice.svelte";
   import StudioEntityInfoCard from "./StudioEntityInfoCard.svelte";
@@ -103,6 +105,10 @@
     busy || metaAllBusy || trackAllBusy || pruneBusy || titleSanBusy,
   );
 
+  /** Opened from the dashboard's "Da sistemare" list for one album. */
+  const focusRequested = studioFocus.pane === "meta";
+  let pendingAlbumId = $state<number | null>(null);
+
   onMount(() => {
     studioAccess.ensure();
     void api
@@ -111,11 +117,34 @@
         discogsConfigured = !!c.discogsConfigured;
       })
       .catch(() => {});
-    fillFromPlayback();
+    if (!focusRequested) fillFromPlayback();
     return () => {
       destroyed = true;
       for (const c of Object.values(runs)) c?.abort();
     };
+  });
+
+  $effect(() => {
+    if (studioFocus.pane === "meta" && studioFocus.albumId != null) {
+      pendingAlbumId = untrack(() => takeStudioAlbum("meta"));
+    }
+  });
+
+  // Artists and albums may still be loading when the pane opens.
+  $effect(() => {
+    const id = pendingAlbumId;
+    if (id == null) return;
+    const al = session.allAlbums.find((a) => a.id === id);
+    if (!al) return;
+    const artist =
+      (al.artist_id != null ? session.artists.find((a) => a.id === al.artist_id) : null) ??
+      session.artists.find((a) => a.name === al.artist_name);
+    if (!artist) return;
+    untrack(() => {
+      metaArtistId = artist.id;
+      metaAlbumId = al.id;
+      pendingAlbumId = null;
+    });
   });
 
   function appendLog(kind: StudioLogKind, line: string) {
@@ -407,7 +436,7 @@
       }
       const toFetch = rescanAll
         ? tracks
-        : tracks.filter((tr) => !(tr.genre?.trim() || tr.release_date?.trim()));
+        : tracks.filter((tr) => !trackHasFileMeta(tr));
       const skipped = tracks.length - toFetch.length;
       appendLog(
         "info",

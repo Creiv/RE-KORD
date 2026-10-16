@@ -1,0 +1,15 @@
+{
+  "quality.title": "Zu erledigen",
+  "quality.tabsAria": "Bibliotheksprobleme",
+  "quality.hint.albums-without-cover": "Alben ohne Cover: in Studio › Cover suchen oder hochladen.",
+  "quality.hint.albums-without-meta": "Alben ohne Datum, Label oder Land: in Studio › Metadaten nachschlagen.",
+  "quality.hint.tracks-without-meta": "Titel ohne Genre und Erscheinungsdatum: im Titel-Editor ergänzen.",
+  "quality.hint.loose-albums": "Ordner mit losen Titeln außerhalb eines Albumordners. Nur zur Information.",
+  "quality.emptyBody": "Hier gibt es nichts zu erledigen.",
+  "quality.editTrack": "Bearbeiten",
+  "quality.fixCover": "Cover",
+  "quality.fixMeta": "Metadaten",
+  "quality.openAlbum": "Album öffnen",
+  "quality.openAlbumAria": "Album {{name}} öffnen",
+  "quality.showMore": "{{n}} weitere zeigen (noch {{left}})"
+}

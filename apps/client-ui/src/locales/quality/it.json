@@ -1,0 +1,15 @@
+{
+  "quality.title": "Da sistemare",
+  "quality.tabsAria": "Problemi della libreria",
+  "quality.hint.albums-without-cover": "Album senza copertina: cercala o caricala in Studio › Copertine.",
+  "quality.hint.albums-without-meta": "Album senza data, etichetta o paese: cercali in Studio › Metadati.",
+  "quality.hint.tracks-without-meta": "Brani senza genere né data di uscita: aggiungili dalla scheda del brano.",
+  "quality.hint.loose-albums": "Cartelle con brani sciolti, fuori da una cartella album. Solo informativo.",
+  "quality.emptyBody": "Niente da sistemare qui.",
+  "quality.editTrack": "Modifica",
+  "quality.fixCover": "Copertina",
+  "quality.fixMeta": "Metadati",
+  "quality.openAlbum": "Apri album",
+  "quality.openAlbumAria": "Apri l’album {{name}}",
+  "quality.showMore": "Mostra altri {{n}} (ne restano {{left}})"
+}

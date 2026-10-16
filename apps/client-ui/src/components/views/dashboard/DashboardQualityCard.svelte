@@ -9,17 +9,25 @@
   import UiIcon from "../../icons/UiIcon.svelte";
   import { t } from "../../../lib/i18n.svelte";
   import { session } from "../../../lib/session.svelte";
+  import type { QualityIssue } from "../../../lib/libraryQuality";
   import type { QualityCounts } from "./dashboardStats";
 
-  let { counts }: { counts: QualityCounts | null } = $props();
+  let {
+    counts,
+    onopen,
+  }: {
+    counts: QualityCounts | null;
+    /** A row was clicked: show the "Da sistemare" list on that issue. */
+    onopen?: (issue: QualityIssue) => void;
+  } = $props();
 
   const alerts = $derived(
     counts
       ? [
-          { id: "albums-without-cover", value: counts.albumsWithoutCover, icon: "image" as const, tone: "warn" },
-          { id: "albums-without-meta", value: counts.albumsWithoutMeta, icon: "album" as const, tone: "warn" },
-          { id: "tracks-without-meta", value: counts.tracksWithoutMeta, icon: "note" as const, tone: "warn" },
-          { id: "loose-albums", value: counts.looseAlbums, icon: "list" as const, tone: "info" },
+          { id: "albums-without-cover" as const, value: counts.albumsWithoutCover, icon: "image" as const, tone: "warn" },
+          { id: "albums-without-meta" as const, value: counts.albumsWithoutMeta, icon: "album" as const, tone: "warn" },
+          { id: "tracks-without-meta" as const, value: counts.tracksWithoutMeta, icon: "note" as const, tone: "warn" },
+          { id: "loose-albums" as const, value: counts.looseAlbums, icon: "list" as const, tone: "info" },
         ]
       : [],
   );
@@ -29,6 +37,19 @@
     session.navigate("studio");
   }
 </script>
+
+{#snippet rowBody(alert: (typeof alerts)[number])}
+  <span class="dash-quality__ic"><UiIcon name={alert.icon} /></span>
+  <span class="dash-quality__label">{t(`dashboard.alert.${alert.id}`)}</span>
+  {#if alert.value === 0}
+    <span class="dash-quality__ok" title={t("dashboard.qualityOk")}>
+      <svg viewBox="0 0 24 24" aria-hidden="true"><path fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" d="M5 12.5l4.2 4.2L19 7" /></svg>
+      <span class="visually-hidden">{t("dashboard.qualityOk")}</span>
+    </span>
+  {:else}
+    <strong class="dash-quality__value">{alert.value}</strong>
+  {/if}
+{/snippet}
 
 <Panel class="session-card dashboard-session-card dashboard-page__tile dashboard-page__tile--quality">
   <header class="section-head section-head--page-toolbar">
@@ -45,16 +66,17 @@
     <ul class="dash-quality">
       {#each alerts as alert (alert.id)}
         {@const state = alert.value === 0 ? "ok" : alert.tone}
-        <li class="dash-quality__row dash-quality__row--{state}">
-          <span class="dash-quality__ic"><UiIcon name={alert.icon} /></span>
-          <span class="dash-quality__label">{t(`dashboard.alert.${alert.id}`)}</span>
-          {#if alert.value === 0}
-            <span class="dash-quality__ok" title={t("dashboard.qualityOk")}>
-              <svg viewBox="0 0 24 24" aria-hidden="true"><path fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" d="M5 12.5l4.2 4.2L19 7" /></svg>
-              <span class="visually-hidden">{t("dashboard.qualityOk")}</span>
-            </span>
+        <li class="dash-quality__item">
+          {#if onopen}
+            <button
+              type="button"
+              class="dash-quality__row dash-quality__row--{state} dash-quality__row--action"
+              onclick={() => onopen(alert.id)}
+            >
+              {@render rowBody(alert)}
+            </button>
           {:else}
-            <strong class="dash-quality__value">{alert.value}</strong>
+            <div class="dash-quality__row dash-quality__row--{state}">{@render rowBody(alert)}</div>
           {/if}
         </li>
       {/each}
@@ -71,7 +93,16 @@
     gap: 0.5rem;
   }
 
+  .dash-quality__item {
+    display: block;
+  }
+
   .dash-quality__row {
+    box-sizing: border-box;
+    width: 100%;
+    font: inherit;
+    color: inherit;
+    text-align: start;
     display: grid;
     grid-template-columns: auto minmax(0, 1fr) auto;
     align-items: center;
@@ -80,6 +111,19 @@
     border-radius: var(--rk-radius-lg);
     border: 1px solid var(--rk-line);
     background: var(--rk-surface-2);
+  }
+
+  .dash-quality__row--action {
+    cursor: pointer;
+  }
+
+  .dash-quality__row--action:hover {
+    border-color: color-mix(in srgb, var(--rk-accent) 45%, var(--rk-line));
+  }
+
+  .dash-quality__row--action:focus-visible {
+    outline: 2px solid var(--rk-accent);
+    outline-offset: 2px;
   }
 
   .dash-quality__row--warn {

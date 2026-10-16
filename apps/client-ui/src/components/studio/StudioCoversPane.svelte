@@ -1,10 +1,11 @@
 <script lang="ts">
   import { CoverArt, EmptyState, FileDrop } from "@rekord/ui";
-  import { onMount } from "svelte";
+  import { onMount, untrack } from "svelte";
   import { albumCoverUrl, api, coverUrlFor, type ArtworkHit } from "../../lib/api";
   import { i18n, t } from "../../lib/i18n.svelte";
   import { session } from "../../lib/session.svelte";
   import { studioAccess } from "../../lib/studio/access.svelte";
+  import { studioFocus, takeStudioAlbum } from "../../lib/studio/focus.svelte";
   import { studioCodeText, studioErrorText } from "../../lib/studio/errors";
   import StudioAccessNotice from "./StudioAccessNotice.svelte";
 
@@ -77,9 +78,41 @@
     artQuery = `${cur.artist_name} ${cur.album_name}`;
   }
 
+  /** Opened from the dashboard's "Da sistemare" list for one album. */
+  const focusRequested = studioFocus.pane === "covers";
+  let pendingAlbumId = $state<number | null>(null);
+
   onMount(() => {
     studioAccess.ensure();
-    if (session.current) fillFromPlayback();
+    if (session.current && !focusRequested) fillFromPlayback();
+  });
+
+  $effect(() => {
+    if (studioFocus.pane === "covers" && studioFocus.albumId != null) {
+      pendingAlbumId = untrack(() => takeStudioAlbum("covers"));
+    }
+  });
+
+  // Artists and albums may still be loading when the pane opens.
+  $effect(() => {
+    const id = pendingAlbumId;
+    if (id == null) return;
+    const al = session.allAlbums.find((a) => a.id === id);
+    if (!al) return;
+    const artist =
+      (al.artist_id != null ? session.artists.find((a) => a.id === al.artist_id) : null) ??
+      session.artists.find((a) => a.name === al.artist_name);
+    if (!artist) return;
+    untrack(() => {
+      coverArtistId = artist.id;
+      coverAlbumId = al.id;
+      artQuery = `${al.artist_name} ${al.name}`;
+      results = [];
+      searched = false;
+      err = null;
+      msg = null;
+      pendingAlbumId = null;
+    });
   });
 
   async function search() {

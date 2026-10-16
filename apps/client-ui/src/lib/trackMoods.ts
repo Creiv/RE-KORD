@@ -1,3 +1,5 @@
+import { parseTrackGenres } from "./genres";
+
 export const TRACK_MOOD_IDS = [
   "energy_boost",
   "party_dance",
@@ -162,20 +164,23 @@ export function albumGenre(album: { genre?: string | null } | null | undefined):
 }
 
 /**
- * Legacy `trackHasFileMeta`: track is “ok” if it has a genre or release date.
- * Used for note badges and the “tracks without meta” alert.
+ * Legacy `trackHasFileMeta`: a track is "ok" when it has a genre or a release
+ * date. Used for note badges and the "tracks without meta" alert, with the
+ * hub's rule (`db::quality`): junk and placeholder genre tokens ("8",
+ * "Unknown", "Music") are not a genre. Reads the `genre` field, not the hub's
+ * `genres` list, so a local edit counts at once.
  */
 export function trackHasFileMeta(
   track: { genre?: string | null; release_date?: string | null } | null | undefined,
 ): boolean {
   if (!track) return false;
-  if (trackGenre(track)) return true;
-  return Boolean(track.release_date?.trim());
+  if (track.release_date?.trim()) return true;
+  return Boolean(track.genre?.trim()) && parseTrackGenres(track.genre).length > 0;
 }
 
 /**
- * Legacy `hasAlbumMeta`: album sidecar/studio meta applied.
- * Falls back to album-level fields if the flag is not populated yet.
+ * Legacy `hasAlbumMeta`: album sidecar/studio meta applied, or any album-level
+ * date / label / country (the hub counts it the same way, `db::quality`).
  */
 export function albumHasAlbumMeta(album: {
   has_album_meta?: boolean;

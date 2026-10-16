@@ -14,6 +14,7 @@
   import DashboardMixCard from "../components/views/dashboard/DashboardMixCard.svelte";
   import DashboardQualityCard from "../components/views/dashboard/DashboardQualityCard.svelte";
   import DashboardRadioCard from "../components/views/dashboard/DashboardRadioCard.svelte";
+  import LibraryQualityDialog from "../components/views/dashboard/LibraryQualityDialog.svelte";
   import {
     libraryCounts,
     qualityCounts,
@@ -27,6 +28,7 @@
   import { prefsRevision } from "../lib/prefsRevision.svelte";
   import { session } from "../lib/session.svelte";
   import { describeError, toasts } from "../lib/toasts.svelte";
+  import { qualityTotal, type QualityIssue } from "../lib/libraryQuality";
   import { albumHasAlbumMeta, trackHasFileMeta, trackYear } from "../lib/trackMoods";
   import { loadUserPrefs } from "../lib/userPrefs";
   import { hubModules } from "../lib/hubModules.svelte";
@@ -72,11 +74,25 @@
   const quality = $derived(
     qualityCounts(stats, session.allAlbums, session.catalogTracks, catalogReady),
   );
-  const qualitySum = $derived(
-    quality
-      ? quality.albumsWithoutCover + quality.albumsWithoutMeta + quality.tracksWithoutMeta
-      : null,
-  );
+  const qualitySum = $derived(quality ? qualityTotal(quality) : null);
+
+  /** "Da sistemare" dialog: the issue shown, null when closed. */
+  let qualityTab = $state<QualityIssue | null>(null);
+
+  function openQuality(issue?: QualityIssue) {
+    if (issue) {
+      qualityTab = issue;
+      return;
+    }
+    // From the tile: the first issue that has something to fix.
+    const q = quality;
+    qualityTab =
+      !q?.albumsWithoutCover && q?.albumsWithoutMeta
+        ? "albums-without-meta"
+        : !q?.albumsWithoutCover && q?.tracksWithoutMeta
+          ? "tracks-without-meta"
+          : "albums-without-cover";
+  }
 
   /**
    * Nothing in this account's library. With a hub ≥ 5.2 we can tell an empty
@@ -232,6 +248,7 @@
       value={qualitySum == null ? null : fmtNumber(qualitySum)}
       tone={qualitySum ? "warning" : qualitySum === 0 ? "success" : "default"}
       loading={qualitySum == null}
+      onclick={catalogReady ? () => openQuality() : undefined}
     />
   </div>
 
@@ -327,10 +344,18 @@
         </div>
       </Panel>
 
-      <DashboardQualityCard counts={quality} />
+      <DashboardQualityCard counts={quality} onopen={catalogReady ? openQuality : undefined} />
     </div>
   {/if}
 </div>
+
+{#if qualityTab}
+  <LibraryQualityDialog
+    initialTab={qualityTab}
+    onclose={() => (qualityTab = null)}
+    onopenalbum={(id) => void openAlbum(id)}
+  />
+{/if}
 
 <style>
   :global(.dashboard-hero-listen-btn) {

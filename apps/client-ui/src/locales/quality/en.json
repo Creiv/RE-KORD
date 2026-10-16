@@ -1,0 +1,15 @@
+{
+  "quality.title": "To fix",
+  "quality.tabsAria": "Library issues",
+  "quality.hint.albums-without-cover": "Albums without cover art: search for one or upload it in Studio › Covers.",
+  "quality.hint.albums-without-meta": "Albums without date, label or country: look them up in Studio › Metadata.",
+  "quality.hint.tracks-without-meta": "Tracks with neither genre nor release date: add them from the track editor.",
+  "quality.hint.loose-albums": "Folders with loose tracks outside an album folder. For information only.",
+  "quality.emptyBody": "Nothing to fix here.",
+  "quality.editTrack": "Edit",
+  "quality.fixCover": "Cover",
+  "quality.fixMeta": "Metadata",
+  "quality.openAlbum": "Open album",
+  "quality.openAlbumAria": "Open the album {{name}}",
+  "quality.showMore": "Show {{n}} more ({{left}} left)"
+}

@@ -9,19 +9,14 @@
  * totals).
  */
 import type { Album, LibraryStats, Track } from "../../../lib/api";
-import { albumHasAlbumMeta, trackHasFileMeta } from "../../../lib/trackMoods";
+import { qualityCountsOf, type QualityCounts } from "../../../lib/libraryQuality";
+
+export type { QualityCounts };
 
 /** `library/stats` (the hub 5.2 fields are on `LibraryStats` itself, optional). */
 export type AccountStats = LibraryStats;
 
 export type LibraryCounts = { artists: number; albums: number; tracks: number };
-
-export type QualityCounts = {
-  albumsWithoutCover: number;
-  albumsWithoutMeta: number;
-  tracksWithoutMeta: number;
-  looseAlbums: number;
-};
 
 /** Hub stats follow the account selection (hub ≥ 5.2). */
 export function statsArePerAccount(stats: AccountStats | null | undefined): boolean {
@@ -46,12 +41,20 @@ export function libraryCounts(
   return { artists: artists.size, albums: albums.size, tracks: catalog.length };
 }
 
+/**
+ * Quality counters of the account. Once its catalog is in they are counted
+ * from it (`lib/libraryQuality`): they follow every edit at once and match the
+ * "Da sistemare" lists. Before that, the hub's per-account stats (same
+ * definitions, `db::quality`) give the first numbers; an older hub's global
+ * stats are never used.
+ */
 export function qualityCounts(
   stats: AccountStats | null | undefined,
   albums: readonly Album[],
   catalog: readonly Track[],
   ready: boolean,
 ): QualityCounts | null {
+  if (ready) return qualityCountsOf(albums, catalog);
   if (
     stats &&
     statsArePerAccount(stats) &&
@@ -65,17 +68,7 @@ export function qualityCounts(
       looseAlbums: stats.loose_album_count ?? 0,
     };
   }
-  if (!ready) return null;
-  // Legacy formula over the account's own albums (albums seen in its catalog).
-  const mine = new Set<number>();
-  for (const tr of catalog) if (tr.album_id != null) mine.add(tr.album_id);
-  const own = albums.filter((a) => mine.has(a.id));
-  return {
-    albumsWithoutCover: own.filter((a) => !a.has_cover && !a.loose).length,
-    albumsWithoutMeta: own.filter((a) => !a.loose && !albumHasAlbumMeta(a)).length,
-    tracksWithoutMeta: catalog.filter((tr) => !trackHasFileMeta(tr)).length,
-    looseAlbums: own.filter((a) => a.loose).length,
-  };
+  return null;
 }
 
 /** "Album aggiornati": most recently updated first (hub `updated_at`), else newest id. */
