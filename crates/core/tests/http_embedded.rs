@@ -7,11 +7,17 @@ mod support;
 use axum::http::{Method, StatusCode};
 use rekord_core::scan::ScanMode;
 use std::fs;
-use std::path::Path;
 use std::time::Duration;
 use support::{req, From, Hub};
 
-const FIXTURES: &str = concat!(env!("CARGO_MANIFEST_DIR"), "/tests/fixtures/embedded");
+/// WMA with tags (ffmpeg reads them). Built into the test binary, so the test
+/// needs nothing from the source tree while it runs: copying the fixture
+/// from there once failed with NotFound while the working tree was being
+/// rewritten by another process.
+const TAGGED_WMA: &[u8] = include_bytes!(concat!(
+    env!("CARGO_MANIFEST_DIR"),
+    "/tests/fixtures/embedded/tagged.wma"
+));
 
 /// ID3v2.3 MP3 with a title and a genre (silent audio frames).
 fn mp3(title: &str, genre: &str) -> Vec<u8> {
@@ -84,11 +90,7 @@ fn track<'a>(tracks: &'a serde_json::Value, file: &str) -> &'a serde_json::Value
 async fn settings_reread_and_job_progress() {
     let hub = Hub::new("embedded");
     hub.file("A/B/01 - one.mp3", &mp3("Tagged One", "Dub"));
-    fs::copy(
-        Path::new(FIXTURES).join("tagged.wma"),
-        hub.root.join("A/B/02 - two.wma"),
-    )
-    .unwrap();
+    hub.file("A/B/02 - two.wma", TAGGED_WMA);
     hub.state
         .run_scan_mode(ScanMode::Incremental)
         .await
