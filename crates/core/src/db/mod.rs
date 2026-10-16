@@ -847,6 +847,21 @@ impl Db {
             .flatten())
     }
 
+    /// The album indexed for `folder_key` has a cover (any source).
+    pub fn album_has_cover_by_folder(&self, folder_key: &str) -> Result<bool> {
+        let conn = self.lock();
+        Ok(conn
+            .query_row(
+                "SELECT has_cover FROM albums WHERE folder_key = ?1",
+                params![folder_key],
+                |r| r.get::<_, Option<i64>>(0),
+            )
+            .optional()?
+            .flatten()
+            .unwrap_or(0)
+            == 1)
+    }
+
     pub fn album_cover_path(&self, album_id: i64) -> Result<Option<PathBuf>> {
         let conn = self.lock();
         let p: Option<Option<String>> = conn

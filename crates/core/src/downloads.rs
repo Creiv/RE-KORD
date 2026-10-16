@@ -12,8 +12,9 @@
 //! - On success only, the output folder is re-indexed before `done` is sent,
 //!   so `done.indexEpoch` already covers the new files.
 
+use crate::download_tags;
 use crate::state::AppState;
-use crate::ytdlp::{self, DownloadOutcome, Toolchain};
+use crate::ytdlp::{self, DownloadExtras, DownloadOutcome, Toolchain};
 use bytes::Bytes;
 use serde_json::{json, Value};
 use std::collections::{HashMap, VecDeque};
@@ -387,6 +388,24 @@ async fn run_job(state: AppState, job: Arc<DownloadJob>, req: StartRequest) {
             .and_then(|r| r.split(':').next()),
     }));
 
+    // Tags and cover (5.2), written by the hub after the run.
+    let tags_on = cfg.embedded.embed_downloads;
+    // A single goes after the folder's last track, not always to `01 - …`.
+    let single_slot = if req.kind == "download_single"
+        && crate::path_util::rel_path_looks_like_album_folder(&req.output_dir)
+    {
+        let dir = req.music_root.join(&req.output_dir);
+        tokio::task::spawn_blocking(move || download_tags::next_track_slot(&dir))
+            .await
+            .ok()
+    } else {
+        None
+    };
+    let extras = DownloadExtras {
+        single_slot,
+        tags: tags_on,
+    };
+
     let (ev_tx, mut ev_rx) = mpsc::channel::<Value>(256);
     let pump_job = job.clone();
     let pump = tokio::spawn(async move {
@@ -401,6 +420,7 @@ async fn run_job(state: AppState, job: Arc<DownloadJob>, req: StartRequest) {
         &req.url,
         &req.kind,
         &req.output_dir,
+        &extras,
         job.cancel.clone(),
         ev_tx,
     )
@@ -408,7 +428,7 @@ async fn run_job(state: AppState, job: Arc<DownloadJob>, req: StartRequest) {
     let _ = pump.await;
     state.active_downloads.lock().unwrap().remove(&job.id);
 
-    let outcome = match outcome {
+    let mut outcome = match outcome {
         Ok(o) => o,
         Err(e) => DownloadOutcome {
             exit_code: -1,
@@ -423,6 +443,12 @@ async fn run_job(state: AppState, job: Arc<DownloadJob>, req: StartRequest) {
             stderr_total: 0,
             command: String::new(),
         },
+    };
+
+    let tags = if tags_on && outcome.summary.downloaded > 0 {
+        Some(tag_downloads(&state, &job, &req, &toolchain, &mut outcome).await)
+    } else {
+        None
     };
 
     let succeeded = outcome.succeeded();
@@ -515,6 +541,7 @@ async fn run_job(state: AppState, job: Arc<DownloadJob>, req: StartRequest) {
         "rescanned": rescanned,
         "rescanError": rescan_error,
         "indexEpoch": index_epoch,
+        "tags": tags,
     });
 
     let data_dir = cfg.data_dir.clone();
@@ -565,6 +592,79 @@ async fn run_job(state: AppState, job: Arc<DownloadJob>, req: StartRequest) {
         debug_assert!(inner.status.finished());
     }
     job.publish(done);
+}
+
+/// Write tags and covers into the files this run downloaded (off the async
+/// workers), publish a `tagged` event and point the summary at renamed
+/// files (WebM copied into Opus).
+async fn tag_downloads(
+    state: &AppState,
+    job: &DownloadJob,
+    req: &StartRequest,
+    toolchain: &Toolchain,
+    outcome: &mut DownloadOutcome,
+) -> download_tags::TagReport {
+    let items = outcome.summary.items.clone();
+    let root = req.music_root.clone();
+    let kind = req.kind.clone();
+    let ffmpeg = toolchain.ffmpeg.clone();
+    let db = state.db.clone();
+    let client = reqwest::Client::builder()
+        .user_agent("RE-KORD/5.2 (studio)")
+        .timeout(Duration::from_secs(20))
+        .build()
+        .ok();
+    let rt = tokio::runtime::Handle::current();
+    let report = tokio::task::spawn_blocking(move || {
+        let has_cover = |folder: &str| db.album_has_cover_by_folder(folder).unwrap_or(false);
+        let fetch = |url: &str| -> Option<Vec<u8>> {
+            let client = client.as_ref()?;
+            rt.block_on(fetch_thumbnail(client, url))
+        };
+        download_tags::finish_downloads(
+            &download_tags::FinishJob {
+                music_root: &root,
+                kind: &kind,
+                fetch: &fetch,
+                ffmpeg: ffmpeg.as_deref(),
+                has_cover: &has_cover,
+            },
+            &items,
+        )
+    })
+    .await
+    .unwrap_or_default();
+    for (old, new) in &report.renamed {
+        let rename = |list: &mut Vec<String>| {
+            for f in list.iter_mut().filter(|f| f.replace('\\', "/") == *old) {
+                *f = new.clone();
+            }
+        };
+        rename(&mut outcome.summary.downloaded_items);
+        for item in &mut outcome.summary.items {
+            rename(&mut item.files);
+        }
+    }
+    for f in &report.failed {
+        tracing::warn!(file = %f.file, reason = %f.reason, "download tags not written");
+    }
+    let mut event = serde_json::to_value(&report).unwrap_or_else(|_| json!({}));
+    event["type"] = json!("tagged");
+    job.publish(event);
+    report
+}
+
+/// One thumbnail, at most [`download_tags::THUMB_MAX_BYTES`].
+async fn fetch_thumbnail(client: &reqwest::Client, url: &str) -> Option<Vec<u8>> {
+    let mut resp = client.get(url).send().await.ok()?.error_for_status().ok()?;
+    let mut body = Vec::new();
+    while let Some(chunk) = resp.chunk().await.ok()? {
+        if body.len() + chunk.len() > download_tags::THUMB_MAX_BYTES {
+            return None;
+        }
+        body.extend_from_slice(&chunk);
+    }
+    (!body.is_empty()).then_some(body)
 }
 
 /// Re-index only the folder a download wrote to; returns the new index

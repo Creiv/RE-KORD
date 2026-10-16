@@ -2,8 +2,8 @@
 //! slicing (studio QA items 1, 2, 6).
 
 use rekord_core::ytdlp::{
-    build_download_args, display_command, summary_from_log, tail_bytes, ItemTracker, RollLog,
-    Toolchain, AUDIO_FORMAT, DONE_FIELD_MAX, ROLL_CAP,
+    build_download_args, build_download_args_with, display_command, summary_from_log, tail_bytes,
+    DownloadExtras, ItemTracker, RollLog, Toolchain, AUDIO_FORMAT, DONE_FIELD_MAX, ROLL_CAP,
 };
 use std::path::PathBuf;
 
@@ -94,6 +94,96 @@ fn cookies_copy_is_passed_and_hidden_in_the_shown_command() {
     assert!(!shown.contains("cookies-abc"), "{shown}");
     let none = build_download_args(&tc, url, "download_single", "A/B", None).unwrap();
     assert!(!none.iter().any(|a| a == "--cookies"));
+}
+
+/// 5.2: a single takes its own track number, else the folder's next free
+/// one (not `01 - …` every time); album downloads keep the release order.
+#[test]
+fn singles_are_numbered_after_the_folder_and_albums_by_release_order() {
+    let tc = Toolchain::default();
+    let single = |slot| {
+        build_download_args_with(
+            &tc,
+            "https://www.youtube.com/watch?v=dQw4w9WgXcQ&list=PL123",
+            "download_single",
+            "Artist/Album",
+            None,
+            &DownloadExtras {
+                single_slot: slot,
+                tags: false,
+            },
+        )
+        .unwrap()
+    };
+    assert_eq!(
+        value_after(&single(Some(8)), "-o"),
+        Some("Artist/Album/%(track_number|08)02d - %(track,title)s.%(ext)s")
+    );
+    // Without a slot (old callers) the legacy fragment stays.
+    assert!(!value_after(&single(None), "-o")
+        .unwrap()
+        .contains("track_number"));
+    let album = build_download_args_with(
+        &tc,
+        "https://music.youtube.com/playlist?list=OLAK5uy_x",
+        "download_playlist",
+        "Artist/Album",
+        None,
+        &DownloadExtras {
+            single_slot: Some(8),
+            tags: false,
+        },
+    )
+    .unwrap();
+    assert_eq!(
+        value_after(&album, "-o"),
+        Some("Artist/Album/%(playlist_index)02d - %(track,title)s.%(ext)s")
+    );
+}
+
+#[test]
+fn tag_pass_asks_only_for_the_metadata_line() {
+    let tc = Toolchain::default();
+    let url = "https://music.youtube.com/playlist?list=OLAK5uy_x";
+    let off = build_download_args(&tc, url, "download_playlist", "A/B", None).unwrap();
+    assert!(!off.iter().any(|a| a.contains("[rekord-meta]")));
+    let args = build_download_args_with(
+        &tc,
+        url,
+        "download_playlist",
+        "A/B",
+        None,
+        &DownloadExtras {
+            single_slot: None,
+            tags: true,
+        },
+    )
+    .unwrap();
+    assert!(args
+        .iter()
+        .any(|a| a.starts_with("after_move:[rekord-meta] %(.{id,")));
+    // No yt-dlp embedding (it would also rewrite files already there) and
+    // no thumbnail files next to the audio.
+    assert!(!args.iter().any(|a| a.starts_with("--embed")));
+    assert!(!args.iter().any(|a| a == "--write-thumbnail"));
+    assert_eq!(args.iter().filter(|a| *a == "-o").count(), 1);
+}
+
+#[test]
+fn meta_lines_attach_to_their_item_and_stay_out_of_the_summary_json() {
+    let mut t = ItemTracker::new();
+    for l in [
+        "[rekord-item] abcdefghijk\t1\tSong",
+        "[download] Destination: A/B/01 - Song.m4a",
+        r#"[rekord-meta] {"id": "abcdefghijk", "title": "Song", "artists": ["X"]}"#,
+    ] {
+        t.feed_line(l);
+    }
+    let s = t.summary();
+    assert_eq!(s.items.len(), 1);
+    assert_eq!(s.items[0].meta.as_ref().unwrap()["artists"][0], "X");
+    let json = serde_json::to_string(&s.items[0]).unwrap();
+    assert!(!json.contains("artists"), "{json}");
 }
 
 /// The QA run: 12 items, all failing with the same message. The old summary

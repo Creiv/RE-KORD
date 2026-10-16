@@ -61,6 +61,9 @@ pub struct EmbeddedSettings {
     /// "Leggi metadati e copertine incorporati".
     pub enabled: bool,
     pub priority: EmbeddedPriority,
+    /// "Incorpora tag e copertina nei file scaricati": Studio downloads get
+    /// tags and the cover written into them ([`crate::download_tags`]).
+    pub embed_downloads: bool,
 }
 
 impl Default for EmbeddedSettings {
@@ -68,6 +71,7 @@ impl Default for EmbeddedSettings {
         Self {
             enabled: true,
             priority: EmbeddedPriority::Studio,
+            embed_downloads: true,
         }
     }
 }

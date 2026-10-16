@@ -8,6 +8,7 @@ pub mod cover;
 pub mod db;
 pub mod diagnostics;
 pub mod disk_space;
+pub mod download_tags;
 pub mod downloads;
 pub mod embedded;
 pub mod entity_info;

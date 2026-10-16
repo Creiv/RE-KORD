@@ -201,8 +201,23 @@ fn flat_tracks_dest_kind(kind: &str) -> bool {
 }
 
 pub fn output_template(url: &str, download_kind: &str, output_dir: &str) -> String {
+    output_template_with(url, download_kind, output_dir, None)
+}
+
+/// Output template; `single_slot` is the destination folder's next free
+/// track number, used by a single that has no track number of its own
+/// (otherwise every single would be `01 - …`).
+pub fn output_template_with(
+    url: &str,
+    download_kind: &str,
+    output_dir: &str,
+    single_slot: Option<u32>,
+) -> String {
     let name = "%(track,title)s";
     if flat_tracks_dest_kind(download_kind) && rel_path_looks_like_album_folder(output_dir) {
+        if let (Some(slot), "download_single") = (single_slot, download_kind) {
+            return format!("%(track_number|{slot:02})02d - {name}.%(ext)s");
+        }
         return format!("{} - {name}.%(ext)s", track_index_fragment(url));
     }
     let n = track_index_fragment(url);
@@ -229,6 +244,16 @@ pub fn output_template(url: &str, download_kind: &str, output_dir: &str) -> Stri
     format!("%(title)s/{n} - {name}.%(ext)s")
 }
 
+/// Per-run additions to the download arguments.
+#[derive(Debug, Clone, Default)]
+pub struct DownloadExtras {
+    /// Next free track number of the destination folder (singles).
+    pub single_slot: Option<u32>,
+    /// Print each item's metadata for the tagging pass
+    /// ([`crate::download_tags`]).
+    pub tags: bool,
+}
+
 pub fn build_download_args(
     toolchain: &Toolchain,
     url: &str,
@@ -236,8 +261,26 @@ pub fn build_download_args(
     output_dir: &str,
     cookies: Option<&Path>,
 ) -> Result<Vec<String>> {
+    build_download_args_with(
+        toolchain,
+        url,
+        download_kind,
+        output_dir,
+        cookies,
+        &DownloadExtras::default(),
+    )
+}
+
+pub fn build_download_args_with(
+    toolchain: &Toolchain,
+    url: &str,
+    download_kind: &str,
+    output_dir: &str,
+    cookies: Option<&Path>,
+    extras: &DownloadExtras,
+) -> Result<Vec<String>> {
     let out_dir = safe_rel_path(output_dir)?;
-    let mut tmpl = output_template(url, download_kind, &out_dir);
+    let mut tmpl = output_template_with(url, download_kind, &out_dir, extras.single_slot);
     if !out_dir.is_empty() {
         tmpl = format!(
             "{}/{}",
@@ -269,6 +312,13 @@ pub fn build_download_args(
         ]
         .map(String::from),
     );
+    if extras.tags {
+        // Metadata as one JSON line per item; no `--embed-*` (it would also
+        // rewrite files already there) and no `--write-thumbnail` (parked
+        // next to the audio while yt-dlp works): the hub does both.
+        args.push("--print".into());
+        args.push(crate::download_tags::meta_print_arg());
+    }
     args.push("-o".into());
     args.push(tmpl);
     if download_kind == "download_single" {
@@ -448,6 +498,10 @@ pub struct ItemRecord {
     /// Files written (paths relative to the music root).
     #[serde(skip_serializing_if = "Vec::is_empty")]
     pub files: Vec<String>,
+    /// yt-dlp metadata printed after the item (`[rekord-meta]` line), for
+    /// the tagging pass; not sent to clients.
+    #[serde(skip)]
+    pub meta: Option<Value>,
 }
 
 impl ItemRecord {
@@ -461,6 +515,7 @@ impl ItemRecord {
             reason: None,
             code: None,
             files: Vec::new(),
+            meta: None,
         }
     }
 
@@ -695,6 +750,15 @@ impl ItemTracker {
                     rec.title = Some(title.to_string());
                 }
                 self.current = Some(i);
+            }
+            return events;
+        }
+        if let Some(rest) = line.strip_prefix(crate::download_tags::META_MARKER) {
+            if let Ok(meta) = serde_json::from_str::<Value>(rest.trim()) {
+                if let Some(id) = meta.get("id").and_then(|v| v.as_str()).map(str::to_string) {
+                    let i = self.by_id_or_new(&id);
+                    self.items[i].meta = Some(meta);
+                }
             }
             return events;
         }
@@ -1019,6 +1083,7 @@ pub async fn run_download(
     url: &str,
     download_kind: &str,
     output_dir: &str,
+    extras: &DownloadExtras,
     cancel: Arc<AtomicBool>,
     events: EventTx,
 ) -> Result<DownloadOutcome> {
@@ -1026,12 +1091,13 @@ pub async fn run_download(
     // Private copy for this run (yt-dlp rewrites the jar on exit); removed
     // when this function returns, i.e. after the process has exited.
     let cookies = crate::ytdlp_cookies::YtdlpCookies::prepare(cfg);
-    let args = build_download_args(
+    let args = build_download_args_with(
         toolchain,
         url,
         download_kind,
         output_dir,
         cookies.as_ref().map(|c| c.path()),
+        extras,
     )?;
     let command = display_command(&program, &args);
 
@@ -1145,7 +1211,10 @@ pub async fn run_download(
 
     let mut handle_line = |is_out: bool, line: String, tracker: &mut ItemTracker| -> Vec<Value> {
         let mut out = Vec::new();
-        let marker = line.trim_start().starts_with(ITEM_MARKER);
+        let marker = line.trim_start().starts_with(ITEM_MARKER)
+            || line
+                .trim_start()
+                .starts_with(crate::download_tags::META_MARKER);
         if marker {
             // Our own id/title marker: tracked, not shown.
         } else if is_out {
