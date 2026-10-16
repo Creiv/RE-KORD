@@ -46,6 +46,8 @@ class PodcastStore {
   loading = $state(false);
   /** Message of the last failed list request (sources keep their last value). */
   error = $state<string | null>(null);
+  /** Show the podcasts view opens on (set by `openSource`, taken by the view). */
+  requestedSource = $state<number | null>(null);
 
   private inflight: Promise<void> | null = null;
   private loadedAt = 0;
@@ -89,6 +91,12 @@ class PodcastStore {
       });
     this.inflight = task;
     return task;
+  }
+
+  /** Go to the podcasts view, on the page of source `id`. */
+  openSource(id: number) {
+    this.requestedSource = id;
+    session.navigate("podcasts");
   }
 
   // ---- Listening state -------------------------------------------------------

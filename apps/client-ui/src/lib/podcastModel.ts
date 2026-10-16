@@ -218,6 +218,39 @@ export function episodeProgress(
   return { ratio, listened: entry.l, resumeAt, started: entry.p > 0 || entry.l };
 }
 
+/** An episode of a source left halfway, still in its list. */
+export type Resumable = { ep: PodcastEpisode; resumeAt: number };
+
+/**
+ * The episode of `source` to offer "continue" for: started, not finished
+ * (there is a resume point), still among the episodes the hub lists (only
+ * those can be played); the most recently listened one wins.
+ */
+export function resumableEpisode(state: PodcastState, source: PodcastSource): Resumable | null {
+  if (source.live) return null;
+  let best: (Resumable & { at: number }) | null = null;
+  for (const ep of source.episodes) {
+    const entry = state.e[entryId(source.id, ep.key)];
+    if (!entry) continue;
+    const { resumeAt } = episodeProgress(entry, ep.durationSecs);
+    if (resumeAt > 0 && (!best || entry.at > best.at)) best = { ep, resumeAt, at: entry.at };
+  }
+  return best && { ep: best.ep, resumeAt: best.resumeAt };
+}
+
+/**
+ * What a click on a source in the dashboard card does: a live station
+ * plays; a show with an unfinished episode asks "continue?"; any other
+ * opens its page (nothing starts by itself).
+ */
+export type CardAction = { kind: "live" } | ({ kind: "ask" } & Resumable) | { kind: "open" };
+
+export function cardAction(state: PodcastState, source: PodcastSource): CardAction {
+  if (source.live) return { kind: "live" };
+  const r = resumableEpisode(state, source);
+  return r ? { kind: "ask", ...r } : { kind: "open" };
+}
+
 /** `4:07`, `1:02:05`; empty when unknown. */
 export function formatDuration(secs: number | null | undefined): string {
   if (!secs || !Number.isFinite(secs) || secs <= 0) return "";

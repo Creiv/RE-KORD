@@ -59,5 +59,9 @@
   "podcasts.liveNow": "In ascolto ora",
   "podcasts.latestEpisode": "Ultimo",
   "podcasts.allTitle": "Tutti i podcast",
-  "podcasts.allHint": "Fonti ed episodi"
+  "podcasts.allHint": "Fonti ed episodi",
+  "podcasts.continueTitle": "Vuoi continuare «{{title}}»?",
+  "podcasts.continueAt": "Riprende da {{at}}.",
+  "podcasts.continue": "Continua",
+  "podcasts.openShow": "Apri il podcast"
 }

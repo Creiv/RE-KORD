@@ -4,6 +4,10 @@
    * (artwork, title, time, play) and the next two as rows. Several: one tile
    * per source with its newest episode, in a horizontal row like "Ascolto
    * veloce". Loaded only when the hub has the module on; never polled.
+   *
+   * A click never starts the newest episode by itself: a show with an
+   * unfinished episode asks "continue?", any other opens its page. Live
+   * stations play at once; the episode rows keep their own play buttons.
    */
   import { onMount } from "svelte";
   import { Button, CoverArt, EmptyState, Panel, Skeleton } from "@rekord/ui";
@@ -11,9 +15,11 @@
   import GraphicEq from "../icons/GraphicEq.svelte";
   import UiIcon from "../icons/UiIcon.svelte";
   import { apiUrl } from "../../lib/config";
+  import { confirmChoice } from "../../lib/confirm.svelte";
   import { fmtRelative, t } from "../../lib/i18n.svelte";
   import { player } from "../../lib/player";
   import {
+    cardAction,
     episodesFor,
     formatDuration,
     isNewEpisode,
@@ -50,6 +56,48 @@
   function toggle(source: PodcastSource, ep: PodcastEpisode) {
     if (isPlaying(source, ep)) player.pause();
     else podcasts.play(source, ep);
+  }
+
+  /** Whether a click on this show would offer to continue an episode. */
+  function resumable(source: PodcastSource): boolean {
+    return cardAction(podcasts.state, source).kind === "ask";
+  }
+
+  /** Click on a show (tile, artwork, title): see `cardAction`. */
+  async function openShow(source: PodcastSource, ep: PodcastEpisode) {
+    // The episode already playing (or paused) here: just play / pause it.
+    if (podcasts.isCurrent(source, ep)) {
+      toggle(source, ep);
+      return;
+    }
+    const action = cardAction(podcasts.state, source);
+    if (action.kind === "live") {
+      toggle(source, ep);
+      return;
+    }
+    if (action.kind === "open") {
+      podcasts.openSource(source.id);
+      return;
+    }
+    const at = formatDuration(action.resumeAt);
+    const choice = await confirmChoice({
+      title: t("podcasts.continueTitle", { title: action.ep.title }),
+      message: at ? t("podcasts.continueAt", { at }) : undefined,
+      confirmLabel: t("podcasts.continue"),
+      altLabel: t("podcasts.openShow"),
+    });
+    if (choice === "confirm") podcasts.play(source, action.ep);
+    else if (choice === "alt") podcasts.openSource(source.id);
+  }
+
+  function openLabel(source: PodcastSource, ep: PodcastEpisode): string {
+    if (isPlaying(source, ep)) return t("player.playPause");
+    if (podcasts.isCurrent(source, ep)) return t("podcasts.play");
+    return t("podcasts.openShow");
+  }
+
+  function glyphOf(source: PodcastSource, ep: PodcastEpisode): "play" | "chevronRight" {
+    return podcasts.isCurrent(source, ep) || resumable(source) ? "play" : "chevronRight";
   }
 
   function metaOf(ep: PodcastEpisode): string[] {
@@ -97,13 +145,13 @@
         <button
           type="button"
           class="podcast-feature__art"
-          title={playing ? t("player.playPause") : t("podcasts.play")}
-          aria-label={playing ? t("player.playPause") : t("podcasts.play")}
-          onclick={() => toggle(single, feature)}
+          title={openLabel(single, feature)}
+          aria-label={openLabel(single, feature)}
+          onclick={() => void openShow(single, feature)}
         >
           <CoverArt kind="album" class="podcast-feature__cover" title={feature.title} src={artFor(single, feature)} rounded={false} />
           <span class="podcast-feature__glyph" aria-hidden="true">
-            {#if playing}<GraphicEq animated />{:else}<UiIcon name="play" />{/if}
+            {#if playing}<GraphicEq animated />{:else}<UiIcon name={glyphOf(single, feature)} />{/if}
           </span>
         </button>
         <div class="podcast-feature__text">
@@ -114,10 +162,17 @@
             {#if isNewEpisode(feature)}<span class="podcast-feature__new">{t("podcasts.new")}</span>{/if}
           </p>
           <div>
-            <Button class="podcast-feature__play" onclick={() => toggle(single, feature)}>
-              <UiIcon name={playing ? "pause" : "play"} />
-              {podcasts.progress(single, feature).resumeAt ? t("podcasts.resumeLatest") : t("podcasts.listenLatest")}
-            </Button>
+            {#if podcasts.isCurrent(single, feature)}
+              <Button class="podcast-feature__play" onclick={() => toggle(single, feature)}>
+                <UiIcon name={playing ? "pause" : "play"} />
+                {playing ? t("player.playPause") : t("podcasts.resumeLatest")}
+              </Button>
+            {:else}
+              <Button class="podcast-feature__play" onclick={() => void openShow(single, feature)}>
+                <UiIcon name={resumable(single) ? "play" : "podcast"} />
+                {resumable(single) ? t("podcasts.resumeLatest") : t("podcasts.openShow")}
+              </Button>
+            {/if}
           </div>
         </div>
       </div>
@@ -149,14 +204,14 @@
                 <button
                   type="button"
                   class="dashboard-smart-radio-tile__overlay {current ? 'dashboard-smart-radio-tile__studio' : 'dashboard-smart-radio-tile__play'}"
-                  title={playing ? t("player.playPause") : t("podcasts.play")}
-                  aria-label={playing ? t("player.playPause") : t("podcasts.play")}
-                  onclick={() => toggle(source, ep)}
+                  title={openLabel(source, ep)}
+                  aria-label={openLabel(source, ep)}
+                  onclick={() => void openShow(source, ep)}
                 >
-                  {#if playing}<GraphicEq animated />{:else}<UiIcon name="play" />{/if}
+                  {#if playing}<GraphicEq animated />{:else}<UiIcon name={glyphOf(source, ep)} />{/if}
                 </button>
               </div>
-              <button type="button" class="dashboard-smart-radio-tile__meta" onclick={() => toggle(source, ep)}>
+              <button type="button" class="dashboard-smart-radio-tile__meta" onclick={() => void openShow(source, ep)}>
                 <span class="dashboard-smart-radio-tile__title podcast-card__tile-title">{ep.title}</span>
                 <span class="podcast-card__tile-sub">{source.name}</span>
                 <span class="podcast-card__tile-sub">{metaOf(ep).join(" · ")}</span>

@@ -17,7 +17,9 @@ import {
   mergeStates,
   minutesLeft,
   normalizeState,
+  cardAction,
   recordProgress,
+  resumableEpisode,
   visibleSources,
 } from "./podcastModel.ts";
 import {
@@ -106,6 +108,38 @@ test("fusione tra dispositivi: vince la modifica più recente di ogni voce", () 
   // Dati malformati non rompono nulla.
   assert.deepEqual(normalizeState({ e: { bad: { p: 1 }, "3:ok": "x" } }), emptyState());
   assert.deepEqual(normalizeState(null), emptyState());
+});
+
+test("card in dashboard: continua l'episodio a metà, altrimenti apre la pagina", () => {
+  const show = (id, keys) => ({
+    id, name: `S${id}`, kind: "rss", live: false, episodeCount: 3, hasArt: false, fetchedAt: null, error: null,
+    episodes: keys.map((key) => ({ key, title: `Ep ${key}`, durationSecs: 600 })),
+  });
+  const a = show(3, ["n1", "n2", "n3"]);
+  const b = show(4, ["m1"]);
+  // Nothing played: open the show, never autoplay.
+  assert.deepEqual(cardAction(emptyState(), a), { kind: "open" });
+  // Halfway through n2: ask to continue it, from where it was left.
+  let s = recordProgress(emptyState(), { ...meta, key: "n2" }, 200, 600, 1000);
+  const ask = cardAction(s, a);
+  assert.equal(ask.kind, "ask");
+  assert.equal(ask.ep.key, "n2");
+  assert.equal(ask.resumeAt, 200);
+  // Per source: the other show is untouched.
+  assert.deepEqual(cardAction(s, b), { kind: "open" });
+  // Two unfinished: the most recently listened wins.
+  s = recordProgress(s, { ...meta, key: "n3" }, 120, 600, 5000);
+  assert.equal(resumableEpisode(s, a).ep.key, "n3");
+  // Finished, barely started, or no longer listed: nothing to continue.
+  let done = markListened(emptyState(), { ...meta, key: "n1" }, true);
+  done = recordProgress(done, { ...meta, key: "n2" }, 5, 600, 2000);
+  done = recordProgress(done, { ...meta, key: "gone" }, 300, 600, 3000);
+  assert.deepEqual(cardAction(done, a), { kind: "open" });
+  // At the very end (within the tail): counts as listened, nothing to continue.
+  const tail = recordProgress(emptyState(), { ...meta, key: "n1" }, 595, 600, 1000);
+  assert.equal(resumableEpisode(tail, a), null);
+  // Live stations play directly.
+  assert.deepEqual(cardAction(s, { ...a, live: true, kind: "live" }), { kind: "live" });
 });
 
 test("righe: durata leggibile, fonti visibili, limite episodi", () => {

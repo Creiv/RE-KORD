@@ -59,5 +59,9 @@
   "podcasts.liveNow": "Läuft gerade",
   "podcasts.latestEpisode": "Neueste",
   "podcasts.allTitle": "Alle Podcasts",
-  "podcasts.allHint": "Quellen und Folgen"
+  "podcasts.allHint": "Quellen und Folgen",
+  "podcasts.continueTitle": "„{{title}}“ fortsetzen?",
+  "podcasts.continueAt": "Weiter ab {{at}}.",
+  "podcasts.continue": "Fortsetzen",
+  "podcasts.openShow": "Podcast öffnen"
 }

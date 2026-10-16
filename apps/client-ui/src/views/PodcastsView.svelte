@@ -40,6 +40,14 @@
     void podcasts.load();
   });
 
+  // Opened on one show (dashboard card): that becomes the remembered tab.
+  $effect(() => {
+    const id = podcasts.requestedSource;
+    if (id == null) return;
+    podcasts.requestedSource = null;
+    pick(String(id));
+  });
+
   const sources = $derived(visibleSources(podcasts.sources));
   const tab = $derived(resolveTab(stored, sources));
   const selected = $derived(tab === "latest" ? null : (sources.find((s) => String(s.id) === tab) ?? null));
