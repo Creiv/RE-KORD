@@ -129,7 +129,7 @@ export function redactPaths(text: string, roots: Array<string | null | undefined
   return out;
 }
 
-export type DownloadIssue = "no_audio_format" | "http_403" | "ytdlp_missing" | null;
+export type DownloadIssue = "no_audio_format" | "http_403" | "ytdlp_missing" | "sign_in" | null;
 
 /** Known whole-job failures, recognised from an error code or from the log. */
 export function detectDownloadIssue(code: string | null | undefined, log: string): DownloadIssue {
@@ -141,5 +141,12 @@ export function detectDownloadIssue(code: string | null | undefined, log: string
     return "no_audio_format";
   }
   if (/HTTP Error 403/i.test(log)) return "http_403";
+  if (isCookieIssueCode(c) || /Sign in to confirm|confirm your age|use --cookies/i.test(log)) return "sign_in";
   return null;
+}
+
+/** yt-dlp codes that YouTube cookies (missing or expired) explain. */
+export function isCookieIssueCode(code: string | null | undefined): boolean {
+  const c = (code ?? "").toLowerCase();
+  return c === "sign_in_required" || c === "age_restricted";
 }

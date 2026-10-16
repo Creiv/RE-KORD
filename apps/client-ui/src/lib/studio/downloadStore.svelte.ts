@@ -31,7 +31,7 @@ import {
   type SummaryItem,
 } from "./downloadSummary";
 import { studioCodeText, studioErrorText } from "./errors";
-import { detectDownloadIssue, redactPaths, ytdlpLogDetailForUser } from "./ytdlpLogFilter";
+import { detectDownloadIssue, isCookieIssueCode, redactPaths, ytdlpLogDetailForUser } from "./ytdlpLogFilter";
 
 export type Progress = { current: number; total: number };
 export type LogKind = "info" | "ok" | "warn" | "error" | "detail";
@@ -101,6 +101,8 @@ class StudioDownloads {
   stopRequested = $state(false);
   /** The hub is indexing the new files / the client reloads the library. */
   refreshing = $state(false);
+  /** The last job hit YouTube's sign-in / age gate: cookies missing or expired. */
+  cookieIssue = $state(false);
 
   entries = $state<LogEntry[]>([]);
   raw = $state("");
@@ -112,6 +114,7 @@ class StudioDownloads {
   activeSupported = $state<boolean | null>(null);
 
   private seq = 0;
+  private cookieHintLogged = false;
   private controller: AbortController | null = null;
   private batchStop = false;
   private pollTimer: ReturnType<typeof setTimeout> | null = null;
@@ -187,6 +190,7 @@ class StudioDownloads {
     track.liveItems.add(key);
     const label = it.title || (it.index != null ? `#${it.index}` : (it.id ?? ""));
     const item: SummaryItem = { label, reason: it.reason ?? "", code: it.code ?? null };
+    if (status === "failed" && isCookieIssueCode(it.code)) this.cookieIssue = true;
     if (status === "downloaded") this.log("ok", t("studio.dl.itemDone", { label: redactPaths(label) }));
     else if (status === "skipped") this.skippedLine(item);
     else this.failedLine(item);
@@ -224,10 +228,14 @@ class StudioDownloads {
     } else if (!ok) {
       const err = errorField(ev);
       const issue = detectDownloadIssue(err.code, rawText);
+      if (issue === "sign_in") this.cookieIssue = true;
       if (issue === "no_audio_format") this.log("error", t("studio.err.noAudioFormat"));
       else if (issue === "http_403") this.log("error", t("studio.err.ytdlp403"));
       else if (issue === "ytdlp_missing") this.log("error", t("studio.err.ytdlpMissing"));
-      else if (err.code && err.code !== "ytdlp_failed") this.log("error", studioCodeText(err.code, err.message));
+      else if (err.code && err.code !== "ytdlp_failed" && issue !== "sign_in") {
+        // Sign-in / age gate: the cookie hint below says it better.
+        this.log("error", studioCodeText(err.code, err.message));
+      }
       if (!summary.failedItems.length) {
         const detail = ytdlpLogDetailForUser({
           ok,
@@ -245,11 +253,16 @@ class StudioDownloads {
       this.log("error", summary.downloaded ? t("studio.dl.logFailedPartial") : t("studio.dl.logFailedNone"));
     } else if (outcome === "partial") {
       this.log("warn", t("studio.dl.logDonePartial"));
+      if (summary.failedItems.some((it) => isCookieIssueCode(it.code))) this.cookieIssue = true;
     } else {
       this.log("ok", t("studio.dl.logDone"));
     }
     if (typeof ev.rescanError === "string" && ev.rescanError) {
       this.log("warn", t("studio.dl.rescanFailed"));
+    }
+    if (this.cookieIssue && !cancelled && !this.cookieHintLogged) {
+      this.cookieHintLogged = true;
+      this.log("warn", t("studio.dl.cookieHint"));
     }
     return { outcome, summary, indexed: typeof ev.indexEpoch === "number" };
   }
@@ -390,6 +403,8 @@ class StudioDownloads {
     this.stopPolling();
     this.busy = true;
     this.stopRequested = false;
+    this.cookieIssue = false;
+    this.cookieHintLogged = false;
     this.activeTitle = title ?? null;
     try {
       const stamp = await this.scanStamp();
@@ -410,6 +425,8 @@ class StudioDownloads {
     this.busy = true;
     this.batchStop = false;
     this.stopRequested = false;
+    this.cookieIssue = false;
+    this.cookieHintLogged = false;
     const outcomes: JobOutcome[] = [];
     let anyNew = false;
     let allIndexed = true;

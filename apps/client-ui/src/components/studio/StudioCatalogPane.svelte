@@ -19,13 +19,17 @@
   import { i18n, t, tp } from "../../lib/i18n.svelte";
   import { studioCodeText, studioErrorText } from "../../lib/studio/errors";
   import { session } from "../../lib/session.svelte";
+  import { downloadFlow } from "../../lib/studio/downloadFlow.svelte";
+  import { studioDownloads } from "../../lib/studio/downloadStore.svelte";
+  import { studioLibraryHit } from "../../lib/studio/libraryIndex.svelte";
+  import type { LibraryHit } from "../../lib/studio/libraryMatch";
   import UiIcon from "../icons/UiIcon.svelte";
   import StudioCatalogPreviewDialog from "./StudioCatalogPreviewDialog.svelte";
 
   let {
     onSendToDownload,
   }: {
-    onSendToDownload: (item: CatalogWebItem, mode: "single" | "playlist") => void;
+    onSendToDownload: (item: CatalogWebItem, mode: "single" | "playlist", library: LibraryHit | null) => void;
   } = $props();
 
   let catalogMode = $state<"local" | "web">("local");
@@ -209,6 +213,21 @@
     }
   }
 
+  /** Tiles already in the library (badge + warning in the download confirm). */
+  const webHits = $derived.by(() => {
+    const out: Record<string, LibraryHit> = {};
+    const scan = (items: CatalogWebItem[], kind: "album" | "song") => {
+      for (const it of items) {
+        const hit = studioLibraryHit({ kind, title: it.title, subtitle: it.subtitle });
+        if (hit) out[it.url] = hit;
+      }
+    };
+    scan(webDiscover?.albums ?? [], "album");
+    scan(webDiscover?.songs ?? [], "song");
+    return out;
+  });
+  const dlLocked = $derived(studioDownloads.busy || downloadFlow.open || !!downloadFlow.pendingUrl);
+
   const webHubError = $derived(
     webDiscover?.error ? studioCodeText(webDiscover.error.code, webDiscover.error.message) : null,
   );
@@ -226,7 +245,17 @@
       <span class="studio-catalog-web-col__count">{items.length}</span>
     </h4>
     {#if webBusy && !webDiscover}
-      <p class="panel-empty">{t("studio.catalog.loading")}</p>
+      <ul class="studio-catalog-web-list" aria-busy="true" aria-label={t("studio.catalog.loading")}>
+        {#each Array(5) as _, i (i)}
+          <li class="studio-catalog-web-tile studio-skeleton-row" aria-hidden="true">
+            <span class="studio-skeleton studio-skeleton--thumb-lg"></span>
+            <span class="studio-skeleton-row__text">
+              <span class="studio-skeleton studio-skeleton--line"></span>
+              <span class="studio-skeleton studio-skeleton--line studio-skeleton--short"></span>
+            </span>
+          </li>
+        {/each}
+      </ul>
     {:else if items.length}
       <ul class="studio-catalog-web-list">
         {#each items as item, i (`${item.url}:${i}`)}
@@ -248,15 +277,26 @@
               <span class="studio-catalog-web-tile__text">
                 <span class="studio-catalog-web-tile__title">{item.title}</span>
                 <span class="studio-catalog-web-tile__meta">{item.subtitle}</span>
+                {#if webHits[item.url]}
+                  <span class="studio-inlib-badge" title={t("studio.dl.inLibraryTitle")}>
+                    <UiIcon name="check" />{t("studio.dl.inLibrary")}
+                  </span>
+                {/if}
               </span>
             </button>
             <button
               type="button"
-              class="ghost-btn ghost-btn--sm studio-catalog-web-tile__dl"
+              class="ghost-btn ghost-btn--sm studio-catalog-web-tile__dl studio-busy-btn"
               title={t("studio.catalog.download")}
-              onclick={() => onSendToDownload(item, mode)}
+              disabled={dlLocked}
+              aria-busy={downloadFlow.pendingUrl === item.url}
+              onclick={() => onSendToDownload(item, mode, webHits[item.url] ?? null)}
             >
-              <UiIcon name="download" />
+              {#if downloadFlow.pendingUrl === item.url}
+                <span class="studio-spinner studio-spinner--sm" aria-hidden="true"></span>
+              {:else}
+                <UiIcon name="download" />
+              {/if}
               <span>{t("studio.catalog.download")}</span>
             </button>
           </li>
@@ -308,10 +348,14 @@
         <div class="studio-catalog-toolbar__row">
           <button
             type="button"
-            class="primary-btn primary-btn--sm"
+            class="primary-btn primary-btn--sm studio-busy-btn"
             disabled={webBusy}
+            aria-busy={webBusy}
             onclick={() => void loadWebDiscover(true)}
           >
+            {#if webBusy}
+              <span class="studio-spinner studio-spinner--sm" aria-hidden="true"></span>
+            {/if}
             {webBusy ? t("studio.catalog.refreshing") : t("studio.catalog.refreshNew")}
           </button>
         </div>
@@ -330,10 +374,14 @@
         <div class="studio-catalog-toolbar__row">
           <button
             type="button"
-            class="primary-btn primary-btn--sm"
+            class="primary-btn primary-btn--sm studio-busy-btn"
             disabled={catalogBusy}
+            aria-busy={catalogBusy}
             onclick={() => void loadCatalogPane(true)}
           >
+            {#if catalogBusy}
+              <span class="studio-spinner studio-spinner--sm" aria-hidden="true"></span>
+            {/if}
             {catalogBusy ? t("studio.catalog.refreshing") : t("studio.catalog.refreshList")}
           </button>
           {#if !catalogArtistDetail}
@@ -499,7 +547,8 @@
               </div>
             </div>
           {:else}
-            <p class="studio-catalog-filter-empty">
+            <p class="studio-catalog-filter-empty" class:studio-loading-line={catalogBusy} role={catalogBusy ? "status" : undefined}>
+              {#if catalogBusy}<span class="studio-spinner studio-spinner--sm" aria-hidden="true"></span>{/if}
               {catalogBusy
                 ? t("studio.catalog.loadingCatalog")
                 : catalogArtistsData.length
@@ -524,6 +573,6 @@
   onclose={() => (previewItem = null)}
   onDownload={(item, mode) => {
     previewItem = null;
-    onSendToDownload(item, mode);
+    onSendToDownload(item, mode, webHits[item.url] ?? null);
   }}
 />

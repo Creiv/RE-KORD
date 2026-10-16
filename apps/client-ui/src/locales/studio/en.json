@@ -512,5 +512,22 @@
   "ui.studioMeta.sanitizeSkippedEdited.one": "1 hand-edited title is left alone",
   "ui.studioMeta.sanitizeSkippedEdited.other": "{{n}} hand-edited titles are left alone",
   "studio.covers.partial": "Some sources did not answer: {{sources}}",
-  "studio.einfo.imageFailed": "Entries saved, but the artist photo could not be downloaded ({{error}})."
+  "studio.einfo.imageFailed": "Entries saved, but the artist photo could not be downloaded ({{error}}).",
+  "studio.dl.confirm.counting": "Counting tracks…",
+  "studio.dl.confirm.dest": "Folder",
+  "studio.dl.confirm.tracks": "Tracks",
+  "studio.dl.confirm.inLibraryAlbum": "This album already seems to be in your library ({{folder}}). Skip it, or download it anyway (for example for a different edition).",
+  "studio.dl.confirm.inLibrarySong": "This track already seems to be in your library. Skip it, or download it anyway.",
+  "studio.dl.confirm.skip": "Skip",
+  "studio.dl.confirm.downloadAnyway": "Download anyway",
+  "studio.dl.confirm.pickDestLead": "Pick the destination folder in the Download tab first: the link stays filled in.",
+  "studio.dl.confirm.pickDest": "Pick folder",
+  "studio.dl.countTimeout": "timed out",
+  "studio.dl.inLibrary": "In library",
+  "studio.dl.inLibraryTitle": "Already in your library",
+  "studio.dl.inLibraryFolder": "Already in library: {{folder}}",
+  "studio.dl.exploreEmpty": "No results.",
+  "studio.dl.cookieHint": "YouTube asks to sign in: cookies are missing or expired. Export them from a private window (after signing in to YouTube) and close it, then upload them in Settings › Integrations.",
+  "studio.dl.openSettings": "Open Settings",
+  "studio.dl.confirm.changeDest": "Change"
 }

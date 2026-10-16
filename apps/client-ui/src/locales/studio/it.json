@@ -512,5 +512,22 @@
   "ui.studioMeta.sanitizeSkippedEdited.one": "1 titolo modificato a mano non viene toccato",
   "ui.studioMeta.sanitizeSkippedEdited.other": "{{n}} titoli modificati a mano non vengono toccati",
   "studio.covers.partial": "Alcune fonti non hanno risposto: {{sources}}",
-  "studio.einfo.imageFailed": "Le voci sono salvate, ma la foto dell'artista non è stata scaricata ({{error}})."
+  "studio.einfo.imageFailed": "Le voci sono salvate, ma la foto dell'artista non è stata scaricata ({{error}}).",
+  "studio.dl.confirm.counting": "Conto i brani…",
+  "studio.dl.confirm.dest": "Cartella",
+  "studio.dl.confirm.tracks": "Brani",
+  "studio.dl.confirm.inLibraryAlbum": "Questo album risulta già in libreria ({{folder}}). Saltalo, oppure scaricalo comunque (per esempio per un'edizione diversa).",
+  "studio.dl.confirm.inLibrarySong": "Questo brano risulta già in libreria. Saltalo, oppure scaricalo comunque.",
+  "studio.dl.confirm.skip": "Salta",
+  "studio.dl.confirm.downloadAnyway": "Scarica comunque",
+  "studio.dl.confirm.pickDestLead": "Scegli prima la cartella di destinazione nella scheda Download: il link resta compilato.",
+  "studio.dl.confirm.pickDest": "Scegli cartella",
+  "studio.dl.countTimeout": "tempo scaduto",
+  "studio.dl.inLibrary": "In libreria",
+  "studio.dl.inLibraryTitle": "Risulta già nella tua libreria",
+  "studio.dl.inLibraryFolder": "Già in libreria: {{folder}}",
+  "studio.dl.exploreEmpty": "Nessun risultato.",
+  "studio.dl.cookieHint": "YouTube chiede l'accesso: cookie mancanti o scaduti. Esportali da una finestra privata (dopo l'accesso a YouTube) e chiudila, poi caricali in Impostazioni › Integrazioni.",
+  "studio.dl.openSettings": "Apri Impostazioni",
+  "studio.dl.confirm.changeDest": "Cambia"
 }

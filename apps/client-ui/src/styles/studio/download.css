@@ -779,7 +779,7 @@
   margin: var(--rk-space-sm) 0;
 }
 
-/* Running download: always on top of the pane, with its Stop button. */
+/* Running download, with its Stop button (placed between the form and the log). */
 .dl-status-card {
   display: flex;
   flex-direction: column;
@@ -863,4 +863,230 @@
 .studio-catalog-list-tile--row .studio-catalog-list-tile__actions {
   flex: 0 0 auto;
   width: auto;
+}
+
+/* Loading, busy buttons, inline errors, "In libreria" (Download + Scopri). */
+.studio-spinner {
+  display: inline-block;
+  flex: 0 0 auto;
+  width: 1.05rem;
+  height: 1.05rem;
+  border-radius: 50%;
+  border: 2px solid color-mix(in srgb, var(--rk-accent) 28%, transparent);
+  border-top-color: var(--rk-accent);
+  animation: rk-studio-spin 0.75s linear infinite;
+}
+
+.studio-spinner--sm {
+  width: 0.85rem;
+  height: 0.85rem;
+}
+
+.primary-btn .studio-spinner {
+  border-color: color-mix(in srgb, currentColor 30%, transparent);
+  border-top-color: currentColor;
+}
+
+@keyframes rk-studio-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+.studio-busy-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--rk-space-xs);
+}
+
+.studio-busy-btn[aria-busy="true"] {
+  cursor: progress;
+}
+
+.studio-loading-line {
+  display: flex;
+  align-items: center;
+  gap: var(--rk-space-sm);
+  margin: var(--rk-space-sm) 0;
+  color: var(--rk-muted);
+  font-size: var(--rk-fs-sm);
+}
+
+.studio-search-field {
+  position: relative;
+}
+
+.studio-search-field.is-busy .ghost-input {
+  padding-right: 2.4rem;
+}
+
+.studio-search-field__spin {
+  position: absolute;
+  top: 50%;
+  right: 0.8rem;
+  margin-top: -0.525rem;
+}
+
+.studio-catalog-list-tile.is-stale {
+  opacity: 0.55;
+  transition: opacity 0.15s ease;
+}
+
+.studio-skeleton {
+  display: block;
+  border-radius: var(--rk-radius);
+  background: linear-gradient(
+    90deg,
+    color-mix(in srgb, var(--rk-ink) 6%, transparent) 0%,
+    color-mix(in srgb, var(--rk-ink) 12%, transparent) 50%,
+    color-mix(in srgb, var(--rk-ink) 6%, transparent) 100%
+  );
+  background-size: 200% 100%;
+  animation: rk-studio-shimmer 1.3s ease-in-out infinite;
+}
+
+.studio-skeleton--thumb {
+  flex: 0 0 auto;
+  width: 48px;
+  height: 48px;
+}
+
+.studio-skeleton--thumb-lg {
+  flex: 0 0 auto;
+  width: 56px;
+  height: 56px;
+}
+
+.studio-skeleton--line {
+  height: 0.7rem;
+  width: 70%;
+}
+
+.studio-skeleton--short {
+  width: 40%;
+}
+
+.studio-skeleton-row {
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  gap: var(--rk-space-md);
+}
+
+.studio-skeleton-row__text {
+  display: flex;
+  flex: 1 1 auto;
+  flex-direction: column;
+  gap: var(--rk-space-xs);
+  min-width: 0;
+}
+
+@keyframes rk-studio-shimmer {
+  0% {
+    background-position: 100% 0;
+  }
+  100% {
+    background-position: -100% 0;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .studio-spinner {
+    animation-duration: 1.6s;
+  }
+
+  .studio-skeleton {
+    animation: none;
+  }
+}
+
+.studio-inline-err {
+  margin: 0;
+  padding: var(--rk-space-sm) var(--rk-space-md);
+  border: 1px solid color-mix(in srgb, var(--rk-warning) 45%, var(--rk-line));
+  border-radius: var(--rk-radius);
+  background: color-mix(in srgb, var(--rk-warning) 9%, transparent);
+  color: var(--rk-ink);
+  font-size: var(--rk-fs-sm);
+  line-height: var(--rk-lh-snug, 1.4);
+}
+
+.studio-inline-err--item {
+  margin-top: var(--rk-space-xs);
+  padding: var(--rk-space-2xs, 4px) var(--rk-space-sm);
+  font-size: var(--rk-fs-xs);
+}
+
+.studio-inlib-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  align-self: flex-start;
+  flex: 0 0 auto;
+  margin-top: 3px;
+  padding: 1px 7px 1px 5px;
+  border-radius: var(--rk-radius-round);
+  border: 1px solid color-mix(in srgb, var(--rk-success) 45%, transparent);
+  background: color-mix(in srgb, var(--rk-success) 12%, transparent);
+  color: var(--rk-success);
+  font-size: var(--rk-fs-xs);
+  font-weight: 600;
+  line-height: 1.5;
+  white-space: nowrap;
+}
+
+.studio-inlib-badge .ui-ic {
+  width: 0.75rem;
+  height: 0.75rem;
+}
+
+.tools-dl-releases__check .studio-inlib-badge {
+  margin-top: 0;
+}
+
+/* Running download: under the form, above the log. */
+.studio-dl-progress {
+  position: sticky;
+  bottom: var(--rk-space-sm);
+  z-index: 2;
+  box-shadow: var(--rk-shadow);
+}
+
+.studio-cookie-hint {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--rk-space-sm) var(--rk-space-md);
+  padding: var(--rk-space-sm) var(--rk-space-md);
+  border: 1px solid color-mix(in srgb, var(--rk-warning) 45%, var(--rk-line));
+  border-radius: var(--rk-radius);
+  background: color-mix(in srgb, var(--rk-warning) 9%, transparent);
+  font-size: var(--rk-fs-sm);
+}
+
+.studio-cookie-hint p {
+  flex: 1 1 16rem;
+  margin: 0;
+}
+
+@media (max-width: 559.98px) {
+  .studio-dl-progress {
+    padding: var(--rk-space-sm) var(--rk-space-md);
+    bottom: calc(var(--rk-space-xs) + env(safe-area-inset-bottom, 0px));
+  }
+
+  .dl-status-card__head {
+    flex-wrap: wrap;
+  }
+
+  .dl-status-card__title {
+    flex: 1 1 100%;
+    font-size: var(--rk-fs-sm);
+  }
+
+  .dl-status-card__stop {
+    margin-left: auto;
+  }
 }

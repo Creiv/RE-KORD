@@ -512,5 +512,22 @@
   "ui.studioMeta.sanitizeSkippedEdited.one": "1 von Hand bearbeiteter Titel bleibt unverändert",
   "ui.studioMeta.sanitizeSkippedEdited.other": "{{n}} von Hand bearbeitete Titel bleiben unverändert",
   "studio.covers.partial": "Einige Quellen haben nicht geantwortet: {{sources}}",
-  "studio.einfo.imageFailed": "Einträge gespeichert, aber das Künstlerfoto konnte nicht heruntergeladen werden ({{error}})."
+  "studio.einfo.imageFailed": "Einträge gespeichert, aber das Künstlerfoto konnte nicht heruntergeladen werden ({{error}}).",
+  "studio.dl.confirm.counting": "Titel werden gezählt…",
+  "studio.dl.confirm.dest": "Ordner",
+  "studio.dl.confirm.tracks": "Titel",
+  "studio.dl.confirm.inLibraryAlbum": "Dieses Album scheint schon in deiner Bibliothek zu sein ({{folder}}). Überspringe es oder lade es trotzdem herunter (etwa für eine andere Edition).",
+  "studio.dl.confirm.inLibrarySong": "Dieser Titel scheint schon in deiner Bibliothek zu sein. Überspringe ihn oder lade ihn trotzdem herunter.",
+  "studio.dl.confirm.skip": "Überspringen",
+  "studio.dl.confirm.downloadAnyway": "Trotzdem herunterladen",
+  "studio.dl.confirm.pickDestLead": "Wähle zuerst den Zielordner im Tab Download: der Link bleibt eingetragen.",
+  "studio.dl.confirm.pickDest": "Ordner wählen",
+  "studio.dl.countTimeout": "Zeitüberschreitung",
+  "studio.dl.inLibrary": "In der Bibliothek",
+  "studio.dl.inLibraryTitle": "Schon in deiner Bibliothek",
+  "studio.dl.inLibraryFolder": "Schon in der Bibliothek: {{folder}}",
+  "studio.dl.exploreEmpty": "Keine Ergebnisse.",
+  "studio.dl.cookieHint": "YouTube verlangt eine Anmeldung: Cookies fehlen oder sind abgelaufen. Exportiere sie aus einem privaten Fenster (nach der Anmeldung bei YouTube) und schließe es, dann lade sie unter Einstellungen › Integrationen hoch.",
+  "studio.dl.openSettings": "Einstellungen öffnen",
+  "studio.dl.confirm.changeDest": "Ändern"
 }

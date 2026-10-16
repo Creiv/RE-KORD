@@ -14,6 +14,7 @@
   import UiIcon from "../components/icons/UiIcon.svelte";
   import StudioCatalogPane from "../components/studio/StudioCatalogPane.svelte";
   import StudioCoversPane from "../components/studio/StudioCoversPane.svelte";
+  import StudioDownloadConfirmDialog from "../components/studio/StudioDownloadConfirmDialog.svelte";
   import StudioDownloadPane from "../components/studio/StudioDownloadPane.svelte";
   import StudioMetaPane from "../components/studio/StudioMetaPane.svelte";
   import ListenVisualizer from "../components/visualizer/ListenVisualizer.svelte";
@@ -38,6 +39,10 @@
   import { loadUserPrefs } from "../lib/userPrefs";
   import { studioAccess } from "../lib/studio/access.svelte";
   import { studioDownloads } from "../lib/studio/downloadStore.svelte";
+  import { downloadFlow, readSavedDownloadDest } from "../lib/studio/downloadFlow.svelte";
+  import type { LibraryHit } from "../lib/studio/libraryMatch";
+  import { studioErrorText } from "../lib/studio/errors";
+  import { toasts } from "../lib/toasts.svelte";
 
   const tabs = $derived([
     { id: "listen", label: t("page.studio.tab.listen") },
@@ -189,11 +194,39 @@
   });
 
 
-  function sendWebItemToDownload(item: CatalogWebItem, mode: "single" | "playlist") {
-    studioDownloads.url = item.url;
-    studioDownloads.urlMode = mode;
-    studioDownloads.studioMode = "classic";
-    session.studioPane = "download";
+  /**
+   * Scopri › Scarica: the same confirm as the Download pane, on the folder
+   * picked there. No usable folder yet → the dialog offers to pick one, which
+   * opens Download with the link filled in (the old behaviour).
+   */
+  async function sendWebItemToDownload(
+    item: CatalogWebItem,
+    mode: "single" | "playlist",
+    library: LibraryHit | null = null,
+  ) {
+    try {
+      const r = await downloadFlow.run({
+        url: item.url,
+        scope: mode,
+        title: item.title,
+        subtitle: item.subtitle,
+        thumbnailUrl: item.thumbnailUrl,
+        releaseTitle: mode === "playlist" ? item.title : undefined,
+        destPath: readSavedDownloadDest(),
+        library,
+      });
+      if (r === "pickDest") {
+        studioDownloads.url = item.url;
+        studioDownloads.urlMode = mode;
+        studioDownloads.studioMode = "classic";
+        session.studioPane = "download";
+      } else if (r === "started") {
+        // Progress and log live in the Download pane.
+        session.studioPane = "download";
+      }
+    } catch (e) {
+      toasts.error(studioErrorText(e));
+    }
   }
 
   onMount(() => {
@@ -586,4 +619,5 @@
     {/if}
   </div>
 </section>
+<StudioDownloadConfirmDialog />
 </div>

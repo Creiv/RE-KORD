@@ -89,3 +89,13 @@ test("riepilogo annidato in `summary` (hub nuovo)", () => {
   assert.equal(s.failed, 11);
   assert.equal(s.failedItems.length, 1);
 });
+
+test("sign-in / age gate: riconosciuti da codice o log (cookie)", () => {
+  assert.equal(detectDownloadIssue("sign_in_required", ""), "sign_in");
+  assert.equal(detectDownloadIssue("age_restricted", ""), "sign_in");
+  assert.equal(
+    detectDownloadIssue("ytdlp_failed", "ERROR: [youtube] abc: Sign in to confirm you’re not a bot. Use --cookies-from-browser or --cookies"),
+    "sign_in",
+  );
+  assert.equal(detectDownloadIssue(null, "ERROR: network unreachable"), null);
+});

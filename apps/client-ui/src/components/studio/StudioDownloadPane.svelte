@@ -2,37 +2,32 @@
   import { onDestroy, onMount } from "svelte";
   import UiIcon from "../icons/UiIcon.svelte";
   import { api, type ExploreResult, type FsDirEntry } from "../../lib/api";
-  import { downloadFlatCount, releasesListStream, type ReleaseItem } from "../../lib/api/studio";
+  import { releasesListStream, type ReleaseItem } from "../../lib/api/studio";
   import { confirmDialog } from "../../lib/confirm.svelte";
   import { fmtNumber, t, tp } from "../../lib/i18n.svelte";
   import { session } from "../../lib/session.svelte";
   import { studioAccess } from "../../lib/studio/access.svelte";
   import { plannedReleaseFolders } from "../../lib/studio/downloadSummary";
+  import { DEST_KEY, DEST_OK_KEY, downloadFlow, type DownloadAsk } from "../../lib/studio/downloadFlow.svelte";
   import { studioDownloads as dl } from "../../lib/studio/downloadStore.svelte";
-  import { studioCodeText, studioErrorText } from "../../lib/studio/errors";
+  import { studioErrorText } from "../../lib/studio/errors";
+  import { studioLibraryHit } from "../../lib/studio/libraryIndex.svelte";
   import {
-    buildStudioDownloadConfirm,
     isValidDownloadDestPath,
     normalizeDownloadDestPath,
     relPathLooksLikeAlbumFolderDest,
     resolveStudioDownloadOutputDir,
-    studioDownloadKindForScope,
     type StudioDownloadScope,
   } from "../../lib/studioDownloadDest";
-  import {
-    detectStudioDlMode,
-    looksLikeSupportedDownloadUrl,
-    urlMatchesStudioDlMode,
-    type DlVideoMode,
-  } from "../../lib/youtubeUrl";
+  import { detectStudioDlMode, urlMatchesStudioDlMode, type DlVideoMode } from "../../lib/youtubeUrl";
   import { partitionYoutubeReleaseEntries } from "../../lib/youtubeReleases";
   import StudioAccessNotice from "./StudioAccessNotice.svelte";
   import StudioLog from "./StudioLog.svelte";
   import StudioYtdlpStatus from "./StudioYtdlpStatus.svelte";
 
-  const DEST_KEY = "rekord-dl-output";
   const EXPLORE_TYPES = new Set(["song", "album", "artist"]);
-  const DEST_OK_KEY = "rekord-dl-ok";
+  /** Placeholder rows while the first Esplora results load. */
+  const SKELETON_ROWS = 6;
   /** Planned folders listed in the batch confirm; the rest is counted. */
   const CONFIRM_ROWS = 30;
 
@@ -54,6 +49,11 @@
   let exploreQ = $state("");
   let exploreResults = $state<ExploreResult[]>([]);
   let exploreBusy = $state(false);
+  /** Query the shown results belong to ("no results" only after a real search). */
+  let exploreDoneFor = $state("");
+  /** Inline errors next to the result that failed (key: result URL). */
+  let itemErr = $state<Record<string, string>>({});
+  let destPanel = $state<HTMLElement | null>(null);
   let releases = $state<ReleaseItem[]>([]);
   let releasesTitle = $state("");
   let releasesUploader = $state("");
@@ -206,6 +206,37 @@
     return plannedReleaseFolders(destPath, titles, albumKeys).filter((r) => r.exists).length;
   });
 
+  /** Esplora results already in the library (badge + warning in the confirm). */
+  const exploreHits = $derived.by(() => {
+    const out: Record<string, ReturnType<typeof studioLibraryHit>> = {};
+    for (const r of exploreResults) {
+      if (r.type !== "album" && r.type !== "song") continue;
+      const hit = studioLibraryHit({ kind: r.type, title: r.title, subtitle: r.subtitle });
+      if (hit) out[r.url] = hit;
+    }
+    return out;
+  });
+  /** Releases (artist page / channel) already in the library: folder match or title + artist. */
+  const releaseInLibrary = $derived.by(() => {
+    const out = new Set<string>();
+    if (!releases.length) return out;
+    const existing = destPath
+      ? new Set(
+          plannedReleaseFolders(destPath, releases.map((r) => r.title), albumKeys)
+            .filter((r) => r.exists)
+            .map((r) => r.path.toLowerCase()),
+        )
+      : new Set<string>();
+    for (const r of releases) {
+      const folder = destPath ? resolveStudioDownloadOutputDir(destPath, "playlist", r.title).toLowerCase() : "";
+      const byFolder = folder !== "" && existing.has(folder);
+      const byName =
+        !!releasesUploader && !!studioLibraryHit({ kind: "album", title: r.title, artist: releasesUploader });
+      if (byFolder || byName) out.add(r.id);
+    }
+    return out;
+  });
+
   async function createFolder() {
     const name = newFolder.trim();
     if (!name || mkdirBlocked) return;
@@ -255,67 +286,39 @@
     });
   }
 
-  /** Track count for the confirm; null when yt-dlp could not tell. */
-  async function playlistCount(url: string): Promise<number | null> {
-    try {
-      const r = await downloadFlatCount(url.trim());
-      const n = Number(r.count);
-      if (r.count != null && r.known !== false && Number.isFinite(n) && n > 0) return n;
-      dl.log("warn", t("studio.dl.logCountUnknown", { error: studioCodeText(r.error ?? "flat_count_failed", null) }));
-      return null;
-    } catch (e) {
-      dl.log("warn", t("studio.dl.logCountUnknown", { error: studioErrorText(e) }));
-      return null;
-    }
+  /** Error shown next to the action and kept, in short, in the log. */
+  function fail(message: string, url?: string) {
+    if (url) itemErr = { ...itemErr, [url]: message };
+    else err = message;
+    dl.log("warn", message);
   }
 
-  function withCountLine(message: string, scope: StudioDownloadScope, count: number | null): string {
-    if (scope !== "playlist" || count != null) return message;
-    return `${message}\n\n${t("studio.dl.confirmTrackCountUnknown")}`;
+  function clearItemErr(url: string) {
+    if (!(url in itemErr)) return;
+    const next = { ...itemErr };
+    delete next[url];
+    itemErr = next;
   }
 
-  async function startOne(url: string, scope: StudioDownloadScope, releaseTitle?: string, preamble?: string) {
-    if (!url.trim()) throw new Error(t("studio.dl.errUrlMissing"));
-    if (!looksLikeSupportedDownloadUrl(url)) throw new Error(t("studio.dl.errUrlUnsupported"));
-    const trackCount = scope === "playlist" ? await playlistCount(url) : null;
-    if (trackCount != null) dl.log("info", tp("studio.dl.logPlaylistCount", trackCount));
-    const confirm = buildStudioDownloadConfirm(
-      { dlPath: destPath, scope, releaseTitle, trackCount, preamble },
-      t,
-    );
-    const message = withCountLine(confirm.message, scope, trackCount);
-    if (!(await confirmDownload(message, confirm.variant === "danger"))) return;
-    const out = resolveStudioDownloadOutputDir(destPath, scope, releaseTitle);
-    await dl.runSingle(url, studioDownloadKindForScope(scope), out, releaseTitle);
+  /** Confirm dialog (opens at once, the track count fills in), then the job. */
+  async function startOne(ask: Omit<DownloadAsk, "destPath">, errKey?: string) {
+    const r = await downloadFlow.run({ ...ask, destPath });
+    if (r === "pickDest") destPanel?.scrollIntoView({ behavior: "smooth", block: "start" });
+    else if (r === "started" && errKey) clearItemErr(errKey);
   }
 
   async function onClassicDownload() {
     err = null;
-    if (!hasValidDownloadDest) {
-      err = t("studio.dl.errPickFolderFirst");
-      return;
-    }
-    if (!dl.url.trim()) {
-      err = t("studio.dl.errEnterUrl");
-      return;
-    }
-    if (!urlMatchesStudioDlMode(dl.url, dl.urlMode)) {
-      err = t("studio.dl.errUrlMismatch");
-      return;
-    }
-    if (dl.urlMode === "releases") {
-      err = t("studio.dl.errUseReleases");
-      return;
-    }
+    if (!hasValidDownloadDest) return fail(t("studio.dl.errPickFolderFirst"));
+    if (!dl.url.trim()) return fail(t("studio.dl.errEnterUrl"));
+    if (!urlMatchesStudioDlMode(dl.url, dl.urlMode)) return fail(t("studio.dl.errUrlMismatch"));
+    if (dl.urlMode === "releases") return fail(t("studio.dl.errUseReleases"));
     const scope: StudioDownloadScope = dl.urlMode === "playlist" ? "playlist" : "single";
-    if (scope === "single" && !inAlbumFolder) {
-      err = t("studio.dl.errSingleNeedsAlbum");
-      return;
-    }
+    if (scope === "single" && !inAlbumFolder) return fail(t("studio.dl.errSingleNeedsAlbum"));
     try {
-      await startOne(dl.url, scope);
+      await startOne({ url: dl.url, scope, title: dl.url.trim() });
     } catch (e) {
-      err = studioErrorText(e);
+      fail(studioErrorText(e));
     }
   }
 
@@ -329,17 +332,23 @@
     const q = exploreQ.trim();
     if (q.length < 2) {
       exploreResults = [];
+      exploreDoneFor = "";
+      exploreBusy = false;
       return;
     }
     exploreBusy = true;
     try {
       const r = await api.youtubeExploreSearch(q);
+      // A slower, older search must not overwrite a newer one.
+      if (q !== exploreQ.trim()) return;
       exploreResults = r.results;
+      exploreDoneFor = q;
+      itemErr = {};
       err = null;
     } catch (e) {
-      err = studioErrorText(e);
+      if (q === exploreQ.trim()) fail(studioErrorText(e));
     } finally {
-      exploreBusy = false;
+      if (q === exploreQ.trim()) exploreBusy = false;
     }
   }
 
@@ -374,7 +383,7 @@
                 uploader: releasesUploader ? ` — ${releasesUploader}` : "",
               }),
             );
-            if (!releases.length) err = t("studio.dl.errNoReleases");
+            if (!releases.length) fail(t("studio.dl.errNoReleases"));
           },
           onPatch: (e) => {
             releases = releases.map((r) =>
@@ -386,7 +395,7 @@
       );
     } catch (e) {
       if (ctrl.signal.aborted) return;
-      err = studioErrorText(e);
+      fail(studioErrorText(e));
     } finally {
       if (relAbort === ctrl) {
         releasesLoading = false;
@@ -402,25 +411,23 @@
   }
 
   async function downloadExploreItem(item: ExploreResult) {
-    err = null;
-    if (!hasValidDownloadDest) {
-      err = t("studio.dl.errPickDest");
-      return;
-    }
+    clearItemErr(item.url);
     const scope: StudioDownloadScope = item.type === "song" ? "single" : "playlist";
-    if (scope === "single" && !inAlbumFolder) {
-      err = t("studio.dl.errSingleNeedsAlbum");
-      return;
-    }
     try {
       await startOne(
+        {
+          url: item.url,
+          scope,
+          title: item.title,
+          subtitle: item.subtitle,
+          thumbnailUrl: item.thumbnailUrl,
+          releaseTitle: scope === "playlist" ? item.title : undefined,
+          library: exploreHits[item.url] ?? null,
+        },
         item.url,
-        scope,
-        scope === "playlist" ? item.title : undefined,
-        t("studio.dl.preamble", { title: item.title }),
       );
     } catch (e) {
-      err = studioErrorText(e);
+      fail(studioErrorText(e), item.url);
     }
   }
 
@@ -428,17 +435,14 @@
     err = null;
     const picked = releases.filter((r) => selectedReleases.has(r.id));
     if (!picked.length) {
-      err = t("studio.dl.errNeedSelection");
-      return;
+      return fail(t("studio.dl.errNeedSelection"));
     }
     const base = normalizeDownloadDestPath(destPath);
     if (!base || !hasValidDownloadDest) {
-      err = t("studio.dl.errPickArtistDest");
-      return;
+      return fail(t("studio.dl.errPickArtistDest"));
     }
     if (inAlbumFolder) {
-      err = t("studio.dl.errManyNeedArtist");
-      return;
+      return fail(t("studio.dl.errManyNeedArtist"));
     }
     const planned = plannedReleaseFolders(base, picked.map((r) => r.title), albumKeys);
     const existing = planned.filter((r) => r.exists).length;
@@ -475,12 +479,10 @@
     err = null;
     if (!dl.url.trim()) return;
     if (!urlMatchesStudioDlMode(dl.url, "releases")) {
-      err = t("studio.dl.errReleasesUrl");
-      return;
+      return fail(t("studio.dl.errReleasesUrl"));
     }
     if (!hasValidDownloadDest) {
-      err = t("studio.dl.errPickFolderFirst");
-      return;
+      return fail(t("studio.dl.errPickFolderFirst"));
     }
     await loadReleases(dl.url.trim(), t("studio.dl.releasesFallbackTitle"));
   }
@@ -522,6 +524,9 @@
     <label class="tools-dl-releases__check">
       <input type="checkbox" checked={selectedReleases.has(r.id)} onchange={() => toggleRel(r.id)} />
       <span class="tools-dl-releases__title" title={r.title}>{r.title}</span>
+      {#if releaseInLibrary.has(r.id)}
+        <span class="studio-inlib-badge" title={t("studio.dl.inLibraryTitle")}>{t("studio.dl.inLibrary")}</span>
+      {/if}
       <span class="tools-dl-releases__trackcount" class:is-pending={r.trackCount == null}>
         {countLabel(r.trackCount)}
       </span>
@@ -599,59 +604,7 @@
 <div class="studio-pane tools-download" role="region" aria-label={t("studio.dl.regionAria")}>
   <StudioAccessNotice what={t("studio.access.downloadReadOnly")} />
 
-  {#if dl.running}
-    <div class="dl-status-card" role="status" aria-live="polite">
-      <div class="dl-status-card__head">
-        <span class="dl-status-card__title">
-          {#if dl.refreshing}
-            {t("studio.dl.statusIndexing")}
-          {:else if dl.activeTitle}
-            {t("studio.dl.statusRunningTitle", { title: dl.activeTitle })}
-          {:else if dl.busy}
-            {t("studio.dl.statusRunning")}
-          {:else}
-            {tp("studio.dl.remoteRunning", dl.remote.length)}
-          {/if}
-        </span>
-        <button
-          type="button"
-          class="ghost-btn ghost-btn--sm dl-status-card__stop"
-          disabled={dl.stopRequested || dl.refreshing}
-          onclick={() => void dl.cancel()}
-        >
-          {dl.stopRequested ? t("studio.dl.stopping") : t("studio.dl.stop")}
-        </button>
-      </div>
-      {#if dl.batch && dl.batch.total > 0}
-        <div class="dl-progress-block">
-          <div class="dl-progress-top">
-            <span>{t("studio.dl.progressReleases")}</span>
-            <span>{fmtNumber(dl.batch.current)}/{fmtNumber(dl.batch.total)}</span>
-          </div>
-          <div class="dl-progress-rail">
-            <div class="dl-progress-fill" style="width: {batchPct}%"></div>
-          </div>
-        </div>
-      {/if}
-      {#if dl.progress && dl.progress.total > 0}
-        <div class="dl-progress-block">
-          <div class="dl-progress-top">
-            <strong>{t("studio.dl.progressTracks")}</strong>
-            <span>{fmtNumber(dl.progress.current)}/{fmtNumber(dl.progress.total)}</span>
-          </div>
-          <div class="dl-progress-rail">
-            <div class="dl-progress-fill" style="width: {progressPct}%"></div>
-          </div>
-        </div>
-      {:else}
-        <div class="dl-progress-rail dl-progress-rail--indeterminate" aria-hidden="true">
-          <div class="dl-progress-fill"></div>
-        </div>
-      {/if}
-    </div>
-  {/if}
-
-  <div class="studio-panel tools-dl-dest">
+  <div class="studio-panel tools-dl-dest" bind:this={destPanel}>
     <div class="tools-dl-dest__head">
       <div class="tools-dl-dest__head-text">
         <h4 class="studio-panel-title">{t("studio.dl.saveFolder")}</h4>
@@ -841,19 +794,36 @@
     {#if dl.studioMode === "explore"}
       <h4 class="studio-panel-title">{t("studio.dl.modeExplore")}</h4>
       <p class="subtle sm studio-panel-gap">{t("studio.dl.exploreLead")}</p>
-      <input
-        type="search"
-        class="ghost-input"
-        placeholder={t("studio.dl.explorePh")}
-        bind:value={exploreQ}
-        oninput={onExploreInput}
-      />
-      {#if exploreBusy}
-        <p class="subtle sm">{t("studio.dl.exploreSearching")}</p>
-      {/if}
-      <div class="studio-explore-results studio-panel-gap">
+      <div class="studio-search-field" class:is-busy={exploreBusy}>
+        <input
+          type="search"
+          class="ghost-input"
+          placeholder={t("studio.dl.explorePh")}
+          aria-label={t("studio.dl.explorePh")}
+          aria-busy={exploreBusy}
+          bind:value={exploreQ}
+          oninput={onExploreInput}
+        />
+        {#if exploreBusy}
+          <span class="studio-spinner studio-search-field__spin" role="status" aria-label={t("studio.dl.exploreSearching")}></span>
+        {/if}
+      </div>
+      <div class="studio-explore-results studio-panel-gap" aria-busy={exploreBusy}>
+        {#if exploreBusy && !exploreResults.length}
+          {#each Array(SKELETON_ROWS) as _, i (i)}
+            <div class="studio-catalog-list-tile studio-catalog-list-tile--row studio-skeleton-row" aria-hidden="true">
+              <span class="studio-skeleton studio-skeleton--thumb"></span>
+              <span class="studio-skeleton-row__text">
+                <span class="studio-skeleton studio-skeleton--line"></span>
+                <span class="studio-skeleton studio-skeleton--line studio-skeleton--short"></span>
+              </span>
+            </div>
+          {/each}
+        {/if}
         {#each exploreResults as item, i (`${item.url}:${i}`)}
-          <div class="studio-catalog-list-tile studio-catalog-list-tile--row">
+          {@const hit = exploreHits[item.url]}
+          {@const pending = downloadFlow.pendingUrl === item.url}
+          <div class="studio-catalog-list-tile studio-catalog-list-tile--row" class:is-stale={exploreBusy}>
             <div class="studio-catalog-list-tile__main">
               {#if item.thumbnailUrl}
                 <img class="studio-catalog-web-thumb" src={item.thumbnailUrl} alt="" width="48" height="48" loading="lazy" />
@@ -864,26 +834,42 @@
                   {EXPLORE_TYPES.has(item.type) ? t(`studio.dl.exploreType.${item.type}`) : item.type}
                   {#if item.subtitle}· {item.subtitle}{/if}
                 </div>
+                {#if hit}
+                  <span class="studio-inlib-badge" title={hit.folder ? t("studio.dl.inLibraryFolder", { folder: hit.folder }) : t("studio.dl.inLibraryTitle")}>
+                    <UiIcon name="check" />{t("studio.dl.inLibrary")}
+                  </span>
+                {/if}
+                {#if itemErr[item.url]}
+                  <p class="studio-inline-err studio-inline-err--item" role="alert">{itemErr[item.url]}</p>
+                {/if}
               </div>
             </div>
             <div class="studio-catalog-list-tile__actions">
               {#if item.type === "artist"}
                 <button
                   type="button"
-                  class="ghost-btn ghost-btn--sm"
+                  class="ghost-btn ghost-btn--sm studio-busy-btn"
                   disabled={releasesLoading}
+                  aria-busy={releasesLoading && releasesTitle === item.title}
                   onclick={() => void openArtistReleases(item)}
                 >
+                  {#if releasesLoading && releasesTitle === item.title}
+                    <span class="studio-spinner studio-spinner--sm" aria-hidden="true"></span>
+                  {/if}
                   {t("studio.dl.releases")}
                 </button>
               {:else}
                 <button
                   type="button"
-                  class="primary-btn primary-btn--sm"
-                  disabled={busy || !canWrite}
+                  class="primary-btn primary-btn--sm studio-busy-btn"
+                  disabled={busy || pending || downloadFlow.open || !canWrite}
+                  aria-busy={pending}
                   title={writeTitle}
                   onclick={() => void downloadExploreItem(item)}
                 >
+                  {#if pending}
+                    <span class="studio-spinner studio-spinner--sm" aria-hidden="true"></span>
+                  {/if}
                   {t("studio.dl.download")}
                 </button>
               {/if}
@@ -891,8 +877,14 @@
           </div>
         {/each}
       </div>
+      {#if !exploreBusy && exploreDoneFor && exploreDoneFor === exploreQ.trim() && !exploreResults.length}
+        <p class="panel-empty">{t("studio.dl.exploreEmpty")}</p>
+      {/if}
       {#if releasesLoading}
-        <p class="subtle sm">{t("studio.dl.loadingReleases")}</p>
+        <p class="studio-loading-line" role="status">
+          <span class="studio-spinner studio-spinner--sm" aria-hidden="true"></span>
+          {t("studio.dl.loadingReleases")}{#if releases.length} · {tp("studio.dl.releasesCount", releases.length)}{/if}
+        </p>
       {/if}
       {#if releases.length}
         {@render releasesPicker()}
@@ -974,7 +966,10 @@
       {#if dl.urlMode === "releases"}
         <div class="tools-dl-releases">
           {#if releasesLoading}
-            <p class="subtle sm">{t("studio.dl.loadingReleases")}</p>
+            <p class="studio-loading-line" role="status">
+              <span class="studio-spinner studio-spinner--sm" aria-hidden="true"></span>
+              {t("studio.dl.loadingReleases")}{#if releases.length} · {tp("studio.dl.releasesCount", releases.length)}{/if}
+            </p>
           {/if}
           {#if releases.length}
             {@render releasesPicker()}
@@ -987,10 +982,14 @@
             {#if !releases.length}
               <button
                 type="button"
-                class="primary-btn"
+                class="primary-btn studio-busy-btn"
                 disabled={releasesLoading || !dl.url.trim() || !dlUrlValid || !hasValidDownloadDest}
+                aria-busy={releasesLoading}
                 onclick={() => void loadReleasesFromUrl()}
               >
+                {#if releasesLoading}
+                  <span class="studio-spinner studio-spinner--sm" aria-hidden="true"></span>
+                {/if}
                 {releasesLoading ? t("studio.dl.loading") : t("studio.dl.loadReleases")}
               </button>
             {:else}
@@ -1022,11 +1021,15 @@
           </div>
           <button
             type="button"
-            class="primary-btn"
-            disabled={busy || !dl.url.trim() || !dlUrlValid || !hasValidDownloadDest || !canWrite}
+            class="primary-btn studio-busy-btn"
+            disabled={busy || downloadFlow.open || !!downloadFlow.pendingUrl || !dl.url.trim() || !dlUrlValid || !hasValidDownloadDest || !canWrite}
+            aria-busy={dl.busy || downloadFlow.pendingUrl === dl.url.trim()}
             title={writeTitle}
             onclick={() => void onClassicDownload()}
           >
+            {#if dl.busy || downloadFlow.pendingUrl === dl.url.trim()}
+              <span class="studio-spinner studio-spinner--sm" aria-hidden="true"></span>
+            {/if}
             {dl.busy ? t("studio.dl.running") : t("studio.dl.run")}
           </button>
         </div>
@@ -1035,7 +1038,72 @@
   </div>
 
   {#if err}
-    <p class="subtle sm warnline" role="alert">{err}</p>
+    <p class="studio-inline-err" role="alert">{err}</p>
+  {/if}
+
+  <!-- Progress between the form and the log: what runs stays next to what it prints. -->
+  {#if dl.running}
+    <div class="dl-status-card studio-dl-progress" role="status" aria-live="polite">
+      <div class="dl-status-card__head">
+        <span class="dl-status-card__title">
+          {#if dl.refreshing}
+            {t("studio.dl.statusIndexing")}
+          {:else if dl.activeTitle}
+            {t("studio.dl.statusRunningTitle", { title: dl.activeTitle })}
+          {:else if dl.busy}
+            {t("studio.dl.statusRunning")}
+          {:else}
+            {tp("studio.dl.remoteRunning", dl.remote.length)}
+          {/if}
+        </span>
+        <button
+          type="button"
+          class="ghost-btn ghost-btn--sm dl-status-card__stop"
+          disabled={dl.stopRequested || dl.refreshing}
+          onclick={() => void dl.cancel()}
+        >
+          {dl.stopRequested ? t("studio.dl.stopping") : t("studio.dl.stop")}
+        </button>
+      </div>
+      {#if dl.batch && dl.batch.total > 0}
+        <div class="dl-progress-block">
+          <div class="dl-progress-top">
+            <span>{t("studio.dl.progressReleases")}</span>
+            <span>{fmtNumber(dl.batch.current)}/{fmtNumber(dl.batch.total)}</span>
+          </div>
+          <div class="dl-progress-rail">
+            <div class="dl-progress-fill" style="width: {batchPct}%"></div>
+          </div>
+        </div>
+      {/if}
+      {#if dl.progress && dl.progress.total > 0}
+        <div class="dl-progress-block">
+          <div class="dl-progress-top">
+            <strong>{t("studio.dl.progressTracks")}</strong>
+            <span>{fmtNumber(dl.progress.current)}/{fmtNumber(dl.progress.total)}</span>
+          </div>
+          <div class="dl-progress-rail">
+            <div class="dl-progress-fill" style="width: {progressPct}%"></div>
+          </div>
+        </div>
+      {:else}
+        <div class="dl-progress-rail dl-progress-rail--indeterminate" aria-hidden="true">
+          <div class="dl-progress-fill"></div>
+        </div>
+      {/if}
+    </div>
+  {/if}
+
+
+  {#if dl.cookieIssue}
+    <div class="studio-cookie-hint" role="note">
+      <p>{t("studio.dl.cookieHint")}</p>
+      {#if session.canManageMachine}
+        <button type="button" class="ghost-btn ghost-btn--sm" onclick={() => session.navigate("settings")}>
+          {t("studio.dl.openSettings")}
+        </button>
+      {/if}
+    </div>
   {/if}
 
   <StudioLog

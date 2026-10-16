@@ -150,11 +150,12 @@ export function downloadCancel(downloadId: string) {
 }
 
 /** `known: false` (with `error`) when yt-dlp could not count the entries. */
-export function downloadFlatCount(url: string) {
+export function downloadFlatCount(url: string, opts?: CallOptions) {
   return request<{ count: number | null; known?: boolean; error?: string | null }>("/api/v1/download-flat-count", {
     method: "POST",
     body: JSON.stringify({ url }),
     timeoutMs: LONG_TIMEOUT_MS,
+    ...opts,
   });
 }
 
