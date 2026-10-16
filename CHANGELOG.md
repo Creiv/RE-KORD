@@ -3,6 +3,36 @@
 All notable changes to RE-KORD. Versions follow [semantic versioning](https://semver.org);
 one version number covers the hub, the clients and the packages.
 
+## 5.2.1 — 2026-10-17 (pre-release, clients only)
+
+A preview of what is coming in 5.3, published as a GitHub pre-release with the Client
+packages only (Linux, Windows, Android). There is no 5.2.1 hub, Server package or Docker
+image: the clients work with a 5.2 hub as they are, and the hub's web page keeps the 5.2
+interface until 5.3.
+
+### New
+
+- **Lyrics behind the fullscreen karaoke.** The strongest one or two words of the line being
+  sung (fillers, backing vocals in brackets and helper verbs skipped, in Italian, English,
+  Spanish and French) appear huge and faint behind the lyrics, lyric-video style, in one of
+  five compositions: one giant outlined word, a slanted word in the theme colour, a vertical
+  word along the edge, a word echoed three times, two words stacked. A repeated line always
+  comes back with the same composition, so the chorus is recognisable; the title stands in
+  before the first line. Each composition drifts slowly for as long as the line is sung and
+  stops when paused. The lines above and below the sung one get a dark halo so they stay
+  readable. **Sfondo**, top right in fullscreen karaoke, turns it off; the choice is saved
+  per account and follows you on every device.
+
+### Fixed
+
+- **Fullscreen visualizers ran past the right edge on desktop** by the width of the side
+  rail: anything on the right was cut off and the karaoke lyrics and the visualizers sat off
+  the visible centre.
+
+### Other
+
+- The Docker image is built only for full releases, so pre-releases never move `:latest`.
+
 ## 5.2.0 — 2026-10-16
 
 Fixes from GitHub issue #99 and working YouTube downloads: a bundled JavaScript engine for
