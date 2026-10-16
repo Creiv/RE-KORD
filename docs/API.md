@@ -254,7 +254,7 @@ A foreign origin gets `403 cross_origin_forbidden` on mutating methods and no `A
 
 `GET /api/v1/health` declares:
 
-- `version` — the hub version (workspace version, e.g. `5.1.0`);
+- `version` — the hub version (workspace version, e.g. `5.2.0`);
 - `apiVersion` — the `/api/v1` contract revision (`api::API_VERSION`, currently `1`); it only grows on a breaking change;
 - `minClientVersion` — the oldest client the hub accepts (`api::MIN_CLIENT_VERSION`);
 - `transcode` — whether `/api/v1/transcode` is usable (ffmpeg found).

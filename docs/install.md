@@ -43,11 +43,11 @@ older systems, use the [headless hub](#linux-headless-hub-with-systemd) or
 ### AppImage
 
 ```bash
-chmod +x RE-KORD-Server-5.1.0-linux-x64.AppImage
-./RE-KORD-Server-5.1.0-linux-x64.AppImage
+chmod +x RE-KORD-Server-5.2.0-linux-x64.AppImage
+./RE-KORD-Server-5.2.0-linux-x64.AppImage
 ```
 
-The same steps apply to `RE-KORD-Client-5.1.0-linux-x64.AppImage`. The AppImage bundles
+The same steps apply to `RE-KORD-Client-5.2.0-linux-x64.AppImage`. The AppImage bundles
 WebKitGTK's GStreamer plugins, so audio works without extra packages. If it does not start
 and the error mentions FUSE, install FUSE 2 (`sudo apt install libfuse2t64` on Ubuntu
 24.04) or run it with `--appimage-extract-and-run`.
@@ -55,8 +55,8 @@ and the error mentions FUSE, install FUSE 2 (`sudo apt install libfuse2t64` on U
 ### Debian / Ubuntu package
 
 ```bash
-sudo apt install ./RE-KORD-Server-5.1.0-linux-x64.deb   # package "re-kord-server"
-sudo apt install ./RE-KORD-Client-5.1.0-linux-x64.deb   # package "re-kord"
+sudo apt install ./RE-KORD-Server-5.2.0-linux-x64.deb   # package "re-kord-server"
+sudo apt install ./RE-KORD-Client-5.2.0-linux-x64.deb   # package "re-kord"
 ```
 
 The packages pull in WebKitGTK 4.1 and the GStreamer plugins (`base`, `good`, `libav`) that
@@ -65,15 +65,15 @@ application menu as **RE-KORD Server** and **RE-KORD**.
 
 ### Linux headless hub (with systemd)
 
-`RE-KORD-Server-5.1.0-linux-x64-headless.tar.gz` is the hub without a window: the
+`RE-KORD-Server-5.2.0-linux-x64-headless.tar.gz` is the hub without a window: the
 `rekord-server` binary, the web client, the admin panel and the bundled tools in `bin/`
 (yt-dlp, `qjs` for yt-dlp's YouTube checks, cloudflared, ffmpeg).
 
 Try it in place:
 
 ```bash
-tar -xzf RE-KORD-Server-5.1.0-linux-x64-headless.tar.gz
-cd RE-KORD-Server-5.1.0-linux-x64-headless
+tar -xzf RE-KORD-Server-5.2.0-linux-x64-headless.tar.gz
+cd RE-KORD-Server-5.2.0-linux-x64-headless
 ./run.sh                                  # http://<this-machine>:7420, admin at /admin
 REKORD_BIND=127.0.0.1:7420 ./run.sh       # this machine only
 ./rekord-server --help                    # every option and environment variable
@@ -117,12 +117,12 @@ Windows 10 or 11, x64. Neither download has an installer: they are portable.
 
 ### RE-KORD Client
 
-`RE-KORD-Client-5.1.0-windows-x64.exe` is a single executable. Put it anywhere and
+`RE-KORD-Client-5.2.0-windows-x64.exe` is a single executable. Put it anywhere and
 double-click it.
 
 ### RE-KORD Server
 
-`RE-KORD-Server-5.1.0-windows-x64.zip` contains a `RE-KORD Server` folder:
+`RE-KORD-Server-5.2.0-windows-x64.zip` contains a `RE-KORD Server` folder:
 
 ```
 RE-KORD Server\
@@ -149,7 +149,7 @@ can move the whole folder at any time.
 
 ## Android
 
-`RE-KORD-Client-5.1.0-android-arm64.apk`, for Android 8.0 or newer on 64-bit ARM (every
+`RE-KORD-Client-5.2.0-android-arm64.apk`, for Android 8.0 or newer on 64-bit ARM (every
 current phone and most tablets and TV boxes).
 
 1. Copy the APK to the phone, or download it there.
@@ -169,7 +169,7 @@ through the remote-access tunnel.
 ## Docker
 
 A ready-made image for amd64 and arm64 is published on the GitHub Container Registry at
-every release: `ghcr.io/creiv/re-kord` (tags `latest`, the version such as `5.1.0`, and the
+every release: `ghcr.io/creiv/re-kord` (tags `latest`, the version such as `5.2.0`, and the
 release tag such as `v5.1`). The `docker-compose.yml` uses it, so that file is all you need:
 
 ```bash

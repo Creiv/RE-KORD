@@ -3,9 +3,14 @@
 All notable changes to RE-KORD. Versions follow [semantic versioning](https://semver.org);
 one version number covers the hub, the clients and the packages.
 
-## Unreleased
+## 5.2.0 — 2026-10-16
 
-### Added
+Fixes from GitHub issue #99 and working YouTube downloads: a bundled JavaScript engine for
+yt-dlp, tags and covers written into downloaded files, a clearer Studio download flow,
+the "To fix" quality list, podcast and Android playback fixes. Hubs and clients 5.0, 5.1
+and 5.2 work together; nothing in the database needs migrating.
+
+### New
 
 - **Studio downloads get tags and a cover.** Downloaded files had no tags and no picture:
   the library knew artist, album and title only from the folders. The hub now writes title,
@@ -20,6 +25,33 @@ one version number covers the hub, the clients and the packages.
   in the library. A WebM download has its Opus stream copied (no re-encode) into `.opus` so
   it can carry tags. Admin panel, *Library › Embedded metadata*: **"Incorpora tag e copertina
   nei file scaricati"** (on by default). The Studio log reports what was written.
+
+- **"In libreria" badges in Studio** (issue #99): Esplora results, an artist's releases and
+  Scopri tiles that match an album or track of the library (title and artist, ignoring
+  accents, punctuation, "Deluxe", "Remastered", "- EP", "- Single", featuring) are marked,
+  and the download confirmation offers **Skip** or **Download anyway**.
+- **Cookie status** in Settings and in the admin panel's Integrations: file present and
+  valid, last update, number of cookies and how many are for YouTube/Google.
+- **"To fix" list from the quality alerts** (issue #99): the *Quality alerts* tile and the
+  rows of *Library quality* on Home open a dialog with one tab per issue (albums without
+  cover, albums without metadata, tracks without metadata, folders with loose tracks) and
+  a button on each item: **Cover** and **Metadata** open Studio with that album already
+  picked, **Edit** opens the track editor, **Open album** its page. Counts update as you
+  fix things.
+
+### Changed
+
+- **Docker image on the GitHub Container Registry**: `ghcr.io/creiv/re-kord` (amd64 and
+  arm64, tags `latest`, the version and the release tag) is built and published at every
+  release tag (thanks to @303inmyheart for the workflow). `docker-compose.yml` now pulls it,
+  so the compose file alone is enough; building locally is still possible.
+- **Podcasts on Home no longer start by themselves** (issue #99). Tapping a show in the
+  *Podcasts & news* card opens its page; if you left one of its episodes halfway, it asks
+  *Continue "…"?* with **Continue** (from where you left it) and **Open the podcast**. Live
+  stations still play at once, and the play buttons of episode rows still play.
+- **"Show in Recent" removed** (issue #99): podcast listens no longer appear in *Recent*,
+  and the podcasts "⋯" menu, which only held that switch, is gone (**Refresh** is always a
+  button).
 
 ### Fixed
 
@@ -118,34 +150,15 @@ one version number covers the hub, the clients and the packages.
   track tagged only with a placeholder genre ("Unknown", "Music", "8") counts as without
   metadata; an album with a release date, label or country counts as having metadata.
 
-### New
+### Known issues
 
-- **"In libreria" badges in Studio** (issue #99): Esplora results, an artist's releases and
-  Scopri tiles that match an album or track of the library (title and artist, ignoring
-  accents, punctuation, "Deluxe", "Remastered", "- EP", "- Single", featuring) are marked,
-  and the download confirmation offers **Skip** or **Download anyway**.
-- **Cookie status** in Settings and in the admin panel's Integrations: file present and
-  valid, last update, number of cookies and how many are for YouTube/Google.
-- **"To fix" list from the quality alerts** (issue #99): the *Quality alerts* tile and the
-  rows of *Library quality* on Home open a dialog with one tab per issue (albums without
-  cover, albums without metadata, tracks without metadata, folders with loose tracks) and
-  a button on each item: **Cover** and **Metadata** open Studio with that album already
-  picked, **Edit** opens the track editor, **Open album** its page. Counts update as you
-  fix things.
-
-### Changed
-
-- **Docker image on the GitHub Container Registry**: `ghcr.io/creiv/re-kord` (amd64 and
-  arm64, tags `latest`, the version and the release tag) is built and published at every
-  release tag (thanks to @303inmyheart for the workflow). `docker-compose.yml` now pulls it,
-  so the compose file alone is enough; building locally is still possible.
-- **Podcasts on Home no longer start by themselves** (issue #99). Tapping a show in the
-  *Podcasts & news* card opens its page; if you left one of its episodes halfway, it asks
-  *Continue "…"?* with **Continue** (from where you left it) and **Open the podcast**. Live
-  stations still play at once, and the play buttons of episode rows still play.
-- **"Show in Recent" removed** (issue #99): podcast listens no longer appear in *Recent*,
-  and the podcasts "⋯" menu, which only held that switch, is gone (**Refresh** is always a
-  button).
+- Android: a play sent from a car or a Bluetooth device after the app has been paused in the
+  background for more than about 10 minutes may not start; open RE-KORD from the
+  notification or the media player to resume. Plays within 10 minutes of a pause work with
+  the screen locked.
+- YouTube can refuse yt-dlp from some networks ("Sign in to confirm you're not a bot") even
+  with a JavaScript engine; uploading cookies exported from a signed-in private window
+  usually solves it.
 
 ## 5.1.0 — 2026-10-09
 

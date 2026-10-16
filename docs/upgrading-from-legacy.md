@@ -56,7 +56,7 @@ Pick one (details in [install.md](install.md)):
 
 - **Desktop computer that holds the music**: the **RE-KORD Server** app (AppImage, `.deb`
   or Windows zip). The hub starts with the window.
-- **Linux server**: the headless package, `RE-KORD-Server-5.1.0-linux-x64-headless.tar.gz`,
+- **Linux server**: the headless package, `RE-KORD-Server-5.2.0-linux-x64-headless.tar.gz`,
   then `sudo ./systemd/install.sh`.
 - **Docker**: see [Docker](#docker) below.
 - **From source**: see [development.md](development.md).
@@ -194,7 +194,7 @@ refuses to update an app across signing keys (`INSTALL_FAILED_UPDATE_INCOMPATIBL
 "App not installed").
 
 1. **Uninstall the legacy RE-KORD** from the launcher (or `adb uninstall app.rekord.client`).
-2. Install `RE-KORD-Client-5.1.0-android-arm64.apk`.
+2. Install `RE-KORD-Client-5.2.0-android-arm64.apk`.
 3. Enter the hub address, or scan the QR code from the admin panel (**Network › Local
    network access › QR**), then pick your account.
 

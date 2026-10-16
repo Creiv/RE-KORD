@@ -74,13 +74,15 @@ first scan of your existing library imports everything automatically.
 - Browse by artist, genre or one of 14 personal **moods**; instant accent-insensitive
   search.
 - **Sonic Nebula**: explore your library as a galaxy laid out by tempo and energy.
-- Quality alerts for missing covers and metadata; safe rescans that never wipe a library
-  when a disk is unplugged.
+- Quality alerts for missing covers and metadata, with a "To fix" list that opens the right
+  editor for each item; safe rescans that never wipe a library when a disk is unplugged.
 
 **Studio**
 - **Discover** new releases from artists you own, with 30-second previews.
 - **Download** from YouTube Music, SoundCloud or Bandcamp with the bundled, self-updating
-  yt-dlp.
+  yt-dlp and its JavaScript engine (QuickJS, or Deno/Node.js if installed): files arrive
+  with tags and a square cover, "In library" badges flag what you already have, and
+  YouTube cookies unlock age-restricted songs.
 - **Metadata** from Discogs, MusicBrainz, iTunes, Deezer and TheAudioDB; title cleanup;
   web **trivia** about artists and albums; **cover** search and upload.
 - Hand-edited values are protected from every rescan and fetch.

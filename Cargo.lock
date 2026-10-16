@@ -3392,7 +3392,7 @@ checksum = "d6f6ff9a378485b298a5286656da665ba74413d36db0979633275d2e708145d4"
 
 [[package]]
 name = "rekord-client"
-version = "5.1.0"
+version = "5.2.0"
 dependencies = [
  "anyhow",
  "rekord-core",
@@ -3410,7 +3410,7 @@ dependencies = [
 
 [[package]]
 name = "rekord-core"
-version = "5.1.0"
+version = "5.2.0"
 dependencies = [
  "anyhow",
  "axum",
@@ -3449,7 +3449,7 @@ dependencies = [
 
 [[package]]
 name = "rekord-plugin-api"
-version = "5.1.0"
+version = "5.2.0"
 dependencies = [
  "serde",
  "serde_json",
@@ -3457,7 +3457,7 @@ dependencies = [
 
 [[package]]
 name = "rekord-server"
-version = "5.1.0"
+version = "5.2.0"
 dependencies = [
  "anyhow",
  "clap",
