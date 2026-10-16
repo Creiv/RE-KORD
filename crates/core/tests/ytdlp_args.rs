@@ -1,17 +1,11 @@
 //! yt-dlp argument builder, per-item summary attribution and char-safe log
 //! slicing (studio QA items 1, 2, 6).
 
-use rekord_core::config::AppConfig;
 use rekord_core::ytdlp::{
     build_download_args, display_command, summary_from_log, tail_bytes, ItemTracker, RollLog,
     Toolchain, AUDIO_FORMAT, DONE_FIELD_MAX, ROLL_CAP,
 };
 use std::path::PathBuf;
-
-fn cfg() -> AppConfig {
-    let dir = std::env::temp_dir().join(format!("rekord-ytargs-{}", uuid::Uuid::new_v4()));
-    AppConfig::resolve(Some(dir), "127.0.0.1:0".parse().unwrap(), None)
-}
 
 fn value_after<'a>(args: &'a [String], flag: &str) -> Option<&'a str> {
     args.iter()
@@ -28,7 +22,7 @@ fn args_are_audio_only_with_ffmpeg_and_absolute_js_runtime() {
         js_runtime: Some("node:/usr/local/bin/node".into()),
     };
     let url = "https://www.youtube.com/watch?v=dQw4w9WgXcQ";
-    let args = build_download_args(&cfg(), &tc, url, "download_single", "Artist/Album").unwrap();
+    let args = build_download_args(&tc, url, "download_single", "Artist/Album", None).unwrap();
     let format = value_after(&args, "-f").unwrap();
     assert_eq!(format, AUDIO_FORMAT);
     assert!(
@@ -68,17 +62,38 @@ fn args_omit_js_runtime_and_ffmpeg_when_missing() {
         js_runtime: None,
     };
     let args = build_download_args(
-        &cfg(),
         &tc,
         "https://www.youtube.com/playlist?list=PL123",
         "download_playlist",
         "",
+        None,
     )
     .unwrap();
     assert!(!args.iter().any(|a| a == "--js-runtimes"));
     assert!(!args.iter().any(|a| a == "--ffmpeg-location"));
     assert!(!args.iter().any(|a| a == "--no-playlist"));
     assert!(args.iter().all(|a| a != "node:node"));
+}
+
+#[test]
+fn cookies_copy_is_passed_and_hidden_in_the_shown_command() {
+    let tc = Toolchain {
+        ytdlp: PathBuf::from("yt-dlp"),
+        ffmpeg: None,
+        js_runtime: None,
+    };
+    let jar = PathBuf::from("/data/tmp/ytdlp-cookies/cookies-abc.txt");
+    let url = "https://www.youtube.com/watch?v=dQw4w9WgXcQ";
+    let args = build_download_args(&tc, url, "download_single", "A/B", Some(&jar)).unwrap();
+    assert_eq!(
+        value_after(&args, "--cookies"),
+        Some("/data/tmp/ytdlp-cookies/cookies-abc.txt")
+    );
+    let shown = display_command(&tc.ytdlp, &args);
+    assert!(shown.contains("--cookies <cookies>"), "{shown}");
+    assert!(!shown.contains("cookies-abc"), "{shown}");
+    let none = build_download_args(&tc, url, "download_single", "A/B", None).unwrap();
+    assert!(!none.iter().any(|a| a == "--cookies"));
 }
 
 /// The QA run: 12 items, all failing with the same message. The old summary

@@ -413,9 +413,18 @@ async fn clear_youtube_cookies(
 
 /// `cookies_locked_by_env` / `cookies_invalid` (and the Discogs equivalents).
 fn credential_code(e: &anyhow::Error, kind: &str) -> &'static str {
-    let locked = e.to_string().contains("environment");
+    use crate::ytdlp_cookies::CookieFormatError;
+    let msg = e.to_string();
+    let locked = msg.contains("environment");
     match (kind, locked) {
         ("cookies", true) => "cookies_locked_by_env",
+        ("cookies", false) if msg == CookieFormatError::Json.message() => "cookies_json",
+        ("cookies", false)
+            if msg == CookieFormatError::Empty.message()
+                || msg == CookieFormatError::NoCookies.message() =>
+        {
+            "cookies_empty"
+        }
         ("cookies", false) => "cookies_invalid",
         (_, true) => "discogs_token_locked_by_env",
         (_, false) => "discogs_token_invalid",

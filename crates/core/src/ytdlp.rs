@@ -263,11 +263,11 @@ pub fn output_template(url: &str, download_kind: &str, output_dir: &str) -> Stri
 }
 
 pub fn build_download_args(
-    cfg: &AppConfig,
     toolchain: &Toolchain,
     url: &str,
     download_kind: &str,
     output_dir: &str,
+    cookies: Option<&Path>,
 ) -> Result<Vec<String>> {
     let out_dir = safe_rel_path(output_dir)?;
     let mut tmpl = output_template(url, download_kind, &out_dir);
@@ -284,7 +284,8 @@ pub fn build_download_args(
         args.push(ffmpeg.to_string_lossy().into_owned());
     }
     args.extend(javascript_args_for(toolchain.js_runtime.as_deref()));
-    if let Some(cookies) = cfg.youtube_cookies_for_ytdlp() {
+    // A per-run copy (`ytdlp_cookies::YtdlpCookies`), never the stored file.
+    if let Some(cookies) = cookies {
         args.push("--cookies".into());
         args.push(cookies.to_string_lossy().into_owned());
     }
@@ -902,9 +903,10 @@ pub async fn run_json_probe(cfg: &AppConfig, url: &str, timeout_ms: u64) -> Resu
         "--no-warnings".into(),
     ];
     args.extend(javascript_args());
-    if let Some(cookies) = cfg.youtube_cookies_for_ytdlp() {
-        args.push("--cookies".into());
-        args.push(cookies.to_string_lossy().into_owned());
+    // Held until the probe is over; the copy is removed on drop.
+    let cookies = crate::ytdlp_cookies::YtdlpCookies::prepare(cfg);
+    if let Some(jar) = &cookies {
+        args.extend(jar.args());
     }
     args.push(url.to_string());
     let mut cmd = Command::new(&program);
@@ -1045,7 +1047,16 @@ pub async fn run_download(
     events: EventTx,
 ) -> Result<DownloadOutcome> {
     let program = toolchain.ytdlp.clone();
-    let args = build_download_args(cfg, toolchain, url, download_kind, output_dir)?;
+    // Private copy for this run (yt-dlp rewrites the jar on exit); removed
+    // when this function returns, i.e. after the process has exited.
+    let cookies = crate::ytdlp_cookies::YtdlpCookies::prepare(cfg);
+    let args = build_download_args(
+        toolchain,
+        url,
+        download_kind,
+        output_dir,
+        cookies.as_ref().map(|c| c.path()),
+    )?;
     let command = display_command(&program, &args);
 
     let mut cmd = Command::new(&program);
@@ -1222,6 +1233,14 @@ pub async fn run_download(
     }
     out_task.abort();
     err_task.abort();
+
+    // Keep the cookies yt-dlp refreshed, only after a clean run.
+    if exit_code == Some(0) && !cancel.load(Ordering::SeqCst) {
+        if let Some(jar) = &cookies {
+            jar.write_back();
+        }
+    }
+    drop(cookies);
 
     let (stdout_text, trunc_o, stdout_total) = out_log.trim_for_done();
     let (stderr_text, trunc_e, stderr_total) = err_log.trim_for_done();

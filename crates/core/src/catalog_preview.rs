@@ -490,9 +490,10 @@ pub async fn create_preview_token(
     }
     args.push("--no-warnings".into());
     args.extend(javascript_args());
-    if let Some(cookies) = cfg.youtube_cookies_for_ytdlp() {
-        args.push("--cookies".into());
-        args.push(cookies.to_string_lossy().into_owned());
+    // Per-run copy of the cookies, removed when this function returns.
+    let cookies = crate::ytdlp_cookies::YtdlpCookies::prepare(cfg);
+    if let Some(jar) = &cookies {
+        args.extend(jar.args());
     }
     args.push(fetch_url);
 

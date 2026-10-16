@@ -35,6 +35,7 @@ pub mod user_state;
 pub mod watcher;
 pub mod youtube_music;
 pub mod ytdlp;
+pub mod ytdlp_cookies;
 pub mod ytdlp_update;
 
 pub use config::AppConfig;

@@ -6,6 +6,7 @@ use super::{episode_key, Episode, PodcastError};
 use crate::config::AppConfig;
 use crate::ytdlp::{classify_ytdlp_error, javascript_args, ytdlp_program};
 use serde_json::Value;
+use std::path::Path;
 use std::process::Stdio;
 use std::time::Duration;
 use tokio::process::Command;
@@ -24,6 +25,10 @@ async fn run(
         return Err(PodcastError::YtdlpDisabled);
     }
     let program = ytdlp_program(cfg).await;
+    // YouTube channels need the same cookies as Studio: a private copy per
+    // run, removed when `cookies` drops (after the process has exited).
+    let cookies = crate::ytdlp_cookies::YtdlpCookies::prepare(cfg);
+    let args = args_with_cookies(args, cookies.as_ref().map(|c| c.path()));
     let mut cmd = Command::new(&program);
     cmd.args(&args)
         .stdin(Stdio::null())
@@ -63,6 +68,18 @@ async fn run(
         c => c,
     };
     Err(PodcastError::Ytdlp(code, detail))
+}
+
+/// `--cookies <file>` in front: the page URL follows `--`, options go before it.
+fn args_with_cookies(args: Vec<String>, cookies: Option<&Path>) -> Vec<String> {
+    match cookies {
+        Some(p) => {
+            let mut out = vec!["--cookies".to_string(), p.to_string_lossy().into_owned()];
+            out.extend(args);
+            out
+        }
+        None => args,
+    }
 }
 
 fn common_args() -> Vec<String> {
@@ -190,6 +207,28 @@ pub async fn resolve_audio(cfg: &AppConfig, page_url: &str) -> Result<String, Po
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn cookies_go_before_the_url_separator() {
+        let mut args = common_args();
+        args.extend([
+            "-J".into(),
+            "--".into(),
+            "https://www.youtube.com/@c".into(),
+        ]);
+        let plain = args_with_cookies(args.clone(), None);
+        assert_eq!(plain, args);
+        let jar = Path::new("/data/tmp/ytdlp-cookies/cookies-1.txt");
+        let with = args_with_cookies(args.clone(), Some(jar));
+        let at = with.iter().position(|a| a == "--cookies").unwrap();
+        let sep = with.iter().position(|a| a == "--").unwrap();
+        assert!(at < sep);
+        assert_eq!(with[at + 1], jar.to_string_lossy());
+        assert_eq!(
+            with.last().map(String::as_str),
+            Some("https://www.youtube.com/@c")
+        );
+    }
 
     #[test]
     fn parses_flat_playlists_and_single_items() {

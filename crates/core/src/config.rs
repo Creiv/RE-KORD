@@ -1,3 +1,4 @@
+use crate::ytdlp_cookies::{is_netscape_cookies, CookieFormatError};
 use anyhow::{Context, Result};
 use serde::{Deserialize, Serialize};
 use std::fs;
@@ -486,12 +487,13 @@ impl AppConfig {
         if self.youtube_cookies_from_env {
             anyhow::bail!("youtube cookies locked by environment");
         }
+        // Validate before writing: a bad upload must not replace good cookies.
+        let text = std::str::from_utf8(bytes)
+            .map_err(|_| anyhow::anyhow!(CookieFormatError::NotNetscape.message()))?;
+        crate::ytdlp_cookies::check_cookie_text(text).map_err(|e| anyhow::anyhow!(e.message()))?;
         let dest = self.default_youtube_cookies_path();
-        fs::write(&dest, bytes)?;
-        if !is_netscape_cookies(&dest) {
-            let _ = fs::remove_file(&dest);
-            anyhow::bail!("file is not a Netscape cookies.txt");
-        }
+        // Credentials: owner-only (0600), replaced atomically.
+        crate::ytdlp_cookies::write_private_atomic(&dest, bytes)?;
         self.youtube_cookies_path = Some(dest.clone());
         let mut s = self.read_persisted();
         s.youtube_cookies_path = Some(dest.clone());
@@ -548,7 +550,9 @@ impl AppConfig {
     }
 
     pub fn config_snapshot(&self) -> serde_json::Value {
-        let cookies_configured = self.youtube_cookies_for_ytdlp().is_some();
+        let cookie_status =
+            crate::ytdlp_cookies::cookie_status(self.youtube_cookies_path.as_deref());
+        let cookies_configured = cookie_status.valid;
         let cookies_label = self
             .youtube_cookies_path
             .as_ref()
@@ -564,6 +568,11 @@ impl AppConfig {
             "youtubeCookiesLockedByEnv": self.youtube_cookies_from_env,
             "youtubeCookiesLabel": cookies_label,
             "youtubeCookiesWritable": !self.youtube_cookies_from_env,
+            "youtubeCookiesPresent": cookie_status.present,
+            "youtubeCookiesValid": cookie_status.valid,
+            "youtubeCookiesEntries": cookie_status.entries,
+            "youtubeCookiesYoutubeEntries": cookie_status.youtube_entries,
+            "youtubeCookiesUpdatedAt": cookie_status.updated_at,
             "discogsConfigured": true,
             "discogsTokenConfigured": self.discogs_token.is_some(),
             "discogsLockedByEnv": self.discogs_token_from_env,
@@ -572,19 +581,6 @@ impl AppConfig {
             "allowRemoteAdmin": self.allow_remote_admin,
         })
     }
-}
-
-fn is_netscape_cookies(path: &Path) -> bool {
-    let Ok(raw) = fs::read_to_string(path) else {
-        return false;
-    };
-    let head = raw.lines().take(40).collect::<Vec<_>>().join("\n");
-    head.contains("# Netscape HTTP Cookie File")
-        || head.contains("# HTTP Cookie File")
-        || raw.lines().any(|l| {
-            let t = l.trim();
-            !t.is_empty() && !t.starts_with('#') && t.split('\t').count() >= 6
-        })
 }
 
 #[cfg(test)]
