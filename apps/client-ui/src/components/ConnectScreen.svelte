@@ -1,6 +1,9 @@
 <script lang="ts">
   import { onMount } from "svelte";
   import { Banner, BrandLogo, Button, Segmented, TextInput } from "@rekord/ui";
+  import AccessKeyScreen from "./AccessKeyScreen.svelte";
+  import { clearAccessKey, setAccessKey, type AccessKeyReason } from "../lib/accessKey";
+  import { isDesktopShell } from "../lib/platform/env";
   import type { Account } from "../lib/account";
   import { connectGate, probeHub, type ProbeFailure } from "../lib/connect.svelte";
   import {
@@ -44,6 +47,12 @@
   let defaultAccountId = $state("");
   let connectedBase = $state("");
   let openingId = $state("");
+  /** The hub just probed wants an access key: ask for it before the accounts. */
+  let keyStep = $state<{ base: string; reason: AccessKeyReason; noticeKey?: string } | null>(null);
+  /** Key that came with a scanned QR: dropped again if the hub refuses it. */
+  let qrKeyBase = "";
+  /** Desktop server flavor: why the built-in hub did not start, if it did not. */
+  let embeddedHubError = $state("");
 
   const candidateBase = $derived(
     mode === "public"
@@ -58,7 +67,20 @@
     void qrScannerAvailable().then((ok) => {
       canScan = ok;
     });
+    void loadEmbeddedHubError();
   });
+
+  /** Only the server flavor registers the command; elsewhere the call fails quietly. */
+  async function loadEmbeddedHubError() {
+    if (!isDesktopShell()) return;
+    try {
+      const { invoke } = await import("@tauri-apps/api/core");
+      const code = await invoke<string | null>("embedded_hub_error");
+      if (code === "access_key_config") embeddedHubError = t("connect.embeddedHubKeyError");
+    } catch {
+      /* not the server flavor */
+    }
+  }
 
   function applySaved(base: string) {
     const parsed = parseHubAddress(base);
@@ -99,9 +121,22 @@
     const probe = await probeHub(base);
     busy = false;
     if (!probe.ok) {
+      if (probe.reason === "access-key") {
+        // A key from the QR that the hub refuses must not stay on the device.
+        const qrRefused = qrKeyBase === base && probe.detail === "invalid";
+        if (qrRefused) clearAccessKey(base);
+        qrKeyBase = "";
+        keyStep = {
+          base,
+          reason: probe.detail,
+          noticeKey: qrRefused ? "accessKey.errQrInvalid" : undefined,
+        };
+        return;
+      }
       error = describeFailure(probe);
       return;
     }
+    qrKeyBase = "";
     connectedBase = base;
     accounts = probe.accounts;
     defaultAccountId = probe.defaultAccountId;
@@ -137,12 +172,17 @@
       error = t("connect.errScan");
       return;
     }
-    const base = hubBaseFromQr(outcome.text);
-    if (!base) {
+    const qr = hubBaseFromQr(outcome.text);
+    if (!qr) {
       error = t("connect.errQrNotHub");
       return;
     }
-    applySaved(base);
+    applySaved(qr.base);
+    if (qr.accessKey) {
+      // Stored for exactly this hub; the probe below checks it right away.
+      setAccessKey(qr.base, qr.accessKey);
+      qrKeyBase = qr.base;
+    }
     // The QR was scanned to connect, not to fill in a field.
     await connect();
   }
@@ -156,6 +196,19 @@
   }
 </script>
 
+{#if keyStep}
+  <AccessKeyScreen
+    base={keyStep.base}
+    reason={keyStep.reason}
+    noticeKey={keyStep.noticeKey}
+    onaccepted={() => {
+      keyStep = null;
+      // Same address, now with the key: on to the accounts.
+      void connect();
+    }}
+    oncancel={() => (keyStep = null)}
+  />
+{:else}
 <div class="connect">
   <div class="connect__lang">
     <span class="connect__lang-label" id="connect-lang-label">
@@ -294,6 +347,11 @@
         </div>
       {/if}
 
+      {#if embeddedHubError && step === "address"}
+        <div class="connect__error">
+          <Banner tone="error">{embeddedHubError}</Banner>
+        </div>
+      {/if}
       {#if error}
         <div class="connect__error">
           <Banner tone="error">{error}</Banner>
@@ -341,6 +399,7 @@
     </section>
   </main>
 </div>
+{/if}
 
 <style>
   .connect {

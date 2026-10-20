@@ -12,6 +12,10 @@
       content="width=device-width, initial-scale=1.0, viewport-fit=cover, interactive-widget=overlays-content"
     />
     <meta name="theme-color" content="#0a0e14" />
+    <!-- Media URLs may carry the hub access key (`accessKey=`): never send them as
+         Referer. The hub sets the same policy as a header, but the Tauri shells load
+         this page from the app itself, where only this tag applies. -->
+    <meta name="referrer" content="no-referrer" />
     <title>RE-KORD</title>
     <meta name="description" content="RE-KORD — la tua musica, dal tuo hub." />
     <link rel="icon" href="/favicon.ico" sizes="any" />

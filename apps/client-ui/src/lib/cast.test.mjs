@@ -15,6 +15,7 @@ const {
   isWebCastSenderEnvironment,
   needsCastTranscode,
   resolveCastMediaBaseUrl,
+  withCastAccessKey,
 } = await import("./cast/castMedia.ts");
 
 const LAN = "http://192.168.0.10:7799";
@@ -167,4 +168,34 @@ test("load gate: a refused load does not skip ahead on the old 'finished'", () =
   assert.equal(gate.takeFinish(finished), false);
   gate.reset();
   assert.equal(gate.settled, true);
+});
+
+test("cast plan carries the access key only on the hub's own URLs", () => {
+  const key = "k".repeat(32);
+  const track = {
+    id: 1,
+    rel_path: "A/B/01.wma",
+    title: "Song",
+    artist_name: "Artist",
+    album_name: "Album",
+    duration_ms: 1000,
+    track_number: 1,
+    album_id: 42,
+    artist_id: 7,
+  };
+  const plan = buildCastLoadPlan(track, LAN, { transcodeAvailable: true });
+  const keyed = withCastAccessKey(plan, LAN, key);
+  assert.equal(keyed.url, `${LAN}/media/A/B/01.wma?accessKey=${key}`);
+  // A URL that already has a query gets `&`.
+  const transcoded = { ...plan, url: `${LAN}/api/v1/transcode/A/B/01.ogg?format=mp3` };
+  assert.equal(
+    withCastAccessKey(transcoded, LAN, key).url,
+    `${LAN}/api/v1/transcode/A/B/01.ogg?format=mp3&accessKey=${key}`,
+  );
+  assert.equal(keyed.metadata.coverUrl, `${LAN}/api/v1/covers/album/42?accessKey=${key}`);
+  // No key stored: unchanged.
+  assert.deepEqual(withCastAccessKey(plan, LAN, null), plan);
+  // A cover on another origin never gets the key.
+  const foreign = { ...plan, metadata: { ...plan.metadata, coverUrl: "https://img.example/x.jpg" } };
+  assert.equal(withCastAccessKey(foreign, LAN, key).metadata.coverUrl, "https://img.example/x.jpg");
 });

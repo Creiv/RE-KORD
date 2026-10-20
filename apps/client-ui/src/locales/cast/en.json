@@ -10,5 +10,8 @@
   "cast.noLanUrl": "The Cast device cannot reach the hub: open the client from its local network address (not localhost) or enable remote access.",
   "cast.loadFailed": "Could not cast “{{title}}”: {{error}}",
   "cast.sessionFailed": "the device did not accept the connection (code {{code}})",
-  "cast.timeout": "the Cast device did not answer"
+  "cast.timeout": "the Cast device did not answer",
+  "cast.keyWarnTitle": "The access key goes to the Cast device",
+  "cast.keyWarnBody": "The Chromecast downloads music and covers straight from the hub, so it also receives the access key in the address. Only cast to devices you trust. If you change the key on the hub later, this notice will come back.",
+  "cast.keyWarnConfirm": "Cast anyway"
 }

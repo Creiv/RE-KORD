@@ -69,27 +69,47 @@ test("un indirizzo completo incollato nel campo IP vince sulla porta accanto", (
 });
 
 test("QR con URL in chiaro", () => {
-  assert.equal(
-    hubBaseFromQr("https://nome.trycloudflare.com"),
-    "https://nome.trycloudflare.com",
-  );
-  assert.equal(
-    hubBaseFromQr("http://192.168.1.20:7420/admin"),
-    "http://192.168.1.20:7420",
-  );
+  assert.deepEqual(hubBaseFromQr("https://nome.trycloudflare.com"), {
+    base: "https://nome.trycloudflare.com",
+  });
+  assert.deepEqual(hubBaseFromQr("http://192.168.1.20:7420/admin"), {
+    base: "http://192.168.1.20:7420",
+  });
 });
 
 test("QR con JSON attorno all'URL", () => {
-  assert.equal(
-    hubBaseFromQr('{"url":"http://192.168.1.20:7420"}'),
-    "http://192.168.1.20:7420",
-  );
-  assert.equal(
-    hubBaseFromQr('{"publicUrl":"https://nome.trycloudflare.com"}'),
-    "https://nome.trycloudflare.com",
-  );
+  assert.deepEqual(hubBaseFromQr('{"url":"http://192.168.1.20:7420"}'), {
+    base: "http://192.168.1.20:7420",
+  });
+  assert.deepEqual(hubBaseFromQr('{"publicUrl":"https://nome.trycloudflare.com"}'), {
+    base: "https://nome.trycloudflare.com",
+  });
   assert.equal(hubBaseFromQr("{non un json}"), null);
   assert.equal(hubBaseFromQr('{"altro":1}'), null);
+});
+
+test("QR with the access key in the fragment or in JSON", () => {
+  const key = "0123456789abcdef0123456789abcdef";
+  assert.deepEqual(hubBaseFromQr(`http://192.168.1.20:7420/#rekordKey=${key}`), {
+    base: "http://192.168.1.20:7420",
+    accessKey: key,
+  });
+  assert.deepEqual(hubBaseFromQr(`https://nome.trycloudflare.com/admin#x=1&rekordKey=${key}`), {
+    base: "https://nome.trycloudflare.com",
+    accessKey: key,
+  });
+  assert.deepEqual(hubBaseFromQr(`{"url":"http://192.168.1.20:7420","accessKey":"${key}"}`), {
+    base: "http://192.168.1.20:7420",
+    accessKey: key,
+  });
+  // Malformed key: the address is still usable, the key is dropped.
+  assert.deepEqual(hubBaseFromQr("http://192.168.1.20:7420/#rekordKey=short"), {
+    base: "http://192.168.1.20:7420",
+  });
+  // A key in the query is not a QR key (and would have reached the server).
+  assert.deepEqual(hubBaseFromQr(`http://192.168.1.20:7420/?rekordKey=${key}`), {
+    base: "http://192.168.1.20:7420",
+  });
 });
 
 test("il modo per riempire i campi giusti", () => {

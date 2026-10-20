@@ -1,5 +1,6 @@
+import { isAccessKeyRefused } from "./accessKey";
 import { getSelectedAccountId } from "./account";
-import { markNeedsTranscode, mediaUrl } from "./config";
+import { getServerBaseUrl, markNeedsTranscode, mediaUrl } from "./config";
 import { ApiError, api, coverUrlFor, type Track } from "./api";
 import {
   constantLevel,
@@ -785,6 +786,20 @@ class PlayerController {
       const reachable = await this.hubReachable();
       // The user moved on meanwhile: that load decides for itself.
       if (gen !== this.loadGen || this.current?.rel_path !== track.rel_path) return;
+      if (isAccessKeyRefused(getServerBaseUrl())) {
+        // The hub answers but refuses our key (the key screen is up): not a
+        // broken file, not a format to transcode. Wait where we are; accepting
+        // a new key resumes (`resumeAfterOutage`).
+        nativeLog(`media error ${errorCode ?? "?"} at ${Math.round(at)}s, access key refused: waiting for a new key`);
+        this.outage = { relPath: track.rel_path, time: Math.max(0, at), play: wantPlay };
+        this.expectPause("outage");
+        this.deck0.pause();
+        this.deck1.pause();
+        this.playing = false;
+        this.syncMediaPlaybackState();
+        this.emitPlayState();
+        return;
+      }
       if (!reachable) {
         nativeLog(`media error ${errorCode ?? "?"} at ${Math.round(at)}s, hub unreachable: waiting for it`);
         this.outage = { relPath: track.rel_path, time: Math.max(0, at), play: wantPlay };
@@ -3354,7 +3369,13 @@ class PlayerController {
       // a format the engine refuses goes to the transcoded stream next time.
       const from = this.current?.rel_path ?? "";
       this.crossfadeRefused = { from, to: path };
-      if (e instanceof DOMException && e.name === "NotSupportedError") markNeedsTranscode(path);
+      if (
+        e instanceof DOMException &&
+        e.name === "NotSupportedError" &&
+        !isAccessKeyRefused(getServerBaseUrl())
+      ) {
+        markNeedsTranscode(path);
+      }
       window.clearTimeout(this.crossfadeWatchdog);
       this.crossfadeWatchdog = 0;
       this.crossfadeBusy = false;

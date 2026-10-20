@@ -7,6 +7,7 @@
  * because the hub can be updated while the client is open.
  */
 
+import { accessKeyHeaders, clearAccessKeyRefusal } from "../accessKey";
 import { getServerBaseUrl } from "../config";
 import { APP_VERSION } from "../version";
 import { evaluateCompat, type CompatVerdict, type HealthInfo } from "./compat";
@@ -79,11 +80,16 @@ export async function checkHubCompat(base: string | null = currentHubBase()): Pr
   try {
     const res = await fetch(`${base.replace(/\/+$/, "")}/api/v1/health`, {
       cache: "no-store",
+      // With the key the hub sends the full health (version included).
+      headers: accessKeyHeaders(base),
       signal: AbortSignal.timeout(TIMEOUT_MS),
     });
     if (!res.ok) return;
     const body = (await res.json()) as HealthInfo & { service?: string };
     if (body?.service !== "RE-KORD") return;
+    // Full health with our key: a refusal noted earlier no longer holds.
+    const accessKey = (body as { accessKey?: unknown }).accessKey;
+    if (accessKey === "ok" || accessKey === "off") clearAccessKeyRefusal(base);
     compat.apply(body);
   } catch {
     /* Hub unreachable: the connection indicator handles it, not this banner. */

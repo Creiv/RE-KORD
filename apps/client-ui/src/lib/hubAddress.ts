@@ -7,6 +7,8 @@
  * a path inside.
  */
 
+import { accessKeyFromFragment, isWellFormedAccessKey } from "./accessKey";
+
 /** Hub port: `--bind 0.0.0.0:7420` is the server's stock value. */
 export const DEFAULT_HUB_PORT = "7420";
 
@@ -83,26 +85,45 @@ export function guessHubMode(raw: string): "local" | "public" {
   return parsed.https ? "public" : "local";
 }
 
+/** What a hub QR carries: the hub origin and, when the panel included it, the access key. */
+export type HubQr = { base: string; accessKey?: string };
+
 /**
- * QR content → hub base. The Network panel's QR contains the public URL
- * in plain text, but a QR scanned in a hurry can carry a
- * path (`/admin`) or come from a panel that wraps the URL in JSON:
- * in both cases here we go back to the bare origin.
+ * QR content → hub base (+ access key). The Network panel's QR contains the
+ * URL in plain text, optionally with the key in the fragment
+ * (`…/#rekordKey=…`, never sent to any server); a QR scanned in a hurry can
+ * carry a path (`/admin`) or come from a panel that wraps the URL in JSON
+ * (`{"url": …, "accessKey": …}`): in every case here we go back to the bare
+ * origin. A malformed key is dropped, the address is kept.
  */
-export function hubBaseFromQr(text: string): string | null {
+export function hubBaseFromQr(text: string): HubQr | null {
   const raw = String(text ?? "").trim();
   if (!raw) return null;
+  let url: string;
+  let key: string | null = null;
   if (raw.startsWith("{")) {
     try {
       const data = JSON.parse(raw) as Record<string, unknown>;
       const candidate = data.url ?? data.baseUrl ?? data.publicUrl ?? data.hub;
       if (typeof candidate !== "string") return null;
-      return parseHubAddress(candidate)?.base ?? null;
+      url = candidate;
+      if (typeof data.accessKey === "string" && isWellFormedAccessKey(data.accessKey.trim())) {
+        key = data.accessKey.trim();
+      }
     } catch {
       return null;
     }
+  } else {
+    url = raw;
   }
-  return parseHubAddress(raw)?.base ?? null;
+  const hash = url.indexOf("#");
+  if (hash >= 0) {
+    key ??= accessKeyFromFragment(url.slice(hash));
+    url = url.slice(0, hash);
+  }
+  const base = parseHubAddress(url)?.base;
+  if (!base) return null;
+  return key ? { base, accessKey: key } : { base };
 }
 
 /** Short label for the «connecting to…» state: the scheme is not needed. */
