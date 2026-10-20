@@ -27,17 +27,28 @@ pub struct Hub {
 impl Hub {
     pub fn new(tag: &str) -> Self {
         let base = std::env::temp_dir().join(format!("rekord-http-{tag}-{}", uuid::Uuid::new_v4()));
-        Self::with_dirs(base.clone(), base.join("music"), base.join("data"))
+        Self::with_dirs(base.clone(), base.join("music"), base.join("data"), None)
+    }
+
+    /// Hub that requires `key` on `/api` and `/media` (`REKORD_ACCESS_KEY`).
+    pub fn with_access_key(tag: &str, key: &str) -> Self {
+        let base = std::env::temp_dir().join(format!("rekord-http-{tag}-{}", uuid::Uuid::new_v4()));
+        Self::with_dirs(
+            base.clone(),
+            base.join("music"),
+            base.join("data"),
+            Some(key),
+        )
     }
 
     /// Hub whose data dir lives inside the music root (must still not be served).
     pub fn with_data_inside_root(tag: &str) -> Self {
         let base = std::env::temp_dir().join(format!("rekord-http-{tag}-{}", uuid::Uuid::new_v4()));
         let root = base.join("music");
-        Self::with_dirs(base.clone(), root.clone(), root.join("hubdata"))
+        Self::with_dirs(base.clone(), root.clone(), root.join("hubdata"), None)
     }
 
-    fn with_dirs(base: PathBuf, root: PathBuf, data: PathBuf) -> Self {
+    fn with_dirs(base: PathBuf, root: PathBuf, data: PathBuf, access_key: Option<&str>) -> Self {
         fs::create_dir_all(&root).unwrap();
         fs::create_dir_all(&data).unwrap();
         let opts = HubOptions {
@@ -46,7 +57,12 @@ impl Hub {
             client_ui_dir: None,
             admin_ui_dir: None,
         };
-        let state = prepare_hub_state(&opts, Some(&root), None).unwrap();
+        let mut state = prepare_hub_state(&opts, Some(&root), None).unwrap();
+        if let Some(key) = access_key {
+            state.access_key = Some(std::sync::Arc::new(
+                rekord_core::access_key::AccessGate::new(key).unwrap(),
+            ));
+        }
         let app = build_router(state.clone(), UiDirs::default());
         Self {
             base,

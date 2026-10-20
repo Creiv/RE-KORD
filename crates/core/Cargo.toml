@@ -38,6 +38,8 @@ image = { workspace = true }
 libc = "0.2"
 regex = "1"
 sha2 = "0.10"
+# Constant-time comparison of the access key (already in the lockfile).
+subtle = "2"
 if-addrs = "0.13"
 
 [dev-dependencies]
