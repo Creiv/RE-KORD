@@ -36,7 +36,9 @@ pub fn run() {
     let builder = builder
         .plugin(tauri_plugin_dialog::init())
         .manage(mpris::MediaState::default())
+        .manage(HubStartError::default())
         .invoke_handler(tauri::generate_handler![
+            embedded_hub_error,
             downloads::save_download,
             mpris::media_update,
             mpris::media_clear,
@@ -64,6 +66,18 @@ pub fn run() {
             embedded_hub::stop(_app);
         }
     });
+}
+
+/// Why the embedded hub did not start, as a code the page translates
+/// (`access_key_config`). `None` when it started or is not part of this build.
+#[cfg(desktop)]
+#[derive(Default)]
+pub(crate) struct HubStartError(pub(crate) std::sync::Mutex<Option<&'static str>>);
+
+#[cfg(desktop)]
+#[tauri::command]
+fn embedded_hub_error(state: tauri::State<'_, HubStartError>) -> Option<&'static str> {
+    *state.0.lock().unwrap()
 }
 
 #[cfg(desktop)]
