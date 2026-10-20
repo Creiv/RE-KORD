@@ -30,6 +30,10 @@ services:
       # With 1 the Default account can perform them from any client that reaches
       # the hub: enable it only on a network you trust.
       REKORD_ALLOW_REMOTE_ADMIN: ${REKORD_ALLOW_REMOTE_ADMIN:-0}
+      # Optional access key every client must present (docs/DEPLOY.md#access-key):
+      # 32-256 characters A-Z a-z 0-9 . _ ~ -, e.g. `openssl rand -hex 32`. Put the value
+      # in .env (chmod 600), not here. Set but empty or invalid: the hub does not start.
+      # REKORD_ACCESS_KEY: ${REKORD_ACCESS_KEY}
       # Extra web origins allowed by CORS (besides the hub's own and the Tauri clients).
       # REKORD_ALLOWED_ORIGINS: https://musica.example.org
       # REKORD_PUBLIC_URL: https://musica.example.org

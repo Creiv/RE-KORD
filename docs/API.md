@@ -15,7 +15,7 @@ Envelope (JSON):
 
 | Method | Path | Description |
 |--------|------|-------------|
-| GET | `/api/v1/health` | Service health → `{ ok, service: "RE-KORD", version, apiVersion: 1, minClientVersion: "5.0.0", transcode, modules, scanning }` (see [Versioning](#versioning-and-client-compatibility)) |
+| GET | `/api/v1/health` | Service health → `{ ok, service: "RE-KORD", version, apiVersion: 1, minClientVersion: "5.0.0", transcode, modules, scanning, accessKey }` (see [Versioning](#versioning-and-client-compatibility); minimal body without the [access key](#access-key)) |
 | GET | `/api/v1/library` | List tracks (`limit`, `offset`) |
 | GET | `/api/v1/library/stats` | Counts for the requesting account's library selection (`track_count`, `album_count`, `artist_count`, `albums_without_cover`, `albums_without_meta`, `tracks_without_meta`, `loose_album_count`, `genre_count`), `catalog_track_count` (whole catalog), `index_epoch` (bumped by every scan / folder rescan), last scan, optional `disk_total_bytes` / `disk_available_bytes` |
 | GET | `/api/v1/library/search?q=` | Full-text track search (FTS over title, artist, album, genre; accent-insensitive; every word is a prefix; file paths and track-number prefixes never match). `limit` default 100, max 500. `scope=all` → `{ tracks, albums, artists }`: albums / artists matching by name (album title, folder, artist) or by genre of the album or its tracks. Without `scope` the bare track list (compat) |
@@ -237,6 +237,46 @@ Taking and releasing the lock is logged at info level, once per transition, and 
 activity log (`power.inhibited` `{ reason }`, `power.released`, `power.failed` `{ code }`;
 settings changes as `power.settings` `{ mode, graceMinutes, lid }`).
 
+### Access key
+
+When the hub runs with `REKORD_ACCESS_KEY` (see [SECURITY.md](../SECURITY.md#optional-access-key)),
+every request to `/api`, `/api/*` (legacy aliases without `v1` included) and `/media/*` must
+present the key:
+
+- header `X-Rekord-Access-Key: <key>` for API calls (allowed by CORS like any other request
+  header);
+- query parameter `accessKey=<key>` for URLs that cannot carry headers: `/media/*`,
+  `/api/v1/transcode/*`, covers, podcast art and play URLs, preview streams, downloads, Cast.
+
+The header wins when both are present. The hub removes the key from the header and the query
+string before routing, so handlers, redirects and logs never see it. Public without the key:
+the static UI (`/`, `/assets/*`, `/admin` page shell, `sw.js`, manifest) and CORS preflights.
+Local requests are not exempt.
+
+`GET /api/v1/health` (and `/api/health`) answers:
+
+| Request | Status | Body |
+|---|---|---|
+| no key, hub has one | 200 | `{ ok, service: "RE-KORD", apiVersion, minClientVersion, accessKey: "required" }` (no `version`, `modules`, `transcode`, `scanning`) |
+| right key | 200 | full body + `accessKey: "ok"` |
+| hub without a key | 200 | full body + `accessKey: "off"` |
+| wrong key | 401 | `access_key_invalid` — this is how clients validate a key |
+
+Refusals use the usual envelope (`{ ok: false, data: null, error, message }`), with
+`Cache-Control: no-store` and no `WWW-Authenticate` (browsers must not show a login dialog):
+
+- `401 access_key_required` — no key presented;
+- `401 access_key_invalid` — wrong key;
+- `429 access_key_rate_limited` + `Retry-After` (seconds) — five distinct wrong keys from
+  the same source within 60 s lock it for 60 s; during the lock the right key gets the same
+  answer.
+
+```bash
+K=$(cat /path/to/key)
+curl -H "X-Rekord-Access-Key: $K" http://127.0.0.1:7420/api/v1/library/albums
+curl -H 'Range: bytes=0-99' "http://127.0.0.1:7420/media/Artist/Album/01.flac?accessKey=$K"
+```
+
 ### CORS
 
 The hub listens on the LAN and on loopback, so any web page open on a machine of the network could otherwise script it. Allowed browser origins:
@@ -338,6 +378,7 @@ The **server** serves the built **client SPA** from `--client-ui` / `REKORD_CLIE
 Studio, downloads, tools and permissions answer `{ ok: false, error: "<code>", message? }`:
 
 - permissions: `forbidden_remote`, `forbidden_default_account`, `cross_origin_forbidden`, `invalid_account_id`, `account_not_found`
+- access key: `access_key_required` (401), `access_key_invalid` (401), `access_key_rate_limited` (429, `Retry-After`)
 - config: `music_root_not_set`, `file_required`, `file_too_large`, `upload_failed`, `cookies_invalid`, `cookies_locked_by_env`, `discogs_token_invalid`, `discogs_token_locked_by_env`
 - files: `invalid_path`, `fs_list_failed`, `fs_search_failed`, `mkdir_failed`, `rel_paths_required`, `delete_failed`, `delete_album_failed`
 - downloads: `ytdlp_disabled`, `url_not_allowed`, `invalid_download_id`, `invalid_output_dir`, `download_id_active`, `download_not_found`, `download_id_required`, `flat_count_failed`, `ytdlp_not_found`, `ytdlp_timeout`, `ytdlp_failed`, `ytdlp_spawn_failed`, `download_failed`, `cancelled`, `client_disconnected`
