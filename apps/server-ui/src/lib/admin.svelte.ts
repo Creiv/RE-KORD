@@ -26,6 +26,13 @@ import {
 } from "../api";
 import type { StatItem } from "@rekord/ui";
 import {
+  accessKeyReason,
+  clearAccessKey,
+  getAccessKey,
+  onAccessKeyNeeded,
+  type AccessKeyReason,
+} from "./accessKey";
+import {
   formatBytes,
   formatDateTime,
   formatDuration,
@@ -133,7 +140,39 @@ class AdminSession {
   message = $state("");
   error = $state("");
 
+  /** The hub wants an access key this browser does not have (or a new one). */
+  keyNeeded = $state<AccessKeyReason | null>(null);
+  /** Seconds left of a wrong-key lock, when the hub said. */
+  keyRetryAfter = $state<number | null>(null);
+  /** A key is stored for this hub in this browser. */
+  hasAccessKey = $state(getAccessKey() != null);
+
   private pollTimer: ReturnType<typeof setInterval> | null = null;
+
+  constructor() {
+    // Any call refused for the key (changed on the hub, forgotten) lands here.
+    onAccessKeyNeeded((reason, retryAfter) => {
+      this.keyNeeded = reason;
+      this.keyRetryAfter = retryAfter;
+      this.stopPolling();
+    });
+  }
+
+  /** The prompt stored a working key (or the hub needs none): reload everything. */
+  keyAccepted() {
+    this.keyNeeded = null;
+    this.keyRetryAfter = null;
+    this.hasAccessKey = getAccessKey() != null;
+    this.error = "";
+    void this.refresh();
+  }
+
+  /** Forget the key in this browser; the prompt comes back if the hub wants one. */
+  forgetAccessKey() {
+    clearAccessKey();
+    this.hasAccessKey = false;
+    void this.refresh();
+  }
 
   readonly scanning = $derived(
     Boolean(this.stats?.scanning ?? this.health?.scanning ?? this.diagnostics?.scanning),
@@ -209,26 +248,34 @@ class AdminSession {
     try {
       this.message = await fn();
     } catch (e) {
-      this.error = errorText(e);
+      this.fail(e);
     } finally {
       this.busy = false;
     }
   }
 
   private fail(e: unknown) {
+    // Key refusals open the prompt instead of an error banner.
+    if (isApiError(e) && accessKeyReason(e.code)) return;
     this.error = errorText(e);
   }
 
   async refresh() {
     this.error = "";
     try {
-      const [health, stats, path, access] = await Promise.all([
-        api.health(),
+      // Without the key the hub answers a minimal health and refuses the rest.
+      const health = await api.health();
+      this.health = health;
+      if (health.accessKey === "required") {
+        this.keyNeeded = getAccessKey() ? "invalid" : "required";
+        this.stopPolling();
+        return;
+      }
+      const [stats, path, access] = await Promise.all([
         api.stats(),
         api.getPath(),
         api.machineAccess(),
       ]);
-      this.health = health;
       this.stats = stats;
       this.musicRoot = path.music_root ?? "";
       this.access = access;

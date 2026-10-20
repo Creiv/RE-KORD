@@ -70,6 +70,14 @@
       {lanUrls.length > 1 ? t("network.lan.hintMany") : t("network.lan.hint")}
     </p>
   {/if}
+  {#if admin.hasAccessKey}
+    <div class="keyrow">
+      <span class="hint">{t("network.accessKey.stored")}</span>
+      <Button variant="ghost" size="sm" onclick={() => admin.forgetAccessKey()}>
+        {t("network.accessKey.forget")}
+      </Button>
+    </div>
+  {/if}
 </Panel>
 
 <Panel title={t("network.remote.title")}>
@@ -213,6 +221,14 @@
     color: var(--rk-muted);
     font-size: var(--rk-fs-sm);
     line-height: var(--rk-lh);
+  }
+
+  .keyrow {
+    display: flex;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 0.4rem 0.8rem;
+    margin-top: 0.8rem;
   }
 
   .check {

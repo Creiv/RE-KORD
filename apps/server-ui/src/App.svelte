@@ -4,6 +4,7 @@
   import { admin, SECTIONS } from "./lib/admin.svelte";
   import { ADMIN_LOCALES } from "./lib/locale";
   import { i18n, t } from "./lib/i18n.svelte";
+  import AccessKeyPrompt from "./views/AccessKeyPrompt.svelte";
   import AccountsPanel from "./views/AccountsPanel.svelte";
   import ActivityPanel from "./views/ActivityPanel.svelte";
   import BackupPanel from "./views/BackupPanel.svelte";
@@ -75,6 +76,16 @@
       </label>
     </header>
 
+    {#if admin.keyNeeded}
+      <!-- The hub wants an access key: nothing else can load without it. -->
+      {#key `${admin.keyNeeded}:${admin.keyRetryAfter ?? ""}`}
+        <AccessKeyPrompt
+          reason={admin.keyNeeded}
+          retryAfter={admin.keyRetryAfter}
+          onaccepted={() => admin.keyAccepted()}
+        />
+      {/key}
+    {:else}
     {#if admin.error}
       <Banner tone="error">{admin.error}</Banner>
     {/if}
@@ -110,6 +121,7 @@
       <PodcastsPanel />
     {:else if admin.section === "network"}
       <NetworkPanel />
+    {/if}
     {/if}
   </main>
 </div>
