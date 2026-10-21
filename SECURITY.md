@@ -45,9 +45,12 @@ are needed to ask for the key.
   no per-device revocation. To rotate it, change the variable and restart the hub; every
   client then asks for the new one.
 - **Format and fail-closed start:** 32 to 256 characters from `A-Z a-z 0-9 . _ ~ -`
-  (generate one with `openssl rand -hex 32`). A variable that is set but empty, too short,
-  too long or with any other character (spaces and line breaks included) stops the hub from
-  starting; the error names the variable, never its value. The desktop server flavor's
+  (generate one with `openssl rand -hex 32`). Weak keys are refused too: fewer than 10
+  different characters, or a shorter block written over and over (`aaaa…`, `abab…`, the
+  same 16 characters twice). A long random key or a long passphrase passes. A variable
+  that is set but empty, too short, too long, weak or with any other character (spaces and
+  line breaks included) stops the hub from starting; the error names the variable, never
+  its value, and recommends `openssl rand -hex 32`. The desktop server flavor's
   embedded hub does not start either, and its connect screen says why.
 - **How it travels:** the `X-Rekord-Access-Key` header for API calls, or the `accessKey`
   query parameter for what cannot send headers (`<audio>`, `<img>`, downloads, Cast). The
@@ -77,15 +80,16 @@ are needed to ask for the key.
 - **On the device:** clients (web, PWA, desktop, Android) store the key in the WebView's
   local storage, keyed by hub origin, and never send it to another hub. Settings can change
   or forget it. The admin panel uses the same storage when it is served by the same hub.
-- **Wrong keys:** the hub counts *distinct* wrong keys per source. Five within a minute lock
-  that source out for 60 seconds (`429 access_key_rate_limited` with `Retry-After`); during
-  the lock even the right key is refused, so the lock gives no hint. Repeating the same
-  stale key does not count. The source is the connecting address; `CF-Connecting-IP` or the
-  last `X-Forwarded-For` hop are used only when that address is loopback (cloudflared, a
-  reverse proxy on the hub computer), and IPv6 clients are grouped by `/64`. Counters are in
-  memory and never logged. **Trade-off:** someone who shares your source (the same NAT, or a
-  proxy that adds no `X-Forwarded-For`) can keep you locked out a minute at a time. The real
-  protection against guessing is the key's length.
+- **Wrong keys:** the hub counts *distinct* wrong keys per source. After five within a
+  minute, every further wrong key from that source gets `429 access_key_rate_limited` with
+  `Retry-After` for 60 seconds. **The right key always gets in**, lock or not: the source is
+  the connecting address only (IPv6 grouped by `/64`), forwarding headers such as
+  `X-Forwarded-For` or `CF-Connecting-IP` are ignored because clients can forge them, and
+  so every client behind a reverse proxy, a NAT or Docker's bridge shares one source; a
+  stranger must not be able to lock them all out. Repeating the same stale key does not
+  count. Counters are in memory and never logged. **Trade-off:** since a right guess is
+  answered at once, the lock does not slow down guessing; the protection against guessing
+  is the key itself (its length and the weak-key rule above).
 - Clients up to 5.2.0 do not know about the key and cannot connect to a hub that has one.
 
 ### Network binding

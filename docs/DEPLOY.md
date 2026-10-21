@@ -40,7 +40,7 @@ directory. When no client bundle is found, the admin panel also answers on `/`.
 
 | Variable | Default | Meaning |
 |---|---|---|
-| `REKORD_ACCESS_KEY` | | Shared key every client must present on `/api` and `/media` (32-256 characters `A-Z a-z 0-9 . _ ~ -`). Set but invalid: the hub does not start. See [Access key](#access-key) |
+| `REKORD_ACCESS_KEY` | | Shared key every client must present on `/api` and `/media` (32-256 characters `A-Z a-z 0-9 . _ ~ -`, at least 10 different, not a repeated block). Set but invalid or weak: the hub does not start. See [Access key](#access-key) |
 | `REKORD_ALLOW_REMOTE_ADMIN` | `0` | `1` allows library and machine operations from non-local clients (see [SECURITY.md](../SECURITY.md)) |
 | `REKORD_ALLOWED_ORIGINS` | | Extra browser origins allowed by the origin policy, comma separated (see [API.md](API.md#cors)) |
 | `REKORD_PUBLIC_URL` | | Public HTTPS URL when the hub is behind your own reverse proxy. Shown and encoded in the QR code instead of a Cloudflare tunnel URL. |
@@ -240,7 +240,8 @@ How it is done:
 [SECURITY.md](../SECURITY.md#optional-access-key), wire format in
 [API.md](API.md#access-key)). Use it whenever the hub is reachable from outside the LAN.
 
-Generate a key (32 to 256 characters from `A-Z a-z 0-9 . _ ~ -`):
+Generate a key (32 to 256 characters from `A-Z a-z 0-9 . _ ~ -`, at least 10 different
+characters, not a short block repeated):
 
 ```bash
 openssl rand -hex 32
@@ -256,8 +257,16 @@ Set it like any other variable:
 - **`rekord-server` by hand:** `REKORD_ACCESS_KEY=<key> ./rekord-server`.
 - **Desktop server flavor:** set the variable in the environment that starts the app.
 
-If the variable is set but empty or invalid, the hub refuses to start and prints why
-(`REKORD_ACCESS_KEY must be at least 32 characters long`, ...); the value is never printed.
+A passphrase of several random words joined by `-` works too, as long as it reaches 32
+characters (do not reuse an example from any documentation). If the variable is set but empty, invalid or weak, the hub refuses to start
+and prints why (`REKORD_ACCESS_KEY must be at least 32 characters long`,
+`REKORD_ACCESS_KEY is too weak: ...`, always with the advice to use `openssl rand -hex 32`);
+the value is never printed.
+
+Wrong keys: after five distinct wrong keys within a minute from one address, that address
+gets `429` for every further wrong key during 60 seconds. The right key always gets in, so
+the clients behind one proxy or Docker's bridge (all one address to the hub) cannot lock
+each other out. The proxy needs no forwarding header for this.
 The embedded hub of the desktop server flavor does not start either, and the connect screen
 reports the error. Rotate the key by changing it and restarting: every client asks again.
 
@@ -342,10 +351,6 @@ Any reverse proxy works. Requirements:
   URL.
 - Requests carrying `X-Forwarded-For` and similar headers are never local, so machine
   operations through the proxy need `REKORD_ALLOW_REMOTE_ADMIN=1`.
-- With an access key, send `X-Forwarded-For` (nginx:
-  `proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;`; Caddy does it by
-  default): the hub then locks out wrong keys per client instead of for everyone behind the
-  proxy.
 - Do not strip the CORS headers: the desktop and Android apps call the hub from another
   origin.
 - Do not put Basic Auth in front of the hub, and keep `accessKey` query parameters out of

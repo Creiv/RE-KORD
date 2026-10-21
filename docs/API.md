@@ -267,9 +267,13 @@ Refusals use the usual envelope (`{ ok: false, data: null, error, message }`), w
 
 - `401 access_key_required` — no key presented;
 - `401 access_key_invalid` — wrong key;
-- `429 access_key_rate_limited` + `Retry-After` (seconds) — five distinct wrong keys from
-  the same source within 60 s lock it for 60 s; during the lock the right key gets the same
-  answer.
+- `429 access_key_rate_limited` + `Retry-After` (seconds) — a wrong key from a source that
+  sent five distinct wrong keys within 60 s; for the next 60 s its wrong keys get this
+  answer. The right key is never refused, lock or not. The source is the peer address
+  (IPv6 by `/64`); `X-Forwarded-For` and `CF-Connecting-IP` are not used.
+
+At startup the hub also refuses weak keys (fewer than 10 different characters, or a short
+block repeated) and recommends `openssl rand -hex 32`; the value is never printed.
 
 ```bash
 K=$(cat /path/to/key)
