@@ -16,8 +16,8 @@
 //! - Only the SHA-256 of the key is kept, compared in constant time. The key is
 //!   never logged nor echoed, and the query parameter is removed from the URI
 //!   before the request reaches the handlers.
-//! - Repeated wrong keys from one source lock that source out for a short while
-//!   (see [`Limiter`]).
+//! - Repeated wrong keys from one source get 429 for a short while (see
+//!   [`Limiter`]); the right key always gets in.
 //!
 //! A key in a URL can end up in reverse-proxy access logs, browser history or
 //! on a Cast device; `Referrer-Policy: no-referrer` (see `origin.rs`) keeps it
@@ -260,10 +260,12 @@ struct SourceState {
 ///
 /// Only *distinct* wrong keys count, so a client still holding an old key
 /// (and asking for fifty covers with it) does not lock itself out. A locked
-/// source gets 429 without its key being checked, otherwise the lock would
-/// still answer "right / wrong" at full speed. The lock is short because it
-/// also hits a legitimate client behind the same source (same NAT, or a proxy
-/// that adds no forwarding header). Sources are never logged.
+/// source gets 429 for every wrong key, but the right key is checked first and
+/// always gets in: many clients can share one source (Docker's bridge, a NAT,
+/// a reverse proxy) and a stranger must not be able to lock them all out. The
+/// price is that the lock does not slow down guessing, since a right guess is
+/// answered at once; that is left to the key itself (length and the weak-key
+/// rule). Sources are never logged.
 #[derive(Debug, Default)]
 pub struct Limiter {
     sources: Mutex<HashMap<IpAddr, SourceState>>,
@@ -388,12 +390,14 @@ pub async fn access_key_guard(
                 .extensions()
                 .get::<ConnectInfo<SocketAddr>>()
                 .map(|ConnectInfo(addr)| *addr);
-            let source = client_source(req.headers(), peer);
-            let now = Instant::now();
-            if let Some(left) = gate.limiter.locked_for(source, now) {
-                return rate_limited(left);
-            }
+            // The right key gets in even from a locked source: the lock only
+            // answers wrong keys.
             if !gate.matches(&key) {
+                let source = client_source(req.headers(), peer);
+                let now = Instant::now();
+                if let Some(left) = gate.limiter.locked_for(source, now) {
+                    return rate_limited(left);
+                }
                 if gate.limiter.record_failure(source, &key, now) {
                     return rate_limited(LOCK_DURATION);
                 }

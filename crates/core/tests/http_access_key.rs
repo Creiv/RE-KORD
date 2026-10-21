@@ -284,7 +284,7 @@ async fn wrong(hub: &Hub, from: From, key: &str, extra: Option<(&str, &str)>) ->
 }
 
 #[tokio::test]
-async fn distinct_wrong_keys_lock_the_source_even_for_the_right_key() {
+async fn distinct_wrong_keys_lock_wrong_keys_but_never_the_right_one() {
     let hub = Hub::with_access_key("ak-lock", KEY);
     for i in 0..4 {
         let res = wrong(&hub, From::Lan, &format!("guess-{i}"), None).await;
@@ -297,9 +297,27 @@ async fn distinct_wrong_keys_lock_the_source_even_for_the_right_key() {
     assert_eq!(res.json()["error"], "access_key_rate_limited");
     let retry: u64 = res.header("retry-after").unwrap().parse().unwrap();
     assert!((1..=60).contains(&retry), "{retry}");
-    // Locked: the right key gets the same answer, so the lock is no oracle.
+    // Locked: the right key still gets in (one source can be many clients).
     let res = wrong(&hub, From::Lan, KEY, None).await;
-    assert_eq!(res.status, StatusCode::TOO_MANY_REQUESTS);
+    assert_eq!(res.status, StatusCode::OK);
+    // ...and does not lift the lock: wrong keys, old or new, stay refused.
+    for guess in ["guess-0", "guess-new"] {
+        let res = wrong(&hub, From::Lan, guess, None).await;
+        assert_eq!(res.status, StatusCode::TOO_MANY_REQUESTS, "{guess}");
+        assert_eq!(res.json()["error"], "access_key_rate_limited");
+        assert!(res.header("retry-after").is_some());
+        assert_no_key(&res);
+    }
+    // Health, the key check of the clients, follows the same rule.
+    let res = hub
+        .send(
+            req(Method::GET, "/api/v1/health")
+                .header(HEADER, KEY)
+                .from(From::Lan)
+                .build(),
+        )
+        .await;
+    assert_eq!(res.json()["accessKey"], "ok");
     // Other sources are unaffected.
     let res = wrong(&hub, From::Local, KEY, None).await;
     assert_eq!(res.status, StatusCode::OK);
@@ -351,7 +369,7 @@ async fn behind_a_loopback_proxy_the_forwarded_client_is_counted() {
     let res = wrong(
         &hub,
         From::Local,
-        KEY,
+        "g-new",
         Some(("x-forwarded-for", "203.0.113.7")),
     )
     .await;
@@ -369,7 +387,7 @@ async fn behind_a_loopback_proxy_the_forwarded_client_is_counted() {
     let res = wrong(
         &hub,
         From::Local,
-        KEY,
+        "g-other",
         Some(("x-forwarded-for", "203.0.113.8, 203.0.113.7")),
     )
     .await;
