@@ -337,8 +337,9 @@ async fn a_stale_key_repeated_does_not_lock() {
 }
 
 #[tokio::test]
-async fn forwarding_headers_from_a_lan_peer_cannot_dodge_the_lock() {
+async fn forged_forwarding_headers_cannot_dodge_the_lock() {
     let hub = Hub::with_access_key("ak-spoof", KEY);
+    // A LAN client inventing a new X-Forwarded-For / CF-Connecting-IP each time.
     for i in 0..5 {
         let ip = format!("10.0.0.{i}");
         wrong(
@@ -349,14 +350,23 @@ async fn forwarding_headers_from_a_lan_peer_cannot_dodge_the_lock() {
         )
         .await;
     }
-    let res = wrong(&hub, From::Lan, "g9", Some(("x-forwarded-for", "10.9.9.9"))).await;
-    assert_eq!(res.status, StatusCode::TOO_MANY_REQUESTS);
+    for (name, value) in [
+        ("x-forwarded-for", "10.9.9.9"),
+        ("cf-connecting-ip", "10.8.8.8"),
+    ] {
+        let res = wrong(&hub, From::Lan, "g9", Some((name, value))).await;
+        assert_eq!(res.status, StatusCode::TOO_MANY_REQUESTS, "{name}");
+    }
+    // The right key still gets in, with or without the forged header.
+    let res = wrong(&hub, From::Lan, KEY, Some(("x-forwarded-for", "10.9.9.9"))).await;
+    assert_eq!(res.status, StatusCode::OK);
 }
 
 #[tokio::test]
-async fn behind_a_loopback_proxy_the_forwarded_client_is_counted() {
+async fn behind_a_proxy_every_client_shares_the_peer_source() {
     let hub = Hub::with_access_key("ak-proxy", KEY);
-    // Reverse proxy on the hub machine: peer 127.0.0.1, client in X-Forwarded-For.
+    // Reverse proxy on the hub machine: peer 127.0.0.1; the headers say who the
+    // client is, but they are ignored, so all its clients are one source.
     for i in 0..5 {
         wrong(
             &hub,
@@ -366,30 +376,25 @@ async fn behind_a_loopback_proxy_the_forwarded_client_is_counted() {
         )
         .await;
     }
-    let res = wrong(
-        &hub,
-        From::Local,
-        "g-new",
+    for (name, value) in [
+        ("x-forwarded-for", "203.0.113.8"),
+        ("cf-connecting-ip", "203.0.113.9"),
+    ] {
+        let res = wrong(&hub, From::Local, "g-new", Some((name, value))).await;
+        assert_eq!(res.status, StatusCode::TOO_MANY_REQUESTS, "{name}");
+    }
+    // The tunnel arrives from loopback too: same source, same lock for wrong keys.
+    let res = wrong(&hub, From::Tunnel, "g-tunnel", None).await;
+    assert_eq!(res.status, StatusCode::TOO_MANY_REQUESTS);
+    // Every one of those clients still gets in with the right key.
+    for extra in [
         Some(("x-forwarded-for", "203.0.113.7")),
-    )
-    .await;
-    assert_eq!(res.status, StatusCode::TOO_MANY_REQUESTS);
-    // Another client of the same proxy still gets in.
-    let res = wrong(
-        &hub,
-        From::Local,
-        KEY,
         Some(("x-forwarded-for", "203.0.113.8")),
-    )
-    .await;
+        None,
+    ] {
+        let res = wrong(&hub, From::Local, KEY, extra).await;
+        assert_eq!(res.status, StatusCode::OK, "{extra:?}");
+    }
+    let res = wrong(&hub, From::Tunnel, KEY, None).await;
     assert_eq!(res.status, StatusCode::OK);
-    // The client cannot pick its own entry: only the last hop counts.
-    let res = wrong(
-        &hub,
-        From::Local,
-        "g-other",
-        Some(("x-forwarded-for", "203.0.113.8, 203.0.113.7")),
-    )
-    .await;
-    assert_eq!(res.status, StatusCode::TOO_MANY_REQUESTS);
 }

@@ -221,29 +221,13 @@ fn source_bucket(ip: IpAddr) -> IpAddr {
     }
 }
 
-/// Who the limiter counts. Forwarding headers are trusted only when the direct
-/// peer is loopback (cloudflared or a reverse proxy on the hub machine): from
-/// any other peer they are client-controlled and ignored.
-fn client_source(headers: &HeaderMap, peer: Option<SocketAddr>) -> IpAddr {
-    let peer_ip = peer.map(|p| p.ip().to_canonical());
-    if let Some(ip) = peer_ip.filter(|ip| !ip.is_loopback()) {
-        return source_bucket(ip);
-    }
-    let header_ip = |name: &str, last_hop: bool| -> Option<IpAddr> {
-        let raw = headers.get(name)?.to_str().ok()?;
-        let hop = if last_hop {
-            raw.rsplit(',').next()?
-        } else {
-            raw
-        };
-        hop.trim().parse::<IpAddr>().ok()
-    };
-    // The last X-Forwarded-For hop is the one our proxy added; earlier ones
-    // come from the client.
-    header_ip("cf-connecting-ip", false)
-        .or_else(|| header_ip("x-forwarded-for", true))
-        .or(peer_ip)
-        .map(source_bucket)
+/// Who the limiter counts: the address of the connection, nothing else.
+/// Forwarding headers (`X-Forwarded-For`, `CF-Connecting-IP`) are ignored:
+/// any client can write them, and a reverse proxy in front of the hub does not
+/// always replace them. Behind a proxy (or Docker's bridge) every client shares
+/// one source, which is why the lock never refuses the right key.
+fn client_source(peer: Option<SocketAddr>) -> IpAddr {
+    peer.map(|p| source_bucket(p.ip()))
         .unwrap_or(IpAddr::from([127, 0, 0, 1]))
 }
 
@@ -393,7 +377,7 @@ pub async fn access_key_guard(
             // The right key gets in even from a locked source: the lock only
             // answers wrong keys.
             if !gate.matches(&key) {
-                let source = client_source(req.headers(), peer);
+                let source = client_source(peer);
                 let now = Instant::now();
                 if let Some(left) = gate.limiter.locked_for(source, now) {
                     return rate_limited(left);
@@ -527,28 +511,22 @@ mod tests {
     }
 
     #[test]
-    fn forwarding_headers_only_count_behind_a_loopback_peer() {
-        let fwd = headers(&[
-            ("cf-connecting-ip", "8.8.8.8"),
-            ("x-forwarded-for", "1.1.1.1, 9.9.9.9"),
-        ]);
-        let lan = client_source(&fwd, addr("192.168.1.20:5000"));
+    fn the_source_is_the_peer_address() {
+        let lan = client_source(addr("192.168.1.20:5000"));
         assert_eq!(lan, "192.168.1.20".parse::<IpAddr>().unwrap());
-        let tunnel = client_source(&fwd, addr("127.0.0.1:5000"));
-        assert_eq!(tunnel, "8.8.8.8".parse::<IpAddr>().unwrap());
-        let xff = headers(&[("x-forwarded-for", "1.1.1.1, 9.9.9.9")]);
-        let proxied = client_source(&xff, addr("127.0.0.1:5000"));
-        assert_eq!(proxied, "9.9.9.9".parse::<IpAddr>().unwrap());
-        let bare = client_source(&HeaderMap::new(), addr("[::1]:5000"));
-        assert!(bare.is_loopback());
+        let loopback = client_source(addr("127.0.0.1:5000"));
+        assert_eq!(loopback, "127.0.0.1".parse::<IpAddr>().unwrap());
+        assert!(client_source(addr("[::1]:5000")).is_loopback());
+        // No connect info (tests, embedded routers): one loopback source.
+        assert!(client_source(None).is_loopback());
     }
 
     #[test]
     fn ipv6_sources_are_grouped_by_prefix() {
-        let a = client_source(&HeaderMap::new(), addr("[2001:db8:1:2::1]:5000"));
-        let b = client_source(&HeaderMap::new(), addr("[2001:db8:1:2:ffff::9]:5000"));
+        let a = client_source(addr("[2001:db8:1:2::1]:5000"));
+        let b = client_source(addr("[2001:db8:1:2:ffff::9]:5000"));
         assert_eq!(a, b);
-        let mapped = client_source(&HeaderMap::new(), addr("[::ffff:192.168.1.20]:5000"));
+        let mapped = client_source(addr("[::ffff:192.168.1.20]:5000"));
         assert_eq!(mapped, "192.168.1.20".parse::<IpAddr>().unwrap());
     }
 
