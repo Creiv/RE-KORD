@@ -20,8 +20,8 @@
   "accessKey.errFormat": "The key has at least {{min}} characters: letters, digits and . _ ~ -",
   "accessKey.errInvalid": "Wrong key. Check it and try again.",
   "accessKey.errStoredInvalid": "The saved key no longer works: it may have been changed on the hub. Enter the new one.",
-  "accessKey.errLocked": "Too many attempts with wrong keys. Wait a minute and try again.",
-  "accessKey.errLockedFor": "Too many attempts with wrong keys. Try again in {{seconds}} s.",
+  "accessKey.errLocked": "Wrong key. After too many wrong attempts, every wrong key is refused for about a minute: the right key still works.",
+  "accessKey.errLockedFor": "Wrong key. After too many wrong attempts, every wrong key is refused for {{seconds}} s: the right key still works.",
   "accessKey.errUnreachable": "Can't reach the hub: check that it is running and that the network works.",
   "accessKey.errNotHub": "Unexpected answer: this is not a RE-KORD hub.",
   "ui.close": "Close",
@@ -593,6 +593,6 @@
   "errors.code.cookies_locked_by_env": "The cookies come from an environment variable: change them on the system.",
   "errors.code.access_key_required": "This hub requires an access key.",
   "errors.code.access_key_invalid": "Wrong access key.",
-  "errors.code.access_key_rate_limited": "Too many attempts with wrong keys: try again shortly.",
-  "errors.accessKeyLockedFor": "Too many attempts with wrong keys: try again in {{seconds}} s."
+  "errors.code.access_key_rate_limited": "Wrong key, and too many wrong attempts for now. The right key still works.",
+  "errors.accessKeyLockedFor": "Wrong key: every wrong key is refused for {{seconds}} s. The right key still works."
 }

@@ -46,7 +46,10 @@
   let reveal = $state(false);
   let busy = $state(false);
   let error = $state<AccessKeyMessage | null>(null);
-  /** Seconds left of a wrong-key lock: submitting is pointless until 0. */
+  /**
+   * Seconds left of the hub's wrong-key lock. Other wrong keys are refused
+   * meanwhile, but the right key always gets in: submitting stays possible.
+   */
   let lockLeft = $state(0);
   let lockTimer: ReturnType<typeof setInterval> | null = null;
 
@@ -94,7 +97,7 @@
 
   async function submit(event?: Event) {
     event?.preventDefault();
-    if (busy || lockLeft > 0) return;
+    if (busy) return;
     error = null;
     // Pasted keys often carry a stray space or line break: the hub never has them.
     const candidate = key.trim();
@@ -202,7 +205,7 @@
       </div>
 
       <div class="access__actions">
-        <Button class="access__cta" type="submit" disabled={busy || lockLeft > 0 || !key.trim()}>
+        <Button class="access__cta" type="submit" disabled={busy || !key.trim()}>
           {busy ? t("accessKey.checking") : t("accessKey.submit")}
         </Button>
         {#if oncancel}

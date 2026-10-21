@@ -20,8 +20,8 @@
   "accessKey.errFormat": "La chiave ha almeno {{min}} caratteri: lettere, cifre e . _ ~ -",
   "accessKey.errInvalid": "Chiave errata. Controllala e riprova.",
   "accessKey.errStoredInvalid": "La chiave salvata non è più valida: forse è stata cambiata sull’hub. Inserisci quella nuova.",
-  "accessKey.errLocked": "Troppi tentativi con chiavi errate. Attendi un minuto e riprova.",
-  "accessKey.errLockedFor": "Troppi tentativi con chiavi errate. Riprova tra {{seconds}} s.",
+  "accessKey.errLocked": "Chiave errata. Dopo troppi tentativi sbagliati, per circa un minuto ogni chiave errata viene rifiutata: la chiave giusta funziona comunque.",
+  "accessKey.errLockedFor": "Chiave errata. Dopo troppi tentativi sbagliati, per {{seconds}} s ogni chiave errata viene rifiutata: la chiave giusta funziona comunque.",
   "accessKey.errUnreachable": "Hub non raggiungibile: controlla che sia acceso e che la rete funzioni.",
   "accessKey.errNotHub": "Risposta inattesa: qui non risponde un hub RE-KORD.",
   "ui.close": "Chiudi",
@@ -593,6 +593,6 @@
   "errors.code.cookies_locked_by_env": "I cookie arrivano da una variabile d'ambiente: modificali sul sistema.",
   "errors.code.access_key_required": "Questo hub richiede una chiave di accesso.",
   "errors.code.access_key_invalid": "Chiave di accesso errata.",
-  "errors.code.access_key_rate_limited": "Troppi tentativi con chiavi errate: riprova tra poco.",
-  "errors.accessKeyLockedFor": "Troppi tentativi con chiavi errate: riprova tra {{seconds}} s."
+  "errors.code.access_key_rate_limited": "Chiave errata, e troppi tentativi sbagliati per ora. La chiave giusta funziona comunque.",
+  "errors.accessKeyLockedFor": "Chiave errata: per {{seconds}} s ogni chiave errata viene rifiutata. La chiave giusta funziona comunque."
 }
