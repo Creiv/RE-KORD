@@ -19,6 +19,9 @@ fn set_but_unusable_key_refuses_to_start() {
         "   ",
         secretish,
         "has spaces in it but is long enough to pass",
+        // Long enough, but weak: one repeated character, a repeated short block.
+        "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        "abababababababababababababababab",
     ] {
         std::env::set_var("REKORD_ACCESS_KEY", bad);
         let err = prepare_hub_state(&opts, None, None)
@@ -31,7 +34,7 @@ fn set_but_unusable_key_refuses_to_start() {
     // Refused before the data dir is touched.
     assert!(!base.join("data").exists());
 
-    std::env::set_var("REKORD_ACCESS_KEY", "a".repeat(32));
+    std::env::set_var("REKORD_ACCESS_KEY", "tren-lago-nube-sal-mesa-ruido-faro");
     let state = prepare_hub_state(&opts, None, None).unwrap();
     assert!(state.access_key.is_some());
 

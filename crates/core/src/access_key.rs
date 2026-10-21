@@ -45,6 +45,10 @@ pub const ACCESS_KEY_QUERY: &str = "accessKey";
 
 pub const MIN_KEY_LEN: usize = 32;
 pub const MAX_KEY_LEN: usize = 256;
+/// Different characters a key needs: "aaaa…" or "0101…" are long but guessable.
+pub const MIN_DISTINCT_CHARS: usize = 10;
+/// How every key refusal ends: what to use instead.
+const KEY_ADVICE: &str = "generate one with `openssl rand -hex 32`";
 /// Longer presented values are refused without hashing.
 const MAX_PRESENTED_LEN: usize = 1024;
 
@@ -79,12 +83,35 @@ fn validate_key(raw: &str) -> Result<()> {
         );
     }
     if raw.len() < MIN_KEY_LEN {
-        bail!("{ACCESS_KEY_ENV} must be at least {MIN_KEY_LEN} characters long");
+        bail!("{ACCESS_KEY_ENV} must be at least {MIN_KEY_LEN} characters long: {KEY_ADVICE}");
     }
     if raw.len() > MAX_KEY_LEN {
         bail!("{ACCESS_KEY_ENV} must be at most {MAX_KEY_LEN} characters long");
     }
+    if distinct_chars(raw) < MIN_DISTINCT_CHARS {
+        bail!(
+            "{ACCESS_KEY_ENV} is too weak: it needs at least {MIN_DISTINCT_CHARS} different \
+             characters; {KEY_ADVICE}"
+        );
+    }
+    if is_repeated_block(raw) {
+        bail!("{ACCESS_KEY_ENV} is too weak: it repeats a shorter block; {KEY_ADVICE}");
+    }
     Ok(())
+}
+
+fn distinct_chars(raw: &str) -> usize {
+    let mut seen = [false; 128];
+    raw.bytes()
+        .filter(|&b| !std::mem::replace(&mut seen[usize::from(b & 0x7f)], true))
+        .count()
+}
+
+/// True when `raw` is a shorter block written two or more times ("abab…",
+/// "0123456789abcdef0123456789abcdef"); a last, partial copy counts too.
+fn is_repeated_block(raw: &str) -> bool {
+    let b = raw.as_bytes();
+    (1..=b.len() / 2).any(|period| (period..b.len()).all(|i| b[i] == b[i - period]))
 }
 
 /// The configured key (as a digest) and the wrong-key limiter.
@@ -448,9 +475,75 @@ mod tests {
             }
         }
         assert!(gate_from_value(Some(KEY.into())).unwrap().is_some());
-        assert!(gate_from_value(Some("a".repeat(MAX_KEY_LEN).into()))
+        assert!(gate_from_value(Some(long_strong_key(MAX_KEY_LEN).into()))
             .unwrap()
             .is_some());
+    }
+
+    /// Non-repeating, varied key of `len` characters (hex of chained digests).
+    fn long_strong_key(len: usize) -> String {
+        let mut out = String::new();
+        let mut seed = sha256(b"rekord");
+        while out.len() < len {
+            out.extend(seed.iter().map(|b| format!("{b:02x}")));
+            seed = sha256(&seed);
+        }
+        out.truncate(len);
+        out
+    }
+
+    #[test]
+    fn weak_keys_are_refused_with_advice_and_without_echoing_them() {
+        for weak in [
+            "a".repeat(MIN_KEY_LEN),                          // one character
+            "ab".repeat(MIN_KEY_LEN / 2),                     // short block
+            "abcdefghij".repeat(4),                           // block of 10 (10 distinct)
+            "0123456789abcdef".repeat(2),                     // 16-char block twice
+            format!("{}012", "0123456789abcdef".repeat(2)),   // twice + partial copy
+            "aabbaabbababbbaaabbbabababaaabbbaa".to_string(), // 2 distinct, no period
+        ] {
+            let err = gate_from_value(Some(weak.as_str().into()))
+                .unwrap_err()
+                .to_string();
+            assert!(err.contains("too weak"), "{weak}: {err}");
+            assert!(err.contains("openssl rand -hex 32"), "{err}");
+            assert!(!err.contains(weak.as_str()), "error echoes the key: {err}");
+        }
+        // Length errors give the same advice.
+        let err = gate_from_value(Some("short".into()))
+            .unwrap_err()
+            .to_string();
+        assert!(err.contains("openssl rand -hex 32"), "{err}");
+    }
+
+    #[test]
+    fn random_hex_and_passphrases_pass() {
+        // `openssl rand -hex 32` (a sample) and a long passphrase.
+        for strong in [
+            "cc9b2de94f2fcbce7d02414981b992a2ed015373de86c3c16d04710ee0ff7c04",
+            "tren-lago-nube-sal-mesa-ruido-faro",
+            KEY,
+        ] {
+            assert!(
+                gate_from_value(Some(strong.into())).unwrap().is_some(),
+                "{strong}"
+            );
+        }
+        // A 29-character passphrase is refused by length (minimum 32), not as weak.
+        let err = gate_from_value(Some("tren-lago-nube-sal-mesa-ruido".into()))
+            .unwrap_err()
+            .to_string();
+        assert!(err.contains("at least 32"), "{err}");
+    }
+
+    #[test]
+    fn weak_key_rules() {
+        assert_eq!(distinct_chars("aaaa"), 1);
+        assert_eq!(distinct_chars("tren-lago-nube-sal-mesa-ruido-faro"), 16);
+        assert!(is_repeated_block("abab"));
+        assert!(is_repeated_block("abcabca"));
+        assert!(!is_repeated_block("abcabd"));
+        assert!(!is_repeated_block(KEY));
     }
 
     #[test]
