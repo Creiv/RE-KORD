@@ -48,6 +48,14 @@ one version number covers the hub, the clients and the packages.
   level of a system Node. A system Node must now be at least 22.23.4, 24.22.1 or 26.12.1
   (end-of-life lines are skipped). The package builder image uses Node 22.23.4.
 
+### Fixed
+
+- **Folders with punctuation were not recognised** (GitHub issue #100): yt-dlp writes `?`,
+  `:` and similar marks as their full-width twins (`What？!`), so Studio's "already in the
+  library" check for planned download folders and the admin folder search never matched
+  "What?!". Both now compare letters and digits only, with accents and case folded, so any
+  punctuation (or none) matches.
+
 ## 5.2.1 — 2026-10-17 (pre-release, clients only)
 
 A preview of what is coming in 5.3, published as a GitHub pre-release with the Client

@@ -14,6 +14,7 @@ import { jsRuntimeLabel, jsRuntimeMissing, pickJsRuntime } from "./jsRuntime.ts"
 import {
   batchCounts,
   jobOutcome,
+  folderMatchKey,
   plannedReleaseFolders,
   signInHintKeys,
   summaryFromEvent,
@@ -81,6 +82,26 @@ test("cartelle pianificate: già in libreria, ordinate, senza doppioni", () => {
     { path: "Artista/Alfa", exists: false },
     { path: "Artista/Zeta", exists: true },
   ]);
+});
+
+test("cartelle pianificate: la punteggiatura non conta (issue #100)", () => {
+  // yt-dlp writes "?" as full-width "？"; a hand-made folder may drop it.
+  const rows = plannedReleaseFolders(
+    "Who?!",
+    ["What?!", "Hey... (Live)", "Café Noir", "( )"],
+    ["who！?/What？!", "Who?!/hey live", "who/cafe noir", "Who?!/( )"],
+  );
+  assert.deepEqual(
+    rows.map((r) => [r.path, r.exists]),
+    [
+      ["Who?!/( )", true],
+      ["Who?!/Café Noir", true],
+      ["Who?!/Hey... (Live)", true],
+      ["Who?!/What?!", true],
+    ],
+  );
+  assert.equal(folderMatchKey("Who？!/What?!"), "who/what");
+  assert.equal(folderMatchKey("Sigur Rós/( )"), "sigurros/( )");
 });
 
 test("riepilogo annidato in `summary` (hub nuovo)", () => {

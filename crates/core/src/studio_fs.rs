@@ -109,17 +109,28 @@ pub struct FsSearchHit {
     pub rel_path: String,
 }
 
+/// Folder names as the search compares them: accents and case folded,
+/// full-width punctuation mapped back, then letters and digits only. So
+/// "what?!" finds the "What？!" yt-dlp wrote and "cafe" finds "Café".
+fn dir_search_key(s: &str) -> String {
+    crate::db::text::fold_search(s)
+        .chars()
+        .filter(|c| c.is_alphanumeric())
+        .collect()
+}
+
 pub fn search_dirs(music_root: &Path, q: &str, limit: usize) -> Result<(Vec<FsSearchHit>, bool)> {
     let query = q.trim().to_lowercase();
     if query.len() < 2 {
         return Ok((vec![], false));
     }
+    let query_key = dir_search_key(&query);
     let mut results = Vec::new();
     let mut truncated = false;
     fn walk(
         dir: &Path,
         prefix: &str,
-        query: &str,
+        needle: (&str, &str),
         results: &mut Vec<FsSearchHit>,
         limit: usize,
         truncated: &mut bool,
@@ -154,7 +165,10 @@ pub fn search_dirs(music_root: &Path, q: &str, limit: usize) -> Result<(Vec<FsSe
             } else {
                 format!("{prefix}/{name}")
             };
-            if name.to_lowercase().contains(query) {
+            let (query, query_key) = needle;
+            let hit = name.to_lowercase().contains(query)
+                || (!query_key.is_empty() && dir_search_key(&name).contains(query_key));
+            if hit {
                 results.push(FsSearchHit {
                     name: name.clone(),
                     rel_path: rel.clone(),
@@ -165,7 +179,7 @@ pub fn search_dirs(music_root: &Path, q: &str, limit: usize) -> Result<(Vec<FsSe
                 walk(
                     &entry.path(),
                     &rel,
-                    query,
+                    needle,
                     results,
                     limit,
                     truncated,
@@ -177,7 +191,7 @@ pub fn search_dirs(music_root: &Path, q: &str, limit: usize) -> Result<(Vec<FsSe
     walk(
         music_root,
         "",
-        &query,
+        (&query, &query_key),
         &mut results,
         limit,
         &mut truncated,
@@ -285,5 +299,30 @@ fn collect_audio(dir: &Path, prefix: &str, out: &mut Vec<String>, depth: usize) 
         } else if kind.is_file() && is_audio_name(&name) {
             out.push(rel);
         }
+    }
+}
+
+#[cfg(test)]
+mod dir_search_tests {
+    use super::*;
+
+    #[test]
+    fn folder_search_ignores_punctuation_and_full_width_marks() {
+        let root = std::env::temp_dir().join(format!("rekord-dirsearch-{}", uuid::Uuid::new_v4()));
+        for d in ["Who？!/What？!", "Café Noir/Nuit", "Plain/Album"] {
+            fs::create_dir_all(root.join(d)).unwrap();
+        }
+        let names = |q: &str| -> Vec<String> {
+            let (hits, _) = search_dirs(&root, q, 20).unwrap();
+            let mut v: Vec<String> = hits.into_iter().map(|h| h.rel_path).collect();
+            v.sort();
+            v
+        };
+        assert_eq!(names("what?!"), vec!["Who？!/What？!"]);
+        // Names match on their own segment, as before.
+        assert_eq!(names("who"), vec!["Who？!"]);
+        assert_eq!(names("cafe"), vec!["Café Noir"]);
+        assert_eq!(names("zz"), Vec::<String>::new());
+        let _ = fs::remove_dir_all(&root);
     }
 }

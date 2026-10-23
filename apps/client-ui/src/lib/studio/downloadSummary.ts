@@ -2,6 +2,7 @@
  * What a finished download did, from the hub's `done` event. Pure (no i18n),
  * so it can be tested with `node --test`.
  */
+import { foldText } from "../search";
 import { joinMusicDestRelPath, normalizeDownloadDestPath } from "../studioDownloadDest";
 
 export type SummaryItem = { label: string; reason: string; code?: string | null };
@@ -90,6 +91,25 @@ export type PlannedRelease = { path: string; exists: boolean };
  * the library ("files will be added there") — legacy
  * `buildReleasesArtistFolderConfirm`.
  */
+/**
+ * Key for "is this folder already in the library": each segment folded
+ * (accents, case) and reduced to letters and digits, so a title typed as
+ * "What?!" matches the folder yt-dlp wrote as "What？!" (full-width) or an
+ * album saved as "What !". A segment with no letter or digit at all ("( )")
+ * keeps its folded text instead of vanishing.
+ */
+export function folderMatchKey(relPath: string): string {
+  return normalizeDownloadDestPath(relPath)
+    .split("/")
+    .filter(Boolean)
+    .map((seg) => {
+      const folded = foldText(seg);
+      const alnum = folded.replace(/[^\p{L}\p{N}]+/gu, "");
+      return alnum || folded.replace(/\s+/g, " ").trim();
+    })
+    .join("/");
+}
+
 export function plannedReleaseFolders(
   base: string,
   titles: string[],
@@ -97,14 +117,14 @@ export function plannedReleaseFolders(
 ): PlannedRelease[] {
   const norm = normalizeDownloadDestPath(base);
   const known = new Set<string>();
-  for (const k of existingFolderKeys) known.add(normalizeDownloadDestPath(k).toLowerCase());
+  for (const k of existingFolderKeys) known.add(folderMatchKey(k));
   const seen = new Set<string>();
   const rows: PlannedRelease[] = [];
   for (const title of titles) {
     const rel = joinMusicDestRelPath(norm, title);
     if (!rel || seen.has(rel)) continue;
     seen.add(rel);
-    rows.push({ path: rel, exists: known.has(rel.toLowerCase()) });
+    rows.push({ path: rel, exists: known.has(folderMatchKey(rel)) });
   }
   rows.sort((a, b) => a.path.localeCompare(b.path));
   return rows;
