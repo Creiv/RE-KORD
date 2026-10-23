@@ -86,6 +86,8 @@ first scan of your existing library imports everything automatically.
 - **Metadata** from Discogs, MusicBrainz, iTunes, Deezer and TheAudioDB; title cleanup;
   web **trivia** about artists and albums; **cover** search and upload.
 - Hand-edited values are protected from every rescan and fetch.
+- Downloading a release you already have? The dialog lists the **tracks your folder is
+  missing** and fetches only those.
 
 **Plectr**
 - A four-lane rhythm game charted on the fly from *your* tracks: three difficulties, hold
@@ -93,17 +95,21 @@ first scan of your existing library imports everything automatically.
 
 **Statistics and achievements**
 - Top tracks, artists, albums and genres by plays, favorites, blocks and Plectr scores.
-- XP, levels, ten ranks from KICKER to KING OF RE-KORD, listening streaks and 65 badges.
+- XP, levels, ten ranks from KICKER to KING OF RE-KORD, listening streaks (synced across
+  your devices) and 65 badges, each showing how far you are and what comes next.
 
 **Make it yours**
 - 17 theme presets plus a custom theme: your colors, a background image or animated GIF,
   colors extracted from the picture, your own text color, adjustable glass. Export a theme
   and share it.
 - Adjustable content and player-bar width on wide screens.
+- Switch Sonic Nebula, the visualizer or Plectr off per account if you do not want them.
 
 **Anywhere**
 - LAN access out of the box, with **QR pairing** for the Android app.
 - One-click **Cloudflare tunnel** for listening away from home, with HTTPS and a QR code.
+- Optional **access key** for hubs reached from outside (tunnel, reverse proxy): one
+  shared key, set from the admin panel or `REKORD_ACCESS_KEY`, asked once per device.
 - Installable web app (PWA) over HTTPS.
 - **Keep the hub awake**: stop the server PC from sleeping, always or only while in use.
 
@@ -264,6 +270,18 @@ improve a translation or add a language, read [docs/TRANSLATIONS.md](docs/TRANSL
 
 All documentation is indexed in [docs/README.md](docs/README.md): user guide, installation,
 upgrading, deployment, architecture, API, Android, development.
+
+## Roadmap
+
+- **6.0**: macOS packages (Server and Client, **unsigned**: right-click › Open on first
+  launch), an OpenSubsonic-compatible API so existing third-party players can connect, the
+  split of the hub's API module, and the removal of the legacy `/api/*` aliases.
+- **Later, no timeline**: a native iOS app in Swift. On iPhone and iPad today, use the web
+  app over the tunnel (Safari › Add to Home Screen). Also on the list: ReplayGain and an
+  equalizer, smart playlists, several music folders.
+- **Help wanted**: both Apple targets need a contributor with a Mac. The packages will be
+  unsigned and published on GitHub only, never through the Apple stores. See
+  [issue #104](https://github.com/Creiv/RE-KORD/issues/104).
 
 ## Community
 

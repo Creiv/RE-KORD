@@ -99,8 +99,8 @@ YouTube video on a laptop) but is a 2.5 MB static file; set `REKORD_YTDLP_JS_RUN
 ## Linux, systemd
 
 ```bash
-tar -xzf RE-KORD-Server-5.2.0-linux-x64-headless.tar.gz
-cd RE-KORD-Server-5.2.0-linux-x64-headless
+tar -xzf RE-KORD-Server-5.3.0-linux-x64-headless.tar.gz
+cd RE-KORD-Server-5.3.0-linux-x64-headless
 sudo ./systemd/install.sh            # /opt/rekord, data in /var/lib/rekord, user "rekord"
 sudoedit /etc/default/rekord-server  # REKORD_MUSIC_ROOT, REKORD_BIND, ...
 sudo systemctl restart rekord-server
@@ -139,7 +139,7 @@ docker compose logs -f
 
 Compose pulls `ghcr.io/creiv/re-kord:latest`, published for amd64 and arm64 by the
 *Build Docker Image* workflow (`.github/workflows/docker.yml`) on every release tag (`v*`),
-or by hand from the Actions tab. Tags: `latest`, the version (`5.2.0`) and the release tag
+or by hand from the Actions tab. Tags: `latest`, the version (`5.3.0`) and the release tag
 (`v5.1`); pin one in the compose file to stay on a release. Update with
 `docker compose pull && docker compose up -d`. To build locally instead, uncomment `build:`
 in `docker-compose.yml` and add `--build`.

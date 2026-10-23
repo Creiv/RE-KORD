@@ -1,6 +1,6 @@
 {
   "name": "@rekord/server-ui",
-  "version": "5.2.1",
+  "version": "5.3.0",
   "private": true,
   "type": "module",
   "scripts": {

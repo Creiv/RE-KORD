@@ -3,7 +3,13 @@
 All notable changes to RE-KORD. Versions follow [semantic versioning](https://semver.org);
 one version number covers the hub, the clients and the packages.
 
-## Unreleased
+## 5.3.0 — 2026-10-25
+
+Everything from GitHub issue #100, the optional access key contributed by @mrsalvaa, a
+lighter and sturdier hub, and the karaoke backdrop previewed in 5.2.1. Hubs and clients
+5.0 to 5.3 work together; the database migrates automatically (schema v8, indexes only).
+Answers of the hub now always carry a stable error code: older clients keep working, the
+detail text moved to `message`.
 
 ### New
 
@@ -19,42 +25,10 @@ one version number covers the hub, the clients and the packages.
   `settings.json`, it takes effect at once and survives restarts and backups.
   `REKORD_ACCESS_KEY`, when set, wins and locks the panel. `GET/PUT/DELETE
   /api/v1/system/access-key` (machine operation).
-
-### Changed
-
-- **Legacy `/api/*` aliases are deprecated.** The routes without `v1` (36 of them, kept for
-  RE-KORD 4 clients) now answer with `Deprecation: true` and a `Link` to their `/api/v1`
-  twin, and the hub logs their first use. They will be removed in 6.0; the RE-KORD 5
-  clients never used them.
-- **Stable error codes everywhere.** The `error` field of a failed answer is now always a
-  `snake_case` code the clients translate (`album_not_found`, `scan_in_progress`,
-  `playlist_tracks_mismatch`, `internal_error`, …); the English detail moved to `message`.
-  Before, a few dozen answers put free text in `error`. Listed in `docs/API.md`.
-- **Hub robustness.** A panic while holding one of the hub's locks no longer turns every
-  later request into a 500 until restart: the lock is recovered. Library queries now use
-  read-only database connections (up to four, next to the single writer), so browsing,
-  searching and playing no longer wait for a scan's or a backfill's write batches, and
-  database schema v8 adds the indexes those reads were missing (albums by artist, the
-  album and track sort orders, playlist order, favorites order, tombstones), so artist
-  pages and paginated lists stop scanning or re-sorting the whole table. The hub's
-  outbound HTTP clients for fixed hosts (metadata providers, YouTube Music, GitHub
-  releases, public-IP lookups, the preview proxy) come from one factory: a User-Agent with
-  the running version, connection and total timeouts everywhere, at most five redirects. *Analyse folders*
-  (`POST /api/v1/library/probe`) is now a machine operation like the layout it feeds.
-- **yt-dlp's JavaScript engine: the bundled QuickJS comes first** (GitHub issue #103, the
-  Node.js security releases of 21 October 2026). An installed Deno, Node.js or Bun is used
-  only when there is no bundled runtime (source builds, `--no-tools` packages) or when
-  `REKORD_YTDLP_JS_RUNTIME` names it, so YouTube downloads no longer depend on the patch
-  level of a system Node. A system Node must now be at least 22.23.4, 24.22.1 or 26.12.1
-  (end-of-life lines are skipped). The package builder image uses Node 22.23.4.
-
-### New
-
 - **Switch Sonic Nebula, the visualizer and Plectr off per account** (GitHub issue #100):
   *Settings › Interface › Features*. Off, their entries, cards, tabs and canvases disappear
   and their code is not loaded; on by default, saved with the account and synced like the
   theme.
-
 - **Studio › Download finds the tracks an album is missing** (GitHub issue #100): when a
   release is already in the library, the download dialog compares its track list with the
   library folder and lists what is missing, by number and name; **Download only the
@@ -66,6 +40,9 @@ one version number covers the hub, the clients and the packages.
   enough to mean something: the "share of the library played" ones need 200, 300, 500,
   1000 and 2000 tracks, "N tracks played" needs five times N, "N artists / albums /
   genres" needs a library with twice N of them; the badge says what is missing.
+- **Lyrics behind the fullscreen karaoke** (previewed in 5.2.1, now in every package and
+  in the hub's web page): the strongest words of the sung line, huge and faint behind the
+  lyrics, in five compositions; **Sfondo** in fullscreen karaoke turns it off, per account.
 
 ### Changed
 
@@ -74,6 +51,31 @@ one version number covers the hub, the clients and the packages.
   while a job ran), the account state saved from another device (once a minute before),
   the tunnel status (every 15 s before). The streams exist only while a page is visible;
   with an older hub, or when a stream drops, the clients poll as before.
+- **Hub robustness.** A panic while holding one of the hub's locks no longer turns every
+  later request into a 500 until restart: the lock is recovered. Library queries now use
+  read-only database connections (up to four, next to the single writer), so browsing,
+  searching and playing no longer wait for a scan's or a backfill's write batches, and
+  database schema v8 adds the indexes those reads were missing (albums by artist, the
+  album and track sort orders, playlist order, favorites order, tombstones), so artist
+  pages and paginated lists stop scanning or re-sorting the whole table. The hub's
+  outbound HTTP clients for fixed hosts (metadata providers, YouTube Music, GitHub
+  releases, public-IP lookups, the preview proxy) come from one factory: a User-Agent with
+  the running version, connection and total timeouts everywhere, at most five redirects. *Analyse folders*
+  (`POST /api/v1/library/probe`) is now a machine operation like the layout it feeds.
+- **Stable error codes everywhere.** The `error` field of a failed answer is now always a
+  `snake_case` code the clients translate (`album_not_found`, `scan_in_progress`,
+  `playlist_tracks_mismatch`, `internal_error`, …); the English detail moved to `message`.
+  Before, a few dozen answers put free text in `error`. Listed in `docs/API.md`.
+- **Legacy `/api/*` aliases are deprecated.** The routes without `v1` (36 of them, kept for
+  RE-KORD 4 clients) now answer with `Deprecation: true` and a `Link` to their `/api/v1`
+  twin, and the hub logs their first use. They will be removed in 6.0; the RE-KORD 5
+  clients never used them.
+- **yt-dlp's JavaScript engine: the bundled QuickJS comes first** (GitHub issue #103, the
+  Node.js security releases of 21 October 2026). An installed Deno, Node.js or Bun is used
+  only when there is no bundled runtime (source builds, `--no-tools` packages) or when
+  `REKORD_YTDLP_JS_RUNTIME` names it, so YouTube downloads no longer depend on the patch
+  level of a system Node. A system Node must now be at least 22.23.4, 24.22.1 or 26.12.1
+  (end-of-life lines are skipped). The package builder image uses Node 22.23.4.
 - **No page scrollbar on desktop either** (GitHub issue #100): as on phones since 5.1, the
   page and its sections scroll without drawing a bar, so the content keeps the full width.
   Logs, long lists, tables and dialogs that ask for a bar keep it.
@@ -81,21 +83,21 @@ one version number covers the hub, the clients and the packages.
   the hub has been away, offers *Retry now* next to *Change hub*, and after two minutes the
   connect screen opens by itself (the hub often changed address on a phone). Playback
   still resumes where it stopped when the hub comes back.
-- **Artist page: albums can be sorted by when they were added** to the library, next to
-  date, name and plays.
-- **CI and dependencies**: the workflow also runs on the development branch, a weekly
-  advisory job runs `cargo audit` and `pnpm audit`, and Dependabot proposes grouped
-  monthly updates. The Docker build locks its cache mounts, so the amd64 and arm64 halves
-  no longer race on the cargo registry.
 - **Phones: the "More" menu is laid out by use** (GitHub issue #100): queue, playlists and
   settings are wide tiles, the other entries squares in a four-column grid. Same entries,
   only the shape changed.
+- **Artist page: albums can be sorted by when they were added** to the library, next to
+  date, name and plays.
 - **"No audio-only format" from YouTube now names its usual causes**: an outdated yt-dlp,
   missing or expired cookies (with where to set them), or age-restricted / members-only
   content.
 - **Plectr: the shared picture matches the results screen**: cover and eyebrow, grade next
   to the score with the record ribbon or the previous best, FC / AP badge, accuracy ring,
   max combo and notes hit, judgement bar and legend, without the buttons.
+- **CI and dependencies**: the workflow also runs on the development branch, a weekly
+  advisory job runs `cargo audit` and `pnpm audit`, and Dependabot proposes grouped
+  monthly updates. The Docker build locks its cache mounts, so the amd64 and arm64 halves
+  no longer race on the cargo registry.
 
 ### Fixed
 
@@ -113,6 +115,16 @@ one version number covers the hub, the clients and the packages.
   library" check for planned download folders and the admin folder search never matched
   "What?!". Both now compare letters and digits only, with accents and case folded, so any
   punctuation (or none) matches.
+- **Fullscreen visualizers ran past the right edge on desktop** by the width of the side
+  rail (from 5.2.1).
+
+### Known issues
+
+- Android: starting playback from a car head unit or Bluetooth control after the app has
+  been paused for more than about ten minutes in the background may fail (the WebView is
+  not running); open the app once and it works again.
+- Linux: while a track plays, GNOME may list a second, bare "RE-KORD" media entry created
+  by WebKitGTK next to the native one.
 
 ## 5.2.1 — 2026-10-17 (pre-release, clients only)
 
