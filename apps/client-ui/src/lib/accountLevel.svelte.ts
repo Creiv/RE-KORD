@@ -7,13 +7,31 @@
  * catalog, favourites, playlists or Plectr records change — never on player
  * ticks.
  */
-import { buildAchievementsSnapshot, type AchievementsSnapshot } from "./achievements";
+import {
+  STREAK_SETTING_KEY,
+  buildAchievementsSnapshot,
+  mergeStreakStates,
+  normalizeStreakState,
+  setStreakSync,
+  type AchievementsSnapshot,
+} from "./achievements";
 import { primaryGenre } from "./genres";
 import { selectPlectrCareer } from "./plectr/records";
 import { plectrRecords } from "./plectr/persist.svelte";
 import { prefsRevision } from "./prefsRevision.svelte";
 import { session } from "./session.svelte";
 import { loadUserPrefs } from "./userPrefs";
+
+// The listening streak lives in the synced account settings (issue #100):
+// read merged with this device's copy, written through the session, combined
+// with the hub's copy on every pull and conflict rebase.
+setStreakSync({
+  get: () => session.syncedSetting(STREAK_SETTING_KEY),
+  set: (state) => session.setSyncedSetting(STREAK_SETTING_KEY, state),
+});
+session.registerSyncedMerge(STREAK_SETTING_KEY, (local, remote) =>
+  mergeStreakStates(normalizeStreakState(local), normalizeStreakState(remote)),
+);
 
 class AccountAchievements {
   /** Null until the account state and the catalog are there. */

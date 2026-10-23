@@ -208,7 +208,61 @@ export const ACHIEVEMENT_IDS: readonly string[] = DEFINITIONS.map((d) => d.id);
 
 const STREAK_KEY = "rekord-achievements-streak";
 
-type StreakState = { count: number; lastDate: string };
+/**
+ * Hub user-state setting that carries the streak between devices and across
+ * reinstalls (GitHub issue #100: kept only in `localStorage`, a new package or
+ * a cleared WebView reset it). The local copy stays as a cache and for the
+ * time before the account state arrives; the two are merged on every read.
+ */
+export const STREAK_SETTING_KEY = "listeningStreak";
+
+export type StreakState = { count: number; lastDate: string };
+
+/** How the streak reaches the synced settings; set once by the session layer. */
+type StreakSync = {
+  get: () => unknown;
+  set: (state: StreakState) => void;
+};
+
+let streakSync: StreakSync | null = null;
+
+export function setStreakSync(sync: StreakSync | null) {
+  streakSync = sync;
+}
+
+export function normalizeStreakState(raw: unknown): StreakState {
+  const parsed = (raw && typeof raw === "object" ? raw : {}) as Partial<StreakState>;
+  return {
+    count:
+      typeof parsed.count === "number" && Number.isFinite(parsed.count) && parsed.count >= 0
+        ? Math.floor(parsed.count)
+        : 0,
+    lastDate: typeof parsed.lastDate === "string" && /^\d{4}-\d{2}-\d{2}$/.test(parsed.lastDate) ? parsed.lastDate : "",
+  };
+}
+
+/**
+ * Two copies of the streak (this device and the hub, or two devices): the
+ * more recent day wins; the same day keeps the higher count; a copy from
+ * the day before extends into the newer one, so listening on the phone
+ * yesterday and on the desktop today is a streak of two.
+ */
+export function mergeStreakStates(a: StreakState, b: StreakState): StreakState {
+  if (!a.lastDate) return b;
+  if (!b.lastDate) return a;
+  if (a.lastDate === b.lastDate) return { lastDate: a.lastDate, count: Math.max(a.count, b.count) };
+  const [older, newer] = a.lastDate < b.lastDate ? [a, b] : [b, a];
+  const consecutive = older.lastDate === yesterdayKey(dateFromKey(newer.lastDate));
+  return {
+    lastDate: newer.lastDate,
+    count: consecutive ? Math.max(newer.count, older.count + 1) : newer.count,
+  };
+}
+
+function dateFromKey(key: string): Date {
+  const [y, m, d] = key.split("-").map(Number);
+  return new Date(y, (m || 1) - 1, d || 1);
+}
 
 function localDateKey(d = new Date()): string {
   const y = d.getFullYear();
@@ -223,38 +277,35 @@ function yesterdayKey(d = new Date()): string {
   return localDateKey(prev);
 }
 
-function readStreakState(): StreakState {
+function readLocalStreakState(): StreakState {
   try {
     const raw =
       localStorage.getItem(STREAK_KEY) ??
       localStorage.getItem("rekord-resonance-streak") ??
       localStorage.getItem("kord-achievements-streak");
-    if (!raw) return { count: 0, lastDate: "" };
-    const parsed = JSON.parse(raw) as Partial<StreakState>;
-    return {
-      count:
-        typeof parsed.count === "number" && parsed.count >= 0
-          ? Math.floor(parsed.count)
-          : 0,
-      lastDate: typeof parsed.lastDate === "string" ? parsed.lastDate : "",
-    };
+    return raw ? normalizeStreakState(JSON.parse(raw)) : { count: 0, lastDate: "" };
   } catch {
     return { count: 0, lastDate: "" };
   }
 }
 
+/** This device's copy merged with the hub's (when the session provides it). */
+export function readStreakState(): StreakState {
+  const local = readLocalStreakState();
+  const synced = streakSync?.get();
+  return synced == null ? local : mergeStreakStates(local, normalizeStreakState(synced));
+}
+
 export function writeStreakState(state: { count: number; lastDate: string }) {
-  const next: StreakState = {
-    count:
-      typeof state.count === "number" && state.count >= 0
-        ? Math.floor(state.count)
-        : 0,
-    lastDate: typeof state.lastDate === "string" ? state.lastDate : "",
-  };
+  const next = normalizeStreakState(state);
   try {
     localStorage.setItem(STREAK_KEY, JSON.stringify(next));
   } catch {
-    /* private mode */
+    /* private mode: the synced copy still has it */
+  }
+  if (streakSync) {
+    const current = normalizeStreakState(streakSync.get());
+    if (current.count !== next.count || current.lastDate !== next.lastDate) streakSync.set(next);
   }
   return next;
 }

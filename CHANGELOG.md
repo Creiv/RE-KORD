@@ -50,6 +50,11 @@ one version number covers the hub, the clients and the packages.
 
 ### Fixed
 
+- **The listening streak reset after an update or a reinstall** (GitHub issue #100): it
+  lived only in the app's local storage. It is now part of the account state synced with
+  the hub (`settings.listeningStreak`): it survives new packages and follows you between
+  devices, and two copies combine (yesterday on the phone plus today on the desktop is a
+  streak of two).
 - **Karaoke backdrop stayed empty for non-Latin lyrics** (GitHub issue #100): the word
   picker kept only `a-z` and digits, so Cyrillic, Greek, Arabic, Hebrew, Japanese, Korean
   and other scripts produced no words. It now keeps letters and digits of every script
