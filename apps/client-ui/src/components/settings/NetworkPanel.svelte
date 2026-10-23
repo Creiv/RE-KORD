@@ -2,7 +2,10 @@
   import { onMount } from "svelte";
   import { ActionRow, Button, Field, Panel, TextInput } from "@rekord/ui";
   import RemoteAccessPanel from "../RemoteAccessPanel.svelte";
+  import { checkAccessKey, clearAccessKey, getAccessKey } from "../../lib/accessKey";
   import { api } from "../../lib/api";
+  import { getServerBaseUrl } from "../../lib/config";
+  import { confirmDialog } from "../../lib/confirm.svelte";
   import { connectGate } from "../../lib/connect.svelte";
   import { t } from "../../lib/i18n.svelte";
   import { session } from "../../lib/session.svelte";
@@ -24,6 +27,55 @@
 
   const canManageMachine = $derived(ctx.canManageMachine);
 
+  /** Access key of the hub in use, as this device sees it. */
+  type KeyStatus = "checking" | "ok" | "off" | "missing" | "invalid" | "locked" | "unknown";
+  let keyStatus = $state<KeyStatus>("checking");
+  let keyStored = $state(false);
+  let keyBusy = $state(false);
+
+  async function loadKeyStatus() {
+    const base = getServerBaseUrl();
+    const stored = getAccessKey(base);
+    keyStored = stored != null;
+    keyStatus = "checking";
+    const res = await checkAccessKey(base, stored ?? "");
+    if (res.ok) keyStatus = res.required ? "ok" : "off";
+    else if (res.reason === "invalid") keyStatus = stored ? "invalid" : "missing";
+    else if (res.reason === "locked") keyStatus = "locked";
+    else keyStatus = "unknown";
+  }
+
+  // The key screen now covers this panel instead of unmounting it: read the
+  // status again when it closes (key accepted, change cancelled).
+  let lastPhase = connectGate.phase;
+  $effect(() => {
+    const phase = connectGate.phase;
+    if (phase === "app" && lastPhase !== "app") void loadKeyStatus();
+    lastPhase = phase;
+  });
+
+  function changeKey() {
+    connectGate.changeKey(getServerBaseUrl());
+  }
+
+  async function forgetKey() {
+    const ok = await confirmDialog({
+      title: t("accessKey.forgetTitle"),
+      message: t("accessKey.forgetBody"),
+      confirmLabel: t("accessKey.forget"),
+      danger: true,
+    });
+    if (!ok) return;
+    keyBusy = true;
+    const base = getServerBaseUrl();
+    const needed = keyStatus === "ok" || keyStatus === "invalid";
+    clearAccessKey(base);
+    keyBusy = false;
+    // The hub still wants a key: ask for it now rather than on the next refusal.
+    if (needed) connectGate.requireKey(base, "required");
+    else void loadKeyStatus();
+  }
+
   async function loadRemote() {
     try {
       ctx.remoteInfo = await api.remoteAccess();
@@ -38,6 +90,7 @@
   onMount(() => {
     void ctx.load();
     void loadRemote();
+    void loadKeyStatus();
     let poll: ReturnType<typeof setInterval> | null = null;
     const sync = () => {
       const visible = document.visibilityState === "visible";
@@ -173,6 +226,26 @@
       rel="noopener noreferrer">{t("settings.openHubPanel")}</a
     >
   </p>
+</Panel>
+<Panel title={t("accessKey.settingsTitle")}>
+  <p class="hint" role="status" aria-live="polite">
+    {t(`accessKey.status.${keyStatus}`)}
+  </p>
+  <ActionRow>
+    <Button
+      variant={keyStatus === "missing" || keyStatus === "invalid" ? "primary" : "ghost"}
+      disabled={keyBusy || keyStatus === "checking" || keyStatus === "off"}
+      onclick={changeKey}
+    >
+      {keyStored ? t("accessKey.change") : t("accessKey.enter")}
+    </Button>
+    {#if keyStored}
+      <Button variant="ghost" tone="danger" disabled={keyBusy} onclick={() => void forgetKey()}>
+        {t("accessKey.forget")}
+      </Button>
+    {/if}
+  </ActionRow>
+  <p class="hint">{t("accessKey.settingsHint")}</p>
 </Panel>
 <Panel title={t("settings.panel.remote")}>
   <RemoteAccessPanel

@@ -1,3 +1,9 @@
+import {
+  accessKeyHeaders,
+  accessKeyReason,
+  reportAccessKeyNeeded,
+  retryAfterSeconds,
+} from "./lib/accessKey";
 import { isGatewayStatus, hubErrorKey } from "./lib/hubErrors";
 import { t } from "./lib/i18n.svelte";
 
@@ -59,6 +65,17 @@ type RequestOptions = RequestInit & {
 function httpError(res: Response, body: unknown, fallback?: string): ApiError {
   const env = (body && typeof body === "object" ? body : null) as { error?: unknown } | null;
   const code = env && typeof env.error === "string" && env.error ? env.error : null;
+  const keyReason = accessKeyReason(code);
+  if (keyReason && (res.status === 401 || res.status === 429)) {
+    // The hub wants a (different) access key: the panel shows its prompt.
+    const retryAfter = retryAfterSeconds(res);
+    reportAccessKeyNeeded(keyReason, retryAfter);
+    const message =
+      keyReason === "locked" && retryAfter
+        ? t("errors.accessKeyLockedFor", { seconds: retryAfter })
+        : t(`errors.code.${code}`);
+    return new ApiError("http", message, { status: res.status, code });
+  }
   const mapped = hubErrorKey(res.status, code, env != null);
   const message = mapped
     ? t(mapped.key, mapped.vars)
@@ -92,7 +109,12 @@ async function fetchHub<R>(
   try {
     let res: Response;
     try {
-      res = await fetch(path, { ...init, signal: controller.signal });
+      // The key goes only to same-origin paths, never to another host.
+      const headers = {
+        ...accessKeyHeaders(path),
+        ...((init.headers as Record<string, string> | undefined) ?? {}),
+      };
+      res = await fetch(path, { ...init, headers, signal: controller.signal });
     } catch (e) {
       return fail(e);
     }
@@ -231,6 +253,8 @@ export type Health = {
   service?: string;
   version?: string;
   scanning?: boolean;
+  /** `"off"`, `"ok"`, or `"required"` (minimal body: no version, no scanning). */
+  accessKey?: string;
 };
 
 export type LibraryStats = {

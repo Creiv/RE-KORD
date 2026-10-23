@@ -6,8 +6,14 @@
  * lost Wi-Fi) is a different thing from the hub answering "no", and the session
  * only flips to "offline" for the former.
  */
+import {
+  accessKeyHeaders,
+  accessKeyReason,
+  isAccessKeyRefused,
+  reportAccessKeyNeeded,
+} from "../accessKey";
 import { accountHeaders, getSelectedAccountId, withAccountQuery } from "../account";
-import { apiUrl } from "../config";
+import { getServerBaseUrl, hubUrl } from "../config";
 import { i18n, t } from "../i18n.svelte";
 
 /** Default ceiling for a JSON call; long jobs pass their own `timeoutMs`. */
@@ -118,8 +124,9 @@ function accountQuery(path: string, accountId: string): string {
   return `${path}${sep}accountId=${encodeURIComponent(id)}`;
 }
 
-function buildHeaders(opts: RequestOptions): HeadersInit {
-  const base: Record<string, string> = {};
+function buildHeaders(opts: RequestOptions, toHub: boolean): HeadersInit {
+  // The key goes only to the hub it was typed for, never to absolute URLs.
+  const base: Record<string, string> = toHub ? accessKeyHeaders(getServerBaseUrl()) : {};
   // Only bodies we serialise ourselves are JSON; FormData sets its own boundary.
   const json = opts.json ?? typeof opts.body === "string";
   if (json) base["Content-Type"] = "application/json";
@@ -141,7 +148,7 @@ function resolveUrl(path: string, opts: RequestOptions): string {
     opts.accountId !== undefined
       ? accountQuery(path, opts.accountId)
       : withAccountQuery(path);
-  return apiUrl(scoped);
+  return hubUrl(scoped);
 }
 
 /**
@@ -160,6 +167,15 @@ export async function fetchHub<R>(
   delete (init as RequestOptions).json;
   if (signal?.aborted) {
     throw new ApiError("aborted", t("core.api.aborted"));
+  }
+  // The hub refused our key and the key screen is up: do not repeat the
+  // refusal over the network (polls, sync, the player's probes) until a new
+  // key is accepted.
+  if (!/^https?:\/\//i.test(path) && isAccessKeyRefused(getServerBaseUrl())) {
+    throw new ApiError("http", translateHubError("access_key_invalid", null), {
+      status: 401,
+      code: "access_key_invalid",
+    });
   }
   const timed = timeoutMs != null && timeoutMs > 0;
   // Without a timer the caller's signal goes straight to fetch, so it keeps
@@ -196,7 +212,7 @@ export async function fetchHub<R>(
     try {
       res = await fetch(resolveUrl(path, opts), {
         ...init,
-        headers: buildHeaders(opts),
+        headers: buildHeaders(opts, toHub),
         signal: controller ? controller.signal : (signal ?? undefined),
       });
     } catch (e) {
@@ -325,6 +341,12 @@ function httpError(
   };
   const code = typeof env.error === "string" && env.error ? env.error : null;
   const detail = typeof env.message === "string" ? env.message : null;
+  const keyReason = accessKeyReason(code);
+  if (keyReason && (res.status === 401 || res.status === 429)) {
+    // The hub in use wants a (different) key: the connection gate asks for it.
+    reportAccessKeyNeeded(getServerBaseUrl(), keyReason);
+    return new ApiError("http", translateHubError(code, null), { status: res.status, code, body });
+  }
   if (
     code &&
     ACCOUNT_REJECTED_CODES.has(code) &&

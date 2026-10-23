@@ -1,5 +1,6 @@
 <script lang="ts">
   import { Button, QrCodeImg } from "@rekord/ui";
+  import { getAccessKey, qrValueWithKey } from "../lib/accessKey";
   import { admin } from "../lib/admin.svelte";
   import { copyText } from "../lib/clipboard";
   import { t } from "../lib/i18n.svelte";
@@ -22,6 +23,14 @@
   // svelte-ignore state_referenced_locally
   let showQr = $state(qrOpen);
   let copied = $state(false);
+  /** Put the access key in the QR (fragment). Off by default, never remembered. */
+  let includeKey = $state(false);
+  // Only the QR image carries the key: the link, copy and labels keep `url`.
+  const qrValue = $derived.by(() => {
+    if (!includeKey || !admin.hasAccessKey) return url;
+    const key = getAccessKey();
+    return key ? qrValueWithKey(url, key) : url;
+  });
   let copiedTimer: ReturnType<typeof setTimeout> | null = null;
 
   async function copy() {
@@ -68,11 +77,20 @@
   </div>
   {#if showQr}
     <figure class="qr">
-      <QrCodeImg value={url} size={220} alt={t("network.qrAlt", { url })} />
+      <QrCodeImg value={qrValue} size={220} alt={t("network.qrAlt", { url })} />
       {#if qrCaption}
         <figcaption>{qrCaption}</figcaption>
       {/if}
     </figure>
+    {#if admin.hasAccessKey}
+      <label class="check">
+        <input type="checkbox" bind:checked={includeKey} />
+        <span>{t("network.qrIncludeKey")}</span>
+      </label>
+      {#if includeKey}
+        <p class="warn" role="note">{t("network.qrIncludeKeyWarn")}</p>
+      {/if}
+    {/if}
   {/if}
 </div>
 
@@ -136,6 +154,26 @@
     border: 1px solid var(--rk-line);
     border-radius: var(--rk-radius-lg);
     background: #fff;
+  }
+
+  .check {
+    display: flex;
+    align-items: flex-start;
+    gap: 0.5rem;
+    font-size: var(--rk-fs-xs);
+    line-height: var(--rk-lh);
+  }
+
+  .check input {
+    margin-top: 0.15rem;
+  }
+
+  .warn {
+    margin: 0;
+    max-width: 30rem;
+    font-size: var(--rk-fs-xs);
+    line-height: var(--rk-lh);
+    color: var(--rk-warning);
   }
 
   .qr figcaption {

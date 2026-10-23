@@ -205,7 +205,22 @@ fn enabled_modules(state: &AppState) -> Vec<String> {
     ids
 }
 
-async fn health(State(state): State<AppState>) -> impl IntoResponse {
+async fn health(
+    State(state): State<AppState>,
+    access: Option<axum::Extension<crate::access_key::Access>>,
+) -> impl IntoResponse {
+    let access_key = crate::access_key::health_access(&state, access.map(|e| e.0));
+    // Without the key: only what a client needs to ask for one and to tell
+    // whether it can talk to this hub at all.
+    if access_key == "required" {
+        return Json(json!({
+            "ok": true,
+            "service": "RE-KORD",
+            "apiVersion": API_VERSION,
+            "minClientVersion": MIN_CLIENT_VERSION,
+            "accessKey": access_key,
+        }));
+    }
     Json(json!({
         "ok": true,
         "service": "RE-KORD",
@@ -215,6 +230,7 @@ async fn health(State(state): State<AppState>) -> impl IntoResponse {
         "transcode": crate::transcode::ffmpeg_available(),
         "modules": enabled_modules(&state),
         "scanning": state.is_scanning(),
+        "accessKey": access_key,
     }))
 }
 

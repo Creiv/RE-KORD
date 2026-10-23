@@ -50,6 +50,13 @@ export const COOKIE_CODES: ReadonlySet<string> = new Set([
   "cookies_locked_by_env",
 ]);
 
+/** Access key refusals (`REKORD_ACCESS_KEY`). */
+export const ACCESS_KEY_CODES: ReadonlySet<string> = new Set([
+  "access_key_required",
+  "access_key_invalid",
+  "access_key_rate_limited",
+]);
+
 /** Statuses a reverse proxy (Vite dev, Cloudflare) answers for a hub that is down. */
 export function isGatewayStatus(status: number): boolean {
   return status === 500 || status === 502 || status === 503 || status === 504;
@@ -76,6 +83,7 @@ export function hubErrorKey(
   if (code && PODCAST_CODES.has(code)) return { key: `errors.code.${code}` };
   if (code && POWER_CODES.has(code)) return { key: `errors.code.${code}` };
   if (code && COOKIE_CODES.has(code)) return { key: `errors.code.${code}` };
+  if (code && ACCESS_KEY_CODES.has(code)) return { key: `errors.code.${code}` };
 
   if (status === 403) {
     if (text.includes("default")) return { key: "errors.forbiddenDefault" };

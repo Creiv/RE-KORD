@@ -2,6 +2,7 @@
   import { onMount, untrack } from "svelte";
   import { ActionRow, Button, Panel, Select, TextInput } from "@rekord/ui";
   import { api, type Track } from "../../lib/api";
+  import { connectGate } from "../../lib/connect.svelte";
   import { hubActivityMsg, hubKind } from "../../lib/hubText";
   import { fmtDate, t, tp } from "../../lib/i18n.svelte";
   import {
@@ -138,6 +139,20 @@
   $effect(() => {
     const query = JSON.parse(activityQueryKey) as ActivityQuery;
     untrack(() => void loadActivity(query));
+  });
+
+  // The access-key screen covers this panel instead of unmounting it: once a
+  // new key is accepted, read again what the refused key left as an error.
+  let lastPhase = connectGate.phase;
+  $effect(() => {
+    const phase = connectGate.phase;
+    if (phase === "app" && lastPhase === "access-key") {
+      untrack(() => {
+        void loadDiag();
+        void loadActivity(JSON.parse(activityQueryKey) as ActivityQuery);
+      });
+    }
+    lastPhase = phase;
   });
 
   function formatActivityTs(ts: string): string {

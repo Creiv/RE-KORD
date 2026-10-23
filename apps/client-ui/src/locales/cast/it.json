@@ -10,5 +10,8 @@
   "cast.noLanUrl": "Il dispositivo Cast non può raggiungere l'hub: apri il client dall'indirizzo di rete locale (non localhost) o attiva l'accesso remoto.",
   "cast.loadFailed": "Impossibile trasmettere «{{title}}»: {{error}}",
   "cast.sessionFailed": "il dispositivo non ha accettato la connessione (codice {{code}})",
-  "cast.timeout": "il dispositivo Cast non ha risposto"
+  "cast.timeout": "il dispositivo Cast non ha risposto",
+  "cast.keyWarnTitle": "La chiave di accesso va al dispositivo Cast",
+  "cast.keyWarnBody": "Il Chromecast scarica musica e copertine direttamente dall’hub, quindi riceve anche la chiave di accesso nell’indirizzo. Trasmetti solo a dispositivi di cui ti fidi. Se in futuro cambi la chiave sull’hub, questo avviso tornerà.",
+  "cast.keyWarnConfirm": "Trasmetti comunque"
 }

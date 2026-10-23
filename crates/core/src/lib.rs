@@ -1,3 +1,4 @@
+pub mod access_key;
 pub mod accounts;
 pub mod api;
 pub mod backup;
@@ -288,7 +289,8 @@ pub fn build_router(state: AppState, ui: UiDirs) -> Router {
 
     // Layers wrap every route, nested service and fallback. Outermost last:
     // security headers → request id → trace span (reads the id) → origin
-    // guard → CORS → compression → static cache headers → body limit.
+    // guard → CORS → access key → compression → static cache headers → body
+    // limit.
     app.layer(axum::middleware::from_fn_with_state(
         state.clone(),
         power::api::activity_layer,
@@ -296,6 +298,10 @@ pub fn build_router(state: AppState, ui: UiDirs) -> Router {
     .layer(DefaultBodyLimit::max(DEFAULT_BODY_LIMIT))
     .layer(axum::middleware::from_fn(static_cache_headers))
     .layer(compression_layer())
+    .layer(axum::middleware::from_fn_with_state(
+        state.clone(),
+        access_key::access_key_guard,
+    ))
     .layer(origin::cors_layer())
     .layer(axum::middleware::from_fn(origin::origin_guard))
     .layer(TraceLayer::new_for_http().make_span_with(request_span))
@@ -338,6 +344,8 @@ pub fn prepare_hub_state(
             .filter(|v| !v.is_empty())
             .map(PathBuf::from)
     });
+    // Fail closed before touching anything: a set but unusable key stops the hub.
+    let access_key = access_key::gate_from_env()?;
     let mut config = AppConfig::resolve(Some(opts.data_dir.clone()), opts.bind, manifest);
     config.ensure_dirs()?;
     modules::write_default_manifest(&config.modules_manifest)?;
@@ -349,7 +357,12 @@ pub fn prepare_hub_state(
         enabled_modules = ?registry.enabled_ids(),
         "starting RE-KORD hub"
     );
-    AppState::new(config, registry)
+    let mut state = AppState::new(config, registry)?;
+    if let Some(gate) = access_key {
+        info!("access key required on /api and /media");
+        state.access_key = Some(std::sync::Arc::new(gate));
+    }
+    Ok(state)
 }
 
 /// Run a hub until `shutdown` resolves, then stop background work (downloads,

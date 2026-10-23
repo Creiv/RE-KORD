@@ -1,3 +1,4 @@
+import { withAccessKeyQuery } from "./accessKey";
 import { externalMediaPath, isExternalPath } from "./externalItems";
 
 const STORAGE_KEY = "rekord.serverBaseUrl";
@@ -41,10 +42,19 @@ if (typeof window !== "undefined" && typeof window.addEventListener === "functio
   });
 }
 
-export function apiUrl(path: string): string {
+/** Hub URL without the access key: for `fetch`, which sends it as a header. */
+export function hubUrl(path: string): string {
   const base = getServerBaseUrl();
   if (!path.startsWith("/")) path = `/${path}`;
   return `${base}${path}`;
+}
+
+/**
+ * Hub URL for things that cannot send headers (`<audio>`, `<img>`, downloads):
+ * carries `accessKey=` when this hub has one stored.
+ */
+export function apiUrl(path: string): string {
+  return withAccessKeyQuery(hubUrl(path), getServerBaseUrl());
 }
 
 /**

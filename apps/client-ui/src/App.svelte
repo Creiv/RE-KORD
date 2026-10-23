@@ -7,12 +7,15 @@
 
 <script lang="ts">
   import { onMount } from "svelte";
+  import AccessKeyScreen from "./components/AccessKeyScreen.svelte";
   import AppShell from "./components/AppShell.svelte";
   import BootSplash from "./components/BootSplash.svelte";
   import ConnectScreen from "./components/ConnectScreen.svelte";
   import { getSelectedAccountId, setSelectedAccountId } from "./lib/account";
   import { connectGate } from "./lib/connect.svelte";
   import { getServerBaseUrl, setServerBaseUrl } from "./lib/config";
+  import { t } from "./lib/i18n.svelte";
+  import { player } from "./lib/player";
   import { session } from "./lib/session.svelte";
 
   /** The app boots only once, even when going through the connection flow. */
@@ -31,7 +34,8 @@
     const unbindPlayer = session.bindPlayer();
     const unbindWindow = session.bindWindow();
     void connectGate.decideOnStart().then((ready) => {
-      if (ready) start();
+      // A hub that wants an access key starts the app once it is accepted.
+      if (ready && connectGate.phase === "app") start();
     });
     return () => {
       unbindPlayer();
@@ -54,6 +58,17 @@
     if (accountId !== getSelectedAccountId()) void session.switchAccount(accountId);
     else void session.refreshAll();
   }
+
+  function onKeyAccepted() {
+    connectGate.keyAccepted();
+    if (connectGate.phase !== "app") return;
+    if (!started) start();
+    else {
+      void session.refreshAll();
+      // A track that stopped on the refused key reloads with the new one.
+      player.resumeAfterOutage();
+    }
+  }
 </script>
 
 {#if connectGate.phase === "connect"}
@@ -63,10 +78,48 @@
     onconnected={onConnected}
     ondismiss={() => connectGate.close()}
   />
+{:else if connectGate.phase === "access-key" && !started}
+  {@render keyScreen()}
 {:else if connectGate.phase === "probing"}
   <!-- Startup probe, usually a few milliseconds: at first only the logo;
        bar and hints appear if the wait gets longer. -->
   <BootSplash />
 {:else}
-  <AppShell />
+  <!-- A key asked for while the app runs (rotated on the hub, Settings ›
+       Change) covers the app instead of replacing it: view, queue and player
+       are still there once the key is accepted or the change cancelled. -->
+  {@const keyOverlay = connectGate.phase === "access-key"}
+  <div class="app-root" inert={keyOverlay} aria-hidden={keyOverlay ? "true" : undefined}>
+    <AppShell />
+  </div>
+  {#if keyOverlay}
+    <div class="key-overlay">
+      {@render keyScreen()}
+    </div>
+  {/if}
 {/if}
+
+{#snippet keyScreen()}
+  {#key connectGate.keyBase + connectGate.keyReason}
+    <AccessKeyScreen
+      base={connectGate.keyBase}
+      reason={connectGate.keyReason}
+      onaccepted={onKeyAccepted}
+      oncancel={connectGate.keyCancellable ? () => connectGate.cancelKey() : undefined}
+      cancelLabel={connectGate.keyCancellable ? t("connect.cancel") : undefined}
+    />
+  {/key}
+{/snippet}
+
+<style>
+  .app-root {
+    display: contents;
+  }
+
+  .key-overlay {
+    position: fixed;
+    inset: 0;
+    z-index: 10000;
+    overflow-y: auto;
+  }
+</style>

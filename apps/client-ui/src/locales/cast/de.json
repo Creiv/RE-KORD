@@ -10,5 +10,8 @@
   "cast.noLanUrl": "Das Cast-Gerät erreicht den Hub nicht: Öffne den Client über seine Adresse im lokalen Netz (nicht localhost) oder aktiviere den Fernzugriff.",
   "cast.loadFailed": "„{{title}}“ konnte nicht gestreamt werden: {{error}}",
   "cast.sessionFailed": "das Gerät hat die Verbindung nicht angenommen (Code {{code}})",
-  "cast.timeout": "das Cast-Gerät hat nicht geantwortet"
+  "cast.timeout": "das Cast-Gerät hat nicht geantwortet",
+  "cast.keyWarnTitle": "Der Zugangsschlüssel geht an das Cast-Gerät",
+  "cast.keyWarnBody": "Der Chromecast lädt Musik und Cover direkt vom Hub und erhält dabei auch den Zugangsschlüssel in der Adresse. Streame nur auf Geräte, denen du vertraust. Wenn du den Schlüssel auf dem Hub später änderst, erscheint dieser Hinweis erneut.",
+  "cast.keyWarnConfirm": "Trotzdem streamen"
 }

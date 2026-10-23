@@ -40,6 +40,7 @@ directory. When no client bundle is found, the admin panel also answers on `/`.
 
 | Variable | Default | Meaning |
 |---|---|---|
+| `REKORD_ACCESS_KEY` | | Shared key every client must present on `/api` and `/media` (32-256 characters `A-Z a-z 0-9 . _ ~ -`, at least 10 different, not a repeated block). Set but invalid or weak: the hub does not start. See [Access key](#access-key) |
 | `REKORD_ALLOW_REMOTE_ADMIN` | `0` | `1` allows library and machine operations from non-local clients (see [SECURITY.md](../SECURITY.md)) |
 | `REKORD_ALLOWED_ORIGINS` | | Extra browser origins allowed by the origin policy, comma separated (see [API.md](API.md#cors)) |
 | `REKORD_PUBLIC_URL` | | Public HTTPS URL when the hub is behind your own reverse proxy. Shown and encoded in the QR code instead of a Cloudflare tunnel URL. |
@@ -148,8 +149,8 @@ the pinned versions. `amd64` and `arm64` are supported.
 
 `docker-compose.yml` settings: `REKORD_PORT`, `REKORD_DATA_HOST`, `REKORD_MUSIC_HOST`,
 `REKORD_ALLOW_REMOTE_ADMIN` and `TZ`, read from the environment or from a `.env` file. Other
-variables (`REKORD_ALLOWED_ORIGINS`, `REKORD_PUBLIC_URL`, `REKORD_YTDLP_COOKIES`, ...) are
-listed, commented out, in the compose file.
+variables (`REKORD_ACCESS_KEY`, `REKORD_ALLOWED_ORIGINS`, `REKORD_PUBLIC_URL`,
+`REKORD_YTDLP_COOKIES`, ...) are listed, commented out, in the compose file.
 
 Sleep prevention is not available inside a container (no systemd-logind); run the hub
 directly on the host if the machine must stay awake.
@@ -233,6 +234,111 @@ How it is done:
   lid or choosing Sleep still follows the power plan.
 - **macOS** (experimental): `caffeinate -i -w <hub pid>`.
 
+## Access key
+
+`REKORD_ACCESS_KEY` makes the hub ask every client for a shared key (model and trade-offs in
+[SECURITY.md](../SECURITY.md#optional-access-key), wire format in
+[API.md](API.md#access-key)). Use it whenever the hub is reachable from outside the LAN.
+
+Generate a key (32 to 256 characters from `A-Z a-z 0-9 . _ ~ -`, at least 10 different
+characters, not a short block repeated):
+
+```bash
+openssl rand -hex 32
+```
+
+Set it like any other variable:
+
+- **systemd:** add `REKORD_ACCESS_KEY=<key>` to `/etc/default/rekord-server` (readable by
+  root only: `sudo chmod 600 /etc/default/rekord-server`), then
+  `sudo systemctl restart rekord-server`.
+- **Docker:** uncomment `REKORD_ACCESS_KEY` in `docker-compose.yml` and put the value in a
+  `.env` file next to it (`chmod 600 .env`), not in the compose file.
+- **`rekord-server` by hand:** `REKORD_ACCESS_KEY=<key> ./rekord-server`.
+- **Desktop server flavor:** set the variable in the environment that starts the app.
+
+A passphrase of several random words joined by `-` works too, as long as it reaches 32
+characters (do not reuse an example from any documentation). If the variable is set but empty, invalid or weak, the hub refuses to start
+and prints why (`REKORD_ACCESS_KEY must be at least 32 characters long`,
+`REKORD_ACCESS_KEY is too weak: ...`, always with the advice to use `openssl rand -hex 32`);
+the value is never printed.
+
+Wrong keys: after five distinct wrong keys within a minute from one address, that address
+gets `429` for every further wrong key during 60 seconds. The right key always gets in, so
+the clients behind one proxy or Docker's bridge (all one address to the hub) cannot lock
+each other out. The proxy needs no forwarding header for this.
+The embedded hub of the desktop server flavor does not start either, and the connect screen
+reports the error. Rotate the key by changing it and restarting: every client asks again.
+
+Clients ask for the key on first connection (or scan the admin panel's QR with *include
+access key* turned on). In Docker, machine operations from the host need the header:
+`docker exec rekord curl -H "X-Rekord-Access-Key: <key>" -X POST http://127.0.0.1:7420/api/v1/library/scan`.
+
+### HTTPS is mandatory remotely
+
+Over plain HTTP the key travels in clear text, in headers and in media URLs. Expose the hub
+only through the Cloudflare tunnel or an HTTPS reverse proxy. On the LAN the hub speaks plain
+HTTP: the key protects against other people on the network only if they cannot read your
+traffic.
+
+### Replacing the proxy's Basic Auth
+
+Basic Auth in front of the hub breaks the desktop and Android apps: their pages run on
+`tauri://localhost` / `http://tauri.localhost`, so every call is cross-origin and the
+WebView cannot answer the authentication challenge (and `<audio>` / `<img>` cannot send
+credentials). Remove Basic Auth from the hub's site and let the access key do that job:
+
+- nginx: delete the `auth_basic` / `auth_basic_user_file` lines from the hub's `location`
+  (or write `auth_basic off;` there if they are inherited from the `server` block);
+- Caddy: delete the `basic_auth` (`basicauth` in older versions) block from the hub's site.
+
+### Keeping the key out of proxy logs
+
+Media URLs carry `accessKey=` in the query string, and the default access-log formats record
+it. The hub itself only logs paths.
+
+nginx: log `$uri` (path only) instead of `$request` / `$request_uri`:
+
+```nginx
+log_format rekord '$remote_addr - [$time_local] "$request_method $uri $server_protocol" '
+                  '$status $body_bytes_sent';
+server {
+    # ...
+    access_log /var/log/nginx/rekord.access.log rekord;
+}
+```
+
+Caddy (example; check it against your Caddy version): remove the parameter from the logged URI:
+
+```
+music.example.org {
+    log {
+        # Explicit form: also valid on Caddy 2.x releases where `wrap` and
+        # `fields` are still required (newer releases accept them as well).
+        format filter {
+            wrap console
+            fields {
+                request>uri query {
+                    delete accessKey
+                }
+            }
+        }
+    }
+    reverse_proxy 127.0.0.1:7420 {
+        flush_interval -1
+    }
+}
+```
+
+The Cloudflare tunnel terminates TLS at Cloudflare, which therefore sees full URLs,
+`accessKey` included; prefer your own HTTPS proxy if that matters to you.
+
+### Cast
+
+Chromecast receivers cannot send headers, so the stream and cover URLs given to them carry
+the key. The key reaches the Cast device and the receiver app running on it; the client
+warns before casting.
+
 ## Reverse proxy and HTTPS
 
 Any reverse proxy works. Requirements:
@@ -247,6 +353,8 @@ Any reverse proxy works. Requirements:
   operations through the proxy need `REKORD_ALLOW_REMOTE_ADMIN=1`.
 - Do not strip the CORS headers: the desktop and Android apps call the hub from another
   origin.
+- Do not put Basic Auth in front of the hub, and keep `accessKey` query parameters out of
+  the access log: see [Access key](#access-key).
 
 Over HTTPS the web client can be installed as a PWA, and the Google Cast web sender
 works in Chrome.

@@ -162,6 +162,47 @@ export function buildCastLoadPlan(track: Track, baseOrigin: string, opts: CastSt
   };
 }
 
+function withKeyQuery(url: string, key: string): string {
+  const hash = url.indexOf("#");
+  const head = hash < 0 ? url : url.slice(0, hash);
+  const tail = hash < 0 ? "" : url.slice(hash);
+  return `${head}${head.includes("?") ? "&" : "?"}accessKey=${encodeURIComponent(key)}${tail}`;
+}
+
+/**
+ * The plan with the hub's access key on the stream and cover URLs: the
+ * receiver fetches them itself and cannot send headers. `baseOrigin` is the
+ * same hub seen from the LAN or the tunnel (its own remote-access answer), so
+ * the key stays with the hub it belongs to; URLs on any other origin are left
+ * alone.
+ */
+export function withCastAccessKey(plan: CastLoadPlan, baseOrigin: string, key: string | null): CastLoadPlan {
+  if (!key) return plan;
+  let origin: string;
+  try {
+    origin = new URL(baseOrigin).origin;
+  } catch {
+    return plan;
+  }
+  const sameHub = (url: string | null) => {
+    if (!url) return false;
+    try {
+      return new URL(url).origin === origin;
+    } catch {
+      return false;
+    }
+  };
+  const cover = plan.metadata.coverUrl;
+  return {
+    ...plan,
+    url: sameHub(plan.url) ? withKeyQuery(plan.url, key) : plan.url,
+    metadata: {
+      ...plan.metadata,
+      coverUrl: cover && sameHub(cover) ? withKeyQuery(cover, key) : cover,
+    },
+  };
+}
+
 /**
  * Whether the Google Cast Web Sender can run here: Chrome-family browsers
  * (Chrome, Edge, Brave… on desktop and Android) in a secure context. Not in

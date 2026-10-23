@@ -22,14 +22,16 @@
  * browsers, nothing elsewhere.
  */
 
+import { acknowledgeCastWarning, castWarningAcknowledged, getAccessKey } from "../accessKey";
 import { api, type Track } from "../api";
 import { getServerBaseUrl } from "../config";
+import { confirmDialog } from "../confirm.svelte";
 import { t } from "../i18n.svelte";
 import { player } from "../player";
 import { toasts } from "../toasts.svelte";
 import { createAndroidCastBackend } from "./androidCast";
 import { CastLoadGate } from "./castLoadGate";
-import { buildCastLoadPlan, resolveCastMediaBaseUrl } from "./castMedia";
+import { buildCastLoadPlan, resolveCastMediaBaseUrl, withCastAccessKey } from "./castMedia";
 import { GoogleCastWebBackend } from "./googleCast";
 import { INITIAL_CAST_STATUS, type CastBackend, type CastStatus } from "./types";
 
@@ -140,6 +142,7 @@ class CastController {
     if (!this.backend || this.busy) return;
     this.busy = true;
     try {
+      if (!(await this.confirmKeyGoesToDevice())) return;
       await this.backend.requestSession();
     } catch (e) {
       // Closing the device picker rejects with "cancel": not an error for the user.
@@ -152,6 +155,23 @@ class CastController {
 
   async disconnect(): Promise<void> {
     await this.backend?.endSession(true);
+  }
+
+  /**
+   * The receiver loads the hub's URLs itself, so with an access key the key
+   * travels to the Cast device. Said once per hub and key, before the first
+   * cast; a new key asks again.
+   */
+  private async confirmKeyGoesToDevice(): Promise<boolean> {
+    const base = getServerBaseUrl();
+    if (!getAccessKey(base) || castWarningAcknowledged(base)) return true;
+    const ok = await confirmDialog({
+      title: t("cast.keyWarnTitle"),
+      message: t("cast.keyWarnBody"),
+      confirmLabel: t("cast.keyWarnConfirm"),
+    });
+    if (ok) acknowledgeCastWarning(base);
+    return ok;
   }
 
   private onConnected() {
@@ -223,7 +243,11 @@ class CastController {
       toasts.error(t("cast.noLanUrl"));
       return;
     }
-    const plan = buildCastLoadPlan(track, info.base, { transcodeAvailable: info.transcode });
+    const plan = withCastAccessKey(
+      buildCastLoadPlan(track, info.base, { transcodeAvailable: info.transcode }),
+      info.base,
+      getAccessKey(getServerBaseUrl()),
+    );
     try {
       await backend.loadMedia(plan.url, plan.contentType, plan.metadata, { startTime, autoplay });
       this.loadGate.settle(token, true);

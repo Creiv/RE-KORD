@@ -148,6 +148,15 @@ pub fn start(app: &AppHandle) {
         eprintln!("[rekord] embedded hub disabled (hub.json / REKORD_EMBEDDED_HUB)");
         return;
     }
+    // Same check `run_hub` does, made here so the window can say why there is
+    // no hub instead of only "unreachable". The message never contains the key.
+    if let Err(e) = rekord_core::access_key::gate_from_env() {
+        eprintln!("[rekord] embedded hub not started: {e}");
+        if let Some(state) = app.try_state::<crate::HubStartError>() {
+            *state.0.lock().unwrap() = Some("access_key_config");
+        }
+        return;
+    }
 
     let bind_raw = env_nonempty("REKORD_BIND").unwrap_or(file.bind.clone());
     let bind: SocketAddr = match bind_raw.parse() {
