@@ -9,6 +9,35 @@
   import { reloadWithFreshShell } from "../lib/platform/pwa";
   import { player } from "../lib/player";
   import { session, type ViewId } from "../lib/session.svelte";
+
+  /** Seconds the hub has been unreachable; ticks once a second only while it is. */
+  let offlineFor = $state(0);
+  /** The connect flow was opened by this outage already: once is enough. */
+  let autoConnectDone = false;
+  const OFFLINE_AUTO_CONNECT_S = 120;
+  $effect(() => {
+    const since = session.hubDownSince;
+    if (since == null) {
+      offlineFor = 0;
+      autoConnectDone = false;
+      return;
+    }
+    const tick = () => {
+      offlineFor = Math.max(0, Math.round((Date.now() - since) / 1000));
+      if (!autoConnectDone && offlineFor >= OFFLINE_AUTO_CONNECT_S && connectGate.phase === "app") {
+        autoConnectDone = true;
+        connectGate.open();
+      }
+    };
+    tick();
+    const timer = window.setInterval(tick, 1000);
+    return () => window.clearInterval(timer);
+  });
+  function formatOfflineFor(s: number): string {
+    if (s < 60) return `${s}s`;
+    const m = Math.floor(s / 60);
+    return s % 60 ? `${m}min ${s % 60}s` : `${m}min`;
+  }
   import {
     SHORTCUT_SEEK_SECONDS,
     SHORTCUTS_OFF_ATTR,
@@ -224,15 +253,32 @@
     <main class="content rk-scroll">
       <div class="inner">
         {#if session.error}
-          <Banner tone="error">{session.error}</Banner>
-          {#if session.status === "offline"}
-            <!-- On the phone the hub changes address as soon as the router renumbers it: from
-                 here the flow reopens, instead of hunting for the entry in Settings. -->
+          {#if session.status === "offline" && session.hubDownSince != null}
+            <!-- Hub unreachable: how long for, retry at once, or change hub (issue #100).
+                 After a couple of minutes the connect flow opens by itself: on the phone the
+                 hub changes address as soon as the router renumbers it. -->
+            <Banner tone="error">
+              {offlineFor < 5
+                ? session.error
+                : t("core.hub.unreachableFor", { time: formatOfflineFor(offlineFor) })}
+            </Banner>
             <div class="offline-out">
+              <Button variant="secondary" onclick={() => session.retryHubNow()}>
+                {t("core.hub.retryNow")}
+              </Button>
               <Button variant="ghost" onclick={() => connectGate.open()}>
                 {t("settings.changeHub")}
               </Button>
             </div>
+          {:else}
+            <Banner tone="error">{session.error}</Banner>
+            {#if session.status === "offline"}
+              <div class="offline-out">
+                <Button variant="ghost" onclick={() => connectGate.open()}>
+                  {t("settings.changeHub")}
+                </Button>
+              </div>
+            {/if}
           {/if}
         {/if}
 
@@ -366,6 +412,8 @@
   .offline-out {
     display: flex;
     justify-content: flex-start;
+    flex-wrap: wrap;
+    gap: var(--rk-space-sm);
   }
 
   .inner {

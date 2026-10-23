@@ -63,6 +63,8 @@
   "core.player.trackSkipped": "“{{title}}” won't load: skipping to the next one.",
   "core.player.waitingHub": "Playback resumes as soon as the hub is reachable again.",
   "core.hub.unreachable": "Hub unreachable. Retrying on its own; music resumes when it is back.",
+  "core.hub.unreachableFor": "Hub unreachable for {{time}}. Retrying by myself; music resumes when it is back. After two minutes the connect screen opens.",
+  "core.hub.retryNow": "Retry now",
   "core.hub.backResumed": "Hub reachable again: resuming where it stopped.",
   "core.time.justNow": "just now",
   "core.status.online": "Online",

@@ -63,6 +63,8 @@
   "core.player.trackSkipped": "«{{title}}» non si carica: passo al successivo.",
   "core.player.waitingHub": "Riprendo appena l'hub torna raggiungibile.",
   "core.hub.unreachable": "Hub non raggiungibile. Riprovo da solo; la musica riprende quando torna.",
+  "core.hub.unreachableFor": "Hub non raggiungibile da {{time}}. Riprovo da solo; la musica riprende quando torna. Dopo due minuti si apre la schermata di connessione.",
+  "core.hub.retryNow": "Riprova ora",
   "core.hub.backResumed": "Hub di nuovo raggiungibile: riprendo da dove si era fermato.",
   "core.time.justNow": "adesso",
   "core.status.online": "Online",

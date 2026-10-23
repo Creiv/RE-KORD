@@ -382,6 +382,8 @@ class ClientSession {
 
   /** The hub could not be reached; cleared by the first request that gets through. */
   private hubDown = $state(false);
+  /** When the outage started (ms since epoch), for the banner's counter. */
+  hubDownSince = $state<number | null>(null);
   /** Running `/health` probe loop while the hub is unreachable. */
   private outageTimer: ReturnType<typeof setTimeout> | null = null;
   private outageDelay = OUTAGE_PROBE_MIN_MS;
@@ -433,6 +435,7 @@ class ClientSession {
    * `/health` with backoff until it answers; then `onHubBack` resumes.
    */
   private markHubUnreachable() {
+    if (!this.hubDown) this.hubDownSince = Date.now();
     this.hubDown = true;
     if (this.status !== "offline") this.status = "offline";
     if (!this.error) this.error = t("core.hub.unreachable");
@@ -492,6 +495,7 @@ class ClientSession {
       this.outageTimer = null;
       this.outageDelay = OUTAGE_PROBE_MIN_MS;
       this.hubDown = false;
+      this.hubDownSince = null;
       this.status = this.stats?.scanning ? "indexing" : "online";
       this.error = "";
       // Playback first: the track that broke off reloads where it stopped.

@@ -63,6 +63,8 @@
   "core.player.trackSkipped": "„{{title}}“ lädt nicht: weiter zum nächsten Titel.",
   "core.player.waitingHub": "Die Wiedergabe geht weiter, sobald der Hub wieder erreichbar ist.",
   "core.hub.unreachable": "Hub nicht erreichbar. Neuer Versuch läuft automatisch; die Musik geht weiter, sobald er zurück ist.",
+  "core.hub.unreachableFor": "Hub seit {{time}} nicht erreichbar. Ich versuche es weiter; die Musik läuft weiter, sobald er zurück ist. Nach zwei Minuten öffnet sich der Verbindungsbildschirm.",
+  "core.hub.retryNow": "Jetzt erneut versuchen",
   "core.hub.backResumed": "Hub wieder erreichbar: Es geht an der gestoppten Stelle weiter.",
   "core.time.justNow": "gerade eben",
   "core.status.online": "Online",
