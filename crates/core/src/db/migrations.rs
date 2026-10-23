@@ -28,10 +28,11 @@ const MIGRATIONS: &[(i64, &str, Step)] = &[
     (5, "recount mp3 durations", v5_recount_mp3_durations),
     (6, "podcast sources", v6_podcast_sources),
     (7, "embedded tags and covers", v7_embedded_tags),
+    (8, "query indexes", v8_query_indexes),
 ];
 
 /// Schema version this build writes.
-pub const SCHEMA_VERSION: i64 = 7;
+pub const SCHEMA_VERSION: i64 = 8;
 
 pub fn user_version(conn: &Connection) -> Result<i64> {
     Ok(conn.query_row("PRAGMA user_version", [], |r| r.get(0))?)
@@ -630,6 +631,32 @@ fn v7_embedded_tags(tx: &Transaction<'_>) -> Result<()> {
           WHERE has_cover = 1 AND cover_path IS NOT NULL AND cover_source IS NULL;
         UPDATE tracks SET edited_fields = edited_fields | 32
           WHERE lyrics IS NOT NULL AND trim(lyrics) != '';
+        "#,
+    )?;
+    Ok(())
+}
+
+/// Indexes for the reads the clients issue all the time, found with
+/// `EXPLAIN QUERY PLAN` on a real library: albums by artist (artist pages,
+/// artist covers, the per-artist subquery of the artist list) scanned the
+/// whole table; the album list and the paginated track list sorted every
+/// row on every page; tombstones, playlist order and favorites order used
+/// temporary b-trees. The sort indexes carry the same collation as the
+/// `ORDER BY` clauses, otherwise SQLite cannot use them.
+fn v8_query_indexes(tx: &Transaction<'_>) -> Result<()> {
+    tx.execute_batch(
+        r#"
+        CREATE INDEX IF NOT EXISTS idx_albums_artist ON albums(artist_id);
+        CREATE INDEX IF NOT EXISTS idx_albums_sort
+            ON albums(artist_name COLLATE NOCASE, name COLLATE NOCASE);
+        CREATE INDEX IF NOT EXISTS idx_tracks_sort
+            ON tracks(artist_name COLLATE NOCASE, album_name COLLATE NOCASE,
+                      disc_number, track_number, title COLLATE NOCASE);
+        CREATE INDEX IF NOT EXISTS idx_tombstones_removed_at ON track_tombstones(removed_at);
+        CREATE INDEX IF NOT EXISTS idx_playlist_tracks_position
+            ON playlist_tracks(playlist_id, position);
+        CREATE INDEX IF NOT EXISTS idx_favorites_created
+            ON favorites(account_id, created_at);
         "#,
     )?;
     Ok(())

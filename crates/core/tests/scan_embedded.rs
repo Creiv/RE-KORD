@@ -10,7 +10,7 @@ use lofty::file::{AudioFile, TaggedFileExt};
 use lofty::picture::{MimeType, Picture, PictureType};
 use lofty::probe::Probe;
 use lofty::tag::{ItemKey, ItemValue, Tag, TagItem, TagType};
-use rekord_core::db::{CuratedTrackMeta, CuratedWrite, Db, LibraryTrack};
+use rekord_core::db::{CuratedTrackMeta, CuratedWrite, Db, LibraryTrack, SCHEMA_VERSION};
 use rekord_core::embedded::{backfill, EmbeddedOptions, EmbeddedPriority, MergePolicy};
 use rekord_core::scan::{scan_library_opts, ScanMode, ScanOptions};
 use std::fs;
@@ -769,7 +769,7 @@ fn the_backfill_completes_a_library_indexed_before_5_1() {
 
     // 5.1 opens it: migration v7, nothing re-read yet.
     let db = Db::open(lib.data.join("rekord.db")).unwrap();
-    assert_eq!(db.schema_version().unwrap(), 7);
+    assert_eq!(db.schema_version().unwrap(), SCHEMA_VERSION);
     let before = {
         let id = db.track_id_by_rel(rel).unwrap().unwrap();
         db.get_library_track(id).unwrap().unwrap()

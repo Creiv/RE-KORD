@@ -33,7 +33,10 @@ one version number covers the hub, the clients and the packages.
 - **Hub robustness.** A panic while holding one of the hub's locks no longer turns every
   later request into a 500 until restart: the lock is recovered. Library queries now use
   read-only database connections (up to four, next to the single writer), so browsing,
-  searching and playing no longer wait for a scan's or a backfill's write batches. *Analyse folders*
+  searching and playing no longer wait for a scan's or a backfill's write batches, and
+  database schema v8 adds the indexes those reads were missing (albums by artist, the
+  album and track sort orders, playlist order, favorites order, tombstones), so artist
+  pages and paginated lists stop scanning or re-sorting the whole table. *Analyse folders*
   (`POST /api/v1/library/probe`) is now a machine operation like the layout it feeds.
 - **yt-dlp's JavaScript engine: the bundled QuickJS comes first** (GitHub issue #103, the
   Node.js security releases of 21 October 2026). An installed Deno, Node.js or Bun is used
