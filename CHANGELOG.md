@@ -20,6 +20,15 @@ one version number covers the hub, the clients and the packages.
   `REKORD_ACCESS_KEY`, when set, wins and locks the panel. `GET/PUT/DELETE
   /api/v1/system/access-key` (machine operation).
 
+### Changed
+
+- **yt-dlp's JavaScript engine: the bundled QuickJS comes first** (GitHub issue #103, the
+  Node.js security releases of 21 October 2026). An installed Deno, Node.js or Bun is used
+  only when there is no bundled runtime (source builds, `--no-tools` packages) or when
+  `REKORD_YTDLP_JS_RUNTIME` names it, so YouTube downloads no longer depend on the patch
+  level of a system Node. A system Node must now be at least 22.23.4, 24.22.1 or 26.12.1
+  (end-of-life lines are skipped). The package builder image uses Node 22.23.4.
+
 ## 5.2.1 — 2026-10-17 (pre-release, clients only)
 
 A preview of what is coming in 5.3, published as a GitHub pre-release with the Client

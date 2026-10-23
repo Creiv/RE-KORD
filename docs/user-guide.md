@@ -529,10 +529,11 @@ YouTube downloads need two things on the hub:
 - **YouTube cookies** (see below): without them YouTube often answers "Sign in to confirm
   you're not a bot".
 - **A JavaScript engine for yt-dlp**: without one YouTube answers "The page needs to be
-  reloaded", even with valid cookies. The hub uses Deno, Node.js 22+ or Bun if installed
-  (also from `~/.deno`, `~/.bun`, nvm, `/usr/local/bin` or `/opt/homebrew/bin`), because
-  they are about twice as fast; otherwise the one included in the Server packages and the
-  Docker image (QuickJS-ng). When there is none,
+  reloaded", even with valid cookies. The hub uses the one included in the Server
+  packages and the Docker image (QuickJS-ng), which is verified and updated with RE-KORD;
+  without it, an installed Deno, Node.js or Bun (also from `~/.deno`, `~/.bun`, nvm,
+  `/usr/local/bin` or `/opt/homebrew/bin`), provided it is recent enough: for Node.js the
+  October 2026 security releases (22.23.4, 24.22.1, 26.12.1) or newer. When there is none,
   the yt-dlp strip warns "YouTube requires a JavaScript engine for yt-dlp".
 
 #### YouTube cookies

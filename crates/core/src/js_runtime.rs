@@ -6,25 +6,27 @@
 //! a desktop app launched from the menu does not see runtimes installed in a
 //! shell profile (nvm, deno, bun), so common install locations are probed too.
 //!
-//! Lookup order (the first usable one wins). A recent deno / node / bun already
-//! installed is preferred because it solves the challenges about twice as fast
-//! as QuickJS (~3 s against ~7 s per video); the bundled QuickJS is the
-//! always-available fallback:
+//! Lookup order (the first usable one wins). The bundled QuickJS comes first:
+//! it is pinned, checksum-verified and updated with RE-KORD, so YouTube
+//! downloads do not depend on the patch level of whatever node happens to be
+//! installed (GitHub issue #103). An installed deno / node / bun is about twice
+//! as fast (~3 s against ~7 s per video) and is used when there is no bundled
+//! runtime (source builds, `--no-tools` packages) or when the setting names it:
 //!
 //! 1. `REKORD_YTDLP_JS_RUNTIME`: `none` / `0` / `off` disables it; otherwise
 //!    a `name:path` pair, an absolute path or a bare name looked up on PATH;
-//! 2. deno, node or bun on PATH;
-//! 3. deno, bun or node in common install locations missing from a GUI PATH:
+//! 2. the bundled runtime: `REKORD_YTDLP_JS_BIN`, then `qjs` (or `deno`) in the
+//!    folders of the bundled tools and next to `YTDLP_PATH`;
+//! 3. deno, node or bun on PATH;
+//! 4. deno, bun or node in common install locations missing from a GUI PATH:
 //!    `~/.deno/bin`, `~/.bun/bin`, nvm's newest node, `/usr/local/bin`,
 //!    `/opt/homebrew/bin` (Windows: `%USERPROFILE%\.deno\bin`,
 //!    `%USERPROFILE%\.bun\bin`, `%ProgramFiles%\nodejs`);
-//! 4. the bundled runtime: `REKORD_YTDLP_JS_BIN`, then `qjs` (or `deno`) in the
-//!    folders of the bundled tools and next to `YTDLP_PATH`;
 //! 5. a `qjs` on PATH or in those common locations.
 //!
-//! Runtimes found on PATH or in common locations must run and meet yt-dlp's
-//! minimum version (an old system node is skipped); the explicit setting is
-//! taken as is. Probing runs subprocesses, so it happens off the async workers
+//! Runtimes found on PATH or in common locations must run and meet the minimum
+//! version (yt-dlp's floor, raised for node to its security releases: an old
+//! system node is skipped); the explicit setting is taken as is. Probing runs subprocesses, so it happens off the async workers
 //! and the result is cached for [`crate::tools::VERSION_TTL`].
 
 use crate::tools::{self, VERSION_TTL};
@@ -48,11 +50,21 @@ const KINDS: [(&str, &str); 4] = [
     ("quickjs", "qjs"),
 ];
 
-/// Oldest version yt-dlp accepts (wiki "EJS"); QuickJS has no hard minimum.
-pub fn minimum_version(name: &str) -> Option<&'static [u64]> {
+/// Oldest version accepted: yt-dlp's floor (wiki "EJS"), raised for node to
+/// the October 2026 security releases (CVE-2026-111497 among others:
+/// 22.23.4, 24.22.1, 26.12.1; odd majors are end of life and always affected,
+/// so they must reach the next even line). QuickJS has no hard minimum.
+pub fn minimum_version(name: &str, version: &str) -> Option<&'static [u64]> {
     match name {
         "deno" => Some(&[2, 3, 0]),
-        "node" => Some(&[22, 0, 0]),
+        "node" => {
+            let major = tools::parse_version_numbers(version).and_then(|n| n.first().copied());
+            Some(match major {
+                Some(m) if m >= 25 => &[26, 12, 1],
+                Some(23) | Some(24) => &[24, 22, 1],
+                _ => &[22, 23, 4],
+            })
+        }
         "bun" => Some(&[1, 2, 11]),
         _ => None,
     }
@@ -231,7 +243,7 @@ impl Lookup {
 
     /// Candidates after the setting, in priority order (existing files only).
     fn candidates(&self) -> Vec<(&'static str, PathBuf, &'static str)> {
-        // Installed fast runtimes first, then the bundled one, then any other qjs.
+        // The bundled runtime first, then installed fast ones, then any other qjs.
         let mut fast: Vec<(&'static str, PathBuf, &'static str)> = Vec::new();
         let mut slow: Vec<(&'static str, PathBuf, &'static str)> = Vec::new();
         let mut push = |name: &'static str, p: PathBuf, source: &'static str| {
@@ -275,7 +287,7 @@ impl Lookup {
                 bundled.push((name, dir.join(self.exe(stem)), "bundled"));
             }
         }
-        let out: Vec<_> = fast.into_iter().chain(bundled).chain(slow).collect();
+        let out: Vec<_> = bundled.into_iter().chain(fast).chain(slow).collect();
         let mut seen = std::collections::HashSet::new();
         out.into_iter()
             .filter(|(_, p, _)| p.is_file())
@@ -341,7 +353,10 @@ impl Lookup {
                 None => continue,
             };
             if source != "bundled" {
-                if let (Some(v), Some(min)) = (version.as_deref(), minimum_version(name)) {
+                if let Some((v, min)) = version
+                    .as_deref()
+                    .and_then(|v| minimum_version(name, v).map(|min| (v, min)))
+                {
                     if !meets_minimum(v, min) {
                         continue;
                     }
@@ -512,6 +527,21 @@ mod tests {
         assert!(!meets_minimum("20.19.2", &[22, 0, 0]));
         assert!(!meets_minimum("2.2.9", &[2, 3, 0]));
         assert!(meets_minimum("garbage", &[2, 3, 0]));
+        // Node: only the October 2026 security releases (or newer) pass.
+        let node_ok = |v: &str| meets_minimum(v, minimum_version("node", v).unwrap());
+        assert!(!node_ok("20.19.2"));
+        assert!(!node_ok("22.16.0"));
+        assert!(node_ok("22.23.4"));
+        assert!(node_ok("22.24.0"));
+        assert!(!node_ok("23.11.0"));
+        assert!(!node_ok("24.0.0"));
+        assert!(node_ok("24.22.1"));
+        assert!(!node_ok("25.9.0"));
+        assert!(!node_ok("26.12.0"));
+        assert!(node_ok("26.12.1"));
+        assert!(node_ok("27.0.0"));
+        assert_eq!(minimum_version("deno", "2.9.7"), Some(&[2u64, 3, 0][..]));
+        assert_eq!(minimum_version("quickjs", "0.17.0"), None);
         assert_eq!(kind_for_file(Path::new("/x/qjs.exe")), Some("quickjs"));
         assert_eq!(kind_for_file(Path::new("/x/deno")), Some("deno"));
         assert_eq!(kind_for_file(Path::new("/x/python")), None);
@@ -556,22 +586,22 @@ mod tests {
             ..base.clone()
         };
         assert_eq!(pick(&name), Some(("node".into(), node.clone(), "env")));
-        // A setting pointing at nothing falls back to the lookup: the
-        // installed node first, the bundled QuickJS without it.
+        // A setting pointing at nothing falls back to the lookup: the bundled
+        // QuickJS first, the installed node without it.
         let missing = Lookup {
             setting: Some("bun".into()),
             ..base.clone()
         };
-        assert_eq!(pick(&missing), Some(("node".into(), node, "path")));
-        let no_node = Lookup {
-            path_var: Some(OsString::new()),
+        assert_eq!(pick(&missing), Some(("quickjs".into(), qjs, "bundled")));
+        let no_bundled = Lookup {
+            bundled_dirs: Vec::new(),
             ..missing
         };
-        assert_eq!(pick(&no_node), Some(("quickjs".into(), qjs, "bundled")));
+        assert_eq!(pick(&no_bundled), Some(("node".into(), node, "path")));
     }
 
     #[test]
-    fn installed_fast_runtimes_before_bundled_qjs() {
+    fn bundled_qjs_before_installed_runtimes() {
         let s = Scratch::new();
         let bundled = s.file("pkg/qjs");
         let env_bin = s.file("elsewhere/qjs");
@@ -585,16 +615,17 @@ mod tests {
             home: Some(s.0.join("home")),
             ..Default::default()
         };
-        // An installed deno (preferred over node) beats the bundled QuickJS.
-        assert_eq!(pick(&l), Some(("deno".into(), path_deno.clone(), "path")));
-        // Off the GUI PATH, the common locations are still found first.
-        l.path_var = Some(OsString::new());
-        assert_eq!(pick(&l), Some(("deno".into(), home_deno, "common")));
-        // Nothing installed: the bundled runtime, the explicit file first.
-        l.home = None;
+        // The bundled runtime wins over everything installed: the explicit
+        // file first, then the one in the bundled folders.
         assert_eq!(pick(&l), Some(("quickjs".into(), env_bin, "bundled")));
         l.bundled_bin = None;
         assert_eq!(pick(&l), Some(("quickjs".into(), bundled, "bundled")));
+        // Without a bundled runtime: an installed deno (preferred over node).
+        l.bundled_dirs = Vec::new();
+        assert_eq!(pick(&l), Some(("deno".into(), path_deno.clone(), "path")));
+        // Off the GUI PATH, the common locations are still found.
+        l.path_var = Some(OsString::new());
+        assert_eq!(pick(&l), Some(("deno".into(), home_deno, "common")));
         let _ = (path_node, path_deno);
     }
 
@@ -602,7 +633,7 @@ mod tests {
     fn common_locations_newest_nvm_and_minimum_versions() {
         let s = Scratch::new();
         let old = s.file("home/.nvm/versions/node/v20.19.2/bin/node");
-        let new = s.file("home/.nvm/versions/node/v22.16.0/bin/node");
+        let new = s.file("home/.nvm/versions/node/v22.23.4/bin/node");
         let _newest_but_broken = s.file("home/.nvm/versions/node/v24.0.0/bin/node");
         let bun = s.file("home/.bun/bin/bun");
         let local_qjs = s.file("usr-local/qjs");
@@ -618,13 +649,13 @@ mod tests {
                 "bun" => Some(Some("1.1.0".into())), // too old for yt-dlp
                 "node" if p.to_string_lossy().contains("v24") => None, // does not run
                 "node" if p == old.as_path() => Some(Some("20.19.2".into())),
-                "node" => Some(Some("22.16.0".into())),
+                "node" => Some(Some("22.23.4".into())),
                 _ => Some(Some("0.17.0".into())),
             }
         };
         let r = l.select(probe).runtime.unwrap();
         assert_eq!((r.name.as_str(), r.path.as_path()), ("node", new.as_path()));
-        assert_eq!(r.version.as_deref(), Some("22.16.0"));
+        assert_eq!(r.version.as_deref(), Some("22.23.4"));
         // Nothing usable but an old node: QuickJS from /usr/local/bin.
         std::fs::remove_file(&new).unwrap();
         std::fs::remove_file(&bun).unwrap();
@@ -647,7 +678,7 @@ mod tests {
             ..Default::default()
         };
         let r = l
-            .select(|name, _| (name != "quickjs").then_some(Some("22.1.0".into())))
+            .select(|name, _| (name != "quickjs").then_some(Some("22.23.4".into())))
             .runtime
             .unwrap();
         assert_eq!((r.name.as_str(), r.source), ("node", "path"));

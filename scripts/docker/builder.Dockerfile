@@ -18,7 +18,7 @@
 # their license: that is the price of producing the .exe installer from Linux.
 FROM ubuntu:24.04
 
-ARG NODE_VERSION=22.16.0
+ARG NODE_VERSION=22.23.4
 ARG PNPM_VERSION=9.15.0
 ARG CARGO_XWIN_VERSION=0.23.1
 
