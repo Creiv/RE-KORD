@@ -279,6 +279,8 @@ upgrading, deployment, architecture, API, Android, development.
 - German translation by [@knoellix](https://github.com/knoellix)
   ([PR #93](https://github.com/Creiv/RE-KORD/pull/93)); the long-MP3 duration fixes were
   inspired by his [PR #95](https://github.com/Creiv/RE-KORD/pull/95).
+- Optional access key by [@mrsalvaa](https://github.com/mrsalvaa)
+  ([PR #102](https://github.com/Creiv/RE-KORD/pull/102)).
 - Built on [Tauri](https://tauri.app), [Svelte](https://svelte.dev),
   [axum](https://github.com/tokio-rs/axum), [SQLite](https://sqlite.org) and
   [lofty](https://github.com/Serial-ATA/lofty-rs); the Server packages bundle
