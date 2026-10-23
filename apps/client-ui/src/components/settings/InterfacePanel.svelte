@@ -33,6 +33,22 @@
   let { ctx }: { ctx: SettingsAccounts } = $props();
   const hubBusy = $derived(ctx.jobs.hubBusy);
 
+  /** Settings › Interface › Features: the optional experiences, per account. */
+  const FEATURE_SWITCHES = [
+    { key: "featureNebula", labelKey: "settings.features.nebula" },
+    { key: "featureVisualizer", labelKey: "settings.features.visualizer" },
+    { key: "featurePlectr", labelKey: "settings.features.plectr" },
+  ] as const;
+  const featurePrefs = $derived.by(() => {
+    void prefsRevision.any;
+    const p = loadUserPrefs();
+    return {
+      featureNebula: p.featureNebula,
+      featureVisualizer: p.featureVisualizer,
+      featurePlectr: p.featurePlectr,
+    };
+  });
+
   const fadeOptions = $derived([
     { value: "0", label: t("settings.audioCrossfadeOff") },
     { value: "3", label: t("settings.audioCrossfade3") },
@@ -376,6 +392,22 @@
     <LayoutWidthFields />
   </SettingsFieldsGrid>
 </Panel>
+<Panel title={t("settings.panel.features")} class="settings-features-section">
+  <p class="hint">{t("settings.features.hint")}</p>
+  <div class="settings-features">
+    {#each FEATURE_SWITCHES as f (f.key)}
+      <label class="settings-glass-toggle">
+        <input
+          type="checkbox"
+          class="settings-checkbox"
+          checked={featurePrefs[f.key]}
+          onchange={(e) => patchUserPrefs({ [f.key]: (e.currentTarget as HTMLInputElement).checked })}
+        />
+        <span>{t(f.labelKey)}</span>
+      </label>
+    {/each}
+  </div>
+</Panel>
 <Panel title={t("settings.panel.player")} class="settings-player-section">
   <SettingsFieldsGrid>
     <Field label={t("settings.visualizer")}>
@@ -402,6 +434,12 @@
 </Panel>
 
 <style>
+  .settings-features {
+    display: flex;
+    flex-wrap: wrap;
+    gap: var(--rk-space-sm) var(--rk-space-lg);
+  }
+
   .settings-glass-opacity.is-disabled {
     opacity: 0.45;
   }

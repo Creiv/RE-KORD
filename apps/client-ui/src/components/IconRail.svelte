@@ -3,6 +3,7 @@
   import type { ViewId } from "../lib/session.svelte";
   import { session } from "../lib/session.svelte";
   import { hubModules } from "../lib/hubModules.svelte";
+  import { features } from "../lib/features.svelte";
   import { accountAchievements } from "../lib/accountLevel.svelte";
   import { t } from "../lib/i18n.svelte";
   import GraphicEq from "./icons/GraphicEq.svelte";
@@ -66,13 +67,15 @@
           <UiIcon name="podcast" />
         </IconRailButton>
       {/if}
-      <IconRailButton
-        label={t("nav.plectr")}
-        active={active === "plectr"}
-        onclick={() => onnavigate("plectr")}
-      >
-        <UiIcon name="plectrum" />
-      </IconRailButton>
+      {#if features.plectr}
+        <IconRailButton
+          label={t("nav.plectr")}
+          active={active === "plectr"}
+          onclick={() => onnavigate("plectr")}
+        >
+          <UiIcon name="plectrum" />
+        </IconRailButton>
+      {/if}
     </div>
     <hr class="sep" />
     <div class="section">

@@ -5,6 +5,7 @@
   import UiIcon from "./icons/UiIcon.svelte";
   import { session } from "../lib/session.svelte";
   import { hubModules } from "../lib/hubModules.svelte";
+  import { features } from "../lib/features.svelte";
   import { t } from "../lib/i18n.svelte";
 
   let {
@@ -28,7 +29,9 @@
       { id: "recent" as const, labelKey: "nav.recent", icon: "history" as const },
       { id: "statistics" as const, labelKey: "nav.statistics", icon: "chart" as const },
       { id: "achievements" as const, labelKey: "nav.achievements", icon: "trophy" as const },
-      { id: "plectr" as const, labelKey: "nav.plectr", icon: "plectrum" as const },
+      ...(features.plectr
+        ? [{ id: "plectr" as const, labelKey: "nav.plectr", icon: "plectrum" as const }]
+        : []),
       { id: "settings" as const, labelKey: "nav.settings", icon: "settings" as const },
     ].map((x) => ({ ...x, label: t(x.labelKey) })),
   );

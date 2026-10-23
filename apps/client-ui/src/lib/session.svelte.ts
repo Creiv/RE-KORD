@@ -2359,6 +2359,9 @@ class ClientSession {
   }
 
   navigate(id: ViewId) {
+    // A view switched off for this account (Settings › Interface › Features)
+    // is never shown, whatever asked for it (back stack, a restored view).
+    if (id === "plectr" && !loadUserPrefs().featurePlectr) id = "dashboard";
     this.view = id;
     // Dashboard: no refreshAll — that pulled user-state / legacyQueue and could
     // stop or replace the playing track. Data sync is TopBar Refresh only.
@@ -2526,6 +2529,9 @@ const SETTINGS_PREF_KEYS = new Set([
   "visualizerMode",
   "karaokeBackdrop",
   "crossfadeSec",
+  "featureNebula",
+  "featureVisualizer",
+  "featurePlectr",
 ]);
 
 /** 4xx other than timeout / conflict / rate limit: retrying cannot help. */
@@ -2628,6 +2634,9 @@ function settingsFromPrefs(p: UserPrefs): Record<string, unknown> {
     locale: p.locale,
     visualizerMode: p.visualizerMode,
     karaokeBackdrop: p.karaokeBackdrop,
+    featureNebula: p.featureNebula,
+    featureVisualizer: p.featureVisualizer,
+    featurePlectr: p.featurePlectr,
   };
 }
 
@@ -2681,6 +2690,9 @@ function prefsPatchFromSettings(
   }
   if (!keep.has("karaokeBackdrop") && typeof settings.karaokeBackdrop === "boolean") {
     patch.karaokeBackdrop = settings.karaokeBackdrop;
+  }
+  for (const key of ["featureNebula", "featureVisualizer", "featurePlectr"] as const) {
+    if (!keep.has(key) && typeof settings[key] === "boolean") patch[key] = settings[key];
   }
   return patch;
 }

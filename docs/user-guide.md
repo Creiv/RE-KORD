@@ -749,6 +749,11 @@ from the hub computer, or anywhere once remote administration is on. See
 
 ### Interface
 
+**Features.** Three switches per account, all on by default: **Sonic Nebula** (the Library
+tab and the Home card), the **visualizer** in Studio › Listen (karaoke keeps working) and
+**Plectr** (the navigation entry and the game). Off, the entry disappears and the code is
+not loaded; the choice is saved with the account and follows you on every device.
+
 - **"Language"**: Italiano, English or Deutsch.
 - **"Theme"**:
 

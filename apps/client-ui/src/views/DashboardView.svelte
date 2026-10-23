@@ -11,6 +11,7 @@
   import TrackList from "../components/TrackList.svelte";
   import UiIcon from "../components/icons/UiIcon.svelte";
   import DashboardNebulaCard from "../components/nebula/DashboardNebulaCard.svelte";
+  import { features } from "../lib/features.svelte";
   import DashboardMixCard from "../components/views/dashboard/DashboardMixCard.svelte";
   import DashboardQualityCard from "../components/views/dashboard/DashboardQualityCard.svelte";
   import DashboardRadioCard from "../components/views/dashboard/DashboardRadioCard.svelte";
@@ -289,7 +290,9 @@
       <DashboardRadioCard {loading} />
       <DashboardMixCard {loading} />
       {@render podcastsCard()}
-      <DashboardNebulaCard tracks={session.catalogTracks} />
+      {#if features.nebula}
+        <DashboardNebulaCard tracks={session.catalogTracks} />
+      {/if}
 
       <Panel class="session-card dashboard-session-card dashboard-page__full dashboard-page__tile">
         <header class="section-head section-head--page-toolbar">

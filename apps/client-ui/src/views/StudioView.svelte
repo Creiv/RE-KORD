@@ -18,6 +18,7 @@
   import StudioDownloadPane from "../components/studio/StudioDownloadPane.svelte";
   import StudioMetaPane from "../components/studio/StudioMetaPane.svelte";
   import ListenVisualizer from "../components/visualizer/ListenVisualizer.svelte";
+  import { features } from "../lib/features.svelte";
   import {
     coverUrlFor,
     type CatalogWebItem,
@@ -439,14 +440,16 @@
                 </div>
               </div>
 
-              <div class="listen-stage__viz">
-                <ListenVisualizer
-                  playing={session.playing}
-                  mode={karaokeMode ? "karaoke" : undefined}
-                  lyrics={session.current?.lyrics ?? ""}
-                  currentTime={session.currentTime}
-                />
-              </div>
+              {#if features.visualizer || karaokeMode}
+                <div class="listen-stage__viz">
+                  <ListenVisualizer
+                    playing={session.playing}
+                    mode={karaokeMode ? "karaoke" : undefined}
+                    lyrics={session.current?.lyrics ?? ""}
+                    currentTime={session.currentTime}
+                  />
+                </div>
+              {/if}
 
               <ListenSleepTimer />
             </section>

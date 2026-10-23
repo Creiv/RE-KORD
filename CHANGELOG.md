@@ -48,6 +48,13 @@ one version number covers the hub, the clients and the packages.
   level of a system Node. A system Node must now be at least 22.23.4, 24.22.1 or 26.12.1
   (end-of-life lines are skipped). The package builder image uses Node 22.23.4.
 
+### New
+
+- **Switch Sonic Nebula, the visualizer and Plectr off per account** (GitHub issue #100):
+  *Settings › Interface › Features*. Off, their entries, cards, tabs and canvases disappear
+  and their code is not loaded; on by default, saved with the account and synced like the
+  theme.
+
 ### Changed
 
 - **No page scrollbar on desktop either** (GitHub issue #100): as on phones since 5.1, the

@@ -25,6 +25,7 @@
   import { player } from "../lib/player";
   import { prefsRevision } from "../lib/prefsRevision.svelte";
   import { session, type LibraryBrowse } from "../lib/session.svelte";
+  import { features } from "../lib/features.svelte";
   import { describeError, toasts } from "../lib/toasts.svelte";
   import {
     NO_GENRE_KEY,
@@ -65,12 +66,18 @@
   const albumById = $derived(new Map<number, Album>(session.allAlbums.map((a) => [a.id, a])));
   const discOf = (tr: Track) => (tr as Track & { disc_number?: number | null }).disc_number ?? 0;
 
-  const browseTabs = $derived([
-    { id: "artists", label: t("page.library.tab.artists") },
-    { id: "genres", label: t("page.library.tab.genres") },
-    { id: "moods", label: t("page.library.tab.moods") },
-    { id: "nebula", label: t("nebula.tab") },
-  ]);
+  const browseTabs = $derived(
+    [
+      { id: "artists", label: t("page.library.tab.artists") },
+      { id: "genres", label: t("page.library.tab.genres") },
+      { id: "moods", label: t("page.library.tab.moods") },
+      { id: "nebula", label: t("nebula.tab") },
+    ].filter((tab) => tab.id !== "nebula" || features.nebula),
+  );
+  // Nebula switched off while it was the open tab: back to the artists.
+  $effect(() => {
+    if (!features.nebula && session.libraryBrowse === "nebula") session.libraryBrowse = "artists";
+  });
 
   /** Play counts snapshot: one prefs read, refreshed only when counts change. */
   const playCounts = $derived.by(() => {
