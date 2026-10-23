@@ -67,7 +67,7 @@ desktop app runs it on its own thread and runtime, so the window never waits for
 | Studio | `downloads.rs`, `ytdlp*.rs`, `youtube_music.rs`, `catalog_preview.rs`, `studio_fs.rs` | yt-dlp downloads as observable jobs, YouTube Music search, Discover previews, folder operations. |
 | Metadata | `metadata/`, `entity_info.rs` | Discogs, MusicBrainz, iTunes, Deezer, TheAudioDB, LRCLIB, Cover Art Archive; curiosità from Wikipedia, Wikiquote, Last.fm, Discogs, TheAudioDB. |
 | Backup | `backup/` | Backup ZIP v3 export/restore, legacy v2 restore, one-time legacy import, legacy config import. |
-| Operations | `jobs.rs`, `diagnostics.rs`, `errors.rs`, `tools.rs` | Job registry, activity log, recent-errors buffer, discovery and update of external tools. |
+| Operations | `jobs.rs`, `diagnostics.rs`, `errors.rs`, `tools.rs`, `events.rs` | Job registry, activity log, recent-errors buffer, discovery and update of external tools, the server-sent event stream (`/api/v1/events`) the clients refresh on instead of polling. |
 | Remote access | `remote_access.rs` | LAN URL detection and the Cloudflare quick tunnel. |
 | Power | `power/` | "Prevent the computer from sleeping": systemd-logind inhibitor (Linux), `SetThreadExecutionState` (Windows), `caffeinate` (macOS). Event driven: activity guards and one grace timer, nothing at all while off. |
 | Podcasts (optional) | `podcasts/` | "Podcast e notizie": feed / page / play.rtl.it / yt-dlp / live-stream sources fetched on demand with a TTL, and a Range-capable audio proxy limited to configured episodes. Off by default. See [MODULES.md](MODULES.md). |

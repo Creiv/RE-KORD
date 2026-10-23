@@ -35,6 +35,7 @@ import {
   setAccessKey,
   type AccessKeyReason,
 } from "./accessKey";
+import { hubEvents } from "./hubEvents.svelte";
 import {
   formatBytes,
   formatDateTime,
@@ -159,10 +160,26 @@ class AdminSession {
       this.keyRetryAfter = retryAfter;
       this.stopPolling();
     });
+    // Hub ≥ 5.3 says when jobs or the library change: one poll per hint,
+    // coalesced, instead of one every 1.5 s while a job runs.
+    hubEvents.start((kind) => {
+      if (kind !== "jobs" && kind !== "library") return;
+      if (this.keyNeeded) return;
+      if (this.eventPollTimer != null) return;
+      this.eventPollTimer = setTimeout(() => {
+        this.eventPollTimer = null;
+        void this.poll();
+      }, 300);
+    });
   }
 
   /** The prompt stored a working key (or the hub needs none): reload everything. */
+  private eventPollTimer: ReturnType<typeof setTimeout> | null = null;
+  /** Fallback ticks while the event stream is up: one in seven (about 10 s). */
+  private pollTick = 0;
+
   keyAccepted() {
+    hubEvents.restart();
     this.keyNeeded = null;
     this.keyRetryAfter = null;
     this.hasAccessKey = getAccessKey() != null;
@@ -434,6 +451,8 @@ class AdminSession {
   startPolling() {
     if (this.pollTimer != null) return;
     this.pollTimer = setInterval(() => {
+      // Events drive the refresh when the stream is up; keep a slow safety net.
+      if (hubEvents.connected && ++this.pollTick % 7 !== 0) return;
       void this.poll();
     }, 1500);
   }

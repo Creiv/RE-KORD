@@ -501,10 +501,15 @@ fn kill_child(inner: &mut RemoteInner) {
     }
 }
 
+fn publish_status(status: &str) {
+    crate::events::publish("remoteAccess", serde_json::json!({ "status": status }));
+}
+
 fn mark_error(inner: &mut RemoteInner, code: &'static str, msg: impl Into<String>) {
     let msg = msg.into();
     inner.enabled = false;
     inner.status = RemoteStatus::Error;
+    publish_status("error");
     inner.public_url = None;
     if msg.contains("ENOENT") || msg.contains("No such file") {
         inner.error_code = Some("cloudflared_not_found");
@@ -524,6 +529,7 @@ fn stop_inner() {
     kill_child(&mut inner);
     inner.enabled = false;
     inner.status = RemoteStatus::Stopped;
+    publish_status("stopped");
     inner.public_url = None;
     inner.error = None;
     inner.error_code = None;
@@ -553,6 +559,7 @@ fn apply_found_url(generation: u64, url: String, data_dir: &Path) -> bool {
     inner.public_url = Some(normalized.clone());
     inner.error = None;
     inner.error_code = None;
+    publish_status("running");
     info!(public_url = %normalized, "Cloudflare tunnel URL ready");
     crate::diagnostics::log_activity(
         data_dir,
@@ -586,6 +593,7 @@ fn start_tunnel(port: u16, data_dir: PathBuf, cloudflared: Option<PathBuf>) {
             let normalized = normalize_url_simple(&url).unwrap_or(url);
             inner.enabled = true;
             inner.status = RemoteStatus::Running;
+            publish_status("running");
             inner.public_url = Some(normalized.clone());
             inner.error = None;
             inner.error_code = None;
@@ -632,6 +640,7 @@ fn start_tunnel(port: u16, data_dir: PathBuf, cloudflared: Option<PathBuf>) {
     let generation = inner.generation;
     inner.enabled = true;
     inner.status = RemoteStatus::Starting;
+    publish_status("starting");
     inner.public_url = None;
     inner.error = None;
     inner.error_code = None;

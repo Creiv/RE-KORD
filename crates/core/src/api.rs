@@ -20,6 +20,7 @@ use zip::{CompressionMethod, ZipWriter};
 pub fn routes() -> Router<AppState> {
     Router::new()
         .route("/api/v1/health", get(health))
+        .route("/api/v1/events", get(crate::events::sse))
         .route("/api/health", get(health))
         .route("/api/v1/library", get(library_index))
         .route("/api/v1/library/stats", get(library_stats))

@@ -14,6 +14,7 @@ pub mod downloads;
 pub mod embedded;
 pub mod entity_info;
 pub mod errors;
+pub mod events;
 pub mod jobs;
 pub mod js_runtime;
 pub mod layout;

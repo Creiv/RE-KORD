@@ -216,6 +216,7 @@ pub fn scan_library_opts(db: &Db, music_root: &Path, opts: ScanOptions) -> Resul
     db.set_meta("schema_scan", "folder-first-v4")?;
     db.set_meta("last_scan_mode", mode.as_str())?;
     let index_epoch = db.bump_index_epoch()?;
+    crate::events::publish("library", serde_json::json!({ "indexEpoch": index_epoch }));
 
     info!(
         scanned_files = stats.scanned,
@@ -336,6 +337,7 @@ pub fn scan_subtree(
     db.refresh_counts()?;
     db.rebuild_genres()?;
     let index_epoch = db.bump_index_epoch()?;
+    crate::events::publish("library", serde_json::json!({ "indexEpoch": index_epoch }));
     info!(
         folder = %prefix,
         scanned_files = stats.scanned,

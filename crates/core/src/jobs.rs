@@ -148,6 +148,7 @@ impl JobRegistry {
         {
             let mut jobs = self.jobs.lock_or_recover();
             jobs.push(job);
+            crate::events::publish("jobs", serde_json::json!({ "id": id, "started": true }));
             prune(&mut jobs);
         }
         if cancelable {
@@ -222,10 +223,16 @@ impl JobRegistry {
     }
 
     pub fn clear_finished(&self) -> usize {
-        let mut jobs = self.jobs.lock_or_recover();
-        let before = jobs.len();
-        jobs.retain(|j| j.status == JobStatus::Running);
-        before - jobs.len()
+        let removed = {
+            let mut jobs = self.jobs.lock_or_recover();
+            let before = jobs.len();
+            jobs.retain(|j| j.status == JobStatus::Running);
+            before - jobs.len()
+        };
+        if removed > 0 {
+            crate::events::publish("jobs", serde_json::json!({ "cleared": removed }));
+        }
+        removed
     }
 
     fn update(&self, id: &str, f: impl FnOnce(&mut Job)) {
@@ -234,6 +241,7 @@ impl JobRegistry {
                 f(job);
             }
         }
+        crate::events::publish("jobs", serde_json::json!({ "id": id }));
     }
 }
 

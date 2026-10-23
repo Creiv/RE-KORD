@@ -350,7 +350,12 @@ pub fn save_user_state(
     let path = user_state_path(data_dir, account);
     let lock = state_lock(&path);
     let _guard = lock.lock().unwrap_or_else(|e| e.into_inner());
-    write_state_file(&path, state)
+    write_state_file(&path, state)?;
+    crate::events::publish(
+        "userState",
+        serde_json::json!({ "accountId": account, "revision": state.revision }),
+    );
+    Ok(())
 }
 
 /// Outcome of a guarded read-modify-write.
@@ -387,6 +392,10 @@ pub fn update_user_state(
     next.track_moods =
         crate::track_moods::normalize_track_moods_map(std::mem::take(&mut next.track_moods));
     write_state_file(&path, &next)?;
+    crate::events::publish(
+        "userState",
+        serde_json::json!({ "accountId": account, "revision": next.revision }),
+    );
     Ok(UpdateOutcome::Saved(next))
 }
 

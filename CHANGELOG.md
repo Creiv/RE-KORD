@@ -69,6 +69,11 @@ one version number covers the hub, the clients and the packages.
 
 ### Changed
 
+- **The hub tells the clients when something changed** (`GET /api/v1/events`, server-sent
+  events) instead of being polled: jobs and scans (the admin panel used to ask every 1.5 s
+  while a job ran), the account state saved from another device (once a minute before),
+  the tunnel status (every 15 s before). The streams exist only while a page is visible;
+  with an older hub, or when a stream drops, the clients poll as before.
 - **No page scrollbar on desktop either** (GitHub issue #100): as on phones since 5.1, the
   page and its sections scroll without drawing a bar, so the content keeps the full width.
   Logs, long lists, tables and dialogs that ask for a bar keep it.

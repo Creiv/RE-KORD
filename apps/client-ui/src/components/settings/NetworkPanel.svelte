@@ -7,6 +7,7 @@
   import { getServerBaseUrl } from "../../lib/config";
   import { confirmDialog } from "../../lib/confirm.svelte";
   import { connectGate } from "../../lib/connect.svelte";
+  import { hubEvents } from "../../lib/hubEvents.svelte";
   import { t } from "../../lib/i18n.svelte";
   import { session } from "../../lib/session.svelte";
   import type { SettingsAccounts } from "./settingsAccounts.svelte";
@@ -95,7 +96,10 @@
     const sync = () => {
       const visible = document.visibilityState === "visible";
       if (visible && poll == null) {
-        poll = setInterval(() => void loadRemote(), REMOTE_POLL_MS);
+        // With the hub's event stream up, `remoteAccess` events drive the refresh.
+        poll = setInterval(() => {
+          if (!hubEvents.connected) void loadRemote();
+        }, REMOTE_POLL_MS);
       } else if (!visible && poll != null) {
         clearInterval(poll);
         poll = null;
@@ -108,7 +112,11 @@
     };
     sync();
     document.addEventListener("visibilitychange", onVisibility);
+    const offEvents = hubEvents.on((kind) => {
+      if (kind === "remoteAccess") void loadRemote();
+    });
     return () => {
+      offEvents();
       if (poll != null) clearInterval(poll);
       document.removeEventListener("visibilitychange", onVisibility);
       if (remoteUrlCopyTimer) clearTimeout(remoteUrlCopyTimer);

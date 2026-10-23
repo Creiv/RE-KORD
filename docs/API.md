@@ -23,6 +23,7 @@ they are removed in 6.0. The RE-KORD 5 clients use `/api/v1` only.
 
 | Method | Path | Description |
 |--------|------|-------------|
+| GET | `/api/v1/events` | Server-sent events (hub ≥ 5.3): `event: hello` first, then `jobs` (a job started, progressed, finished, was cancelled or cleared; at most one every 400 ms per client, the last one kept), `library` (`{ indexEpoch }` after a scan; `{ lagged: true }` when the client fell behind), `userState` (`{ accountId, revision }` after a save), `remoteAccess` (`{ status }`), `downloads`. Hints only: re-read the matching endpoint. Keep-alive comment every 25 s; never compressed; needs the access key as `?accessKey=` like media |
 | GET | `/api/v1/health` | Service health → `{ ok, service: "RE-KORD", version, apiVersion: 1, minClientVersion: "5.0.0", transcode, modules, scanning, accessKey }` (see [Versioning](#versioning-and-client-compatibility); minimal body without the [access key](#access-key)) |
 | GET | `/api/v1/library` | List tracks (`limit`, `offset`) |
 | GET | `/api/v1/library/stats` | Counts for the requesting account's library selection (`track_count`, `album_count`, `artist_count`, `albums_without_cover`, `albums_without_meta`, `tracks_without_meta`, `loose_album_count`, `genre_count`), `catalog_track_count` (whole catalog), `index_epoch` (bumped by every scan / folder rescan), last scan, optional `disk_total_bytes` / `disk_available_bytes` |

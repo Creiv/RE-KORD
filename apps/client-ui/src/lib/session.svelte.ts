@@ -37,6 +37,7 @@ import {
   watchLibraryChanges,
   type LibraryChange,
 } from "./libraryEvents";
+import { hubEvents } from "./hubEvents.svelte";
 import { normalizeCustomTheme } from "./themeCatalog";
 import {
   applyTheme,
@@ -496,6 +497,7 @@ class ClientSession {
       this.outageDelay = OUTAGE_PROBE_MIN_MS;
       this.hubDown = false;
       this.hubDownSince = null;
+      hubEvents.rebind();
       this.status = this.stats?.scanning ? "indexing" : "online";
       this.error = "";
       // Playback first: the track that broke off reloads where it stopped.
@@ -1468,9 +1470,32 @@ class ClientSession {
       schedule();
     };
     const onFocus = () => this.pullIfStale(USER_STATE_FOCUS_GAP_MS);
-    // Other devices edit the same account: re-read it now and then while
-    // someone is looking (never in the background).
-    const poll = setInterval(() => this.pullIfStale(USER_STATE_POLL_MS - 1000), USER_STATE_POLL_MS);
+    // Other devices edit the same account: the hub's event stream says when
+    // (hub ≥ 5.3); the timer stays as a slow safety net while the stream is
+    // up, and as the only way with an older hub. Never in the background.
+    const poll = setInterval(
+      () => this.pullIfStale(hubEvents.connected ? USER_STATE_POLL_MS * 5 : USER_STATE_POLL_MS - 1000),
+      USER_STATE_POLL_MS,
+    );
+    let deltaTimer: ReturnType<typeof setTimeout> | null = null;
+    const offEvents = hubEvents.on((kind, data) => {
+      if (kind === "userState") {
+        const account = getSelectedAccountId() || "default";
+        if (data.accountId !== account) return;
+        const stored = this.readSyncBase(account);
+        if (stored?.revision != null && data.revision === stored.revision) return;
+        this.pullIfStale(0);
+      } else if (kind === "library") {
+        // A scan finished (or the stream lagged): apply the catalog delta once
+        // things settle, not for every one of a burst.
+        if (deltaTimer != null) clearTimeout(deltaTimer);
+        deltaTimer = setTimeout(() => {
+          deltaTimer = null;
+          if (!this.hubDown && document.visibilityState === "visible") void this.syncCatalogDelta();
+        }, 1500);
+      }
+    });
+    hubEvents.start();
     document.addEventListener("visibilitychange", onVisibility);
     window.addEventListener("pageshow", schedule);
     window.addEventListener("online", onOnline);
@@ -1482,6 +1507,9 @@ class ClientSession {
       if (this.outageTimer != null) clearTimeout(this.outageTimer);
       this.outageTimer = null;
       clearInterval(poll);
+      if (deltaTimer != null) clearTimeout(deltaTimer);
+      offEvents();
+      hubEvents.stop();
       document.removeEventListener("visibilitychange", onVisibility);
       window.removeEventListener("pageshow", schedule);
       window.removeEventListener("online", onOnline);
