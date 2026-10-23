@@ -3,6 +3,7 @@
 
 use crate::perm::PeerAddr;
 use crate::state::AppState;
+use crate::sync::LockRecover;
 use axum::extract::{Query, State};
 use axum::http::{HeaderMap, StatusCode};
 use axum::response::{IntoResponse, Response};
@@ -831,7 +832,7 @@ async fn remote_status(
     PeerAddr(peer): PeerAddr,
     Query(q): Query<AccountQuery>,
 ) -> Response {
-    let cfg = state.config.lock().unwrap().clone();
+    let cfg = state.config.lock_or_recover().clone();
     let lan = lan_urls_for_port(cfg.bind.port());
     let bind = cfg.bind.to_string();
     let data_dir = cfg.data_dir.clone();
@@ -856,7 +857,7 @@ async fn remote_start(
     if let Err(e) = require_machine_op(&state, &headers, &q, peer) {
         return e;
     }
-    let cfg = state.config.lock().unwrap().clone();
+    let cfg = state.config.lock_or_recover().clone();
     let port = cfg.bind.port();
     let data_dir = cfg.data_dir.clone();
     let lan = lan_urls_for_port(port);
@@ -907,7 +908,7 @@ async fn remote_stop(
     if let Err(e) = require_machine_op(&state, &headers, &q, peer) {
         return e;
     }
-    let cfg = state.config.lock().unwrap().clone();
+    let cfg = state.config.lock_or_recover().clone();
     let data_dir = cfg.data_dir.clone();
     let lan = lan_urls_for_port(cfg.bind.port());
     let bind = cfg.bind.to_string();
@@ -930,7 +931,7 @@ async fn remote_login(
     if let Err(e) = require_machine_op(&state, &headers, &q, peer) {
         return e;
     }
-    let data_dir = state.config.lock().unwrap().data_dir.clone();
+    let data_dir = state.config.lock_or_recover().data_dir.clone();
     if let Err(e) = persist_logged_in(&data_dir, true) {
         return err(StatusCode::INTERNAL_SERVER_ERROR, e);
     }
@@ -953,7 +954,7 @@ async fn remote_logout(
     if let Err(e) = require_machine_op(&state, &headers, &q, peer) {
         return e;
     }
-    let cfg = state.config.lock().unwrap().clone();
+    let cfg = state.config.lock_or_recover().clone();
     let data_dir = cfg.data_dir.clone();
     let lan = lan_urls_for_port(cfg.bind.port());
     let bind = cfg.bind.to_string();

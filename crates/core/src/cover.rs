@@ -1,4 +1,5 @@
 use crate::state::AppState;
+use crate::sync::LockRecover;
 use axum::body::Body;
 use axum::extract::{Path, Query, State};
 use axum::http::{header, HeaderMap, HeaderValue, StatusCode};
@@ -115,7 +116,7 @@ async fn serve_variant(
     let Some(size) = crate::thumbs::normalize_size(q.size) else {
         return serve_image(path, versioned, req).await;
     };
-    let data_dir = state.config.lock().unwrap().data_dir.clone();
+    let data_dir = state.config.lock_or_recover().data_dir.clone();
     let source = path.clone();
     let thumb =
         tokio::task::spawn_blocking(move || crate::thumbs::ensure_thumb(&data_dir, &source, size))

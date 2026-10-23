@@ -24,6 +24,7 @@
 //! out of `Referer`. The header is used wherever the client can send one.
 
 use crate::state::AppState;
+use crate::sync::LockRecover;
 use anyhow::{bail, Result};
 use axum::body::Body;
 use axum::extract::{ConnectInfo, State};
@@ -381,7 +382,7 @@ pub struct Limiter {
 impl Limiter {
     /// Remaining lock time for `source`, if locked.
     pub fn locked_for(&self, source: IpAddr, now: Instant) -> Option<Duration> {
-        let mut map = self.sources.lock().unwrap();
+        let mut map = self.sources.lock_or_recover();
         let entry = map.get_mut(&source)?;
         match entry.locked_until {
             Some(until) if until > now => Some(until - now),
@@ -397,7 +398,7 @@ impl Limiter {
     pub fn record_failure(&self, source: IpAddr, presented: &str, now: Instant) -> bool {
         let digest = sha256(presented.as_bytes());
         let fingerprint = u64::from_le_bytes(digest[..8].try_into().unwrap());
-        let mut map = self.sources.lock().unwrap();
+        let mut map = self.sources.lock_or_recover();
         if !map.contains_key(&source) && map.len() >= MAX_SOURCES {
             evict(&mut map, now);
         }
@@ -767,6 +768,6 @@ mod tests {
         for i in 0..(MAX_SOURCES + 100) as u32 {
             lim.record_failure(IpAddr::from(i.to_be_bytes()), "x", t0);
         }
-        assert!(lim.sources.lock().unwrap().len() <= MAX_SOURCES);
+        assert!(lim.sources.lock_or_recover().len() <= MAX_SOURCES);
     }
 }

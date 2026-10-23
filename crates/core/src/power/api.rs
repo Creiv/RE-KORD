@@ -3,6 +3,7 @@
 use super::{ActivityGuard, ActivityKind};
 use crate::config::{PowerSettings, PreventSleep};
 use crate::perm::PeerAddr;
+use crate::sync::LockRecover;
 use crate::AppState;
 use axum::body::{Body, Bytes, HttpBody};
 use axum::extract::{Request, State};
@@ -36,7 +37,7 @@ fn err(status: StatusCode, code: &str, message: Option<String>) -> Response {
 /// Settings, limits and live status (no side effects).
 pub fn payload(state: &AppState) -> Value {
     let (settings, locked) = {
-        let cfg = state.config.lock().unwrap();
+        let cfg = state.config.lock_or_recover();
         (cfg.power, cfg.power_mode_from_env)
     };
     json!({
@@ -101,7 +102,7 @@ async fn put_power(
         None => None,
     };
     let (before, next, data_dir, was_inhibiting) = {
-        let mut cfg = state.config.lock().unwrap();
+        let mut cfg = state.config.lock_or_recover();
         let before = cfg.power;
         if cfg.power_mode_from_env && mode.is_some_and(|m| m != before.prevent_sleep) {
             return err(

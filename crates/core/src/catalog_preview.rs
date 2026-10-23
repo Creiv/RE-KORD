@@ -5,6 +5,7 @@
 //! URL and `<audio src>` stays a plain hub URL.
 
 use crate::config::AppConfig;
+use crate::sync::LockRecover;
 use crate::youtube_music::{browse_payload, browse_response_title, walk_collect};
 use crate::ytdlp::{
     classify_ytdlp_error, guess_youtube_url_from_entry_id, javascript_args_resolved,
@@ -560,7 +561,7 @@ pub async fn create_preview_token(
     };
 
     let token = uuid::Uuid::new_v4().to_string();
-    let mut map = token_cache().lock().unwrap();
+    let mut map = token_cache().lock_or_recover();
     prune_tokens(&mut map);
     map.insert(
         token.clone(),
@@ -580,7 +581,7 @@ pub fn forget_token(token: &str) {
 }
 
 pub fn preview_stream_url(token: &str) -> Option<String> {
-    let mut map = token_cache().lock().unwrap();
+    let mut map = token_cache().lock_or_recover();
     prune_tokens(&mut map);
     map.get(token.trim()).map(|e| e.stream_url.clone())
 }
@@ -677,7 +678,7 @@ mod tests {
 
     #[test]
     fn token_round_trip_and_expiry() {
-        let mut map = token_cache().lock().unwrap();
+        let mut map = token_cache().lock_or_recover();
         map.insert(
             "live".into(),
             TokenEntry {

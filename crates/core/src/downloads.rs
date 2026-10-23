@@ -14,6 +14,7 @@
 
 use crate::download_tags;
 use crate::state::AppState;
+use crate::sync::LockRecover;
 use crate::ytdlp::{self, DownloadExtras, DownloadOutcome, Toolchain};
 use bytes::Bytes;
 use serde_json::{json, Value};
@@ -219,7 +220,7 @@ fn prune(map: &mut HashMap<String, Arc<DownloadJob>>) {
 }
 
 fn hub_id(state: &AppState) -> PathBuf {
-    state.config.lock().unwrap().data_dir.clone()
+    state.config.lock_or_recover().data_dir.clone()
 }
 
 /// Jobs of this hub, newest first.
@@ -350,7 +351,7 @@ pub fn start(state: &AppState, req: StartRequest) -> Result<NdjsonStream, &'stat
         if map.contains_key(&req.download_id) {
             return Err("download_id_active");
         }
-        let mut active = state.active_downloads.lock().unwrap();
+        let mut active = state.active_downloads.lock_or_recover();
         if active.contains_key(&req.download_id) {
             return Err("download_id_active");
         }
@@ -367,7 +368,7 @@ pub fn start(state: &AppState, req: StartRequest) -> Result<NdjsonStream, &'stat
 async fn run_job(state: AppState, job: Arc<DownloadJob>, req: StartRequest) {
     // A download keeps the computer awake until it ends (`whenActive`).
     let _activity = state.power.begin(crate::power::ActivityKind::Job);
-    let cfg = state.config.lock().unwrap().clone();
+    let cfg = state.config.lock_or_recover().clone();
     let toolchain = Toolchain::resolve(&cfg).await;
     let ytdlp_info = crate::tools::peek(
         crate::tools::Tool::Ytdlp,
@@ -426,7 +427,7 @@ async fn run_job(state: AppState, job: Arc<DownloadJob>, req: StartRequest) {
     )
     .await;
     let _ = pump.await;
-    state.active_downloads.lock().unwrap().remove(&job.id);
+    state.active_downloads.lock_or_recover().remove(&job.id);
 
     let mut outcome = match outcome {
         Ok(o) => o,

@@ -1,6 +1,7 @@
 //! Restore of next v3 and legacy v2 backup ZIPs.
 
 use super::*;
+use crate::sync::LockRecover;
 
 #[derive(Default)]
 struct AccountRestoreBundle {
@@ -214,7 +215,7 @@ pub async fn restore_backup_zip(
                 music_root = Some(PathBuf::from(r));
             }
         }
-        let dest = state.config.lock().unwrap().settings_path();
+        let dest = state.config.lock_or_recover().settings_path();
         if let Some(parent) = dest.parent() {
             fs::create_dir_all(parent)?;
         }
@@ -229,7 +230,7 @@ pub async fn restore_backup_zip(
         let (settings, had_remote_admin) = legacy_config::sanitize_restored_settings(&settings);
         if had_remote_admin {
             warn!("restore: backup had allow_remote_admin=true; reset to false on this machine");
-            let data_dir = state.config.lock().unwrap().data_dir.clone();
+            let data_dir = state.config.lock_or_recover().data_dir.clone();
             crate::diagnostics::log_activity(
                 &data_dir,
                 crate::diagnostics::ActivityEvent::new(
@@ -242,7 +243,7 @@ pub async fn restore_backup_zip(
         fs::write(&dest, settings.as_bytes())?;
         // Sleep prevention follows the restored settings at once.
         {
-            let mut cfg = state.config.lock().unwrap();
+            let mut cfg = state.config.lock_or_recover();
             cfg.reload_power_settings();
             state.power.configure(cfg.power);
         }
@@ -261,7 +262,7 @@ pub async fn restore_backup_zip(
             .and_then(|v| v.get("cloudflareLoggedIn").and_then(|x| x.as_bool()));
         let mut legacy = legacy_cfg.clone().unwrap_or_default();
         legacy.cloudflare_logged_in |= zip_remote == Some(true);
-        let mut cfg = state.config.lock().unwrap();
+        let mut cfg = state.config.lock_or_recover();
         let imported =
             legacy_config::apply_legacy_config(&mut cfg, &legacy, None, zip_token.as_deref());
         if imported.discogs_token || imported.cloudflare_logged_in || imported.youtube_cookies {
@@ -287,29 +288,32 @@ pub async fn restore_backup_zip(
     }
 
     {
-        let mut cfg = state.config.lock().unwrap();
+        let mut cfg = state.config.lock_or_recover();
         cfg.save_music_root(music_root.clone())?;
     }
 
     if let Some(modules) = read_zip_string(&mut archive, "config/modules.manifest.toml")? {
-        let dest = state.config.lock().unwrap().modules_manifest.clone();
+        let dest = state.config.lock_or_recover().modules_manifest.clone();
         if let Some(parent) = dest.parent() {
             fs::create_dir_all(parent)?;
         }
         fs::write(dest, modules)?;
     }
 
-    let data_dir = state.config.lock().unwrap().data_dir.clone();
+    let data_dir = state.config.lock_or_recover().data_dir.clone();
 
     // Shared config extras (cookies / activity).
     if let Some(cookies) = read_zip_string(&mut archive, "config/youtube-cookies.txt")? {
         if !cookies.trim().is_empty() {
-            let dest = state.config.lock().unwrap().default_youtube_cookies_path();
+            let dest = state
+                .config
+                .lock_or_recover()
+                .default_youtube_cookies_path();
             // Owner-only, atomic, and the cookies it replaces are wiped.
             if let Err(e) = crate::ytdlp_cookies::store_upload(&dest, cookies.as_bytes()) {
                 tracing::warn!(error = %e, "restore: youtube cookies not written");
             }
-            let mut cfg = state.config.lock().unwrap();
+            let mut cfg = state.config.lock_or_recover();
             if !cfg.youtube_cookies_from_env {
                 cfg.youtube_cookies_path = Some(dest);
             }

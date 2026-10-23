@@ -3,6 +3,7 @@
 use crate::accounts;
 use crate::perm::PeerAddr;
 use crate::state::AppState;
+use crate::sync::LockRecover;
 use axum::extract::{Query, State};
 use axum::http::HeaderMap;
 use axum::response::{IntoResponse, Response};
@@ -146,7 +147,7 @@ pub fn routes() -> Router<AppState> {
 async fn diagnostics(State(state): State<AppState>) -> Response {
     let _ = STARTED_AT.get_or_init(Instant::now);
     let uptime_secs = STARTED_AT.get().map(|t| t.elapsed().as_secs()).unwrap_or(0);
-    let cfg = state.config.lock().unwrap().clone();
+    let cfg = state.config.lock_or_recover().clone();
     let stats = state.db.stats(None).ok();
     let disk = cfg
         .music_root
@@ -200,7 +201,7 @@ async fn diagnostics(State(state): State<AppState>) -> Response {
             "parkedFavorites": parked_favorites,
             "parkedPlaylistTracks": parked_playlist_tracks,
         },
-        "activeDownloads": state.active_downloads.lock().unwrap().len(),
+        "activeDownloads": state.active_downloads.lock_or_recover().len(),
         "jobs": {
             "active": state.jobs.active_count(),
             "recent": state.jobs.list().into_iter().take(10).collect::<Vec<_>>(),
@@ -377,7 +378,7 @@ async fn activity_log(
     headers: HeaderMap,
     Query(q): Query<ActivityLogQuery>,
 ) -> Response {
-    let data_dir = state.config.lock().unwrap().data_dir.clone();
+    let data_dir = state.config.lock_or_recover().data_dir.clone();
     // Unknown / malformed ids are refused instead of falling back to Default
     // (which would unlock the full log).
     let caller_id =

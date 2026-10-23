@@ -1,6 +1,7 @@
 use crate::config::AppConfig;
 use crate::db::Db;
 use crate::scan;
+use crate::sync::LockRecover;
 use rekord_plugin_api::ModuleRegistry;
 use std::collections::HashMap;
 use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
@@ -90,7 +91,7 @@ impl AppState {
 
     /// Embedded tags / covers as the hub settings say.
     pub fn embedded_options(&self) -> crate::embedded::EmbeddedOptions {
-        crate::embedded::EmbeddedOptions::from_config(&self.config.lock().unwrap())
+        crate::embedded::EmbeddedOptions::from_config(&self.config.lock_or_recover())
     }
 
     pub fn is_scanning(&self) -> bool {
@@ -106,7 +107,7 @@ impl AppState {
         if acquired {
             self.scan_generations.started.fetch_add(1, Ordering::SeqCst);
             let activity = self.power.begin(crate::power::ActivityKind::Job);
-            *self.scan_activity.lock().unwrap() = Some(activity);
+            *self.scan_activity.lock_or_recover() = Some(activity);
         }
         acquired
     }
@@ -120,7 +121,7 @@ impl AppState {
     }
 
     pub fn end_scan(&self) {
-        drop(self.scan_activity.lock().unwrap().take());
+        drop(self.scan_activity.lock_or_recover().take());
         let started = self.scan_generations.started.load(Ordering::SeqCst);
         self.scan_generations
             .completed
@@ -178,7 +179,7 @@ impl AppState {
     /// Autoscan when music_root is set and the library was never indexed.
     pub fn needs_initial_scan(&self) -> bool {
         let root = {
-            let cfg = self.config.lock().unwrap();
+            let cfg = self.config.lock_or_recover();
             cfg.music_root.clone()
         };
         let Some(root) = root else {
@@ -243,7 +244,7 @@ impl AppState {
             anyhow::bail!(SCAN_BUSY);
         };
         {
-            let data_dir = self.config.lock().unwrap().data_dir.clone();
+            let data_dir = self.config.lock_or_recover().data_dir.clone();
             crate::diagnostics::log_activity(
                 &data_dir,
                 crate::diagnostics::ActivityEvent::new(
@@ -255,14 +256,14 @@ impl AppState {
             );
         }
         let root = {
-            let cfg = self.config.lock().unwrap();
+            let cfg = self.config.lock_or_recover();
             cfg.music_root.clone()
         };
         let Some(root) = root else {
             anyhow::bail!("music_root not set");
         };
         let db = self.db.clone();
-        let data_dir = self.config.lock().unwrap().data_dir.clone();
+        let data_dir = self.config.lock_or_recover().data_dir.clone();
         let job = self.jobs.start_coded(
             "scan",
             &format!("Scan libreria ({})", mode.as_str()),
@@ -330,8 +331,7 @@ impl AppState {
     pub async fn rescan_path(&self, rel_dir: &str) -> anyhow::Result<u64> {
         let root = self
             .config
-            .lock()
-            .unwrap()
+            .lock_or_recover()
             .music_root
             .clone()
             .ok_or_else(|| anyhow::anyhow!("music_root not set"))?;
@@ -342,7 +342,7 @@ impl AppState {
             tokio::time::sleep(std::time::Duration::from_millis(300)).await;
         };
         let db = self.db.clone();
-        let data_dir = self.config.lock().unwrap().data_dir.clone();
+        let data_dir = self.config.lock_or_recover().data_dir.clone();
         let rel = rel_dir.to_string();
         let embedded = self.embedded_options();
         let result = tokio::task::spawn_blocking(move || {
@@ -383,7 +383,7 @@ impl AppState {
     /// next: run the one-time legacy import now (under the scan lock).
     fn spawn_pending_legacy_import(&self) {
         let (data_dir, root) = {
-            let cfg = self.config.lock().unwrap();
+            let cfg = self.config.lock_or_recover();
             (cfg.data_dir.clone(), cfg.music_root.clone())
         };
         let Some(root) = root else {

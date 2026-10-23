@@ -31,6 +31,7 @@ pub mod selection;
 pub mod state;
 pub mod studio;
 pub mod studio_fs;
+pub mod sync;
 pub mod thumbs;
 pub mod tools;
 pub mod track_moods;
@@ -45,6 +46,7 @@ pub mod ytdlp_update;
 pub use config::AppConfig;
 pub use state::AppState;
 
+use crate::sync::LockRecover;
 use anyhow::Result;
 use axum::body::Body;
 use axum::extract::DefaultBodyLimit;
@@ -422,8 +424,7 @@ pub async fn stop_background_work(state: &AppState) {
     state.power.shutdown();
     let downloads: Vec<_> = state
         .active_downloads
-        .lock()
-        .unwrap()
+        .lock_or_recover()
         .values()
         .cloned()
         .collect();
@@ -437,7 +438,7 @@ pub async fn stop_background_work(state: &AppState) {
         // The download tasks kill yt-dlp on their cancel flag; give them a moment.
         let deadline = tokio::time::Instant::now() + Duration::from_secs(3);
         while tokio::time::Instant::now() < deadline
-            && !state.active_downloads.lock().unwrap().is_empty()
+            && !state.active_downloads.lock_or_recover().is_empty()
         {
             tokio::time::sleep(Duration::from_millis(100)).await;
         }
@@ -466,7 +467,7 @@ pub async fn serve_with_shutdown(
     // so client/admin UIs don't open against an empty DB until a manual scan.
     state.spawn_initial_scan_if_needed();
     // Probe yt-dlp / ffmpeg / cloudflared versions in the background.
-    tools::spawn_warmup(&state.config.lock().unwrap().clone());
+    tools::spawn_warmup(&state.config.lock_or_recover().clone());
     watcher::start(&state);
     thumbs::spawn_backfill(&state);
     embedded::backfill::spawn_if_needed(&state);
@@ -475,7 +476,7 @@ pub async fn serve_with_shutdown(
     let listener = tokio::net::TcpListener::bind(addr).await?;
     info!(%addr, "RE-KORD server listening");
     // Only a hub that actually serves may keep the computer awake.
-    let data_dir = state.config.lock().unwrap().data_dir.clone();
+    let data_dir = state.config.lock_or_recover().data_dir.clone();
     state.power.start(Some(data_dir));
 
     let (signal_tx, signal_rx) = tokio::sync::oneshot::channel::<()>();

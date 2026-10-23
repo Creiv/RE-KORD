@@ -13,6 +13,7 @@ use super::tags::{read_file, read_picture, ReadRequest};
 use super::{cover, EmbeddedOptions, MergePolicy, TAGS_VERSION};
 use crate::db::Db;
 use crate::state::AppState;
+use crate::sync::LockRecover;
 use anyhow::Result;
 use serde::Serialize;
 use std::collections::BTreeSet;
@@ -49,7 +50,7 @@ pub struct EmbeddedStatus {
 }
 
 pub fn status(state: &AppState) -> Result<EmbeddedStatus> {
-    let settings = state.config.lock().unwrap().embedded;
+    let settings = state.config.lock_or_recover().embedded;
     let (pending_tracks, pending_albums) = state.db.embedded_pending(TAGS_VERSION)?;
     Ok(EmbeddedStatus {
         enabled: settings.enabled,
@@ -70,7 +71,7 @@ pub fn spawn_if_needed(state: &AppState) {
         while state.is_scanning() {
             tokio::time::sleep(Duration::from_secs(2)).await;
         }
-        if !state.config.lock().unwrap().embedded.enabled {
+        if !state.config.lock_or_recover().embedded.enabled {
             return;
         }
         match state.db.embedded_pending(TAGS_VERSION) {
@@ -283,7 +284,7 @@ fn current_policy(state: &AppState) -> Result<(EmbeddedOptions, MergePolicy, u64
 }
 
 fn music_root_available(state: &AppState) -> bool {
-    let root = state.config.lock().unwrap().music_root.clone();
+    let root = state.config.lock_or_recover().music_root.clone();
     root.is_some_and(|r| r.is_dir())
 }
 

@@ -10,6 +10,7 @@ use crate::perm::PeerAddr;
 use crate::selection::{self, CatalogKeys, SelectionPatch};
 use crate::state::AppState;
 use crate::studio_fs;
+use crate::sync::LockRecover;
 use crate::youtube_music::{self, ReleaseEntry};
 use crate::ytdlp::{self, is_allowed_ytdlp_url, is_uuid_download_id, normalize_http_url};
 use crate::{downloads, tools, ytdlp_update};
@@ -257,8 +258,7 @@ fn upstream_err(e: anyhow::Error, fallback: &'static str) -> Response {
 fn music_root(state: &AppState) -> Result<std::path::PathBuf, Response> {
     state
         .config
-        .lock()
-        .unwrap()
+        .lock_or_recover()
         .music_root
         .clone()
         .ok_or_else(|| err(StatusCode::BAD_REQUEST, "music_root_not_set"))
@@ -330,7 +330,7 @@ fn config_snapshot_for_account(
     q: &AccountQuery,
     peer: Option<std::net::SocketAddr>,
 ) -> serde_json::Value {
-    let mut snap = state.config.lock().unwrap().config_snapshot();
+    let mut snap = state.config.lock_or_recover().config_snapshot();
     let access = crate::perm::machine_op_status(state, headers, q.account_id.as_deref(), peer);
     let can_manage = access
         .get("canManageMachine")
@@ -383,7 +383,7 @@ async fn upload_youtube_cookies(
     // Snapshot under the same guard: a `match` on `lock().method()` keeps the
     // MutexGuard alive for the whole match (incl. arms) → re-lock would deadlock.
     let snap = {
-        let mut cfg = state.config.lock().unwrap();
+        let mut cfg = state.config.lock_or_recover();
         if let Err(e) = cfg.set_youtube_cookies_bytes(&bytes) {
             return err_detail(StatusCode::BAD_REQUEST, credential_code(&e, "cookies"), e);
         }
@@ -402,7 +402,7 @@ async fn clear_youtube_cookies(
         return e;
     }
     let snap = {
-        let mut cfg = state.config.lock().unwrap();
+        let mut cfg = state.config.lock_or_recover();
         if let Err(e) = cfg.clear_youtube_cookies() {
             return err_detail(StatusCode::BAD_REQUEST, credential_code(&e, "cookies"), e);
         }
@@ -447,7 +447,7 @@ async fn set_discogs_token(
         return e;
     }
     let snap = {
-        let mut cfg = state.config.lock().unwrap();
+        let mut cfg = state.config.lock_or_recover();
         if let Err(e) = cfg.set_discogs_token(&body.token) {
             return err_detail(StatusCode::BAD_REQUEST, credential_code(&e, "discogs"), e);
         }
@@ -466,7 +466,7 @@ async fn clear_discogs_token(
         return e;
     }
     let snap = {
-        let mut cfg = state.config.lock().unwrap();
+        let mut cfg = state.config.lock_or_recover();
         if let Err(e) = cfg.clear_discogs_token() {
             return err_detail(StatusCode::BAD_REQUEST, credential_code(&e, "discogs"), e);
         }
@@ -704,7 +704,7 @@ async fn start_download(
         return err(StatusCode::BAD_REQUEST, "invalid_output_dir");
     }
 
-    let data_dir = state.config.lock().unwrap().data_dir.clone();
+    let data_dir = state.config.lock_or_recover().data_dir.clone();
     let account_id =
         match accounts::account_from_request(&data_dir, &headers, aq.account_id.as_deref()) {
             Ok(id) => id,
@@ -794,7 +794,7 @@ async fn download_active(
 }
 
 pub(crate) fn attach_download_to_selection(state: &AppState, account_id: &str, output_dir: &str) {
-    let data_dir = state.config.lock().unwrap().data_dir.clone();
+    let data_dir = state.config.lock_or_recover().data_dir.clone();
     let acc = if account_id.trim().is_empty() {
         DEFAULT_ACCOUNT_ID
     } else {
@@ -858,8 +858,7 @@ async fn cancel_download(
     }
     if let Some(flag) = state
         .active_downloads
-        .lock()
-        .unwrap()
+        .lock_or_recover()
         .get(&body.download_id)
     {
         flag.store(true, Ordering::SeqCst);
@@ -883,7 +882,7 @@ async fn download_flat_count(State(state): State<AppState>, Json(body): Json<Url
     if !is_allowed_ytdlp_url(&url) {
         return err(StatusCode::BAD_REQUEST, "url_not_allowed");
     }
-    let cfg = state.config.lock().unwrap().clone();
+    let cfg = state.config.lock_or_recover().clone();
     match youtube_music::flat_playlist_count(&cfg, &url).await {
         Ok(Some(count)) => ok(json!({ "count": count, "known": true })).into_response(),
         Ok(None) => ok(json!({ "count": null, "known": false })).into_response(),
@@ -901,7 +900,7 @@ async fn download_flat_count(State(state): State<AppState>, Json(body): Json<Url
 }
 
 async fn download_preset(State(state): State<AppState>) -> impl IntoResponse {
-    let cfg = state.config.lock().unwrap().clone();
+    let cfg = state.config.lock_or_recover().clone();
     let ctx = tools::ToolContext::from_config(&cfg);
     let (ytdlp, js_runtime) = tokio::join!(
         tools::resolve(tools::Tool::Ytdlp, &ctx),
@@ -951,7 +950,7 @@ async fn update_ytdlp(
         return e;
     }
     let force = body.and_then(|Json(b)| b.force).unwrap_or(false);
-    let cfg = state.config.lock().unwrap().clone();
+    let cfg = state.config.lock_or_recover().clone();
     let ctx = tools::ToolContext::from_config(&cfg);
     match ytdlp_update::update_ytdlp(&ctx, force).await {
         Ok(report) => {
@@ -1025,7 +1024,7 @@ async fn youtube_releases(
     {
         return err(StatusCode::BAD_REQUEST, "invalid_releases_url");
     }
-    let cfg = state.config.lock().unwrap().clone();
+    let cfg = state.config.lock_or_recover().clone();
     let enrich = body.enrich_counts.unwrap_or(false);
     let stream = body.stream.unwrap_or(false);
 
@@ -1155,7 +1154,7 @@ async fn catalog_web_tracks(
     if catalog_preview::normalize_catalog_web_url(&raw).is_none() {
         return err(StatusCode::BAD_REQUEST, "invalid_catalog_url");
     }
-    let cfg = state.config.lock().unwrap().clone();
+    let cfg = state.config.lock_or_recover().clone();
     ok(catalog_preview::release_tracks(&cfg, &raw).await).into_response()
 }
 
@@ -1170,7 +1169,7 @@ async fn catalog_web_preview(
     if catalog_preview::normalize_catalog_web_url(&raw).is_none() {
         return err(StatusCode::BAD_REQUEST, "invalid_catalog_url");
     }
-    let cfg = state.config.lock().unwrap().clone();
+    let cfg = state.config.lock_or_recover().clone();
     match catalog_preview::create_preview_token(&cfg, &raw).await {
         Ok(token) => ok(json!({
             "playUrl": format!("/api/v1/catalog-web-preview/stream?t={token}"),
@@ -1277,7 +1276,7 @@ async fn artwork_search(
     State(state): State<AppState>,
     Query(q): Query<ArtworkSearchQuery>,
 ) -> Response {
-    let cfg = state.config.lock().unwrap().clone();
+    let cfg = state.config.lock_or_recover().clone();
     let query = q.q.or(q.term);
     match metadata::search_artwork_detailed(
         &cfg,
@@ -1445,7 +1444,7 @@ async fn album_info_fetch(
         Ok(p) => p,
         Err(r) => return r,
     };
-    let cfg = state.config.lock().unwrap().clone();
+    let cfg = state.config.lock_or_recover().clone();
     let opts = metadata::AlbumFetchOptions {
         overwrite_title: body.overwrite_title.unwrap_or(false),
     };
@@ -1521,7 +1520,7 @@ async fn track_info_fetch(
         Ok(r) => r,
         Err(r) => return r,
     };
-    let cfg = state.config.lock().unwrap().clone();
+    let cfg = state.config.lock_or_recover().clone();
     match metadata::track_info_fetch(&cfg, &root, &state.db, &rel).await {
         Ok(v) => Json(v).into_response(),
         Err(e) => meta_err(e, "track_info_fetch_failed", StatusCode::BAD_GATEWAY),
@@ -1544,7 +1543,7 @@ async fn track_info_fetch_album(
         Ok(p) => p,
         Err(r) => return r,
     };
-    let cfg = state.config.lock().unwrap().clone();
+    let cfg = state.config.lock_or_recover().clone();
     match metadata::track_info_fetch_album(&cfg, &root, &state.db, &path).await {
         Ok(v) => ok(v).into_response(),
         Err(e) => meta_err(e, "track_info_fetch_failed", StatusCode::BAD_GATEWAY),
@@ -1706,7 +1705,7 @@ async fn discogs_search(
     State(state): State<AppState>,
     Json(body): Json<DiscogsSearchBody>,
 ) -> Response {
-    let cfg = state.config.lock().unwrap().clone();
+    let cfg = state.config.lock_or_recover().clone();
     match metadata::discogs_search(&cfg, &body.artist, &body.album).await {
         Ok(candidates) => ok(json!({ "ok": true, "candidates": candidates })).into_response(),
         Err(e) => meta_err(e, "discogs_search_failed", StatusCode::BAD_GATEWAY),
@@ -1739,7 +1738,7 @@ async fn discogs_apply(
         Ok(p) => p,
         Err(r) => return r,
     };
-    let cfg = state.config.lock().unwrap().clone();
+    let cfg = state.config.lock_or_recover().clone();
     match metadata::discogs_apply(
         &cfg,
         &root,
@@ -1773,7 +1772,7 @@ fn entity_search_options(
     album: Option<&str>,
     lang: Option<&str>,
 ) -> EntitySearchOptions {
-    let cfg = state.config.lock().unwrap();
+    let cfg = state.config.lock_or_recover();
     EntitySearchOptions {
         artist: artist.trim().to_string(),
         album: album
@@ -1803,7 +1802,7 @@ async fn entity_info_search(
         body.album.as_deref(),
         body.lang.as_deref(),
     );
-    let root = state.config.lock().unwrap().music_root.clone();
+    let root = state.config.lock_or_recover().music_root.clone();
     match entity_info::search_entity_info(
         root.as_deref(),
         &opts,

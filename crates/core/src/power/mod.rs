@@ -23,6 +23,8 @@ pub mod api;
 mod platform;
 
 use crate::config::{PowerSettings, PreventSleep};
+#[cfg(test)]
+use crate::sync::LockRecover;
 use chrono::{DateTime, Utc};
 use serde::Serialize;
 use std::path::PathBuf;
@@ -813,7 +815,7 @@ mod tests {
             req: InhibitRequest<'_>,
             lost: LostNotifier,
         ) -> Result<Acquired, InhibitError> {
-            if let Some(e) = self.0.fail.lock().unwrap().clone() {
+            if let Some(e) = self.0.fail.lock_or_recover().clone() {
                 return Err(e);
             }
             self.0.held.fetch_add(1, Ordering::SeqCst);
@@ -821,7 +823,7 @@ mod tests {
             if req.lid {
                 self.0.lid_held.fetch_add(1, Ordering::SeqCst);
             }
-            *self.0.notifier.lock().unwrap() = Some(lost);
+            *self.0.notifier.lock_or_recover() = Some(lost);
             Ok(Acquired {
                 lock: Box::new(FakeLock {
                     state: self.0.clone(),
@@ -1057,7 +1059,7 @@ mod tests {
     #[tokio::test(start_paused = true)]
     async fn failures_are_reported_and_not_retried_on_every_activity() {
         let (pm, st) = manager();
-        *st.fail.lock().unwrap() = Some(InhibitError::new(ERR_REFUSED, "Access denied"));
+        *st.fail.lock_or_recover() = Some(InhibitError::new(ERR_REFUSED, "Access denied"));
         pm.configure(settings(PreventSleep::WhenActive, 1));
         pm.start(None);
         pm.touch(ActivityKind::Remote);
@@ -1065,7 +1067,7 @@ mod tests {
         assert!(!s.inhibiting);
         assert_eq!(s.error_code, Some(ERR_REFUSED));
 
-        *st.fail.lock().unwrap() = None;
+        *st.fail.lock_or_recover() = None;
         pm.touch(ActivityKind::Remote);
         assert_eq!(held(&st), 0, "no retry right after a failure");
         tokio::time::advance(RETRY_AFTER).await;
@@ -1077,11 +1079,11 @@ mod tests {
     #[tokio::test(start_paused = true)]
     async fn a_settings_change_retries_after_a_failure() {
         let (pm, st) = manager();
-        *st.fail.lock().unwrap() = Some(InhibitError::new(ERR_UNSUPPORTED, "no systemd"));
+        *st.fail.lock_or_recover() = Some(InhibitError::new(ERR_UNSUPPORTED, "no systemd"));
         pm.configure(settings(PreventSleep::Always, 10));
         pm.start(None);
         assert_eq!(pm.status().error_code, Some(ERR_UNSUPPORTED));
-        *st.fail.lock().unwrap() = None;
+        *st.fail.lock_or_recover() = None;
         pm.configure(settings(PreventSleep::Always, 10));
         assert_eq!(held(&st), 0, "same settings: unsupported stays");
         pm.configure(settings(PreventSleep::Always, 11));
@@ -1092,7 +1094,7 @@ mod tests {
     async fn a_lock_lost_later_is_reported() {
         let (pm, st) = started(PreventSleep::Always, 10);
         assert_eq!(held(&st), 1);
-        let notifier = st.notifier.lock().unwrap().clone().unwrap();
+        let notifier = st.notifier.lock_or_recover().clone().unwrap();
         notifier.lost(LockPart::Lid, InhibitError::new(ERR_REFUSED, "lid denied"));
         let s = pm.status();
         assert!(s.inhibiting);
@@ -1115,7 +1117,7 @@ mod tests {
     #[tokio::test(start_paused = true)]
     async fn always_takes_the_lock_again_after_losing_it() {
         let (pm, st) = started(PreventSleep::Always, 10);
-        let notifier = st.notifier.lock().unwrap().clone().unwrap();
+        let notifier = st.notifier.lock_or_recover().clone().unwrap();
         notifier.lost(LockPart::Sleep, InhibitError::new(ERR_FAILED, "killed"));
         assert_eq!(held(&st), 0);
         settle().await;
@@ -1130,17 +1132,17 @@ mod tests {
     #[tokio::test(start_paused = true)]
     async fn always_retries_a_failed_first_lock() {
         let (pm, st) = manager();
-        *st.fail.lock().unwrap() = Some(InhibitError::new(ERR_FAILED, "transient"));
+        *st.fail.lock_or_recover() = Some(InhibitError::new(ERR_FAILED, "transient"));
         pm.configure(settings(PreventSleep::Always, 10));
         pm.start(None);
         assert_eq!(held(&st), 0);
-        *st.fail.lock().unwrap() = None;
+        *st.fail.lock_or_recover() = None;
         tokio::time::advance(RETRY_AFTER + Duration::from_secs(1)).await;
         settle().await;
         assert_eq!(held(&st), 1);
         // Unsupported is final: no timer keeps waking up for it.
         let (pm2, st2) = manager();
-        *st2.fail.lock().unwrap() = Some(InhibitError::new(ERR_UNSUPPORTED, "no"));
+        *st2.fail.lock_or_recover() = Some(InhibitError::new(ERR_UNSUPPORTED, "no"));
         pm2.configure(settings(PreventSleep::Always, 10));
         pm2.start(None);
         assert!(pm2.shared.lock().timer.is_none());

@@ -14,6 +14,7 @@ use super::{
 };
 use crate::config::PodcastSettings;
 use crate::perm::PeerAddr;
+use crate::sync::LockRecover;
 use crate::AppState;
 use axum::extract::{Path, Query, State};
 use axum::http::HeaderMap;
@@ -138,7 +139,7 @@ async fn list_sources(State(state): State<AppState>, Query(q): Query<RefreshQuer
         Ok(s) => s,
         Err(e) => return error_response(&e),
     };
-    let ttl = state.config.lock().unwrap().podcasts.cache_ttl_minutes;
+    let ttl = state.config.lock_or_recover().podcasts.cache_ttl_minutes;
     ok(json!({
         "sources": sources.iter().map(|s| source_view(s, false)).collect::<Vec<_>>(),
         "cacheTtlMinutes": ttl,
@@ -220,7 +221,7 @@ fn redact_url(raw: &str) -> String {
 }
 
 fn admin_payload(state: &AppState) -> Result<Value, PodcastError> {
-    let settings = state.config.lock().unwrap().podcasts;
+    let settings = state.config.lock_or_recover().podcasts;
     let sources = store::list(&state.db)?;
     Ok(json!({
         "enabled": settings.enabled,
@@ -277,7 +278,7 @@ async fn admin_settings(
 ) -> Response {
     let op = machine_op!(&state, &headers, peer);
     let (data_dir, before, saved) = {
-        let mut cfg = state.config.lock().unwrap();
+        let mut cfg = state.config.lock_or_recover();
         let before = cfg.podcasts;
         let mut next = before;
         if let Some(e) = body.enabled {
@@ -356,7 +357,7 @@ async fn admin_test(
         Ok(n) => n,
         Err(e) => return error_response(&e),
     };
-    let cfg = state.config.lock().unwrap().clone();
+    let cfg = state.config.lock_or_recover().clone();
     match detect(&cfg, &state.podcasts.policy(), &body.url, limit).await {
         Ok(d) => ok(detected_view(&d, limit)),
         Err(e) => error_response(&e),
@@ -397,7 +398,7 @@ async fn admin_add(
         Err(e) => return error_response(&e),
         _ => {}
     }
-    let cfg = state.config.lock().unwrap().clone();
+    let cfg = state.config.lock_or_recover().clone();
     let d = match detect(&cfg, &state.podcasts.policy(), &body.url, limit).await {
         Ok(d) => d,
         Err(e) => return error_response(&e),
@@ -488,7 +489,7 @@ async fn admin_update(
         .map(str::trim)
         .filter(|u| !u.is_empty() && *u != src.url)
     {
-        let cfg = state.config.lock().unwrap().clone();
+        let cfg = state.config.lock_or_recover().clone();
         let limit = count.unwrap_or(src.episode_count);
         let d = match detect(&cfg, &state.podcasts.policy(), new_url, limit).await {
             Ok(d) => d,
@@ -562,7 +563,7 @@ async fn admin_delete(
         return error_response(&e);
     }
     state.podcasts.forget_source(id);
-    let data_dir = state.config.lock().unwrap().data_dir.clone();
+    let data_dir = state.config.lock_or_recover().data_dir.clone();
     crate::diagnostics::log_activity(
         &data_dir,
         crate::diagnostics::ActivityEvent::new(

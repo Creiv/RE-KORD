@@ -4,6 +4,7 @@
 //! artwork; variants are cached under `<data_dir>/thumbs/<size>/`.
 
 use crate::state::AppState;
+use crate::sync::LockRecover;
 use anyhow::{Context, Result};
 use image::imageops::FilterType;
 use std::collections::hash_map::DefaultHasher;
@@ -91,7 +92,7 @@ pub fn spawn_backfill(state: &AppState) {
 }
 
 pub async fn run_backfill(state: AppState) -> Result<()> {
-    let data_dir = state.config.lock().unwrap().data_dir.clone();
+    let data_dir = state.config.lock_or_recover().data_dir.clone();
     let covers = state.db.all_album_cover_paths()?;
     if covers.is_empty() {
         return Ok(());

@@ -1,6 +1,7 @@
 //! Per-account user state with optimistic revision locking.
 
 use crate::state::AppState;
+use crate::sync::LockRecover;
 use axum::extract::{DefaultBodyLimit, Multipart, Query, State};
 use axum::http::{header, HeaderMap, HeaderValue, StatusCode};
 use axum::response::{IntoResponse, Response};
@@ -580,7 +581,7 @@ fn conflict(current: UserStateV1) -> Response {
 }
 
 fn data_dir_of(state: &AppState) -> PathBuf {
-    state.config.lock().unwrap().data_dir.clone()
+    state.config.lock_or_recover().data_dir.clone()
 }
 
 /// Run a user-state update on the blocking pool and map the outcome.

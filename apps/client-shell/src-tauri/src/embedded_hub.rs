@@ -153,7 +153,7 @@ pub fn start(app: &AppHandle) {
     if let Err(e) = rekord_core::access_key::gate_from_env() {
         eprintln!("[rekord] embedded hub not started: {e}");
         if let Some(state) = app.try_state::<crate::HubStartError>() {
-            *state.0.lock().unwrap() = Some("access_key_config");
+            *state.0.lock().unwrap_or_else(|e| e.into_inner()) = Some("access_key_config");
         }
         return;
     }
@@ -214,7 +214,7 @@ pub fn start(app: &AppHandle) {
     match spawned {
         Ok(_) => {
             if let Some(handle) = app.try_state::<HubHandle>() {
-                *handle.0.lock().unwrap() = Some(Running {
+                *handle.0.lock().unwrap_or_else(|e| e.into_inner()) = Some(Running {
                     shutdown: Some(tx),
                     done: done_rx,
                 });
@@ -229,7 +229,7 @@ pub fn stop(app: &AppHandle) {
     let Some(handle) = app.try_state::<HubHandle>() else {
         return;
     };
-    let Some(mut running) = handle.0.lock().unwrap().take() else {
+    let Some(mut running) = handle.0.lock().unwrap_or_else(|e| e.into_inner()).take() else {
         return;
     };
     if let Some(tx) = running.shutdown.take() {

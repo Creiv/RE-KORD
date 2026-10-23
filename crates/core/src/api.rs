@@ -4,6 +4,7 @@ use crate::entity_info;
 use crate::perm::PeerAddr;
 use crate::selection::{self, CatalogKeys, LibrarySelection, SelectionFilterMode, SelectionPatch};
 use crate::state::AppState;
+use crate::sync::LockRecover;
 use axum::extract::{DefaultBodyLimit, Multipart, Path, Query, State};
 use axum::http::{header, HeaderMap, HeaderValue, StatusCode};
 use axum::response::{IntoResponse, Response};
@@ -131,7 +132,7 @@ pub fn routes() -> Router<AppState> {
 }
 
 fn data_dir(state: &AppState) -> PathBuf {
-    state.config.lock().unwrap().data_dir.clone()
+    state.config.lock_or_recover().data_dir.clone()
 }
 
 #[derive(Debug, Deserialize, Default)]
@@ -489,7 +490,7 @@ async fn library_stats(
         Ok(s) => s,
         Err(e) => return err(StatusCode::INTERNAL_SERVER_ERROR, e),
     };
-    let music_root_path = state.config.lock().unwrap().music_root.clone();
+    let music_root_path = state.config.lock_or_recover().music_root.clone();
     let music_root = music_root_path
         .as_ref()
         .map(|p| p.to_string_lossy().into_owned());
@@ -823,8 +824,7 @@ async fn get_track(
 async fn get_music_path(State(state): State<AppState>) -> impl IntoResponse {
     let root = state
         .config
-        .lock()
-        .unwrap()
+        .lock_or_recover()
         .music_root
         .as_ref()
         .map(|p| p.to_string_lossy().into_owned());
@@ -858,7 +858,7 @@ async fn set_music_path(
         return err(StatusCode::BAD_REQUEST, "music_root is not a directory");
     }
     // Drop the config guard before needs_initial_scan (it locks again).
-    if let Err(e) = state.config.lock().unwrap().save_music_root(path.clone()) {
+    if let Err(e) = state.config.lock_or_recover().save_music_root(path.clone()) {
         return err(StatusCode::INTERNAL_SERVER_ERROR, e.to_string());
     }
     // First-time path (or never indexed): index in background so admin
@@ -914,7 +914,7 @@ async fn probe_library(
     State(state): State<AppState>,
     Query(q): Query<ProbeQuery>,
 ) -> impl IntoResponse {
-    let root = state.config.lock().unwrap().music_root.clone();
+    let root = state.config.lock_or_recover().music_root.clone();
     let Some(root) = root else {
         return err(StatusCode::BAD_REQUEST, "music_root not set");
     };
@@ -926,7 +926,7 @@ async fn probe_library(
 }
 
 async fn get_library_layout(State(state): State<AppState>) -> impl IntoResponse {
-    let root = state.config.lock().unwrap().music_root.clone();
+    let root = state.config.lock_or_recover().music_root.clone();
     let Some(root) = root else {
         return ok(crate::layout::LibraryLayout::default()).into_response();
     };
@@ -940,7 +940,7 @@ async fn set_library_layout(
     Json(body): Json<crate::layout::LibraryLayout>,
 ) -> Response {
     let _op = machine_op_or_err!(&state, &headers, peer);
-    let root = state.config.lock().unwrap().music_root.clone();
+    let root = state.config.lock_or_recover().music_root.clone();
     let Some(root) = root else {
         return err(StatusCode::BAD_REQUEST, "music_root not set");
     };
@@ -962,7 +962,7 @@ async fn set_library_layout(
 }
 
 async fn get_watch(State(state): State<AppState>) -> impl IntoResponse {
-    let enabled = state.config.lock().unwrap().watch_library;
+    let enabled = state.config.lock_or_recover().watch_library;
     ok(state.watcher.status(enabled))
 }
 
@@ -980,8 +980,7 @@ async fn set_watch(
     let _op = machine_op_or_err!(&state, &headers, peer);
     if let Err(e) = state
         .config
-        .lock()
-        .unwrap()
+        .lock_or_recover()
         .save_watch_library(body.enabled)
     {
         return err(StatusCode::INTERNAL_SERVER_ERROR, e.to_string());
@@ -1050,7 +1049,7 @@ async fn set_embedded(
     Json(body): Json<EmbeddedBody>,
 ) -> Response {
     let _op = machine_op_or_err!(&state, &headers, peer);
-    let current = state.config.lock().unwrap().embedded;
+    let current = state.config.lock_or_recover().embedded;
     let mut next = current;
     if let Some(enabled) = body.enabled {
         next.enabled = enabled;
@@ -1065,7 +1064,7 @@ async fn set_embedded(
         next.embed_downloads = embed;
     }
     if next != current {
-        if let Err(e) = state.config.lock().unwrap().save_embedded_settings(next) {
+        if let Err(e) = state.config.lock_or_recover().save_embedded_settings(next) {
             tracing::warn!(error = %e, "could not save embedded metadata settings");
             return err(StatusCode::INTERNAL_SERVER_ERROR, "settings_save_failed");
         }
@@ -1131,7 +1130,7 @@ async fn reread_embedded(
 ) -> Response {
     let _op = machine_op_or_err!(&state, &headers, peer);
     let body = body.map(|Json(b)| b).unwrap_or_default();
-    let settings = state.config.lock().unwrap().embedded;
+    let settings = state.config.lock_or_recover().embedded;
     let override_studio = body.override_studio
         && settings.enabled
         && settings.priority == crate::embedded::EmbeddedPriority::Embedded;
@@ -1172,8 +1171,7 @@ async fn set_machine_access(
     }
     if let Err(e) = state
         .config
-        .lock()
-        .unwrap()
+        .lock_or_recover()
         .save_allow_remote_admin(body.enabled)
     {
         return err(StatusCode::INTERNAL_SERVER_ERROR, e.to_string());
@@ -1242,8 +1240,7 @@ async fn set_access_key(
     let digest = gate.digest_hex();
     if let Err(e) = state
         .config
-        .lock()
-        .unwrap()
+        .lock_or_recover()
         .save_access_key_digest(Some(&digest))
     {
         return err(StatusCode::INTERNAL_SERVER_ERROR, e.to_string());
@@ -1277,7 +1274,7 @@ async fn clear_access_key(
             "the access key is set by REKORD_ACCESS_KEY; unset it there",
         );
     }
-    if let Err(e) = state.config.lock().unwrap().save_access_key_digest(None) {
+    if let Err(e) = state.config.lock_or_recover().save_access_key_digest(None) {
         return err(StatusCode::INTERNAL_SERVER_ERROR, e.to_string());
     }
     state.access_key.clear();
@@ -1317,7 +1314,7 @@ async fn get_legacy_import(
 ) -> Response {
     let _op = machine_op_or_err!(&state, &headers, peer);
     let (data_dir, root) = {
-        let cfg = state.config.lock().unwrap();
+        let cfg = state.config.lock_or_recover();
         (cfg.data_dir.clone(), cfg.music_root.clone())
     };
     let status = tokio::task::spawn_blocking(move || {
@@ -1342,7 +1339,7 @@ async fn sync_legacy_meta(
 ) -> Response {
     let _op = machine_op_or_err!(&state, &headers, peer);
     let (data_dir, root) = {
-        let cfg = state.config.lock().unwrap();
+        let cfg = state.config.lock_or_recover();
         (cfg.data_dir.clone(), cfg.music_root.clone())
     };
     let Some(root) = root else {
@@ -1707,7 +1704,7 @@ async fn get_entity_info(
     Query(q): Query<EntityInfoQuery>,
 ) -> impl IntoResponse {
     let root = {
-        let cfg = state.config.lock().unwrap();
+        let cfg = state.config.lock_or_recover();
         cfg.music_root.clone()
     };
     let Some(root) = root else {

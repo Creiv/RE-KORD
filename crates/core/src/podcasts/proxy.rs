@@ -9,6 +9,7 @@
 //! and an episode key, never a URL, so this is not an open proxy.
 
 use super::{refresh_source, store, ytdlp_src, PodcastError, Runtime, SourceKind, LIVE_KEY};
+use crate::sync::LockRecover;
 use crate::AppState;
 use axum::body::Body;
 use axum::http::{header, HeaderMap, HeaderValue, StatusCode};
@@ -115,7 +116,7 @@ pub async fn upstream_for(state: &AppState, sid: i64, key: &str) -> Result<Upstr
     let url = match rt.cached_resolution(sid, key) {
         Some(u) => u,
         None => {
-            let cfg = state.config.lock().unwrap().clone();
+            let cfg = state.config.lock_or_recover().clone();
             let page_url = super::net::parse_public_url(&page)?;
             super::net::resolve_allowed(&page_url, &rt.policy()).await?;
             let u = ytdlp_src::resolve_audio(&cfg, page_url.as_str()).await?;
@@ -325,8 +326,7 @@ const ART_MAX_DOWNLOAD: usize = 12 * 1024 * 1024;
 fn art_cache_dir(state: &AppState) -> std::path::PathBuf {
     state
         .config
-        .lock()
-        .unwrap()
+        .lock_or_recover()
         .data_dir
         .join("cache")
         .join("podcast-art")

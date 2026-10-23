@@ -5,6 +5,7 @@
 
 use crate::perm::PeerAddr;
 use crate::state::AppState;
+use crate::sync::LockRecover;
 use axum::extract::{Path, Query, State};
 use axum::http::{HeaderMap, StatusCode};
 use axum::response::{IntoResponse, Response};
@@ -145,14 +146,13 @@ impl JobRegistry {
         };
         let cancel = Arc::new(AtomicBool::new(false));
         {
-            let mut jobs = self.jobs.lock().unwrap();
+            let mut jobs = self.jobs.lock_or_recover();
             jobs.push(job);
             prune(&mut jobs);
         }
         if cancelable {
             self.cancels
-                .lock()
-                .unwrap()
+                .lock_or_recover()
                 .insert(id.clone(), cancel.clone());
         }
         JobHandle {
@@ -170,7 +170,7 @@ impl JobRegistry {
 
     /// Jobs newest-first, running ones on top.
     pub fn list(&self) -> Vec<Job> {
-        let jobs = self.jobs.lock().unwrap();
+        let jobs = self.jobs.lock_or_recover();
         let mut out = jobs.clone();
         out.sort_by(|a, b| {
             let a_run = a.status == JobStatus::Running;
@@ -182,8 +182,7 @@ impl JobRegistry {
 
     pub fn active_count(&self) -> usize {
         self.jobs
-            .lock()
-            .unwrap()
+            .lock_or_recover()
             .iter()
             .filter(|j| j.status == JobStatus::Running)
             .count()
@@ -191,7 +190,7 @@ impl JobRegistry {
 
     /// Returns false when the job is unknown or not cancelable.
     pub fn cancel(&self, id: &str) -> bool {
-        let flag = self.cancels.lock().unwrap().get(id).cloned();
+        let flag = self.cancels.lock_or_recover().get(id).cloned();
         match flag {
             Some(flag) => {
                 flag.store(true, Ordering::SeqCst);
@@ -210,8 +209,7 @@ impl JobRegistry {
     /// One job by id (running or in history).
     pub fn get(&self, id: &str) -> Option<Job> {
         self.jobs
-            .lock()
-            .unwrap()
+            .lock_or_recover()
             .iter()
             .find(|j| j.id == id)
             .cloned()
@@ -219,12 +217,12 @@ impl JobRegistry {
 
     /// Flag every cancelable running job (hub shutdown).
     pub fn cancel_all(&self) -> usize {
-        let ids: Vec<String> = self.cancels.lock().unwrap().keys().cloned().collect();
+        let ids: Vec<String> = self.cancels.lock_or_recover().keys().cloned().collect();
         ids.iter().filter(|id| self.cancel(id)).count()
     }
 
     pub fn clear_finished(&self) -> usize {
-        let mut jobs = self.jobs.lock().unwrap();
+        let mut jobs = self.jobs.lock_or_recover();
         let before = jobs.len();
         jobs.retain(|j| j.status == JobStatus::Running);
         before - jobs.len()
@@ -359,7 +357,7 @@ impl JobHandle {
             merge_params(&mut job.params, params);
             job.finished_at = Some(chrono::Utc::now().to_rfc3339());
         });
-        self.registry.cancels.lock().unwrap().remove(&self.id);
+        self.registry.cancels.lock_or_recover().remove(&self.id);
         self.end_activity();
     }
 
@@ -373,7 +371,7 @@ impl JobHandle {
             job.error = Some(err);
             job.finished_at = Some(chrono::Utc::now().to_rfc3339());
         });
-        self.registry.cancels.lock().unwrap().remove(&self.id);
+        self.registry.cancels.lock_or_recover().remove(&self.id);
         self.end_activity();
     }
 }
@@ -392,7 +390,7 @@ impl Drop for JobHandle {
                 job.finished_at = Some(chrono::Utc::now().to_rfc3339());
             }
         });
-        self.registry.cancels.lock().unwrap().remove(&self.id);
+        self.registry.cancels.lock_or_recover().remove(&self.id);
         self.end_activity();
     }
 }

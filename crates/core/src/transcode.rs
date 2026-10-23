@@ -9,6 +9,7 @@
 //! (the body owns the child, `kill_on_drop`).
 
 use crate::state::AppState;
+use crate::sync::LockRecover;
 use crate::tools::{self, Tool, ToolContext};
 use axum::body::Body;
 use axum::extract::{Path as AxumPath, Query, State};
@@ -254,16 +255,14 @@ async fn transcode_cached_flac(
     };
     let dir = state
         .config
-        .lock()
-        .unwrap()
+        .lock_or_recover()
         .data_dir
         .join("cache")
         .join("transcode");
     let target = dir.join(format!("{key}.flac"));
     if !target.is_file() {
         let lock = flac_locks()
-            .lock()
-            .unwrap()
+            .lock_or_recover()
             .entry(key.clone())
             .or_default()
             .clone();
@@ -302,7 +301,7 @@ async fn transcode_cached_flac(
                 tracing::warn!(rel = %rel_path, "flac transcode failed");
                 return json_err(StatusCode::INTERNAL_SERVER_ERROR, "transcode_failed");
             }
-            flac_locks().lock().unwrap().remove(&key);
+            flac_locks().lock_or_recover().remove(&key);
             let dir_for_prune = dir.clone();
             tokio::task::spawn_blocking(move || prune_flac_cache(&dir_for_prune));
         }

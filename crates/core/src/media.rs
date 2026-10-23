@@ -11,6 +11,7 @@
 
 use crate::path_util::{ensure_servable, resolve_library_file, LibraryPathError};
 use crate::state::AppState;
+use crate::sync::LockRecover;
 use axum::body::Body;
 use axum::extract::{Path as AxumPath, State};
 use axum::http::{header, HeaderMap, HeaderValue, Method, StatusCode};
@@ -38,7 +39,7 @@ pub fn routes() -> Router<AppState> {
 #[allow(clippy::result_large_err)]
 pub fn resolve_media_path(state: &AppState, raw: &str) -> Result<PathBuf, Response> {
     let (root, data_dir) = {
-        let cfg = state.config.lock().unwrap();
+        let cfg = state.config.lock_or_recover();
         (cfg.music_root.clone(), cfg.data_dir.clone())
     };
     let Some(root) = root else {

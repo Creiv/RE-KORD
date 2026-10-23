@@ -195,7 +195,7 @@ async fn async_main(args: Args) -> Result<()> {
 
         if args.sync_legacy_meta {
             let (data_dir, root) = {
-                let cfg = state.config.lock().unwrap();
+                let cfg = state.config.lock().unwrap_or_else(|e| e.into_inner());
                 (cfg.data_dir.clone(), cfg.music_root.clone())
             };
             let Some(root) = root else {

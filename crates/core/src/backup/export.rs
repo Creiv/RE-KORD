@@ -1,6 +1,7 @@
 //! Backup ZIP export (`kordBackup: 3`) and theme package export / import.
 
 use super::*;
+use crate::sync::LockRecover;
 
 pub(super) fn collect_library_sidecars(music_root: &Path) -> Vec<(PathBuf, String)> {
     let mut out = Vec::new();
@@ -63,7 +64,7 @@ pub(super) fn collect_kord_dir(music_root: &Path) -> Vec<(PathBuf, String)> {
 /// Build a next hub backup ZIP (bytes).
 pub fn build_backup_zip(state: &AppState) -> Result<(Vec<u8>, String)> {
     let (music_root, settings_path, modules_path, data_dir) = {
-        let cfg = state.config.lock().unwrap();
+        let cfg = state.config.lock_or_recover();
         (
             cfg.music_root.clone(),
             cfg.settings_path(),
@@ -168,7 +169,7 @@ pub fn build_backup_zip(state: &AppState) -> Result<(Vec<u8>, String)> {
 
         // Cookies + activity (shared hub data).
         let cookies = {
-            let cfg = state.config.lock().unwrap();
+            let cfg = state.config.lock_or_recover();
             cfg.youtube_cookies_path
                 .clone()
                 .unwrap_or_else(|| cfg.default_youtube_cookies_path())
@@ -183,7 +184,7 @@ pub fn build_backup_zip(state: &AppState) -> Result<(Vec<u8>, String)> {
         // Same treatment as the cookies: machine credentials travel with the
         // backup so a restore on a new machine keeps working (never env tokens).
         let discogs_token = {
-            let cfg = state.config.lock().unwrap();
+            let cfg = state.config.lock_or_recover();
             (!cfg.discogs_token_from_env)
                 .then(|| cfg.discogs_token.clone())
                 .flatten()
@@ -221,7 +222,7 @@ pub fn build_backup_zip(state: &AppState) -> Result<(Vec<u8>, String)> {
 
 /// Shareable theme package (legacy-compatible): `rekord-theme/rekord-theme.json` + optional background.
 pub fn build_theme_export_zip(state: &AppState, account_id: &str) -> Result<(Vec<u8>, String)> {
-    let data_dir = state.config.lock().unwrap().data_dir.clone();
+    let data_dir = state.config.lock_or_recover().data_dir.clone();
     let ustate = user_state::load_user_state(&data_dir, account_id);
     let settings = &ustate.settings;
 
@@ -384,7 +385,7 @@ pub fn try_import_theme_zip(
         bail!("Invalid theme archive: bad rekord-theme.json");
     }
 
-    let data_dir = state.config.lock().unwrap().data_dir.clone();
+    let data_dir = state.config.lock_or_recover().data_dir.clone();
     // Settings to write; applied in one locked read-modify-write at the end.
     let mut patch = serde_json::Map::new();
 

@@ -19,6 +19,7 @@
 
 use crate::accounts;
 use crate::state::AppState;
+use crate::sync::LockRecover;
 use axum::extract::{ConnectInfo, FromRequestParts};
 use axum::http::request::Parts;
 use axum::http::{HeaderMap, StatusCode};
@@ -131,7 +132,7 @@ pub fn require_machine_op(
     peer: Option<SocketAddr>,
 ) -> Result<MachineOp, Response> {
     let (data_dir, allow_remote) = {
-        let cfg = state.config.lock().unwrap();
+        let cfg = state.config.lock_or_recover();
         (cfg.data_dir.clone(), cfg.allow_remote_admin)
     };
     let local = is_local_request(headers, peer);
@@ -151,7 +152,7 @@ pub fn require_library_op(
     headers: &HeaderMap,
     peer: Option<SocketAddr>,
 ) -> Result<bool, Response> {
-    let allow_remote = state.config.lock().unwrap().allow_remote_admin;
+    let allow_remote = state.config.lock_or_recover().allow_remote_admin;
     let local = is_local_request(headers, peer);
     if !local && !allow_remote {
         return Err(forbidden(FORBIDDEN_REMOTE));
@@ -180,7 +181,7 @@ pub fn machine_op_status(
     peer: Option<SocketAddr>,
 ) -> serde_json::Value {
     let (data_dir, allow_remote) = {
-        let cfg = state.config.lock().unwrap();
+        let cfg = state.config.lock_or_recover();
         (cfg.data_dir.clone(), cfg.allow_remote_admin)
     };
     let is_default =

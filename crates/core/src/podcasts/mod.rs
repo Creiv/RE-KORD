@@ -22,6 +22,7 @@ pub mod store;
 pub mod xml;
 pub mod ytdlp_src;
 
+use crate::sync::LockRecover;
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::sync::atomic::AtomicUsize;
@@ -210,23 +211,23 @@ impl Runtime {
     }
 
     pub fn policy(&self) -> net::NetPolicy {
-        self.policy.lock().unwrap().clone()
+        self.policy.lock_or_recover().clone()
     }
 
     /// Tests only: let the module reach local fixture servers.
     #[doc(hidden)]
     pub fn set_policy_for_tests(&self, policy: net::NetPolicy) {
-        *self.policy.lock().unwrap() = policy;
+        *self.policy.lock_or_recover() = policy;
     }
 
     fn source_lock(&self, id: i64) -> Arc<tokio::sync::Mutex<()>> {
-        let mut map = self.source_locks.lock().unwrap();
+        let mut map = self.source_locks.lock_or_recover();
         map.retain(|_, l| Arc::strong_count(l) > 1);
         map.entry(id).or_default().clone()
     }
 
     pub(crate) fn cached_resolution(&self, id: i64, key: &str) -> Option<String> {
-        let mut map = self.resolved.lock().unwrap();
+        let mut map = self.resolved.lock_or_recover();
         let now = Instant::now();
         map.retain(|_, (_, at)| now.duration_since(*at) < RESOLVED_TTL);
         map.get(&(id, key.to_string())).map(|(u, _)| u.clone())
@@ -234,18 +235,21 @@ impl Runtime {
 
     pub(crate) fn remember_resolution(&self, id: i64, key: &str, url: &str) {
         self.resolved
-            .lock()
-            .unwrap()
+            .lock_or_recover()
             .insert((id, key.to_string()), (url.to_string(), Instant::now()));
     }
 
     pub(crate) fn forget_resolution(&self, id: i64, key: &str) {
-        self.resolved.lock().unwrap().remove(&(id, key.to_string()));
-        self.playing.lock().unwrap().remove(&(id, key.to_string()));
+        self.resolved
+            .lock_or_recover()
+            .remove(&(id, key.to_string()));
+        self.playing
+            .lock_or_recover()
+            .remove(&(id, key.to_string()));
     }
 
     pub(crate) fn playing_url(&self, id: i64, key: &str) -> Option<(String, bool)> {
-        let mut map = self.playing.lock().unwrap();
+        let mut map = self.playing.lock_or_recover();
         let now = Instant::now();
         map.retain(|_, (_, _, at)| now.duration_since(*at) < PLAYING_GRACE);
         map.get(&(id, key.to_string()))
@@ -253,7 +257,7 @@ impl Runtime {
     }
 
     pub(crate) fn note_playing(&self, id: i64, key: &str, url: &str, live: bool) {
-        let mut map = self.playing.lock().unwrap();
+        let mut map = self.playing.lock_or_recover();
         if map.len() >= PLAYING_MAX {
             if let Some(oldest) = map
                 .iter()
@@ -272,12 +276,10 @@ impl Runtime {
     /// Drop everything cached for a source (edited or deleted).
     pub(crate) fn forget_source(&self, id: i64) {
         self.resolved
-            .lock()
-            .unwrap()
+            .lock_or_recover()
             .retain(|(sid, _), _| *sid != id);
         self.playing
-            .lock()
-            .unwrap()
+            .lock_or_recover()
             .retain(|(sid, _), _| *sid != id);
     }
 }
@@ -327,7 +329,7 @@ pub async fn refresh_source(
     let _guard = lock.lock().await;
     let src = store::get(&state.db, id)?.ok_or(PodcastError::SourceNotFound)?;
     let (cfg, ttl) = {
-        let cfg = state.config.lock().unwrap().clone();
+        let cfg = state.config.lock_or_recover().clone();
         let ttl = i64::from(cfg.podcasts.cache_ttl_minutes) * 60;
         (cfg, ttl)
     };
@@ -377,7 +379,7 @@ pub async fn refresh_source(
 
 /// Whether the module is on (hub setting).
 pub fn enabled(state: &crate::AppState) -> bool {
-    state.config.lock().unwrap().podcasts.enabled
+    state.config.lock_or_recover().podcasts.enabled
 }
 
 #[cfg(test)]
@@ -498,6 +500,6 @@ mod tests {
         for i in 0..(PLAYING_MAX + 5) {
             rt.note_playing(2, &format!("e{i}"), "https://x", false);
         }
-        assert!(rt.playing.lock().unwrap().len() <= PLAYING_MAX);
+        assert!(rt.playing.lock_or_recover().len() <= PLAYING_MAX);
     }
 }

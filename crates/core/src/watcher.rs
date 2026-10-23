@@ -4,6 +4,7 @@
 //! deleted) results in a single incremental re-index once the tree goes quiet.
 
 use crate::state::AppState;
+use crate::sync::LockRecover;
 use notify::{RecommendedWatcher, RecursiveMode, Watcher};
 use serde::Serialize;
 use std::collections::HashMap;
@@ -253,7 +254,7 @@ fn is_relevant(event: &notify::Event) -> bool {
 /// Start (or restart) the watcher for the configured music root.
 pub fn start(state: &AppState) {
     let (enabled, root) = {
-        let cfg = state.config.lock().unwrap();
+        let cfg = state.config.lock_or_recover();
         (cfg.watch_library, cfg.music_root.clone())
     };
     if !enabled {

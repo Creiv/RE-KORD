@@ -77,7 +77,7 @@ pub(crate) struct HubStartError(pub(crate) std::sync::Mutex<Option<&'static str>
 #[cfg(desktop)]
 #[tauri::command]
 fn embedded_hub_error(state: tauri::State<'_, HubStartError>) -> Option<&'static str> {
-    *state.0.lock().unwrap()
+    *state.0.lock().unwrap_or_else(|e| e.into_inner())
 }
 
 #[cfg(desktop)]
