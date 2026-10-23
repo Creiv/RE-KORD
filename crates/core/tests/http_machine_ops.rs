@@ -24,6 +24,10 @@ fn guarded_requests() -> Vec<Case> {
             Box::new(|| req(Method::DELETE, "/api/v1/jobs")),
         ),
         (
+            "library probe",
+            Box::new(|| req(Method::POST, "/api/v1/library/probe")),
+        ),
+        (
             "errors clear",
             Box::new(|| req(Method::DELETE, "/api/v1/diagnostics/errors")),
         ),

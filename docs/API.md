@@ -35,7 +35,7 @@ Envelope (JSON):
 | GET | `/api/v1/library/tracks-page` | Paginated personal library (`limit`, `offset`) → `{ items, total, revision }` |
 | GET | `/api/v1/library/artists-page` | Paginated artists (`limit`, `offset`) → `{ items, total }` |
 | GET | `/api/v1/library/changes?revision=` | Delta since a revision: `{ revision, updated, removed, full }` (`full: true` → page again) |
-| POST | `/api/v1/library/probe` | Analyse folder structure and suggest a layout |
+| POST | `/api/v1/library/probe` | Analyse folder structure and suggest a layout (machine operation) |
 | GET/PUT | `/api/v1/library/layout` | Read / write `music_root/.kord/library-layout.json` |
 | GET/PUT | `/api/v1/library/watch` | Filesystem watcher status / enable-disable (debounced incremental scan) |
 | POST | `/api/v1/library/thumbnails` | Start the cover thumbnail backfill as a job |

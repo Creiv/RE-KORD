@@ -909,11 +909,15 @@ struct ProbeQuery {
     sample_limit: Option<u64>,
 }
 
-/// Analyse the folder structure without touching the DB (setup helper).
+/// Analyse the folder structure without touching the DB (setup helper). A
+/// machine operation like the layout it feeds: it walks the music folder.
 async fn probe_library(
     State(state): State<AppState>,
+    headers: HeaderMap,
+    PeerAddr(peer): PeerAddr,
     Query(q): Query<ProbeQuery>,
-) -> impl IntoResponse {
+) -> Response {
+    let _op = machine_op_or_err!(&state, &headers, peer);
     let root = state.config.lock_or_recover().music_root.clone();
     let Some(root) = root else {
         return err(StatusCode::BAD_REQUEST, "music_root not set");
