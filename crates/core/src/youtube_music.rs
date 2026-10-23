@@ -98,10 +98,11 @@ fn innertube_context() -> Value {
 }
 
 fn http_client() -> Result<reqwest::Client> {
-    Ok(reqwest::Client::builder()
-        .user_agent("RE-KORD/5.1 (+https://github.com/rekord; studio)")
-        .timeout(std::time::Duration::from_secs(25))
-        .build()?)
+    Ok(crate::net::client(
+        "studio discover",
+        std::time::Duration::from_secs(10),
+        std::time::Duration::from_secs(25),
+    ))
 }
 
 async fn innertube_post(url: &str, body: Value) -> Result<Value> {

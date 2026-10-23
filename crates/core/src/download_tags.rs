@@ -141,7 +141,7 @@ where
 /// HTTP client for thumbnails: redirects stay on [`THUMB_HOSTS`].
 pub fn thumbnail_client() -> Option<reqwest::Client> {
     reqwest::Client::builder()
-        .user_agent("RE-KORD/5.2 (studio)")
+        .user_agent(crate::net::user_agent("studio thumbnails"))
         .connect_timeout(std::time::Duration::from_secs(10))
         .timeout(std::time::Duration::from_secs(20))
         .redirect(thumbnail_redirect_policy(thumbnail_url_allowed))

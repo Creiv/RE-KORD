@@ -114,16 +114,11 @@ fn release_api_url() -> String {
 }
 
 fn http_client() -> Result<reqwest::Client, UpdateError> {
-    reqwest::Client::builder()
-        .user_agent(concat!(
-            "RE-KORD/",
-            env!("CARGO_PKG_VERSION"),
-            " (yt-dlp updater)"
-        ))
-        .connect_timeout(Duration::from_secs(15))
-        .timeout(Duration::from_secs(300))
-        .build()
-        .map_err(|e| UpdateError::Download(e.to_string()))
+    Ok(crate::net::client(
+        "yt-dlp updater",
+        Duration::from_secs(15),
+        Duration::from_secs(300),
+    ))
 }
 
 struct Release {

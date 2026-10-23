@@ -306,10 +306,11 @@ pub async fn resolve_public_ip() -> Option<String> {
             }
         }
     }
-    let client = reqwest::Client::builder()
-        .timeout(std::time::Duration::from_secs(5))
-        .build()
-        .ok()?;
+    let client = crate::net::client(
+        "public ip",
+        std::time::Duration::from_secs(3),
+        std::time::Duration::from_secs(5),
+    );
     for url in PUBLIC_IP_LOOKUPS {
         let Ok(res) = client.get(*url).send().await else {
             continue;

@@ -1207,13 +1207,11 @@ async fn catalog_web_preview_stream(
         .and_then(|v| v.to_str().ok())
         .map(|s| s.to_string())
         .unwrap_or_else(|| format!("bytes=0-{}", catalog_preview::initial_range_bytes() - 1));
-    let client = match reqwest::Client::builder()
-        .timeout(std::time::Duration::from_secs(30))
-        .build()
-    {
-        Ok(c) => c,
-        Err(e) => return err_detail(StatusCode::INTERNAL_SERVER_ERROR, "preview_failed", e),
-    };
+    let client = crate::net::client(
+        "studio preview",
+        std::time::Duration::from_secs(10),
+        std::time::Duration::from_secs(30),
+    );
     let upstream = match client
         .get(&stream_url)
         .header(reqwest::header::RANGE, range)

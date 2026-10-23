@@ -10,7 +10,9 @@ use serde::Serialize;
 use serde_json::Value;
 use std::path::{Path, PathBuf};
 
-const UA: &str = "RE-KORD/5.1 (studio artwork; +local)";
+fn ua() -> String {
+    crate::net::user_agent("studio artwork")
+}
 
 #[derive(Debug, Clone, Serialize)]
 #[serde(rename_all = "camelCase")]
@@ -146,7 +148,7 @@ pub async fn fetch_public_image(raw_url: &str, max_bytes: usize) -> Result<(Vec<
         }
         let addr = public_addr_for(&url).await?;
         let mut builder = reqwest::Client::builder()
-            .user_agent(UA)
+            .user_agent(ua())
             .timeout(std::time::Duration::from_secs(20))
             .redirect(reqwest::redirect::Policy::none());
         if let Some(domain) = url.domain() {

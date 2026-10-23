@@ -36,7 +36,10 @@ one version number covers the hub, the clients and the packages.
   searching and playing no longer wait for a scan's or a backfill's write batches, and
   database schema v8 adds the indexes those reads were missing (albums by artist, the
   album and track sort orders, playlist order, favorites order, tombstones), so artist
-  pages and paginated lists stop scanning or re-sorting the whole table. *Analyse folders*
+  pages and paginated lists stop scanning or re-sorting the whole table. The hub's
+  outbound HTTP clients for fixed hosts (metadata providers, YouTube Music, GitHub
+  releases, public-IP lookups, the preview proxy) come from one factory: a User-Agent with
+  the running version, connection and total timeouts everywhere, at most five redirects. *Analyse folders*
   (`POST /api/v1/library/probe`) is now a machine operation like the layout it feeds.
 - **yt-dlp's JavaScript engine: the bundled QuickJS comes first** (GitHub issue #103, the
   Node.js security releases of 21 October 2026). An installed Deno, Node.js or Bun is used

@@ -20,6 +20,7 @@ pub mod layout;
 pub mod media;
 pub mod metadata;
 pub mod modules;
+pub mod net;
 pub mod origin;
 pub mod path_util;
 pub mod perm;

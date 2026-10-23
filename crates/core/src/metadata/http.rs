@@ -7,18 +7,21 @@ use serde_json::Value;
 use std::sync::OnceLock;
 use std::time::{Duration, Instant};
 
-pub const UA: &str = "RE-KORD/5.1 (studio metadata; +https://github.com/rekord)";
+/// User-Agent of the metadata providers' client (MusicBrainz requires one).
+pub fn ua() -> String {
+    crate::net::user_agent("studio metadata")
+}
 
 /// Shared client (20 s timeout). Falls back to a default client if the
 /// builder fails, which only happens without a TLS backend.
 pub fn client() -> &'static reqwest::Client {
     static C: OnceLock<reqwest::Client> = OnceLock::new();
     C.get_or_init(|| {
-        reqwest::Client::builder()
-            .user_agent(UA)
-            .timeout(Duration::from_secs(20))
-            .build()
-            .unwrap_or_default()
+        crate::net::client(
+            "studio metadata",
+            Duration::from_secs(10),
+            Duration::from_secs(20),
+        )
     })
 }
 
