@@ -121,11 +121,13 @@
    keeps the full width. Only the areas that ask for a bar (`.rk-scroll`: logs,
    long lists, tables, dialogs) and the Plectr lists keep theirs. */
 @media (pointer: fine) {
-  *:not(.rk-scroll):not(.plectr-side):not(.plectr-device__screen) {
+  *:not(.rk-scroll):not(.plectr-side):not(.plectr-device__screen),
+  main.content.rk-scroll {
     scrollbar-width: none !important;
   }
 
-  *:not(.rk-scroll):not(.plectr-side):not(.plectr-device__screen)::-webkit-scrollbar {
+  *:not(.rk-scroll):not(.plectr-side):not(.plectr-device__screen)::-webkit-scrollbar,
+  main.content.rk-scroll::-webkit-scrollbar {
     display: none !important;
     width: 0 !important;
     height: 0 !important;
