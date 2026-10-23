@@ -367,7 +367,7 @@
   "studio.err.rateLimited": "Troppe richieste al servizio: riprova tra poco.",
   "studio.err.forbiddenRemote": "Operazione possibile solo dal computer dell'hub (o abilita l'accesso remoto nel pannello dell'hub).",
   "studio.err.forbiddenDefault": "Operazione riservata all'account Default.",
-  "studio.err.noAudioFormat": "YouTube non offre un formato solo audio per questo contenuto. Spesso dipende da una versione vecchia di yt-dlp: aggiornalo e riprova.",
+  "studio.err.noAudioFormat": "YouTube non offre un formato solo audio per questo contenuto. Cause tipiche: yt-dlp vecchio (aggiornalo dalla barra qui sotto), cookie YouTube assenti o scaduti (Impostazioni › Libreria › Integrazioni), oppure contenuto con restrizione d'età o riservato agli iscritti.",
   "studio.err.ytdlp403": "YouTube ha rifiutato il download (errore 403). Aggiorna yt-dlp e riprova; se continua, configura i cookie di YouTube.",
   "studio.err.ytdlpDisabled": "I download con yt-dlp sono disattivati su questo hub.",
   "studio.err.ytdlpMissing": "yt-dlp non è installato sull'hub.",

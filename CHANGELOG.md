@@ -71,6 +71,12 @@ one version number covers the hub, the clients and the packages.
   the hub has been away, offers *Retry now* next to *Change hub*, and after two minutes the
   connect screen opens by itself (the hub often changed address on a phone). Playback
   still resumes where it stopped when the hub comes back.
+- **Phones: the "More" menu is laid out by use** (GitHub issue #100): queue, playlists and
+  settings are wide tiles, the other entries squares in a four-column grid. Same entries,
+  only the shape changed.
+- **"No audio-only format" from YouTube now names its usual causes**: an outdated yt-dlp,
+  missing or expired cookies (with where to set them), or age-restricted / members-only
+  content.
 - **Plectr: the shared picture matches the results screen**: cover and eyebrow, grade next
   to the score with the record ribbon or the previous best, FC / AP badge, accuracy ring,
   max combo and notes hit, judgement bar and legend, without the buttons.

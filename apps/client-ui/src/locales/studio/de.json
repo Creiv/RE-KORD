@@ -367,7 +367,7 @@
   "studio.err.rateLimited": "Zu viele Anfragen an den Dienst: Versuche es gleich noch einmal.",
   "studio.err.forbiddenRemote": "Nur am Rechner des Hubs möglich (oder aktiviere den Fernzugriff im Hub-Panel).",
   "studio.err.forbiddenDefault": "Dem Konto Default vorbehalten.",
-  "studio.err.noAudioFormat": "YouTube bietet für diesen Inhalt kein reines Audioformat an. Oft liegt das an einem veralteten yt-dlp: Aktualisiere es und versuche es erneut.",
+  "studio.err.noAudioFormat": "YouTube bietet für diesen Inhalt kein reines Audioformat an. Übliche Ursachen: ein veraltetes yt-dlp (über die Leiste unten aktualisieren), fehlende oder abgelaufene YouTube-Cookies (Einstellungen › Bibliothek › Integrationen) oder altersbeschränkte / nur für Mitglieder verfügbare Inhalte.",
   "studio.err.ytdlp403": "YouTube hat den Download abgelehnt (Fehler 403). Aktualisiere yt-dlp und versuche es erneut; falls es bleibt, richte YouTube-Cookies ein.",
   "studio.err.ytdlpDisabled": "yt-dlp-Downloads sind auf diesem Hub deaktiviert.",
   "studio.err.ytdlpMissing": "yt-dlp ist auf dem Hub nicht installiert.",

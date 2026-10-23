@@ -20,19 +20,22 @@
 
   const moreItems = $derived(
     [
+      // The "More" sheet (issue #100): the places you go all the time (queue,
+      // playlists, settings) as wide tiles, the rest as squares in a 4-column
+      // grid; same entries as before, only the shape changed.
+      { id: "queue" as const, labelKey: "nav.queue", icon: "list" as const, wide: true },
+      { id: "playlists" as const, labelKey: "nav.playlists", icon: "queueMusic" as const, wide: true },
+      { id: "favorites" as const, labelKey: "nav.favorites", icon: "favorite" as const, wide: false },
+      { id: "recent" as const, labelKey: "nav.recent", icon: "history" as const, wide: false },
+      { id: "statistics" as const, labelKey: "nav.statistics", icon: "chart" as const, wide: false },
+      { id: "achievements" as const, labelKey: "nav.achievements", icon: "trophy" as const, wide: false },
       ...(hubModules.podcasts
-        ? [{ id: "podcasts" as const, labelKey: "nav.podcasts", icon: "podcast" as const }]
+        ? [{ id: "podcasts" as const, labelKey: "nav.podcasts", icon: "podcast" as const, wide: false }]
         : []),
-      { id: "queue" as const, labelKey: "nav.queue", icon: "list" as const },
-      { id: "playlists" as const, labelKey: "nav.playlists", icon: "queueMusic" as const },
-      { id: "favorites" as const, labelKey: "nav.favorites", icon: "favorite" as const },
-      { id: "recent" as const, labelKey: "nav.recent", icon: "history" as const },
-      { id: "statistics" as const, labelKey: "nav.statistics", icon: "chart" as const },
-      { id: "achievements" as const, labelKey: "nav.achievements", icon: "trophy" as const },
       ...(features.plectr
-        ? [{ id: "plectr" as const, labelKey: "nav.plectr", icon: "plectrum" as const }]
+        ? [{ id: "plectr" as const, labelKey: "nav.plectr", icon: "plectrum" as const, wide: false }]
         : []),
-      { id: "settings" as const, labelKey: "nav.settings", icon: "settings" as const },
+      { id: "settings" as const, labelKey: "nav.settings", icon: "settings" as const, wide: true },
     ].map((x) => ({ ...x, label: t(x.labelKey) })),
   );
 
@@ -121,6 +124,8 @@
           <button
             type="button"
             class:active={active === item.id}
+            class:wide={item.wide}
+            class:square={!item.wide}
             aria-current={active === item.id ? "page" : undefined}
             onclick={() => go(item.id)}
           >
@@ -311,6 +316,21 @@
     line-height: var(--rk-lh-tight);
     text-align: center;
     cursor: pointer;
+  }
+
+  .grid button.wide {
+    grid-column: span 2;
+    grid-template-columns: auto 1fr;
+    align-items: center;
+    justify-items: start;
+    text-align: left;
+    padding-inline: 0.8rem;
+    gap: 0.6rem;
+  }
+
+  .grid button.square {
+    aspect-ratio: 1;
+    align-content: center;
   }
 
   .grid button.active {

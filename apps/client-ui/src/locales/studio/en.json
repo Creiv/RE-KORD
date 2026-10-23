@@ -367,7 +367,7 @@
   "studio.err.rateLimited": "Too many requests to the service: try again shortly.",
   "studio.err.forbiddenRemote": "Only possible from the hub computer (or enable remote access in the hub panel).",
   "studio.err.forbiddenDefault": "Reserved to the Default account.",
-  "studio.err.noAudioFormat": "YouTube offers no audio-only format for this content. This is often an outdated yt-dlp: update it and retry.",
+  "studio.err.noAudioFormat": "YouTube offers no audio-only format for this content. Usual causes: an outdated yt-dlp (update it from the strip below), missing or expired YouTube cookies (Settings › Library › Integrations), or age-restricted / members-only content.",
   "studio.err.ytdlp403": "YouTube refused the download (error 403). Update yt-dlp and retry; if it persists, configure YouTube cookies.",
   "studio.err.ytdlpDisabled": "yt-dlp downloads are disabled on this hub.",
   "studio.err.ytdlpMissing": "yt-dlp is not installed on the hub.",
