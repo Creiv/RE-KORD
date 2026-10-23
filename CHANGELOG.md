@@ -50,6 +50,10 @@ one version number covers the hub, the clients and the packages.
 
 ### Fixed
 
+- **Karaoke backdrop stayed empty for non-Latin lyrics** (GitHub issue #100): the word
+  picker kept only `a-z` and digits, so Cyrillic, Greek, Arabic, Hebrew, Japanese, Korean
+  and other scripts produced no words. It now keeps letters and digits of every script
+  (Chinese, Japanese and Korean words count from two characters).
 - **Folders with punctuation were not recognised** (GitHub issue #100): yt-dlp writes `?`,
   `:` and similar marks as their full-width twins (`What？!`), so Studio's "already in the
   library" check for planned download folders and the admin folder search never matched

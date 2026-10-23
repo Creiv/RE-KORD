@@ -45,13 +45,17 @@ const STOP = new Set(
     .filter(Boolean),
 );
 
-/** Lower case, no accents: the matching form of a word. */
+/**
+ * Lower case, no accents, letters and digits of any script: the matching
+ * form of a word. Cyrillic, Greek, Arabic, Hebrew, Japanese, Korean and the
+ * rest must survive here, or their lines end up with no words at all.
+ */
 function fold(word: string): string {
   return word
-    .toLowerCase()
+    .toLocaleLowerCase()
     .normalize("NFD")
     .replace(/[̀-ͯ]/g, "")
-    .replace(/[^a-z0-9]/g, "");
+    .replace(/[^\p{L}\p{N}]/gu, "");
 }
 
 /** Words of a line as sung (punctuation and brackets dropped, accents kept). */
@@ -65,12 +69,21 @@ export function lineWords(text: string): string[] {
     .filter(Boolean);
 }
 
+/**
+ * Shortest word worth showing. Latin and Cyrillic words carry little meaning
+ * under four letters; Chinese, Japanese and Korean pack a word into one or
+ * two characters, so two is enough there.
+ */
+function minWordLength(folded: string): number {
+  return /[\p{Script=Han}\p{Script=Hiragana}\p{Script=Katakana}\p{Script=Hangul}]/u.test(folded) ? 2 : 4;
+}
+
 /** The one or two strongest words of a line, strongest first. */
 export function strongWords(text: string, max = 2): string[] {
   const words = lineWords(text);
   const scored = words
     .map((w, i) => ({ w, i, f: fold(w) }))
-    .filter((x) => x.f.length >= 4 && !STOP.has(x.f) && !/^\d+$/.test(x.f))
+    .filter((x) => x.f.length >= minWordLength(x.f) && !STOP.has(x.f) && !/^\p{N}+$/u.test(x.f))
     .map((x) => ({ ...x, score: x.f.length + (x.i === words.length - 1 ? 1.5 : 0) }))
     .sort((p, q) => q.score - p.score);
   const picked: typeof scored = [];

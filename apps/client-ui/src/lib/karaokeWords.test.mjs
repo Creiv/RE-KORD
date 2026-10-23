@@ -19,6 +19,14 @@ test("strongWords sceglie le parole piene, la più forte per prima", () => {
   assert.deepEqual(strongWords("Pare che sia io che non glie ne dia"), []);
 });
 
+test("strongWords funziona con alfabeti non latini (issue #100)", () => {
+  assert.deepEqual(strongWords("Подмосковные вечера"), ["ПОДМОСКОВНЫЕ", "ВЕЧЕРА"]);
+  assert.deepEqual(strongWords("Το τραγούδι της βροχής"), ["ΤΡΑΓΟΎΔΙ", "ΒΡΟΧΉΣ"]);
+  assert.deepEqual(strongWords("أغنية الليل الطويل"), ["الطويل", "أغنية"]);
+  assert.deepEqual(strongWords("桜が 咲いた 春の日に"), ["春の日に", "咲いた"]);
+  assert.deepEqual(strongWords("사랑해요 그대"), ["사랑해요", "그대"]);
+});
+
 test("planLine: stessa riga, stessa composizione; righe vuote senza parole", () => {
   const a = planLine("Sparare alla luna per dormire 'sta notte");
   assert.deepEqual(planLine("Sparare alla luna per dormire 'sta notte"), a);
