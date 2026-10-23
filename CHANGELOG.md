@@ -3,6 +3,23 @@
 All notable changes to RE-KORD. Versions follow [semantic versioning](https://semver.org);
 one version number covers the hub, the clients and the packages.
 
+## Unreleased
+
+### New
+
+- **Optional access key** (by [@mrsalvaa](https://github.com/mrsalvaa), PR #102): one
+  shared key in front of `/api` and `/media`, for hubs reached through a tunnel or a
+  reverse proxy. Off unless set. Clients ask for it once per hub (key screen, QR with the
+  key from the admin panel, *Settings › Network* to change or forget it); `<audio>`,
+  covers, downloads and Cast carry it as a query parameter, the hub strips it before
+  routing and never logs it. Wrong keys from one address are rate limited, the right key
+  always gets in; weak keys are refused. See `SECURITY.md`.
+- **Access key from the admin panel** (*Network › Access key*): generate, set, replace or
+  remove the key without touching the environment; only its SHA-256 digest is saved in
+  `settings.json`, it takes effect at once and survives restarts and backups.
+  `REKORD_ACCESS_KEY`, when set, wins and locks the panel. `GET/PUT/DELETE
+  /api/v1/system/access-key` (machine operation).
+
 ## 5.2.1 — 2026-10-17 (pre-release, clients only)
 
 A preview of what is coming in 5.3, published as a GitHub pre-release with the Client

@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { ActionRow, Banner, Button, Panel } from "@rekord/ui";
+  import { ActionRow, Banner, Button, Field, Panel, TextInput } from "@rekord/ui";
   import { admin, humanTime } from "../lib/admin.svelte";
   import { t } from "../lib/i18n.svelte";
   import PowerPanel from "./PowerPanel.svelte";
@@ -21,6 +21,27 @@
   );
 
   const yesNo = (v: boolean) => (v ? t("common.yes") : t("common.no"));
+
+  // Hub access key (Network › Access key): set / replace / remove from here.
+  const hubKey = $derived(admin.accessKeyStatus);
+  let keyDraft = $state("");
+  let keyShown = $state(false);
+  const keyEditable = $derived(Boolean(hubKey) && !hubKey?.lockedByEnv && admin.canManage);
+
+  /** 48 hex characters from the browser's CSPRNG, same shape as `openssl rand -hex 24`. */
+  function generateKey() {
+    const bytes = new Uint8Array(24);
+    crypto.getRandomValues(bytes);
+    keyDraft = Array.from(bytes, (b) => b.toString(16).padStart(2, "0")).join("");
+    keyShown = true;
+  }
+
+  async function saveKey() {
+    if (await admin.setHubAccessKey(keyDraft)) {
+      keyDraft = "";
+      keyShown = false;
+    }
+  }
 </script>
 
 <Panel title={t("network.lan.title")}>
@@ -160,6 +181,56 @@
   <PowerPanel power={admin.power} />
 {/if}
 
+{#if hubKey}
+  <Panel title={t("network.hubKey.title")}>
+    <p class="hint">{t("network.hubKey.hint")}</p>
+    <div class="grid">
+      <div class="cell">
+        <span class="k">{t("network.hubKey.state")}</span>
+        <span class="v">{t(`network.hubKey.source.${hubKey.source}`)}</span>
+      </div>
+    </div>
+    {#if hubKey.lockedByEnv}
+      <Banner tone="info">{t("network.hubKey.envNote")}</Banner>
+    {:else if !admin.canManage}
+      <Banner tone="info">{t("network.hubKey.cannotManage")}</Banner>
+    {:else}
+      <Field label={hubKey.enabled ? t("network.hubKey.replace") : t("network.hubKey.set")}>
+        <div class="keyinput">
+          <TextInput
+            type={keyShown ? "text" : "password"}
+            bind:value={keyDraft}
+            placeholder={t("network.hubKey.placeholder")}
+            autocomplete="off"
+            spellcheck={false}
+            disabled={!keyEditable || admin.busy}
+          />
+          <Button variant="ghost" size="sm" disabled={!keyEditable || admin.busy} onclick={() => (keyShown = !keyShown)}>
+            {keyShown ? t("network.hubKey.hide") : t("network.hubKey.show")}
+          </Button>
+        </div>
+      </Field>
+      <p class="hint">{t("network.hubKey.rules")}</p>
+      <ActionRow>
+        <Button disabled={!keyEditable || admin.busy || !keyDraft.trim()} onclick={() => void saveKey()}>
+          {hubKey.enabled ? t("network.hubKey.replaceAction") : t("network.hubKey.setAction")}
+        </Button>
+        <Button variant="secondary" disabled={!keyEditable || admin.busy} onclick={generateKey}>
+          {t("network.hubKey.generate")}
+        </Button>
+        {#if hubKey.enabled}
+          <Button variant="ghost" disabled={!keyEditable || admin.busy} onclick={() => void admin.clearHubAccessKey()}>
+            {t("network.hubKey.remove")}
+          </Button>
+        {/if}
+      </ActionRow>
+      {#if hubKey.enabled}
+        <Banner tone="info">{t("network.hubKey.afterSet")}</Banner>
+      {/if}
+    {/if}
+  </Panel>
+{/if}
+
 <Panel title={t("network.machine.title")}>
   <p class="hint">{t("network.machine.hint")}</p>
   {#if access}
@@ -221,6 +292,18 @@
     color: var(--rk-muted);
     font-size: var(--rk-fs-sm);
     line-height: var(--rk-lh);
+  }
+
+  .keyinput {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+  }
+
+  .keyinput :global(.rk-input) {
+    flex: 1;
+    min-width: 0;
+    font-family: var(--rk-font-mono, monospace);
   }
 
   .keyrow {

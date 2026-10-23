@@ -1,5 +1,6 @@
 import {
   api,
+  type AccessKeyStatus,
   type Account,
   type ActivityEntry,
   type Diagnostics,
@@ -29,7 +30,9 @@ import {
   accessKeyReason,
   clearAccessKey,
   getAccessKey,
+  isWellFormedAccessKey,
   onAccessKeyNeeded,
+  setAccessKey,
   type AccessKeyReason,
 } from "./accessKey";
 import {
@@ -172,6 +175,51 @@ class AdminSession {
     clearAccessKey();
     this.hasAccessKey = false;
     void this.refresh();
+  }
+
+  /** The hub's own key setting (`Network › Access key`); null on hubs before 5.3. */
+  accessKeyStatus = $state<AccessKeyStatus | null>(null);
+
+  /**
+   * Set or replace the hub's access key. The hub validates it like
+   * `REKORD_ACCESS_KEY` (length, characters, weak keys); on success this browser
+   * keeps the key so the panel goes on working, every other client asks for it.
+   */
+  async setHubAccessKey(key: string): Promise<boolean> {
+    const value = key.trim();
+    if (!isWellFormedAccessKey(value)) {
+      this.error = t("network.hubKey.malformed");
+      return false;
+    }
+    this.busy = true;
+    try {
+      this.accessKeyStatus = await api.setHubAccessKey(value);
+      setAccessKey(value);
+      this.hasAccessKey = true;
+      this.error = "";
+      return true;
+    } catch (e) {
+      this.fail(e);
+      return false;
+    } finally {
+      this.busy = false;
+    }
+  }
+
+  /** Remove the hub's access key: the hub is open again to anyone who reaches it. */
+  async clearHubAccessKey() {
+    if (!window.confirm(t("network.hubKey.removeConfirm"))) return;
+    this.busy = true;
+    try {
+      this.accessKeyStatus = await api.clearHubAccessKey();
+      clearAccessKey();
+      this.hasAccessKey = false;
+      this.error = "";
+    } catch (e) {
+      this.fail(e);
+    } finally {
+      this.busy = false;
+    }
   }
 
   readonly scanning = $derived(
@@ -324,9 +372,10 @@ class AdminSession {
           this.config = await api.config();
           break;
         case "network":
-          [this.remote, this.power] = await Promise.all([
+          [this.remote, this.power, this.accessKeyStatus] = await Promise.all([
             api.remoteAccess(),
             api.power().catch(() => null),
+            api.accessKeyStatus().catch(() => null),
           ]);
           break;
         case "backup":

@@ -33,7 +33,8 @@ reached and from the operation levels below.
 
 ### Optional access key
 
-Setting `REKORD_ACCESS_KEY` adds one shared secret in front of the whole API. Unset, nothing
+A shared secret in front of the whole API, set either from the admin panel (**Network ›
+Access key**, a machine operation) or with `REKORD_ACCESS_KEY`. Without one, nothing
 changes. Set, every request to `/api` (including the legacy `/api/*` aliases without `v1`)
 and to `/media` must present the key; the static UI (`/`, `/assets`, the `/admin` page shell,
 service worker, manifest) and CORS preflights stay public, because they carry no data and
@@ -42,8 +43,13 @@ are needed to ask for the key.
 - **What it is:** a hub-wide key, typically to expose the hub through a tunnel or a reverse
   proxy. **What it is not:** per-user authentication. Accounts remain profiles; anyone with
   the key can use any account's personal data. There is one key for every device: there is
-  no per-device revocation. To rotate it, change the variable and restart the hub; every
-  client then asks for the new one.
+  no per-device revocation. To rotate it, set a new one in the panel (or change the variable
+  and restart the hub); every client then asks for the new one.
+- **Where it lives:** a key set in the panel is kept only as its SHA-256 digest in
+  `settings.json` (`access_key_sha256`), so a backup carries the digest and a restore keeps
+  the hub protected. `REKORD_ACCESS_KEY`, when set, wins over the saved key and locks the
+  panel. If you lose a panel key, remove `access_key_sha256` from `settings.json` and
+  restart, or set `REKORD_ACCESS_KEY`.
 - **Format and fail-closed start:** 32 to 256 characters from `A-Z a-z 0-9 . _ ~ -`
   (generate one with `openssl rand -hex 32`). Weak keys are refused too: fewer than 10
   different characters, or a shorter block written over and over (`aaaa…`, `abab…`, the

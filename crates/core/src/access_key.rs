@@ -35,7 +35,7 @@ use serde_json::json;
 use sha2::{Digest, Sha256};
 use std::collections::HashMap;
 use std::net::{IpAddr, Ipv6Addr, SocketAddr};
-use std::sync::Mutex;
+use std::sync::{Arc, Mutex, RwLock};
 use std::time::{Duration, Instant};
 use subtle::ConstantTimeEq;
 
@@ -71,31 +71,32 @@ fn key_allowed_char(c: char) -> bool {
     c.is_ascii_alphanumeric() || matches!(c, '.' | '_' | '~' | '-')
 }
 
-/// Why a configured key is refused. Messages never include the value.
-fn validate_key(raw: &str) -> Result<()> {
+/// Why a key is refused; `what` names it (`REKORD_ACCESS_KEY`, "the access
+/// key"). Messages never include the value.
+fn validate_key(raw: &str, what: &str) -> Result<()> {
     if raw.is_empty() {
-        bail!("{ACCESS_KEY_ENV} is set but empty: unset it or give it a key");
+        bail!("{what} is set but empty: unset it or give it a key");
     }
     if !raw.chars().all(key_allowed_char) {
         bail!(
-            "{ACCESS_KEY_ENV} may only contain A-Z, a-z, 0-9, '.', '_', '~' and '-' \
+            "{what} may only contain A-Z, a-z, 0-9, '.', '_', '~' and '-' \
              (no spaces or line breaks)"
         );
     }
     if raw.len() < MIN_KEY_LEN {
-        bail!("{ACCESS_KEY_ENV} must be at least {MIN_KEY_LEN} characters long: {KEY_ADVICE}");
+        bail!("{what} must be at least {MIN_KEY_LEN} characters long: {KEY_ADVICE}");
     }
     if raw.len() > MAX_KEY_LEN {
-        bail!("{ACCESS_KEY_ENV} must be at most {MAX_KEY_LEN} characters long");
+        bail!("{what} must be at most {MAX_KEY_LEN} characters long");
     }
     if distinct_chars(raw) < MIN_DISTINCT_CHARS {
         bail!(
-            "{ACCESS_KEY_ENV} is too weak: it needs at least {MIN_DISTINCT_CHARS} different \
+            "{what} is too weak: it needs at least {MIN_DISTINCT_CHARS} different \
              characters; {KEY_ADVICE}"
         );
     }
     if is_repeated_block(raw) {
-        bail!("{ACCESS_KEY_ENV} is too weak: it repeats a shorter block; {KEY_ADVICE}");
+        bail!("{what} is too weak: it repeats a shorter block; {KEY_ADVICE}");
     }
     Ok(())
 }
@@ -131,12 +132,41 @@ fn sha256(bytes: &[u8]) -> [u8; 32] {
 }
 
 impl AccessGate {
+    /// A key from `REKORD_ACCESS_KEY` (errors name the variable).
     pub fn new(raw: &str) -> Result<Self> {
-        validate_key(raw)?;
-        Ok(Self {
-            digest: sha256(raw.as_bytes()),
+        validate_key(raw, ACCESS_KEY_ENV)?;
+        Ok(Self::with_digest(sha256(raw.as_bytes())))
+    }
+
+    /// A key typed in the admin panel: same rules, errors say "the access key".
+    pub fn from_user_input(raw: &str) -> Result<Self> {
+        validate_key(raw, "the access key")?;
+        Ok(Self::with_digest(sha256(raw.as_bytes())))
+    }
+
+    /// A key saved earlier as its digest (`settings.json` → `access_key_sha256`).
+    pub fn from_digest_hex(hex: &str) -> Result<Self> {
+        let hex = hex.trim();
+        if hex.len() != 64 || !hex.bytes().all(|b| b.is_ascii_hexdigit()) {
+            bail!("access_key_sha256 is not a SHA-256 hex digest");
+        }
+        let mut digest = [0u8; 32];
+        for (i, byte) in digest.iter_mut().enumerate() {
+            *byte = u8::from_str_radix(&hex[i * 2..i * 2 + 2], 16)?;
+        }
+        Ok(Self::with_digest(digest))
+    }
+
+    fn with_digest(digest: [u8; 32]) -> Self {
+        Self {
+            digest,
             limiter: Limiter::default(),
-        })
+        }
+    }
+
+    /// The digest as lowercase hex, for `settings.json`.
+    pub fn digest_hex(&self) -> String {
+        self.digest.iter().map(|b| format!("{b:02x}")).collect()
     }
 
     /// Constant time over the digests, so neither content nor length leaks.
@@ -164,6 +194,72 @@ fn gate_from_value(value: Option<std::ffi::OsString>) -> Result<Option<AccessGat
     AccessGate::new(raw).map(Some)
 }
 
+/// Where the active key comes from.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum KeySource {
+    /// `REKORD_ACCESS_KEY`: locked, the admin panel cannot change it.
+    Env,
+    /// Set from the admin panel, kept as a digest in `settings.json`.
+    Settings,
+}
+
+impl KeySource {
+    pub fn as_str(self) -> &'static str {
+        match self {
+            KeySource::Env => "env",
+            KeySource::Settings => "settings",
+        }
+    }
+}
+
+/// The hub's current gate, replaceable at runtime (admin panel). `None`: no
+/// key required. Shared by the guard (every request) and the system API.
+#[derive(Default)]
+pub struct AccessKeySlot {
+    inner: RwLock<Option<(Arc<AccessGate>, KeySource)>>,
+}
+
+impl std::fmt::Debug for AccessKeySlot {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.write_str("AccessKeySlot(<redacted>)")
+    }
+}
+
+impl AccessKeySlot {
+    pub fn current(&self) -> Option<Arc<AccessGate>> {
+        self.inner
+            .read()
+            .unwrap_or_else(|e| e.into_inner())
+            .as_ref()
+            .map(|(g, _)| g.clone())
+    }
+
+    pub fn source(&self) -> Option<KeySource> {
+        self.inner
+            .read()
+            .unwrap_or_else(|e| e.into_inner())
+            .as_ref()
+            .map(|(_, s)| *s)
+    }
+
+    pub fn is_set(&self) -> bool {
+        self.source().is_some()
+    }
+
+    /// True when `REKORD_ACCESS_KEY` decides: the panel can only look.
+    pub fn locked_by_env(&self) -> bool {
+        self.source() == Some(KeySource::Env)
+    }
+
+    pub fn set(&self, gate: AccessGate, source: KeySource) {
+        *self.inner.write().unwrap_or_else(|e| e.into_inner()) = Some((Arc::new(gate), source));
+    }
+
+    pub fn clear(&self) {
+        *self.inner.write().unwrap_or_else(|e| e.into_inner()) = None;
+    }
+}
+
 /// Access outcome left in the request extensions for the health handler.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Access {
@@ -175,10 +271,10 @@ pub enum Access {
 
 /// What health may show: `"off"`, `"ok"` or `"required"` (minimal body).
 pub fn health_access(state: &AppState, access: Option<Access>) -> &'static str {
-    match (&state.access_key, access) {
-        (None, _) => "off",
-        (Some(_), Some(Access::Granted)) => "ok",
-        (Some(_), _) => "required",
+    match (state.access_key.is_set(), access) {
+        (false, _) => "off",
+        (true, Some(Access::Granted)) => "ok",
+        (true, _) => "required",
     }
 }
 
@@ -379,7 +475,7 @@ pub async fn access_key_guard(
     mut req: Request<Body>,
     next: Next,
 ) -> Response {
-    let Some(gate) = state.access_key.clone() else {
+    let Some(gate) = state.access_key.current() else {
         return next.run(req).await;
     };
     let path = req.uri().path();

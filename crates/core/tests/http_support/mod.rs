@@ -57,11 +57,12 @@ impl Hub {
             client_ui_dir: None,
             admin_ui_dir: None,
         };
-        let mut state = prepare_hub_state(&opts, Some(&root), None).unwrap();
+        let state = prepare_hub_state(&opts, Some(&root), None).unwrap();
         if let Some(key) = access_key {
-            state.access_key = Some(std::sync::Arc::new(
+            state.access_key.set(
                 rekord_core::access_key::AccessGate::new(key).unwrap(),
-            ));
+                rekord_core::access_key::KeySource::Env,
+            );
         }
         let app = build_router(state.clone(), UiDirs::default());
         Self {

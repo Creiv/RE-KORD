@@ -36,11 +36,11 @@ fn set_but_unusable_key_refuses_to_start() {
 
     std::env::set_var("REKORD_ACCESS_KEY", "tren-lago-nube-sal-mesa-ruido-faro");
     let state = prepare_hub_state(&opts, None, None).unwrap();
-    assert!(state.access_key.is_some());
+    assert!(state.access_key.is_set());
 
     std::env::remove_var("REKORD_ACCESS_KEY");
     let state = prepare_hub_state(&opts, None, None).unwrap();
-    assert!(state.access_key.is_none());
+    assert!(!state.access_key.is_set());
     drop(state);
     let _ = std::fs::remove_dir_all(&base);
 }

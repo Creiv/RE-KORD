@@ -236,9 +236,18 @@ How it is done:
 
 ## Access key
 
-`REKORD_ACCESS_KEY` makes the hub ask every client for a shared key (model and trade-offs in
+The hub can ask every client for a shared key (model and trade-offs in
 [SECURITY.md](../SECURITY.md#optional-access-key), wire format in
 [API.md](API.md#access-key)). Use it whenever the hub is reachable from outside the LAN.
+
+The simplest way is the admin panel: **Network › Access key › "Generate"**, then **"Set the
+key"**. The panel keeps the key in that browser; every other device asks for it on its next
+request (scan the panel's QR with *include access key* on, or type it). Only the key's
+SHA-256 digest is saved (`settings.json` → `access_key_sha256`), and it survives restarts
+and backups. Setting, replacing and removing it are machine operations.
+
+`REKORD_ACCESS_KEY` does the same from the environment, for headless and Docker hubs; when
+it is set it wins over the panel's key and the panel can only show that.
 
 Generate a key (32 to 256 characters from `A-Z a-z 0-9 . _ ~ -`, at least 10 different
 characters, not a short block repeated):

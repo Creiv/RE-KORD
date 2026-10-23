@@ -36,9 +36,10 @@ pub struct AppState {
     /// Bumped by every "re-read embedded tags" request, so a running backfill
     /// notices a newer request (and its override choice).
     pub embedded_reread_gen: Arc<std::sync::atomic::AtomicU64>,
-    /// `REKORD_ACCESS_KEY` gate (`None`: no key required). Set by
-    /// `prepare_hub_state`, never part of `AppConfig` (which is serialised).
-    pub access_key: Option<Arc<crate::access_key::AccessGate>>,
+    /// The access key gate (`REKORD_ACCESS_KEY` or the admin panel; empty: no
+    /// key required). Filled by `prepare_hub_state`, swapped by the system
+    /// API; never part of `AppConfig` (which is serialised).
+    pub access_key: Arc<crate::access_key::AccessKeySlot>,
 }
 
 /// `started` is bumped when a scan takes the lock, `completed` catches up when
@@ -83,7 +84,7 @@ impl AppState {
             scan_generations: Arc::new(ScanGenerations::default()),
             embedded_backfill: Arc::new(AtomicBool::new(false)),
             embedded_reread_gen: Arc::new(std::sync::atomic::AtomicU64::new(0)),
-            access_key: None,
+            access_key: Arc::new(crate::access_key::AccessKeySlot::default()),
         })
     }
 

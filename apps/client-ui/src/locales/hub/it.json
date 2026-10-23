@@ -14,6 +14,8 @@
   "hub.activity.library.downloadTagsSettings": "Tag e copertina nei download cambiati",
   "hub.activity.library.selection": "Selezione della libreria aggiornata",
   "hub.activity.system.remoteAdminOn": "Operazioni di macchina abilitate da remoto",
+  "hub.activity.system.accessKeySet": "Chiave di accesso impostata dal pannello",
+  "hub.activity.system.accessKeyCleared": "Chiave di accesso rimossa dal pannello",
   "hub.activity.system.remoteAdminOff": "Operazioni di macchina limitate al computer dell'hub",
   "hub.activity.system.ytdlpUpdated": "yt-dlp aggiornato: {{from}} → {{to}}",
   "hub.activity.system.legacyImport": "Importazione da RE-KORD legacy: {{accounts}} account, {{favorites}} preferiti, {{playlists}} playlist, {{moods}} mood, {{blocked}} bloccati",

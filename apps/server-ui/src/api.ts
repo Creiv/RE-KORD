@@ -517,6 +517,14 @@ export type MachineAccess = {
   canManageMachine: boolean;
 };
 
+/** `GET /api/v1/system/access-key`: whether the hub asks for a key and who set it. */
+export type AccessKeyStatus = {
+  enabled: boolean;
+  source: "off" | "env" | "settings";
+  /** `REKORD_ACCESS_KEY` is set: the panel can look but not change. */
+  lockedByEnv: boolean;
+};
+
 export type HubConfig = {
   musicRoot?: string | null;
   dataDir?: string;
@@ -797,6 +805,14 @@ export const api = {
       body: JSON.stringify(patch),
     }),
 
+  accessKeyStatus: () => request<AccessKeyStatus>("/api/v1/system/access-key"),
+  setHubAccessKey: (key: string) =>
+    request<AccessKeyStatus>("/api/v1/system/access-key", {
+      method: "PUT",
+      body: JSON.stringify({ key }),
+    }),
+  clearHubAccessKey: () =>
+    request<AccessKeyStatus>("/api/v1/system/access-key", { method: "DELETE" }),
   machineAccess: () => request<MachineAccess>("/api/v1/system/machine-access"),
   setRemoteAdmin: (enabled: boolean) =>
     request<MachineAccess>("/api/v1/system/machine-access", {

@@ -357,10 +357,19 @@ pub fn prepare_hub_state(
         enabled_modules = ?registry.enabled_ids(),
         "starting RE-KORD hub"
     );
-    let mut state = AppState::new(config, registry)?;
+    let saved_digest = config.read_access_key_digest();
+    let state = AppState::new(config, registry)?;
     if let Some(gate) = access_key {
-        info!("access key required on /api and /media");
-        state.access_key = Some(std::sync::Arc::new(gate));
+        info!("access key required on /api and /media (REKORD_ACCESS_KEY)");
+        state.access_key.set(gate, access_key::KeySource::Env);
+    } else if let Some(hex) = saved_digest {
+        match access_key::AccessGate::from_digest_hex(&hex) {
+            Ok(gate) => {
+                info!("access key required on /api and /media (set in the admin panel)");
+                state.access_key.set(gate, access_key::KeySource::Settings);
+            }
+            Err(e) => warn!(error = %e, "ignoring the saved access key"),
+        }
     }
     Ok(state)
 }

@@ -55,6 +55,8 @@ export const ACCESS_KEY_CODES: ReadonlySet<string> = new Set([
   "access_key_required",
   "access_key_invalid",
   "access_key_rate_limited",
+  "access_key_from_env",
+  "access_key_weak",
 ]);
 
 /** Statuses a reverse proxy (Vite dev, Cloudflare) answers for a hub that is down. */

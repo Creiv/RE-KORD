@@ -54,6 +54,12 @@ pub fn routes() -> Router<AppState> {
         .route("/api/v1/network/public-ip", get(get_public_ip))
         .route("/api/network/public-ip", get(get_public_ip))
         .route(
+            "/api/v1/system/access-key",
+            get(get_access_key)
+                .put(set_access_key)
+                .delete(clear_access_key),
+        )
+        .route(
             "/api/v1/system/machine-access",
             get(get_machine_access).put(set_machine_access),
         )
@@ -183,6 +189,15 @@ fn err(status: StatusCode, msg: impl Into<String>) -> Response {
         error: Some(msg.into()),
     });
     (status, body).into_response()
+}
+
+/// Stable `snake_case` code plus an untranslated detail (`message`).
+fn err_code(status: StatusCode, code: &'static str, message: impl Into<String>) -> Response {
+    (
+        status,
+        Json(json!({ "ok": false, "error": code, "message": message.into() })),
+    )
+        .into_response()
 }
 
 /// HTTP API contract version advertised by `/health` (bump on breaking changes).
@@ -1180,6 +1195,101 @@ async fn set_machine_access(
         },
     );
     ok(crate::perm::machine_op_status(&state, &headers, None, peer)).into_response()
+}
+
+/// Whether the hub asks for an access key, and where that key comes from.
+fn access_key_status(state: &AppState) -> serde_json::Value {
+    let source = state.access_key.source();
+    json!({
+        "enabled": source.is_some(),
+        "source": source.map(|s| s.as_str()).unwrap_or("off"),
+        // `REKORD_ACCESS_KEY` wins: the panel can look but not change.
+        "lockedByEnv": source == Some(crate::access_key::KeySource::Env),
+    })
+}
+
+async fn get_access_key(State(state): State<AppState>) -> impl IntoResponse {
+    ok(access_key_status(&state))
+}
+
+#[derive(Deserialize)]
+struct AccessKeyBody {
+    key: String,
+}
+
+/// Set or replace the access key from the admin panel (machine operation).
+/// The key is validated like `REKORD_ACCESS_KEY`, only its digest is saved,
+/// and every client (this panel included) must present it from now on.
+async fn set_access_key(
+    State(state): State<AppState>,
+    headers: HeaderMap,
+    PeerAddr(peer): PeerAddr,
+    Json(body): Json<AccessKeyBody>,
+) -> Response {
+    let _op = machine_op_or_err!(&state, &headers, peer);
+    if state.access_key.locked_by_env() {
+        return err_code(
+            StatusCode::CONFLICT,
+            "access_key_from_env",
+            "the access key is set by REKORD_ACCESS_KEY; change it there",
+        );
+    }
+    let gate = match crate::access_key::AccessGate::from_user_input(body.key.trim()) {
+        Ok(gate) => gate,
+        // The message never contains the value (see `validate_key`).
+        Err(e) => return err_code(StatusCode::BAD_REQUEST, "access_key_weak", e.to_string()),
+    };
+    let digest = gate.digest_hex();
+    if let Err(e) = state
+        .config
+        .lock()
+        .unwrap()
+        .save_access_key_digest(Some(&digest))
+    {
+        return err(StatusCode::INTERNAL_SERVER_ERROR, e.to_string());
+    }
+    state
+        .access_key
+        .set(gate, crate::access_key::KeySource::Settings);
+    crate::diagnostics::log_activity(
+        &data_dir(&state),
+        crate::diagnostics::ActivityEvent::new(
+            "system",
+            "accessKeySet",
+            "chiave di accesso impostata dal pannello",
+        ),
+    );
+    ok(access_key_status(&state)).into_response()
+}
+
+/// Remove the access key set from the panel (machine operation): the hub is
+/// open again to anyone who reaches it.
+async fn clear_access_key(
+    State(state): State<AppState>,
+    headers: HeaderMap,
+    PeerAddr(peer): PeerAddr,
+) -> Response {
+    let _op = machine_op_or_err!(&state, &headers, peer);
+    if state.access_key.locked_by_env() {
+        return err_code(
+            StatusCode::CONFLICT,
+            "access_key_from_env",
+            "the access key is set by REKORD_ACCESS_KEY; unset it there",
+        );
+    }
+    if let Err(e) = state.config.lock().unwrap().save_access_key_digest(None) {
+        return err(StatusCode::INTERNAL_SERVER_ERROR, e.to_string());
+    }
+    state.access_key.clear();
+    crate::diagnostics::log_activity(
+        &data_dir(&state),
+        crate::diagnostics::ActivityEvent::new(
+            "system",
+            "accessKeyCleared",
+            "chiave di accesso rimossa dal pannello",
+        ),
+    );
+    ok(access_key_status(&state)).into_response()
 }
 
 async fn get_public_ip() -> impl IntoResponse {

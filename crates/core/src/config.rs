@@ -29,6 +29,9 @@ pub struct PersistedSettings {
     pub power: Option<serde_json::Value>,
     /// "Leggi metadati e copertine incorporati" and its priority.
     pub embedded_metadata: Option<serde_json::Value>,
+    /// SHA-256 (hex) of the access key set from the admin panel; the key itself
+    /// is never stored. Ignored while `REKORD_ACCESS_KEY` is set.
+    pub access_key_sha256: Option<String>,
 }
 
 /// When the hub keeps the computer from going to sleep.
@@ -426,6 +429,22 @@ impl AppConfig {
         self.watch_library = enabled;
         let mut s = self.read_persisted();
         s.watch_library = Some(enabled);
+        self.write_persisted(&s)
+    }
+
+    /// The saved access key digest, if any (read on demand: it is not part of
+    /// the serialised config, so `GET /config` never shows it).
+    pub fn read_access_key_digest(&self) -> Option<String> {
+        self.read_persisted()
+            .access_key_sha256
+            .map(|s| s.trim().to_string())
+            .filter(|s| !s.is_empty())
+    }
+
+    /// Persist (or, with `None`, remove) the access key digest.
+    pub fn save_access_key_digest(&self, digest_hex: Option<&str>) -> Result<()> {
+        let mut s = self.read_persisted();
+        s.access_key_sha256 = digest_hex.map(str::to_string);
         self.write_persisted(&s)
     }
 

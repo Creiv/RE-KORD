@@ -47,6 +47,7 @@ Envelope (JSON):
 | GET/DELETE | `/api/v1/diagnostics/errors` | Recent WARN/ERROR ring buffer (`limit`) / clear it |
 | GET | `/api/v1/network/public-ip` | Public IP (best effort, `null` when offline) |
 | GET/PUT | `/api/v1/system/machine-access` | Machine-operation rights; `PUT { "enabled" }` toggles remote admin (local only) |
+| GET/PUT/DELETE | `/api/v1/system/access-key` | The hub's [access key](#access-key): `GET` → `{ enabled, source: "off"\|"env"\|"settings", lockedByEnv }` (no digest, never the key). `PUT { "key" }` sets or replaces it (same rules as `REKORD_ACCESS_KEY`: 400 `access_key_weak`, message without the value) and `DELETE` removes it; both are machine operations, 409 `access_key_from_env` while the variable is set. Takes effect at once; only the SHA-256 digest is saved (`settings.json` → `access_key_sha256`) |
 | GET/PUT | `/api/v1/system/power` | Sleep prevention setting and live status; `PUT` is a machine operation — see [Sleep prevention](#sleep-prevention) |
 | GET/POST | `/api/v1/favorites` | List / add favorite (`{ "track_id" }`) — per account |
 | DELETE | `/api/v1/favorites/{id}` | Remove favorite — per account |
@@ -173,7 +174,7 @@ Two levels (parity legacy `requestAccess.mjs`, where a loopback request could ru
 - tools: `POST …/tools/ytdlp/update`
 - backup: `GET …/backup/kord-data` (download) and `POST …/backup/kord-restore` (full restore; a non-admin may only restore a **theme package** up to 32 MiB)
 - jobs and diagnostics: job cancel / clear, `DELETE …/diagnostics/errors`
-- remote access: `POST …/remote-access/start|stop|login|logout`, `PUT …/system/machine-access`
+- remote access: `POST …/remote-access/start|stop|login|logout`, `PUT …/system/machine-access`, `PUT`/`DELETE …/system/access-key`
 - sleep prevention: `PUT …/system/power`
 
 Refusals are `403` with `error: "forbidden_remote"` (not on the hub machine and remote admin off) or `error: "forbidden_default_account"` (machine operation from another account).
@@ -239,7 +240,8 @@ settings changes as `power.settings` `{ mode, graceMinutes, lid }`).
 
 ### Access key
 
-When the hub runs with `REKORD_ACCESS_KEY` (see [SECURITY.md](../SECURITY.md#optional-access-key)),
+When the hub has an access key (set in the admin panel or with `REKORD_ACCESS_KEY`, see
+[SECURITY.md](../SECURITY.md#optional-access-key)),
 every request to `/api`, `/api/*` (legacy aliases without `v1` included) and `/media/*` must
 present the key:
 
@@ -382,7 +384,7 @@ The **server** serves the built **client SPA** from `--client-ui` / `REKORD_CLIE
 Studio, downloads, tools and permissions answer `{ ok: false, error: "<code>", message? }`:
 
 - permissions: `forbidden_remote`, `forbidden_default_account`, `cross_origin_forbidden`, `invalid_account_id`, `account_not_found`
-- access key: `access_key_required` (401), `access_key_invalid` (401), `access_key_rate_limited` (429, `Retry-After`)
+- access key: `access_key_required` (401), `access_key_invalid` (401), `access_key_rate_limited` (429, `Retry-After`), `access_key_weak` (400, setting a key from the panel), `access_key_from_env` (409, the variable locks the panel)
 - config: `music_root_not_set`, `file_required`, `file_too_large`, `upload_failed`, `cookies_invalid`, `cookies_locked_by_env`, `discogs_token_invalid`, `discogs_token_locked_by_env`
 - files: `invalid_path`, `fs_list_failed`, `fs_search_failed`, `mkdir_failed`, `rel_paths_required`, `delete_failed`, `delete_album_failed`
 - downloads: `ytdlp_disabled`, `url_not_allowed`, `invalid_download_id`, `invalid_output_dir`, `download_id_active`, `download_not_found`, `download_id_required`, `flat_count_failed`, `ytdlp_not_found`, `ytdlp_timeout`, `ytdlp_failed`, `ytdlp_spawn_failed`, `download_failed`, `cancelled`, `client_disconnected`

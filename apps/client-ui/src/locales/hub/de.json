@@ -14,6 +14,8 @@
   "hub.activity.library.downloadTagsSettings": "Einstellung für Tags und Cover in Downloads geändert",
   "hub.activity.library.selection": "Bibliotheksauswahl aktualisiert",
   "hub.activity.system.remoteAdminOn": "Systemvorgänge von anderen Geräten erlaubt",
+  "hub.activity.system.accessKeySet": "Zugangsschlüssel im Admin-Panel gesetzt",
+  "hub.activity.system.accessKeyCleared": "Zugangsschlüssel im Admin-Panel entfernt",
   "hub.activity.system.remoteAdminOff": "Systemvorgänge auf den Rechner des Hubs beschränkt",
   "hub.activity.system.ytdlpUpdated": "yt-dlp aktualisiert: {{from}} → {{to}}",
   "hub.activity.system.legacyImport": "Import aus dem alten RE-KORD: {{accounts}} Konten, {{favorites}} Favoriten, {{playlists}} Playlists, {{moods}} Stimmungen, {{blocked}} gesperrt",

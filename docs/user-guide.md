@@ -896,7 +896,7 @@ panel"*). From another device the panel is read-only, unless remote administrati
 | **Accounts** | Create, rename, export and delete accounts. |
 | **Integrations** | YouTube cookies for yt-dlp and the Discogs token. |
 | **Podcasts & news** | Turn the optional module on or off, the cache lifetime, and the sources (add with a **"Test"** preview, rename, episodes per source, order, remove). See [Podcasts & news](#podcasts--news). |
-| **Network** | **"Local network access"** (addresses and QR codes), **"Access from outside"** (Cloudflare tunnel, public IP), **"Power"** (keep the computer from sleeping) and **"Machine operations"**. |
+| **Network** | **"Local network access"** (addresses and QR codes), **"Access from outside"** (Cloudflare tunnel, public IP), **"Power"** (keep the computer from sleeping), **"Access key"** and **"Machine operations"**. |
 
 **Updating the library safely.** "Update (changes only)" re-reads only what changed and
 refuses to drop a large part of the library at once (for example when a disk is not
@@ -923,6 +923,16 @@ replaces values typed by hand, after a confirmation. After an upgrade from 5.0 t
 the tags of the existing library once, the same way, without changing anything you
 curated. Cover precedence: a cover chosen in Studio or an image in the album folder, then
 covers of the previous version, then the embedded picture.
+
+**Access key.** **Network › Access key** protects the hub with one shared key that every
+device must present: useful when the hub is reachable from outside, through the tunnel or a
+reverse proxy (always over HTTPS). **"Generate"** makes a random key, **"Set the key"** turns
+it on at once: this browser keeps it, every other device asks for it on its next request (scan
+the panel's QR with *include access key* on, or type it in the app's key screen). **"Replace"**
+rotates it and **"Remove the key"** opens the hub again. The hub stores only a digest of the
+key, so copy it before saving. It is a machine operation, and a key set with
+`REKORD_ACCESS_KEY` can only be changed there. Accounts stay profiles without passwords: the
+key is about who can reach the hub, not who you are.
 
 **Machine operations.** **Network › Machine operations** shows whether this session can
 control the hub (Default account, local request). The switch **"Also allow these
