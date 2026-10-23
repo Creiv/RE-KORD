@@ -76,6 +76,12 @@ one version number covers the hub, the clients and the packages.
   the hub has been away, offers *Retry now* next to *Change hub*, and after two minutes the
   connect screen opens by itself (the hub often changed address on a phone). Playback
   still resumes where it stopped when the hub comes back.
+- **Artist page: albums can be sorted by when they were added** to the library, next to
+  date, name and plays.
+- **CI and dependencies**: the workflow also runs on the development branch, a weekly
+  advisory job runs `cargo audit` and `pnpm audit`, and Dependabot proposes grouped
+  monthly updates. The Docker build locks its cache mounts, so the amd64 and arm64 halves
+  no longer race on the cargo registry.
 - **Phones: the "More" menu is laid out by use** (GitHub issue #100): queue, playlists and
   settings are wide tiles, the other entries squares in a four-column grid. Same entries,
   only the shape changed.

@@ -4,9 +4,12 @@ name: CI
 
 on:
   push:
-    branches: [main]
+    branches: [main, next/tauri-hub]
   pull_request:
   workflow_dispatch:
+  schedule:
+    # Weekly dependency audit (Monday 06:00 UTC), even without pushes.
+    - cron: "0 6 * * 1"
 
 concurrency:
   group: ci-${{ github.ref }}
@@ -159,6 +162,32 @@ jobs:
           name: rekord-client-android-debug
           path: apps/client-shell/src-tauri/gen/android/app/build/outputs/apk/**/*.apk
           retention-days: 7
+
+  audit:
+    name: Dependency audit (advisory)
+    runs-on: ubuntu-latest
+    # Advisory: a new RUSTSEC or npm advisory must not block a fix from landing;
+    # the job turns red so it gets looked at.
+    continue-on-error: true
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+      - name: cargo audit
+        run: |
+          cargo install --locked cargo-audit
+          cargo audit --deny warnings
+      - uses: pnpm/action-setup@v4
+        with:
+          package_json_file: package.json
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: pnpm
+          cache-dependency-path: pnpm-lock.yaml
+      - run: pnpm install --frozen-lockfile
+      - name: pnpm audit (production dependencies)
+        run: pnpm audit --prod --audit-level moderate
 
   docker:
     name: Docker image (build only)

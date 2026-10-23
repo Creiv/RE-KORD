@@ -55,6 +55,7 @@
   "library.sortName": "Nome",
   "library.sortPlays": "Ascolti",
   "library.sortDate": "Data",
+  "library.sortAdded": "Aggiunti",
   "library.emptyArtists": "Nessun artista nella tua libreria",
   "library.emptyGenreTracks": "Nessun brano in questo genere",
   "library.emptyArtistAlbums": "Nessun album in questa cartella artista",

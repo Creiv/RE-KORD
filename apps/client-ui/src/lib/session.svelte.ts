@@ -86,7 +86,7 @@ export type LibraryBrowse = "artists" | "genres" | "moods" | "nebula";
 /** Legacy `libOverviewSort`: artists / genres overview order. */
 export type LibraryOverviewSort = "name" | "plays";
 /** Legacy `artistAlbumSort`: album grid order on an artist page. */
-export type ArtistAlbumSort = "date" | "name" | "plays";
+export type ArtistAlbumSort = "date" | "added" | "name" | "plays";
 const LIBRARY_BROWSE_IDS: readonly LibraryBrowse[] = ["artists", "genres", "moods", "nebula"];
 export type StudioPane = "listen" | "catalog" | "download" | "meta" | "covers";
 export type EditDialog = "none" | "track" | "album" | "cover";
@@ -154,7 +154,7 @@ class ClientSession {
     return this.artistAlbumSortState;
   }
   set artistAlbumSort(next: ArtistAlbumSort) {
-    if (next !== "date" && next !== "name" && next !== "plays") return;
+    if (next !== "date" && next !== "added" && next !== "name" && next !== "plays") return;
     this.artistAlbumSortState = next;
     if (this.syncedSettings.artistAlbumSort !== next) this.setSyncedSetting("artistAlbumSort", next);
   }

@@ -3,7 +3,7 @@
  * (GitHub issue #100: the picture used to be its own design), saved through
  * a download link.
  */
-import { fmtNumber, t } from "../i18n.svelte";
+import { fmtNumber, i18n, t } from "../i18n.svelte";
 import { JUDGE_COLORS, STAGE_BG } from "./config";
 import type { DifficultyId, GameResult } from "./types";
 
@@ -252,7 +252,7 @@ export function renderShareCard(data: ShareCardData, art: CanvasImageSource | nu
   ctx.fillText("PLECTR · RE-KORD", PAD, H - 120);
   ctx.textAlign = "right";
   ctx.font = font(600, 26);
-  ctx.fillText(new Date().toLocaleDateString(), W - PAD, H - 120);
+  ctx.fillText(new Date().toLocaleDateString(i18n.formatLocale), W - PAD, H - 120);
   ctx.textAlign = "left";
   return c;
 }

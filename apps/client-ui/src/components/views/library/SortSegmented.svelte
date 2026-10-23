@@ -1,10 +1,10 @@
 <script lang="ts">
-  /** Sort toggle for library grids (Data / Nome / Ascolti), one size everywhere. */
+  /** Sort toggle for library grids (Data / Aggiunti / Nome / Ascolti), one size everywhere. */
   import { Segmented } from "@rekord/ui";
   import UiIcon from "../../icons/UiIcon.svelte";
   import { t } from "../../../lib/i18n.svelte";
 
-  type SortKey = "date" | "name" | "plays";
+  type SortKey = "date" | "added" | "name" | "plays";
 
   let {
     value,
@@ -20,10 +20,11 @@
 
   const LABEL: Record<SortKey, string> = {
     date: "library.sortDate",
+    added: "library.sortAdded",
     name: "library.sortName",
     plays: "library.sortPlays",
   };
-  const ICON = { date: "date", name: "sortByAlpha", plays: "chart" } as const;
+  const ICON = { date: "date", added: "history", name: "sortByAlpha", plays: "chart" } as const;
 </script>
 
 <Segmented

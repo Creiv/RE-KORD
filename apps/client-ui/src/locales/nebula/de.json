@@ -55,6 +55,7 @@
   "library.sortName": "Name",
   "library.sortPlays": "Wiedergaben",
   "library.sortDate": "Datum",
+  "library.sortAdded": "Hinzugefügt",
   "library.emptyArtists": "Keine Künstler in deiner Bibliothek",
   "library.emptyGenreTracks": "Keine Titel in diesem Genre",
   "library.emptyArtistAlbums": "Keine Alben in diesem Künstlerordner",

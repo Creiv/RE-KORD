@@ -26,7 +26,7 @@ COPY apps/client-ui/package.json apps/client-ui/
 COPY apps/server-ui/package.json apps/server-ui/
 COPY apps/client-shell/package.json apps/client-shell/
 COPY packages/ui/package.json packages/ui/
-RUN --mount=type=cache,id=pnpm-store,target=/pnpm/store \
+RUN --mount=type=cache,id=pnpm-store,target=/pnpm/store,sharing=locked \
     pnpm install --frozen-lockfile --filter "@rekord/client-ui..." --filter "@rekord/server-ui..."
 COPY packages/ui packages/ui
 COPY apps/client-ui apps/client-ui
@@ -43,8 +43,10 @@ COPY apps/server apps/server
 # (and an empty lib) is enough for cargo to read the workspace.
 COPY apps/client-shell/src-tauri/Cargo.toml apps/client-shell/src-tauri/Cargo.toml
 RUN mkdir -p apps/client-shell/src-tauri/src && : > apps/client-shell/src-tauri/src/lib.rs
-RUN --mount=type=cache,id=cargo-registry,target=/usr/local/cargo/registry \
-    --mount=type=cache,id=rekord-target,target=/src/target \
+# `sharing=locked`: the amd64 and arm64 builds of one buildx run would otherwise
+# write the same registry cache at once (`libc .cargo-ok File exists`).
+RUN --mount=type=cache,id=cargo-registry,target=/usr/local/cargo/registry,sharing=locked \
+    --mount=type=cache,id=rekord-target,target=/src/target,sharing=locked \
     cargo build -p rekord-server --release --locked \
  && install -m 0755 target/release/rekord-server /rekord-server
 

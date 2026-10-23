@@ -414,6 +414,16 @@
           a.name.localeCompare(b.name, undefined, { numeric: true })
         );
       });
+    } else if (artistAlbumSort === "added") {
+      // Newest in the library first (`added_at`, hub ≥ 5.0); unknown dates last.
+      list.sort((a, b) => {
+        const da = a.added_at ?? "";
+        const db = b.added_at ?? "";
+        if (!da && !db) return a.name.localeCompare(b.name, undefined, { numeric: true });
+        if (!da) return 1;
+        if (!db) return -1;
+        return db.localeCompare(da) || a.name.localeCompare(b.name, undefined, { numeric: true });
+      });
     } else if (artistAlbumSort === "name") {
       list.sort((a, b) => a.name.localeCompare(b.name, undefined, { numeric: true }));
     } else {
@@ -672,7 +682,7 @@
           </h2>
         </div>
         <div class="section-head__tools library-overview-toolbar">
-          <SortSegmented ariaLabel={t("library.sortAlbumsAria")} keys={["date", "name", "plays"]} value={artistAlbumSort} onchange={(v) => (session.artistAlbumSort = v)} />
+          <SortSegmented ariaLabel={t("library.sortAlbumsAria")} keys={["date", "added", "name", "plays"]} value={artistAlbumSort} onchange={(v) => (session.artistAlbumSort = v)} />
         </div>
       </div>
     </div>

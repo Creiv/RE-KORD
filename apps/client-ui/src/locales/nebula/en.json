@@ -55,6 +55,7 @@
   "library.sortName": "Name",
   "library.sortPlays": "Plays",
   "library.sortDate": "Date",
+  "library.sortAdded": "Added",
   "library.emptyArtists": "No artists in your library",
   "library.emptyGenreTracks": "No tracks in this genre",
   "library.emptyArtistAlbums": "No albums in this artist folder",
