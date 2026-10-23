@@ -662,6 +662,12 @@ tracks played. Click any row to open it in the library.
 
 ## Achievements
 
+Every locked badge shows how far you are ("12 of 30", a thin bar) and a tooltip with its
+description; **Next up** lists the closest ones. Badges that measure your library need a
+library large enough to be meaningful (for example "half the library played" counts from
+1000 tracks, "50 artists played" needs a library with at least 100 artists); until then
+the badge says what is missing.
+
 Listening earns experience points (XP):
 
 | Activity | XP |

@@ -24,6 +24,10 @@ export type AchievementSignals = {
   tracksWithPlays: number;
   shuffleBlocks: number;
   libraryTrackCount: number;
+  /** Distinct artists / albums / genres in the library, when the caller knows them. */
+  libraryArtistCount?: number;
+  libraryAlbumCount?: number;
+  libraryGenreCount?: number;
   topArtistPlays: number;
   topTrackPlays: number;
   albumsWithPlays: number;
@@ -36,13 +40,80 @@ export type AchievementSignals = {
   plectrXp: number;
 };
 
+/**
+ * What a badge needs from the library before it can count (GitHub issue
+ * #100): a 20-track library unlocked "half the library played" after ten
+ * plays. `tracks` compares with the library size, the others with how many
+ * distinct artists / albums / genres the library has (when known).
+ */
+export type LibraryMinimum = { kind: "tracks" | "artists" | "albums" | "genres"; need: number };
+
 /** Title / description live in i18n: `achievements.badge.<id>.title|desc`. */
 type AchievementDefinition = {
   id: string;
   xpBonus: number;
   icon: AchievementIconKind;
   check: (s: AchievementSignals) => boolean;
+  /** Where the account stands: `[value, target]`, for the progress line. */
+  progress: (s: AchievementSignals) => [number, number];
+  minLibrary?: LibraryMinimum;
 };
+
+/** `signal >= n`. */
+type CountedSignal = {
+  [K in keyof AchievementSignals]-?: undefined extends AchievementSignals[K] ? never : K;
+}[keyof AchievementSignals];
+
+function at(
+  id: string,
+  xpBonus: number,
+  icon: AchievementIconKind,
+  field: CountedSignal,
+  n: number,
+  extra: { minLibrary?: LibraryMinimum } = {},
+): AchievementDefinition {
+  return {
+    id,
+    xpBonus,
+    icon,
+    check: (s) => s[field] >= n,
+    progress: (s) => [Math.min(s[field], n), n],
+    ...extra,
+  };
+}
+
+/** A share of the library played, counted only on libraries of `minTracks` or more. */
+function libraryPct(
+  id: string,
+  xpBonus: number,
+  icon: AchievementIconKind,
+  pct: number,
+  minTracks: number,
+): AchievementDefinition {
+  const target = (s: AchievementSignals) => Math.max(1, Math.ceil(s.libraryTrackCount * pct));
+  return {
+    id,
+    xpBonus,
+    icon,
+    check: (s) => libraryPctPlayed(s, pct),
+    progress: (s) => [Math.min(s.tracksWithPlays, target(s)), target(s)],
+    minLibrary: { kind: "tracks", need: minTracks },
+  };
+}
+
+/** How many of the minimum's kind the library has (`null`: unknown, no gate). */
+function libraryHas(s: AchievementSignals, kind: LibraryMinimum["kind"]): number | null {
+  switch (kind) {
+    case "tracks":
+      return s.libraryTrackCount;
+    case "artists":
+      return s.libraryArtistCount ?? null;
+    case "albums":
+      return s.libraryAlbumCount ?? null;
+    case "genres":
+      return s.libraryGenreCount ?? null;
+  }
+}
 
 type XpTier = { xpMin: number; xpMax: number | null; title: string };
 
@@ -128,71 +199,71 @@ function libraryPctPlayed(signals: AchievementSignals, pct: number): boolean {
 }
 
 const DEFINITIONS: AchievementDefinition[] = [
-  { id: "first_play", xpBonus: 10, icon: "play", check: (s) => s.totalPlays >= 1 },
-  { id: "plays_10", xpBonus: 15, icon: "play", check: (s) => s.totalPlays >= 10 },
-  { id: "plays_25", xpBonus: 20, icon: "play", check: (s) => s.totalPlays >= 25 },
-  { id: "plays_50", xpBonus: 30, icon: "play", check: (s) => s.totalPlays >= 50 },
-  { id: "plays_100", xpBonus: 50, icon: "play", check: (s) => s.totalPlays >= 100 },
-  { id: "plays_250", xpBonus: 75, icon: "play", check: (s) => s.totalPlays >= 250 },
-  { id: "plays_500", xpBonus: 100, icon: "flame", check: (s) => s.totalPlays >= 500 },
-  { id: "plays_1000", xpBonus: 150, icon: "flame", check: (s) => s.totalPlays >= 1000 },
-  { id: "plays_2500", xpBonus: 200, icon: "flame", check: (s) => s.totalPlays >= 2500 },
-  { id: "plays_5000", xpBonus: 300, icon: "flame", check: (s) => s.totalPlays >= 5000 },
-  { id: "first_favorite", xpBonus: 15, icon: "heart", check: (s) => s.favoritesCount >= 1 },
-  { id: "favorites_5", xpBonus: 25, icon: "heart", check: (s) => s.favoritesCount >= 5 },
-  { id: "favorites_10", xpBonus: 40, icon: "heart", check: (s) => s.favoritesCount >= 10 },
-  { id: "favorites_25", xpBonus: 60, icon: "heart", check: (s) => s.favoritesCount >= 25 },
-  { id: "favorites_50", xpBonus: 90, icon: "heart", check: (s) => s.favoritesCount >= 50 },
-  { id: "favorites_100", xpBonus: 120, icon: "heart", check: (s) => s.favoritesCount >= 100 },
-  { id: "playlist_1", xpBonus: 30, icon: "list", check: (s) => s.playlistsCount >= 1 },
-  { id: "playlists_3", xpBonus: 50, icon: "list", check: (s) => s.playlistsCount >= 3 },
-  { id: "playlists_5", xpBonus: 70, icon: "list", check: (s) => s.playlistsCount >= 5 },
-  { id: "playlists_10", xpBonus: 100, icon: "list", check: (s) => s.playlistsCount >= 10 },
-  { id: "playlists_20", xpBonus: 140, icon: "list", check: (s) => s.playlistsCount >= 20 },
-  { id: "artists_3", xpBonus: 20, icon: "artist", check: (s) => s.artistsWithPlays >= 3 },
-  { id: "artists_5", xpBonus: 30, icon: "artist", check: (s) => s.artistsWithPlays >= 5 },
-  { id: "artists_10", xpBonus: 45, icon: "artist", check: (s) => s.artistsWithPlays >= 10 },
-  { id: "artists_20", xpBonus: 70, icon: "artist", check: (s) => s.artistsWithPlays >= 20 },
-  { id: "artists_50", xpBonus: 110, icon: "artist", check: (s) => s.artistsWithPlays >= 50 },
-  { id: "artists_100", xpBonus: 160, icon: "artist", check: (s) => s.artistsWithPlays >= 100 },
-  { id: "genres_3", xpBonus: 25, icon: "genre", check: (s) => s.genresWithPlays >= 3 },
-  { id: "genres_5", xpBonus: 40, icon: "genre", check: (s) => s.genresWithPlays >= 5 },
-  { id: "genres_10", xpBonus: 60, icon: "genre", check: (s) => s.genresWithPlays >= 10 },
-  { id: "genres_15", xpBonus: 80, icon: "genre", check: (s) => s.genresWithPlays >= 15 },
-  { id: "genres_20", xpBonus: 100, icon: "genre", check: (s) => s.genresWithPlays >= 20 },
-  { id: "tracks_10", xpBonus: 20, icon: "library", check: (s) => s.tracksWithPlays >= 10 },
-  { id: "tracks_50", xpBonus: 50, icon: "library", check: (s) => s.tracksWithPlays >= 50 },
-  { id: "tracks_100", xpBonus: 80, icon: "library", check: (s) => s.tracksWithPlays >= 100 },
-  { id: "tracks_500", xpBonus: 150, icon: "library", check: (s) => s.tracksWithPlays >= 500 },
-  { id: "shuffle_1", xpBonus: 15, icon: "shuffle", check: (s) => s.shuffleBlocks >= 1 },
-  { id: "shuffle_3", xpBonus: 25, icon: "shuffle", check: (s) => s.shuffleBlocks >= 3 },
-  { id: "shuffle_5", xpBonus: 40, icon: "shuffle", check: (s) => s.shuffleBlocks >= 5 },
-  { id: "shuffle_10", xpBonus: 60, icon: "shuffle", check: (s) => s.shuffleBlocks >= 10 },
-  { id: "shuffle_25", xpBonus: 90, icon: "shuffle", check: (s) => s.shuffleBlocks >= 25 },
-  { id: "artist_plays_10", xpBonus: 35, icon: "artist", check: (s) => s.topArtistPlays >= 10 },
-  { id: "artist_plays_25", xpBonus: 80, icon: "flame", check: (s) => s.topArtistPlays >= 25 },
-  { id: "artist_plays_50", xpBonus: 120, icon: "flame", check: (s) => s.topArtistPlays >= 50 },
-  { id: "artist_plays_100", xpBonus: 180, icon: "flame", check: (s) => s.topArtistPlays >= 100 },
-  { id: "library_5pct", xpBonus: 40, icon: "library", check: (s) => libraryPctPlayed(s, 0.05) },
-  { id: "library_10pct", xpBonus: 100, icon: "library", check: (s) => libraryPctPlayed(s, 0.1) },
-  { id: "library_25pct", xpBonus: 160, icon: "library", check: (s) => libraryPctPlayed(s, 0.25) },
-  { id: "library_50pct", xpBonus: 250, icon: "library", check: (s) => libraryPctPlayed(s, 0.5) },
-  { id: "streak_3", xpBonus: 25, icon: "streak", check: (s) => s.streak >= 3 },
-  { id: "streak_7", xpBonus: 50, icon: "streak", check: (s) => s.streak >= 7 },
-  { id: "streak_14", xpBonus: 90, icon: "streak", check: (s) => s.streak >= 14 },
-  { id: "streak_30", xpBonus: 150, icon: "streak", check: (s) => s.streak >= 30 },
-  { id: "plays_7500", xpBonus: 400, icon: "flame", check: (s) => s.totalPlays >= 7500 },
-  { id: "favorites_200", xpBonus: 200, icon: "heart", check: (s) => s.favoritesCount >= 200 },
-  { id: "albums_10", xpBonus: 55, icon: "library", check: (s) => s.albumsWithPlays >= 10 },
-  { id: "albums_50", xpBonus: 110, icon: "library", check: (s) => s.albumsWithPlays >= 50 },
-  { id: "playlist_tracks_30", xpBonus: 85, icon: "list", check: (s) => s.playlistTrackCount >= 30 },
-  { id: "track_plays_20", xpBonus: 70, icon: "play", check: (s) => s.topTrackPlays >= 20 },
-  { id: "library_75pct", xpBonus: 320, icon: "library", check: (s) => libraryPctPlayed(s, 0.75) },
-  { id: "plectr_tracks_10", xpBonus: 30, icon: "plectr", check: (s) => s.plectrTracksPlayed >= 10 },
-  { id: "plectr_tracks_50", xpBonus: 55, icon: "plectr", check: (s) => s.plectrTracksPlayed >= 50 },
-  { id: "plectr_tracks_100", xpBonus: 85, icon: "plectr", check: (s) => s.plectrTracksPlayed >= 100 },
-  { id: "plectr_tracks_250", xpBonus: 130, icon: "plectr", check: (s) => s.plectrTracksPlayed >= 250 },
-  { id: "plectr_tracks_500", xpBonus: 200, icon: "plectr", check: (s) => s.plectrTracksPlayed >= 500 },
+  at("first_play", 10, "play", "totalPlays", 1),
+  at("plays_10", 15, "play", "totalPlays", 10),
+  at("plays_25", 20, "play", "totalPlays", 25),
+  at("plays_50", 30, "play", "totalPlays", 50),
+  at("plays_100", 50, "play", "totalPlays", 100),
+  at("plays_250", 75, "play", "totalPlays", 250),
+  at("plays_500", 100, "flame", "totalPlays", 500),
+  at("plays_1000", 150, "flame", "totalPlays", 1000),
+  at("plays_2500", 200, "flame", "totalPlays", 2500),
+  at("plays_5000", 300, "flame", "totalPlays", 5000),
+  at("first_favorite", 15, "heart", "favoritesCount", 1),
+  at("favorites_5", 25, "heart", "favoritesCount", 5),
+  at("favorites_10", 40, "heart", "favoritesCount", 10),
+  at("favorites_25", 60, "heart", "favoritesCount", 25),
+  at("favorites_50", 90, "heart", "favoritesCount", 50),
+  at("favorites_100", 120, "heart", "favoritesCount", 100),
+  at("playlist_1", 30, "list", "playlistsCount", 1),
+  at("playlists_3", 50, "list", "playlistsCount", 3),
+  at("playlists_5", 70, "list", "playlistsCount", 5),
+  at("playlists_10", 100, "list", "playlistsCount", 10),
+  at("playlists_20", 140, "list", "playlistsCount", 20),
+  at("artists_3", 20, "artist", "artistsWithPlays", 3, { minLibrary: { kind: "artists", need: 6 } }),
+  at("artists_5", 30, "artist", "artistsWithPlays", 5, { minLibrary: { kind: "artists", need: 10 } }),
+  at("artists_10", 45, "artist", "artistsWithPlays", 10, { minLibrary: { kind: "artists", need: 20 } }),
+  at("artists_20", 70, "artist", "artistsWithPlays", 20, { minLibrary: { kind: "artists", need: 40 } }),
+  at("artists_50", 110, "artist", "artistsWithPlays", 50, { minLibrary: { kind: "artists", need: 100 } }),
+  at("artists_100", 160, "artist", "artistsWithPlays", 100, { minLibrary: { kind: "artists", need: 200 } }),
+  at("genres_3", 25, "genre", "genresWithPlays", 3, { minLibrary: { kind: "genres", need: 6 } }),
+  at("genres_5", 40, "genre", "genresWithPlays", 5, { minLibrary: { kind: "genres", need: 10 } }),
+  at("genres_10", 60, "genre", "genresWithPlays", 10, { minLibrary: { kind: "genres", need: 20 } }),
+  at("genres_15", 80, "genre", "genresWithPlays", 15, { minLibrary: { kind: "genres", need: 30 } }),
+  at("genres_20", 100, "genre", "genresWithPlays", 20, { minLibrary: { kind: "genres", need: 40 } }),
+  at("tracks_10", 20, "library", "tracksWithPlays", 10, { minLibrary: { kind: "tracks", need: 50 } }),
+  at("tracks_50", 50, "library", "tracksWithPlays", 50, { minLibrary: { kind: "tracks", need: 250 } }),
+  at("tracks_100", 80, "library", "tracksWithPlays", 100, { minLibrary: { kind: "tracks", need: 500 } }),
+  at("tracks_500", 150, "library", "tracksWithPlays", 500, { minLibrary: { kind: "tracks", need: 2500 } }),
+  at("shuffle_1", 15, "shuffle", "shuffleBlocks", 1),
+  at("shuffle_3", 25, "shuffle", "shuffleBlocks", 3),
+  at("shuffle_5", 40, "shuffle", "shuffleBlocks", 5),
+  at("shuffle_10", 60, "shuffle", "shuffleBlocks", 10),
+  at("shuffle_25", 90, "shuffle", "shuffleBlocks", 25),
+  at("artist_plays_10", 35, "artist", "topArtistPlays", 10),
+  at("artist_plays_25", 80, "flame", "topArtistPlays", 25),
+  at("artist_plays_50", 120, "flame", "topArtistPlays", 50),
+  at("artist_plays_100", 180, "flame", "topArtistPlays", 100),
+  libraryPct("library_5pct", 40, "library", 0.05, 200),
+  libraryPct("library_10pct", 100, "library", 0.1, 300),
+  libraryPct("library_25pct", 160, "library", 0.25, 500),
+  libraryPct("library_50pct", 250, "library", 0.5, 1000),
+  at("streak_3", 25, "streak", "streak", 3),
+  at("streak_7", 50, "streak", "streak", 7),
+  at("streak_14", 90, "streak", "streak", 14),
+  at("streak_30", 150, "streak", "streak", 30),
+  at("plays_7500", 400, "flame", "totalPlays", 7500),
+  at("favorites_200", 200, "heart", "favoritesCount", 200),
+  at("albums_10", 55, "library", "albumsWithPlays", 10, { minLibrary: { kind: "albums", need: 20 } }),
+  at("albums_50", 110, "library", "albumsWithPlays", 50, { minLibrary: { kind: "albums", need: 100 } }),
+  at("playlist_tracks_30", 85, "list", "playlistTrackCount", 30),
+  at("track_plays_20", 70, "play", "topTrackPlays", 20),
+  libraryPct("library_75pct", 320, "library", 0.75, 2000),
+  at("plectr_tracks_10", 30, "plectr", "plectrTracksPlayed", 10),
+  at("plectr_tracks_50", 55, "plectr", "plectrTracksPlayed", 50),
+  at("plectr_tracks_100", 85, "plectr", "plectrTracksPlayed", 100),
+  at("plectr_tracks_250", 130, "plectr", "plectrTracksPlayed", 250),
+  at("plectr_tracks_500", 200, "plectr", "plectrTracksPlayed", 500),
 ];
 
 export function achievementTitleKey(id: string): string {
@@ -352,6 +423,10 @@ export type AchievementsSnapshot = {
     xpBonus: number;
     icon: AchievementIconKind;
     unlocked: boolean;
+    /** Where the account stands towards the badge. */
+    progress: { value: number; target: number; pct: number };
+    /** The library is too small for this badge to count yet. */
+    requirement: (LibraryMinimum & { have: number }) | null;
   }[];
   streak: number;
 };
@@ -363,6 +438,9 @@ export function buildAchievementsSnapshot(input: {
   playlistsCount: number;
   playlistTrackCount: number;
   libraryTrackCount: number;
+  libraryArtistCount?: number;
+  libraryAlbumCount?: number;
+  libraryGenreCount?: number;
   shuffleBlocks: number;
   genreForTrack: (t: TrackLike) => string | null;
   plectrTracksPlayed?: number;
@@ -411,6 +489,9 @@ export function buildAchievementsSnapshot(input: {
     tracksWithPlays,
     shuffleBlocks: input.shuffleBlocks,
     libraryTrackCount: input.libraryTrackCount,
+    libraryArtistCount: input.libraryArtistCount,
+    libraryAlbumCount: input.libraryAlbumCount,
+    libraryGenreCount: input.libraryGenreCount,
     topArtistPlays,
     topTrackPlays,
     albumsWithPlays: albumsWithPlays.size,
@@ -432,8 +513,14 @@ export function buildAchievementsSnapshot(input: {
 
   let achievementXp = 0;
   const achievements = DEFINITIONS.map((def) => {
-    const unlocked = def.check(signals);
+    let requirement: (LibraryMinimum & { have: number }) | null = null;
+    if (def.minLibrary) {
+      const have = libraryHas(signals, def.minLibrary.kind);
+      if (have != null && have < def.minLibrary.need) requirement = { ...def.minLibrary, have };
+    }
+    const unlocked = requirement == null && def.check(signals);
     if (unlocked) achievementXp += def.xpBonus;
+    const [value, target] = def.progress(signals);
     return {
       id: def.id,
       titleKey: achievementTitleKey(def.id),
@@ -441,6 +528,12 @@ export function buildAchievementsSnapshot(input: {
       xpBonus: def.xpBonus,
       icon: def.icon,
       unlocked,
+      progress: {
+        value,
+        target,
+        pct: unlocked ? 100 : target > 0 ? Math.min(99, Math.floor((value / target) * 100)) : 0,
+      },
+      requirement,
     };
   });
 

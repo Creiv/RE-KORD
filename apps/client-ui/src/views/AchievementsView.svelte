@@ -50,6 +50,25 @@
   const snapshot = $derived(bootstrapped ? accountAchievements.snapshot : null);
 
   const loading = $derived(!bootstrapped || snapshot == null);
+  type Badge = NonNullable<typeof snapshot>["achievements"][number];
+  /** Closest locked badges first (library requirements last). */
+  const nextUp = $derived(
+    (snapshot?.achievements ?? [])
+      .filter((a) => !a.unlocked)
+      .sort((a, b) => Number(!!a.requirement) - Number(!!b.requirement) || b.progress.pct - a.progress.pct)
+      .slice(0, 6),
+  );
+  function requirementText(req: NonNullable<Badge["requirement"]>): string {
+    return t(`achievements.requires.${req.kind}`, { need: req.need, have: req.have });
+  }
+  function badgeTooltip(ach: Badge): string {
+    const desc = t(ach.descKey);
+    if (ach.unlocked) return `${t("achievements.unlockedLabel")} · ${desc}`;
+    const state = ach.requirement
+      ? requirementText(ach.requirement)
+      : t("achievements.progressOf", { value: ach.progress.value, target: ach.progress.target });
+    return `${state} · ${desc}`;
+  }
   const unlocked = $derived(
     snapshot?.achievements.filter((a) => a.unlocked).length ?? 0,
   );
@@ -189,6 +208,24 @@
   {/if}
 
   <div class="achievements-page__main view-page__main" aria-busy={loading}>
+    {#if nextUp.length}
+      <Panel title={t("achievements.nextTitle")} class="achievements-board">
+        <ul class="achievements-next">
+          {#each nextUp as ach (ach.id)}
+            <li class="achievements-next__item" title={badgeTooltip(ach)}>
+              <UiIcon name={iconName(ach.icon)} class="achievements-next__ic" />
+              <span class="achievements-next__title">{t(ach.titleKey)}</span>
+              <span class="achievements-next__meta">
+                {ach.requirement
+                  ? requirementText(ach.requirement)
+                  : t("achievements.progressOf", { value: ach.progress.value, target: ach.progress.target })}
+              </span>
+              <span class="achievements-next__bar" aria-hidden="true"><span style="width: {ach.progress.pct}%"></span></span>
+            </li>
+          {/each}
+        </ul>
+      </Panel>
+    {/if}
     <Panel title={t("achievements.boardTitle")} class="achievements-board">
       {#snippet actions()}
         <p class="achievements-board__lead">
@@ -209,6 +246,7 @@
             aria-label={ach.unlocked
               ? t("achievements.achUnlockedAria", { title })
               : t("achievements.achLockedAria", { title })}
+            title={badgeTooltip(ach)}
           >
             <span class="achievements-badge__icon" aria-hidden="true">
               <UiIcon
@@ -220,6 +258,16 @@
               <h3>{title}</h3>
               <p>{t(ach.descKey)}</p>
               <span class="achievements-badge__xp">+{ach.xpBonus} XP</span>
+              {#if !ach.unlocked}
+                <span class="achievements-badge__progress" aria-hidden="true">
+                  <span class="achievements-badge__progress-bar" style="width: {ach.progress.pct}%"></span>
+                </span>
+                <span class="achievements-badge__progress-text">
+                  {ach.requirement
+                    ? requirementText(ach.requirement)
+                    : t("achievements.progressOf", { value: ach.progress.value, target: ach.progress.target })}
+                </span>
+              {/if}
             </div>
             <span
               class="achievements-badge__state"

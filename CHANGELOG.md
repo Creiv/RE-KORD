@@ -55,6 +55,13 @@ one version number covers the hub, the clients and the packages.
   and their code is not loaded; on by default, saved with the account and synced like the
   theme.
 
+- **Achievements show their progress** (GitHub issue #100): every locked badge carries a
+  bar and "12 of 30", a tooltip repeats it with the description, and a *Next up* panel
+  lists the six closest badges. Badges that measure the library now need a library big
+  enough to mean something: the "share of the library played" ones need 200, 300, 500,
+  1000 and 2000 tracks, "N tracks played" needs five times N, "N artists / albums /
+  genres" needs a library with twice N of them; the badge says what is missing.
+
 ### Changed
 
 - **No page scrollbar on desktop either** (GitHub issue #100): as on phones since 5.1, the

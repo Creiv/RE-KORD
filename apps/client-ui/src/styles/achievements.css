@@ -342,3 +342,78 @@
   border: 1px solid color-mix(in srgb, var(--rk-accent) 35%, var(--rk-line) 65%);
   box-shadow: none;
 }
+
+/* Progress towards a locked badge (issue #100): a thin bar and the numbers. */
+.achievements-badge__progress {
+  display: block;
+  height: 4px;
+  margin-top: 0.45rem;
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--rk-fg) 12%, transparent);
+  overflow: hidden;
+}
+
+.achievements-badge__progress-bar {
+  display: block;
+  height: 100%;
+  border-radius: inherit;
+  background: var(--rk-accent);
+}
+
+.achievements-badge__progress-text {
+  display: block;
+  margin-top: 0.25rem;
+  font-size: var(--rk-fs-xs);
+  color: var(--rk-muted);
+}
+
+.achievements-next {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(15rem, 1fr));
+  gap: var(--rk-space-sm) var(--rk-space-md);
+}
+
+.achievements-next__item {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  grid-template-areas: "ic title" "ic meta" "bar bar";
+  column-gap: 0.6rem;
+  align-items: center;
+}
+
+.achievements-next__item :global(.achievements-next__ic) {
+  grid-area: ic;
+  width: 1.4rem;
+  height: 1.4rem;
+  color: var(--rk-accent);
+}
+
+.achievements-next__title {
+  grid-area: title;
+  font-weight: 600;
+}
+
+.achievements-next__meta {
+  grid-area: meta;
+  font-size: var(--rk-fs-xs);
+  color: var(--rk-muted);
+}
+
+.achievements-next__bar {
+  grid-area: bar;
+  display: block;
+  height: 4px;
+  margin-top: 0.35rem;
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--rk-fg) 12%, transparent);
+  overflow: hidden;
+}
+
+.achievements-next__bar > span {
+  display: block;
+  height: 100%;
+  background: var(--rk-accent);
+}
