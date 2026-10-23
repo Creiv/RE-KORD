@@ -135,7 +135,7 @@ impl Db {
 
     /// Favorites as rel_paths, newest first, including parked ones.
     pub fn export_favorite_rel_paths(&self, account_id: &str) -> Result<Vec<String>> {
-        let conn = self.lock();
+        let conn = self.read();
         let mut stmt = conn.prepare(
             r#"
             SELECT rel_path FROM (
@@ -158,7 +158,7 @@ impl Db {
 
     /// Distinct account ids that own favorites or playlists.
     pub fn list_user_data_account_ids(&self) -> Result<Vec<String>> {
-        let conn = self.lock();
+        let conn = self.read();
         let mut ids = std::collections::BTreeSet::new();
         for sql in [
             "SELECT DISTINCT account_id FROM favorites",
@@ -426,7 +426,7 @@ impl Db {
     }
 
     pub fn list_playlists(&self, account_id: &str) -> Result<Vec<Playlist>> {
-        let conn = self.lock();
+        let conn = self.read();
         let mut stmt = conn.prepare(
             r#"
             SELECT p.id, p.name, p.created_at,
@@ -494,7 +494,7 @@ impl Db {
         if !self.playlist_belongs(account_id, id)? {
             return Ok(Vec::new());
         }
-        let conn = self.lock();
+        let conn = self.read();
         let sql = format!(
             "SELECT {} FROM playlist_tracks pt
              JOIN tracks t ON t.id = pt.track_id

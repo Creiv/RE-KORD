@@ -242,7 +242,7 @@ impl Db {
 
     /// Normalised key → canonical label.
     pub fn genre_labels(&self) -> Result<HashMap<String, String>> {
-        let conn = self.lock();
+        let conn = self.read();
         let mut stmt = conn.prepare("SELECT key, label FROM genres")?;
         let rows = stmt.query_map([], |r| Ok((r.get::<_, String>(0)?, r.get::<_, String>(1)?)))?;
         Ok(rows.flatten().collect())

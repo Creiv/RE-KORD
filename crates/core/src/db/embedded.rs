@@ -40,7 +40,7 @@ const COVER_PENDING: &str = "loose = 0 AND embedded_cover_from IS NULL \
 impl Db {
     /// `(tracks, albums)` the backfill still has to look at.
     pub fn embedded_pending(&self, tags_version: i64) -> Result<(u64, u64)> {
-        let conn = self.lock();
+        let conn = self.read();
         let tracks: i64 = conn.query_row(
             "SELECT COUNT(*) FROM tracks WHERE tags_version < ?1",
             params![tags_version],
@@ -61,7 +61,7 @@ impl Db {
         tags_version: i64,
         limit: usize,
     ) -> Result<Vec<PendingTrack>> {
-        let conn = self.lock();
+        let conn = self.read();
         let mut stmt = conn.prepare(
             r#"
             SELECT id, rel_path, file_path, artist_name, album_name, album_id, artist_id,
@@ -95,7 +95,7 @@ impl Db {
         limit: usize,
         files: usize,
     ) -> Result<Vec<PendingCoverAlbum>> {
-        let conn = self.lock();
+        let conn = self.read();
         let mut stmt = conn.prepare(&format!(
             "SELECT id, folder_key FROM albums WHERE {COVER_PENDING} ORDER BY id LIMIT ?1"
         ))?;
@@ -184,7 +184,7 @@ impl Db {
 
     /// `(folder_key, loose)` of an album.
     pub fn album_folder(&self, album_id: i64) -> Result<Option<(String, bool)>> {
-        let conn = self.lock();
+        let conn = self.read();
         Ok(conn
             .query_row(
                 "SELECT folder_key, loose FROM albums WHERE id = ?1",

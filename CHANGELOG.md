@@ -31,7 +31,9 @@ one version number covers the hub, the clients and the packages.
   `playlist_tracks_mismatch`, `internal_error`, …); the English detail moved to `message`.
   Before, a few dozen answers put free text in `error`. Listed in `docs/API.md`.
 - **Hub robustness.** A panic while holding one of the hub's locks no longer turns every
-  later request into a 500 until restart: the lock is recovered. *Analyse folders*
+  later request into a 500 until restart: the lock is recovered. Library queries now use
+  read-only database connections (up to four, next to the single writer), so browsing,
+  searching and playing no longer wait for a scan's or a backfill's write batches. *Analyse folders*
   (`POST /api/v1/library/probe`) is now a machine operation like the layout it feeds.
 - **yt-dlp's JavaScript engine: the bundled QuickJS comes first** (GitHub issue #103, the
   Node.js security releases of 21 October 2026). An installed Deno, Node.js or Bun is used

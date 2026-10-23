@@ -1236,7 +1236,7 @@ impl Db {
 
     /// `(parked favorites, parked playlist entries)` waiting for their file.
     pub fn parked_user_link_counts(&self) -> Result<(u64, u64)> {
-        let conn = self.lock();
+        let conn = self.read();
         let a: i64 = conn.query_row("SELECT COUNT(*) FROM parked_favorites", [], |r| r.get(0))?;
         let b: i64 = conn.query_row("SELECT COUNT(*) FROM parked_playlist_tracks", [], |r| {
             r.get(0)

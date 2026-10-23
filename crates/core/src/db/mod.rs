@@ -152,9 +152,103 @@ fn non_empty(v: Option<String>) -> Option<String> {
     v.filter(|s| !s.trim().is_empty())
 }
 
+/// How many read-only connections may exist; beyond that, reads use the writer.
+const MAX_READERS: usize = 4;
+
+/// Lazily opened read-only connections, handed out one at a time.
+struct ReadPool {
+    path: PathBuf,
+    idle: Mutex<Vec<Connection>>,
+    opened: std::sync::atomic::AtomicUsize,
+    /// Opening a reader failed once: do not retry on every query.
+    broken: std::sync::atomic::AtomicBool,
+}
+
+impl ReadPool {
+    fn new(path: PathBuf) -> Self {
+        Self {
+            path,
+            idle: Mutex::new(Vec::new()),
+            opened: std::sync::atomic::AtomicUsize::new(0),
+            broken: std::sync::atomic::AtomicBool::new(false),
+        }
+    }
+
+    fn take(&self) -> Option<Connection> {
+        use std::sync::atomic::Ordering;
+        if let Some(conn) = self
+            .idle
+            .lock()
+            .unwrap_or_else(PoisonError::into_inner)
+            .pop()
+        {
+            return Some(conn);
+        }
+        if self.broken.load(Ordering::Relaxed) || self.opened.load(Ordering::Relaxed) >= MAX_READERS
+        {
+            return None;
+        }
+        let flags = rusqlite::OpenFlags::SQLITE_OPEN_READ_ONLY
+            | rusqlite::OpenFlags::SQLITE_OPEN_NO_MUTEX
+            | rusqlite::OpenFlags::SQLITE_OPEN_URI;
+        match Connection::open_with_flags(&self.path, flags)
+            .and_then(|c| c.busy_timeout(BUSY_TIMEOUT).map(|()| c))
+        {
+            Ok(conn) => {
+                self.opened.fetch_add(1, Ordering::Relaxed);
+                Some(conn)
+            }
+            Err(e) => {
+                self.broken.store(true, Ordering::Relaxed);
+                tracing::warn!(error = %e, "read-only database connection unavailable, reads use the writer");
+                None
+            }
+        }
+    }
+
+    fn give(&self, conn: Connection) {
+        self.idle
+            .lock()
+            .unwrap_or_else(PoisonError::into_inner)
+            .push(conn);
+    }
+}
+
+/// A borrowed connection for one read; a pooled one goes back on drop.
+enum ReadConn<'a> {
+    Pooled {
+        conn: Option<Connection>,
+        pool: &'a ReadPool,
+    },
+    Writer(MutexGuard<'a, Connection>),
+}
+
+impl std::ops::Deref for ReadConn<'_> {
+    type Target = Connection;
+    fn deref(&self) -> &Connection {
+        match self {
+            ReadConn::Pooled { conn, .. } => conn.as_ref().expect("connection present until drop"),
+            ReadConn::Writer(guard) => guard,
+        }
+    }
+}
+
+impl Drop for ReadConn<'_> {
+    fn drop(&mut self) {
+        if let ReadConn::Pooled { conn, pool } = self {
+            if let Some(c) = conn.take() {
+                pool.give(c);
+            }
+        }
+    }
+}
+
 #[derive(Clone)]
 pub struct Db {
     conn: Arc<Mutex<Connection>>,
+    /// Read-only connections for queries: with WAL they neither wait for the
+    /// writer nor make it wait, so the API stays responsive during a scan.
+    readers: Arc<ReadPool>,
     /// Embedded priority "embedded" (see `embedded::EmbeddedPriority`):
     /// values taken from the tags are not replaced by sidecar fills, and
     /// album values derived from the tracks replace curated ones nobody typed.
@@ -457,8 +551,22 @@ impl Db {
         migrations::run(&mut conn)?;
         Ok(Self {
             conn: Arc::new(Mutex::new(conn)),
+            readers: Arc::new(ReadPool::new(path.as_ref().to_path_buf())),
             prefer_embedded: Arc::new(std::sync::atomic::AtomicBool::new(false)),
         })
+    }
+
+    /// A connection for a read-only query: one of the pooled readers, or the
+    /// writer when every reader is busy or none can be opened. Reads see every
+    /// committed write (WAL), never the inside of a running transaction.
+    fn read(&self) -> ReadConn<'_> {
+        match self.readers.take() {
+            Some(conn) => ReadConn::Pooled {
+                conn: Some(conn),
+                pool: &self.readers,
+            },
+            None => ReadConn::Writer(self.lock()),
+        }
     }
 
     /// See [`Db::prefers_embedded`].
@@ -485,7 +593,7 @@ impl Db {
 
     /// Schema version (`PRAGMA user_version`) of the open database.
     pub fn schema_version(&self) -> Result<i64> {
-        migrations::user_version(&self.lock())
+        migrations::user_version(&self.read())
     }
 
     /// The connection guard. A panic while holding it must not take the whole
@@ -514,7 +622,7 @@ impl Db {
     }
 
     pub fn get_meta(&self, key: &str) -> Result<Option<String>> {
-        let conn = self.lock();
+        let conn = self.read();
         let v = conn
             .query_row(
                 "SELECT value FROM library_meta WHERE key = ?1",
@@ -526,7 +634,7 @@ impl Db {
     }
 
     pub fn stats(&self, music_root: Option<String>) -> Result<LibraryStats> {
-        let conn = self.lock();
+        let conn = self.read();
         let track_count: i64 = conn.query_row("SELECT COUNT(*) FROM tracks", [], |r| r.get(0))?;
         let album_count: i64 = conn.query_row("SELECT COUNT(*) FROM albums", [], |r| r.get(0))?;
         let artist_count: i64 = conn.query_row("SELECT COUNT(*) FROM artists", [], |r| r.get(0))?;
@@ -714,7 +822,7 @@ impl Db {
         tail: &str,
         params: impl rusqlite::Params,
     ) -> Result<Vec<LibraryTrack>> {
-        let conn = self.lock();
+        let conn = self.read();
         let sql = format!("SELECT {} {} {tail}", Self::rich_cols(), Self::RICH_FROM);
         let mut stmt = conn.prepare(&sql)?;
         let rows = stmt.query_map(params, Self::map_library_track)?;
@@ -836,7 +944,7 @@ impl Db {
     /// `embedded_cover_from` of an album (`None`: no such album, or never
     /// checked; `Some("")`: checked, no picture).
     pub fn album_embedded_cover_from(&self, folder_key: &str) -> Result<Option<String>> {
-        let conn = self.lock();
+        let conn = self.read();
         Ok(conn
             .query_row(
                 "SELECT embedded_cover_from FROM albums WHERE folder_key = ?1",
@@ -849,7 +957,7 @@ impl Db {
 
     /// The album indexed for `folder_key` has a cover (any source).
     pub fn album_has_cover_by_folder(&self, folder_key: &str) -> Result<bool> {
-        let conn = self.lock();
+        let conn = self.read();
         Ok(conn
             .query_row(
                 "SELECT has_cover FROM albums WHERE folder_key = ?1",
@@ -863,7 +971,7 @@ impl Db {
     }
 
     pub fn album_cover_path(&self, album_id: i64) -> Result<Option<PathBuf>> {
-        let conn = self.lock();
+        let conn = self.read();
         let p: Option<Option<String>> = conn
             .query_row(
                 "SELECT cover_path FROM albums WHERE id = ?1 AND has_cover = 1",
@@ -876,7 +984,7 @@ impl Db {
 
     /// Distinct cover files for thumbnail backfill.
     pub fn all_album_cover_paths(&self) -> Result<Vec<PathBuf>> {
-        let conn = self.lock();
+        let conn = self.read();
         let mut stmt = conn.prepare(
             "SELECT DISTINCT cover_path FROM albums WHERE has_cover = 1 AND cover_path IS NOT NULL",
         )?;
@@ -885,7 +993,7 @@ impl Db {
     }
 
     pub fn artist_cover_path(&self, artist_id: i64) -> Result<Option<PathBuf>> {
-        let conn = self.lock();
+        let conn = self.read();
         let p: Option<Option<String>> = conn
             .query_row(
                 r#"
@@ -902,7 +1010,7 @@ impl Db {
     }
 
     pub fn list_tracks(&self, limit: i64, offset: i64) -> Result<Vec<Track>> {
-        let conn = self.lock();
+        let conn = self.read();
         let sql = format!(
             "SELECT {} FROM tracks
              ORDER BY artist_name COLLATE NOCASE, album_name COLLATE NOCASE,
@@ -921,7 +1029,7 @@ impl Db {
         let Some(m) = text::fts_query(q) else {
             return Ok(Vec::new());
         };
-        let conn = self.lock();
+        let conn = self.read();
         let sql = format!(
             "SELECT {} FROM tracks_fts f JOIN tracks t ON t.id = f.rowid
              LEFT JOIN albums a ON a.id = t.album_id
@@ -958,7 +1066,7 @@ impl Db {
             .values()
             .any(|label| text::fold_search(label).contains(&needle));
         if any_genre {
-            let conn = self.lock();
+            let conn = self.read();
             let mut stmt = conn.prepare(
                 "SELECT album_id, artist_id, genres FROM tracks WHERE genres IS NOT NULL AND genres != '[]'",
             )?;
@@ -998,7 +1106,7 @@ impl Db {
     }
 
     pub fn get_track(&self, id: i64) -> Result<Option<Track>> {
-        let conn = self.lock();
+        let conn = self.read();
         let sql = format!("SELECT {} FROM tracks WHERE id = ?1", Self::TRACK_COLS);
         let t = conn
             .query_row(&sql, params![id], Self::map_track)
@@ -1007,7 +1115,7 @@ impl Db {
     }
 
     pub fn track_file_path(&self, id: i64) -> Result<Option<PathBuf>> {
-        let conn = self.lock();
+        let conn = self.read();
         let p: Option<String> = conn
             .query_row(
                 "SELECT file_path FROM tracks WHERE id = ?1",
@@ -1019,7 +1127,7 @@ impl Db {
     }
 
     pub fn track_file_path_by_rel(&self, rel: &str) -> Result<Option<PathBuf>> {
-        let conn = self.lock();
+        let conn = self.read();
         let p: Option<String> = conn
             .query_row(
                 "SELECT file_path FROM tracks WHERE rel_path = ?1",
@@ -1040,7 +1148,7 @@ impl Db {
             "WHERE t.updated_at > ?1 ORDER BY t.updated_at LIMIT ?2",
             params![since, limit],
         )?;
-        let conn = self.lock();
+        let conn = self.read();
         let removed = {
             let mut stmt = conn.prepare(
                 "SELECT rel_path FROM track_tombstones WHERE removed_at > ?1 ORDER BY removed_at LIMIT ?2",
@@ -1053,7 +1161,7 @@ impl Db {
 
     /// Highest `updated_at` in the catalog: the client's delta cursor.
     pub fn library_revision(&self) -> Result<Option<String>> {
-        let conn = self.lock();
+        let conn = self.read();
         let track_rev: Option<String> = conn
             .query_row("SELECT MAX(updated_at) FROM tracks", [], |r| r.get(0))
             .optional()?
@@ -1073,12 +1181,12 @@ impl Db {
     }
 
     pub fn count_tracks(&self) -> Result<i64> {
-        let conn = self.lock();
+        let conn = self.read();
         Ok(conn.query_row("SELECT COUNT(*) FROM tracks", [], |r| r.get(0))?)
     }
 
     pub fn list_albums(&self) -> Result<Vec<Album>> {
-        let conn = self.lock();
+        let conn = self.read();
         let sql = format!(
             "SELECT {} FROM albums ORDER BY artist_name COLLATE NOCASE, name COLLATE NOCASE",
             Self::ALBUM_COLS
@@ -1089,7 +1197,7 @@ impl Db {
     }
 
     pub fn album_tracks(&self, album_id: i64) -> Result<Vec<Track>> {
-        let conn = self.lock();
+        let conn = self.read();
         let sql = format!(
             "SELECT {} FROM tracks WHERE album_id = ?1",
             Self::TRACK_COLS
@@ -1102,7 +1210,7 @@ impl Db {
     }
 
     pub fn list_artists(&self) -> Result<Vec<Artist>> {
-        let conn = self.lock();
+        let conn = self.read();
         let mut stmt = conn.prepare(
             r#"
             SELECT a.id, a.name, a.album_count, a.track_count,
@@ -1127,7 +1235,7 @@ impl Db {
     }
 
     pub fn get_artist(&self, id: i64) -> Result<Option<Artist>> {
-        let conn = self.lock();
+        let conn = self.read();
         let a = conn
             .query_row(
                 r#"
@@ -1154,7 +1262,7 @@ impl Db {
     }
 
     pub fn artist_albums(&self, artist_id: i64) -> Result<Vec<Album>> {
-        let conn = self.lock();
+        let conn = self.read();
         let sql = format!(
             "SELECT {} FROM albums WHERE artist_id = ?1 ORDER BY loose ASC, name COLLATE NOCASE",
             Self::ALBUM_COLS
@@ -1207,7 +1315,7 @@ impl Db {
     }
 
     pub fn get_album(&self, id: i64) -> Result<Option<Album>> {
-        let conn = self.lock();
+        let conn = self.read();
         let sql = format!("SELECT {} FROM albums WHERE id = ?1", Self::ALBUM_COLS);
         let a = conn
             .query_row(&sql, params![id], Self::map_album)
@@ -1216,7 +1324,7 @@ impl Db {
     }
 
     pub fn track_by_rel(&self, rel: &str) -> Result<Option<Track>> {
-        let conn = self.lock();
+        let conn = self.read();
         let sql = format!(
             "SELECT {} FROM tracks WHERE rel_path = ?1",
             Self::TRACK_COLS
@@ -1228,7 +1336,7 @@ impl Db {
     }
 
     pub fn tracks_by_album_folder(&self, folder_key: &str) -> Result<Vec<Track>> {
-        let conn = self.lock();
+        let conn = self.read();
         let sql = format!(
             "SELECT {} FROM tracks t
              JOIN albums a ON a.id = t.album_id
@@ -1688,7 +1796,7 @@ impl Db {
         folder_key: &str,
         file_name: &str,
     ) -> Result<Option<String>> {
-        let conn = self.lock();
+        let conn = self.read();
         let want = file_name.to_ascii_lowercase();
         let mut stmt = conn.prepare(
             r#"
@@ -1744,7 +1852,7 @@ impl Db {
     }
 
     pub fn all_album_folder_keys(&self) -> Result<std::collections::HashSet<String>> {
-        let conn = self.lock();
+        let conn = self.read();
         let mut stmt = conn.prepare("SELECT folder_key FROM albums")?;
         let rows = stmt.query_map([], |r| r.get::<_, String>(0))?;
         Ok(rows.filter_map(|r| r.ok()).collect())
