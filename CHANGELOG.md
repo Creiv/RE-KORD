@@ -48,6 +48,19 @@ one version number covers the hub, the clients and the packages.
   level of a system Node. A system Node must now be at least 22.23.4, 24.22.1 or 26.12.1
   (end-of-life lines are skipped). The package builder image uses Node 22.23.4.
 
+### Changed
+
+- **No page scrollbar on desktop either** (GitHub issue #100): as on phones since 5.1, the
+  page and its sections scroll without drawing a bar, so the content keeps the full width.
+  Logs, long lists, tables and dialogs that ask for a bar keep it.
+- **Hub unreachable: a clearer recovery** (GitHub issue #100). The banner counts how long
+  the hub has been away, offers *Retry now* next to *Change hub*, and after two minutes the
+  connect screen opens by itself (the hub often changed address on a phone). Playback
+  still resumes where it stopped when the hub comes back.
+- **Plectr: the shared picture matches the results screen**: cover and eyebrow, grade next
+  to the score with the record ribbon or the previous best, FC / AP badge, accuracy ring,
+  max combo and notes hit, judgement bar and legend, without the buttons.
+
 ### Fixed
 
 - **The listening streak reset after an update or a reinstall** (GitHub issue #100): it
