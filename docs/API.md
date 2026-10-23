@@ -393,6 +393,10 @@ Studio, downloads, tools and permissions answer `{ ok: false, error: "<code>", m
 
 - permissions: `forbidden_remote`, `forbidden_default_account`, `cross_origin_forbidden`, `invalid_account_id`, `account_not_found`
 - access key: `access_key_required` (401), `access_key_invalid` (401), `access_key_rate_limited` (429, `Retry-After`), `access_key_weak` (400, setting a key from the panel), `access_key_from_env` (409, the variable locks the panel)
+- generic (5.3): `internal_error` (500, `message` carries the detail), `not_found` (404), `invalid_request` (400). Before 5.3 these answers carried free text in `error`
+- library: `album_not_found`, `artist_not_found`, `track_not_found`, `music_root_not_directory`, `scan_in_progress` (409), `entity_info_not_found`
+- playlists: `playlist_not_found`, `name_required`, `playlist_tracks_mismatch` (409, reorder with ids that are not the current ones)
+- backup and themes: `not_a_zip`, `not_a_theme_archive`, `invalid_theme`, `restore_invalid`, `file_too_large` (413)
 - config: `music_root_not_set`, `file_required`, `file_too_large`, `upload_failed`, `cookies_invalid`, `cookies_locked_by_env`, `discogs_token_invalid`, `discogs_token_locked_by_env`
 - files: `invalid_path`, `fs_list_failed`, `fs_search_failed`, `mkdir_failed`, `rel_paths_required`, `delete_failed`, `delete_album_failed`
 - downloads: `ytdlp_disabled`, `url_not_allowed`, `invalid_download_id`, `invalid_output_dir`, `download_id_active`, `download_not_found`, `download_id_required`, `flat_count_failed`, `ytdlp_not_found`, `ytdlp_timeout`, `ytdlp_failed`, `ytdlp_spawn_failed`, `download_failed`, `cancelled`, `client_disconnected`

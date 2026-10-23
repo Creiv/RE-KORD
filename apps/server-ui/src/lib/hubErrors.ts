@@ -107,9 +107,17 @@ export function hubErrorKey(
   }
   if (!hasBody && status === 404) return { key: "errors.notAvailable" };
 
-  if (text.includes("already in progress")) return { key: "errors.scanBusy" };
-  if (text.includes("music_root not set")) return { key: "errors.musicRootNotSet" };
-  if (text.includes("music root is not a directory")) return { key: "errors.musicRootMissing" };
+  // 5.3 hubs answer stable codes; the text checks keep older hubs readable.
+  if (text === "scan_in_progress" || text.includes("already in progress")) {
+    return { key: "errors.scanBusy" };
+  }
+  if (text === "music_root_not_set" || text.includes("music_root not set")) {
+    return { key: "errors.musicRootNotSet" };
+  }
+  if (text === "music_root_not_directory" || text.includes("music root is not a directory")) {
+    return { key: "errors.musicRootMissing" };
+  }
+  if (text === "file_too_large") return { key: "errors.tooLarge" };
   if (text === "legacy_data_not_found") return { key: "errors.legacyDataNotFound" };
   if (text === "account not found" || text === "account_not_found") {
     return { key: "errors.accountNotFound" };

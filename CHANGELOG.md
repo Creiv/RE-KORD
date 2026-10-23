@@ -26,6 +26,10 @@ one version number covers the hub, the clients and the packages.
   RE-KORD 4 clients) now answer with `Deprecation: true` and a `Link` to their `/api/v1`
   twin, and the hub logs their first use. They will be removed in 6.0; the RE-KORD 5
   clients never used them.
+- **Stable error codes everywhere.** The `error` field of a failed answer is now always a
+  `snake_case` code the clients translate (`album_not_found`, `scan_in_progress`,
+  `playlist_tracks_mismatch`, `internal_error`, …); the English detail moved to `message`.
+  Before, a few dozen answers put free text in `error`. Listed in `docs/API.md`.
 - **Hub robustness.** A panic while holding one of the hub's locks no longer turns every
   later request into a 500 until restart: the lock is recovered. *Analyse folders*
   (`POST /api/v1/library/probe`) is now a machine operation like the layout it feeds.

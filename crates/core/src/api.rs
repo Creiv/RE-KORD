@@ -192,6 +192,15 @@ fn err(status: StatusCode, msg: impl Into<String>) -> Response {
     (status, body).into_response()
 }
 
+/// 500 with the stable `internal_error` code and the error text as detail.
+fn internal(e: impl std::fmt::Display) -> Response {
+    err_code(
+        StatusCode::INTERNAL_SERVER_ERROR,
+        "internal_error",
+        e.to_string(),
+    )
+}
+
 /// Stable `snake_case` code plus an untranslated detail (`message`).
 fn err_code(status: StatusCode, code: &'static str, message: impl Into<String>) -> Response {
     (
@@ -284,7 +293,7 @@ async fn library_index(
         SelectionFilterMode::Empty => ok(Vec::<crate::db::LibraryTrack>::new()).into_response(),
         SelectionFilterMode::All => match state.db.list_library_tracks(limit, offset) {
             Ok(tracks) => ok(tracks).into_response(),
-            Err(e) => err(StatusCode::INTERNAL_SERVER_ERROR, e.to_string()),
+            Err(e) => internal(e.to_string()),
         },
         // Filter after a full fetch so limit/offset apply to the personal library, not the FS page.
         SelectionFilterMode::Filter => {
@@ -302,7 +311,7 @@ async fn library_index(
                         .collect();
                     ok(page).into_response()
                 }
-                (Err(e), _) | (_, Err(e)) => err(StatusCode::INTERNAL_SERVER_ERROR, e.to_string()),
+                (Err(e), _) | (_, Err(e)) => internal(e.to_string()),
             }
         }
     }
@@ -351,7 +360,7 @@ async fn tracks_page(
                     "offset": offset,
                 }))
                 .into_response(),
-                (Err(e), _) | (_, Err(e)) => err(StatusCode::INTERNAL_SERVER_ERROR, e.to_string()),
+                (Err(e), _) | (_, Err(e)) => internal(e.to_string()),
             }
         }
         SelectionFilterMode::Filter => {
@@ -376,7 +385,7 @@ async fn tracks_page(
                     }))
                     .into_response()
                 }
-                (Err(e), _) | (_, Err(e)) => err(StatusCode::INTERNAL_SERVER_ERROR, e.to_string()),
+                (Err(e), _) | (_, Err(e)) => internal(e.to_string()),
             }
         }
     }
@@ -430,7 +439,7 @@ async fn artists_page(
             }))
             .into_response()
         }
-        (Err(e), _) | (_, Err(e)) => err(StatusCode::INTERNAL_SERVER_ERROR, e.to_string()),
+        (Err(e), _) | (_, Err(e)) => internal(e.to_string()),
     }
 }
 
@@ -448,7 +457,7 @@ async fn library_changes(
 ) -> impl IntoResponse {
     let revision = match state.db.library_revision() {
         Ok(r) => r,
-        Err(e) => return err(StatusCode::INTERNAL_SERVER_ERROR, e.to_string()),
+        Err(e) => return internal(e.to_string()),
     };
     let limit = q.limit.unwrap_or(2_000).clamp(1, 10_000);
     let Some(since) = q.since.as_deref().map(str::trim).filter(|s| !s.is_empty()) else {
@@ -473,7 +482,7 @@ async fn library_changes(
             }))
             .into_response()
         }
-        Err(e) => err(StatusCode::INTERNAL_SERVER_ERROR, e.to_string()),
+        Err(e) => internal(e.to_string()),
     }
 }
 
@@ -517,8 +526,8 @@ async fn library_stats(
             }
             ok(stats).into_response()
         }
-        Ok(Err(e)) => err(StatusCode::INTERNAL_SERVER_ERROR, e.to_string()),
-        Err(e) => err(StatusCode::INTERNAL_SERVER_ERROR, e.to_string()),
+        Ok(Err(e)) => internal(e.to_string()),
+        Err(e) => internal(e.to_string()),
     }
 }
 
@@ -553,8 +562,8 @@ async fn library_genres(
     .await;
     match computed {
         Ok(Ok(list)) => ok(list).into_response(),
-        Ok(Err(e)) => err(StatusCode::INTERNAL_SERVER_ERROR, e.to_string()),
-        Err(e) => err(StatusCode::INTERNAL_SERVER_ERROR, e.to_string()),
+        Ok(Err(e)) => internal(e.to_string()),
+        Err(e) => internal(e.to_string()),
     }
 }
 
@@ -637,8 +646,8 @@ async fn library_search(
                 ok(tracks).into_response()
             }
         }
-        Ok(Err(e)) => err(StatusCode::INTERNAL_SERVER_ERROR, e.to_string()),
-        Err(e) => err(StatusCode::INTERNAL_SERVER_ERROR, e.to_string()),
+        Ok(Err(e)) => internal(e.to_string()),
+        Err(e) => internal(e.to_string()),
     }
 }
 
@@ -654,7 +663,7 @@ async fn list_albums(
     };
     match state.db.list_albums() {
         Ok(v) => ok(selection::filter_albums(v, &sel)).into_response(),
-        Err(e) => err(StatusCode::INTERNAL_SERVER_ERROR, e.to_string()),
+        Err(e) => internal(e.to_string()),
     }
 }
 
@@ -674,16 +683,18 @@ async fn album_tracks(
             Ok(Some(al)) => {
                 let filtered = selection::filter_albums(vec![al], &sel);
                 if filtered.is_empty() {
-                    return err(StatusCode::NOT_FOUND, "album not found");
+                    return err_code(StatusCode::NOT_FOUND, "album_not_found", "album not found");
                 }
             }
-            Ok(None) => return err(StatusCode::NOT_FOUND, "album not found"),
-            Err(e) => return err(StatusCode::INTERNAL_SERVER_ERROR, e.to_string()),
+            Ok(None) => {
+                return err_code(StatusCode::NOT_FOUND, "album_not_found", "album not found")
+            }
+            Err(e) => return internal(e.to_string()),
         }
     }
     match state.db.library_album_tracks(id) {
         Ok(v) => ok(v).into_response(),
-        Err(e) => err(StatusCode::INTERNAL_SERVER_ERROR, e.to_string()),
+        Err(e) => internal(e.to_string()),
     }
 }
 
@@ -707,9 +718,7 @@ async fn list_artists(
             let tracks = selection::filter_tracks(tracks, &albums, &sel);
             ok(selection::filter_artists(artists, &albums, &tracks, &sel)).into_response()
         }
-        (Err(e), _, _) | (_, Err(e), _) | (_, _, Err(e)) => {
-            err(StatusCode::INTERNAL_SERVER_ERROR, e.to_string())
-        }
+        (Err(e), _, _) | (_, Err(e), _) | (_, _, Err(e)) => internal(e.to_string()),
     }
 }
 
@@ -736,14 +745,22 @@ async fn get_artist(
                     let filtered = selection::filter_artists(vec![a], &albums, &tracks, &sel);
                     match filtered.into_iter().next() {
                         Some(a) => ok(a).into_response(),
-                        None => err(StatusCode::NOT_FOUND, "artist not found"),
+                        None => err_code(
+                            StatusCode::NOT_FOUND,
+                            "artist_not_found",
+                            "artist not found",
+                        ),
                     }
                 }
-                (Err(e), _) | (_, Err(e)) => err(StatusCode::INTERNAL_SERVER_ERROR, e.to_string()),
+                (Err(e), _) | (_, Err(e)) => internal(e.to_string()),
             }
         }
-        Ok(None) => err(StatusCode::NOT_FOUND, "artist not found"),
-        Err(e) => err(StatusCode::INTERNAL_SERVER_ERROR, e.to_string()),
+        Ok(None) => err_code(
+            StatusCode::NOT_FOUND,
+            "artist_not_found",
+            "artist not found",
+        ),
+        Err(e) => internal(e.to_string()),
     }
 }
 
@@ -760,7 +777,7 @@ async fn artist_albums(
     };
     match state.db.artist_albums(id) {
         Ok(v) => ok(selection::filter_albums(v, &sel)).into_response(),
-        Err(e) => err(StatusCode::INTERNAL_SERVER_ERROR, e.to_string()),
+        Err(e) => internal(e.to_string()),
     }
 }
 
@@ -780,11 +797,11 @@ async fn get_album(
             let filtered = selection::filter_albums(vec![a], &sel);
             match filtered.into_iter().next() {
                 Some(a) => ok(a).into_response(),
-                None => err(StatusCode::NOT_FOUND, "album not found"),
+                None => err_code(StatusCode::NOT_FOUND, "album_not_found", "album not found"),
             }
         }
-        Ok(None) => err(StatusCode::NOT_FOUND, "album not found"),
-        Err(e) => err(StatusCode::INTERNAL_SERVER_ERROR, e.to_string()),
+        Ok(None) => err_code(StatusCode::NOT_FOUND, "album_not_found", "album not found"),
+        Err(e) => internal(e.to_string()),
     }
 }
 
@@ -810,14 +827,16 @@ async fn get_track(
                     let filtered = selection::filter_tracks(vec![t], &albums, &sel);
                     match filtered.into_iter().next() {
                         Some(t) => ok(t).into_response(),
-                        None => err(StatusCode::NOT_FOUND, "track not found"),
+                        None => {
+                            err_code(StatusCode::NOT_FOUND, "track_not_found", "track not found")
+                        }
                     }
                 }
-                Err(e) => err(StatusCode::INTERNAL_SERVER_ERROR, e.to_string()),
+                Err(e) => internal(e.to_string()),
             }
         }
-        Ok(None) => err(StatusCode::NOT_FOUND, "track not found"),
-        Err(e) => err(StatusCode::INTERNAL_SERVER_ERROR, e.to_string()),
+        Ok(None) => err_code(StatusCode::NOT_FOUND, "track_not_found", "track not found"),
+        Err(e) => internal(e.to_string()),
     }
 }
 
@@ -855,11 +874,15 @@ async fn set_music_path(
     let _op = machine_op_or_err!(&state, &headers, peer);
     let path = PathBuf::from(body.music_root.trim());
     if !path.is_dir() {
-        return err(StatusCode::BAD_REQUEST, "music_root is not a directory");
+        return err_code(
+            StatusCode::BAD_REQUEST,
+            "music_root_not_directory",
+            "music_root is not a directory",
+        );
     }
     // Drop the config guard before needs_initial_scan (it locks again).
     if let Err(e) = state.config.lock_or_recover().save_music_root(path.clone()) {
-        return err(StatusCode::INTERNAL_SERVER_ERROR, e.to_string());
+        return internal(e.to_string());
     }
     // First-time path (or never indexed): index in background so admin
     // "save path" is enough — no separate scan click required.
@@ -885,7 +908,11 @@ async fn run_scan(
 ) -> Response {
     let _op = machine_op_or_err!(&state, &headers, peer);
     if state.is_scanning() {
-        return err(StatusCode::CONFLICT, "scan already in progress");
+        return err_code(
+            StatusCode::CONFLICT,
+            "scan_in_progress",
+            "scan already in progress",
+        );
     }
     let mode = crate::scan::ScanMode::from_query(q.mode.as_deref());
     match state.run_scan_mode(mode).await {
@@ -893,11 +920,11 @@ async fn run_scan(
         Err(e) => {
             let msg = e.to_string();
             if msg.contains("music_root not set") {
-                err(StatusCode::BAD_REQUEST, msg)
+                err_code(StatusCode::BAD_REQUEST, "music_root_not_set", msg)
             } else if msg.contains("already in progress") {
-                err(StatusCode::CONFLICT, msg)
+                err_code(StatusCode::CONFLICT, "scan_in_progress", msg)
             } else {
-                err(StatusCode::INTERNAL_SERVER_ERROR, msg)
+                internal(msg)
             }
         }
     }
@@ -920,12 +947,16 @@ async fn probe_library(
     let _op = machine_op_or_err!(&state, &headers, peer);
     let root = state.config.lock_or_recover().music_root.clone();
     let Some(root) = root else {
-        return err(StatusCode::BAD_REQUEST, "music_root not set");
+        return err_code(
+            StatusCode::BAD_REQUEST,
+            "music_root_not_set",
+            "music_root not set",
+        );
     };
     let limit = q.sample_limit.unwrap_or(200);
     match tokio::task::spawn_blocking(move || crate::layout::probe_structure(&root, limit)).await {
         Ok(report) => ok(report).into_response(),
-        Err(e) => err(StatusCode::INTERNAL_SERVER_ERROR, e.to_string()),
+        Err(e) => internal(e.to_string()),
     }
 }
 
@@ -946,7 +977,11 @@ async fn set_library_layout(
     let _op = machine_op_or_err!(&state, &headers, peer);
     let root = state.config.lock_or_recover().music_root.clone();
     let Some(root) = root else {
-        return err(StatusCode::BAD_REQUEST, "music_root not set");
+        return err_code(
+            StatusCode::BAD_REQUEST,
+            "music_root_not_set",
+            "music_root not set",
+        );
     };
     match crate::layout::save_layout(&root, &body) {
         Ok(()) => {
@@ -961,7 +996,7 @@ async fn set_library_layout(
             );
             ok(body).into_response()
         }
-        Err(e) => err(StatusCode::INTERNAL_SERVER_ERROR, e.to_string()),
+        Err(e) => internal(e.to_string()),
     }
 }
 
@@ -987,7 +1022,7 @@ async fn set_watch(
         .lock_or_recover()
         .save_watch_library(body.enabled)
     {
-        return err(StatusCode::INTERNAL_SERVER_ERROR, e.to_string());
+        return internal(e.to_string());
     }
     if body.enabled {
         crate::watcher::start(&state);
@@ -1032,7 +1067,7 @@ async fn run_thumbnail_backfill(
 async fn get_embedded(State(state): State<AppState>) -> Response {
     match crate::embedded::backfill::status(&state) {
         Ok(s) => ok(s).into_response(),
-        Err(e) => err(StatusCode::INTERNAL_SERVER_ERROR, e.to_string()),
+        Err(e) => internal(e.to_string()),
     }
 }
 
@@ -1097,7 +1132,7 @@ async fn set_embedded(
             next.enabled && next.priority == crate::embedded::EmbeddedPriority::Embedded,
         );
         if let Err(e) = crate::embedded::backfill::request_reread(&state, false) {
-            return err(StatusCode::INTERNAL_SERVER_ERROR, e.to_string());
+            return internal(e.to_string());
         }
         crate::diagnostics::log_activity(
             &data_dir(&state),
@@ -1139,7 +1174,7 @@ async fn reread_embedded(
         && settings.enabled
         && settings.priority == crate::embedded::EmbeddedPriority::Embedded;
     if let Err(e) = crate::embedded::backfill::request_reread(&state, override_studio) {
-        return err(StatusCode::INTERNAL_SERVER_ERROR, e.to_string());
+        return internal(e.to_string());
     }
     crate::diagnostics::log_activity(
         &data_dir(&state),
@@ -1178,7 +1213,7 @@ async fn set_machine_access(
         .lock_or_recover()
         .save_allow_remote_admin(body.enabled)
     {
-        return err(StatusCode::INTERNAL_SERVER_ERROR, e.to_string());
+        return internal(e.to_string());
     }
     crate::diagnostics::log_activity(
         &data_dir(&state),
@@ -1247,7 +1282,7 @@ async fn set_access_key(
         .lock_or_recover()
         .save_access_key_digest(Some(&digest))
     {
-        return err(StatusCode::INTERNAL_SERVER_ERROR, e.to_string());
+        return internal(e.to_string());
     }
     state
         .access_key
@@ -1279,7 +1314,7 @@ async fn clear_access_key(
         );
     }
     if let Err(e) = state.config.lock_or_recover().save_access_key_digest(None) {
-        return err(StatusCode::INTERNAL_SERVER_ERROR, e.to_string());
+        return internal(e.to_string());
     }
     state.access_key.clear();
     crate::diagnostics::log_activity(
@@ -1327,7 +1362,7 @@ async fn get_legacy_import(
     .await;
     match status {
         Ok(s) => ok(s).into_response(),
-        Err(e) => err(StatusCode::INTERNAL_SERVER_ERROR, e.to_string()),
+        Err(e) => internal(e.to_string()),
     }
 }
 
@@ -1347,7 +1382,11 @@ async fn sync_legacy_meta(
         (cfg.data_dir.clone(), cfg.music_root.clone())
     };
     let Some(root) = root else {
-        return err(StatusCode::BAD_REQUEST, "music_root not set");
+        return err_code(
+            StatusCode::BAD_REQUEST,
+            "music_root_not_set",
+            "music_root not set",
+        );
     };
     if !root.join(".kord").is_dir() {
         return err(StatusCode::NOT_FOUND, "legacy_data_not_found");
@@ -1405,8 +1444,8 @@ async fn sync_legacy_meta(
     .await;
     match out {
         Ok(Ok(report)) => ok(report).into_response(),
-        Ok(Err(e)) => err(StatusCode::INTERNAL_SERVER_ERROR, e.to_string()),
-        Err(e) => err(StatusCode::INTERNAL_SERVER_ERROR, e.to_string()),
+        Ok(Err(e)) => internal(e.to_string()),
+        Err(e) => internal(e.to_string()),
     }
 }
 
@@ -1418,7 +1457,7 @@ async fn list_favorites(
     let account_id = account_or_err!(&state, &headers, &aq);
     match state.db.list_favorites(&account_id) {
         Ok(v) => ok(v).into_response(),
-        Err(e) => err(StatusCode::INTERNAL_SERVER_ERROR, e.to_string()),
+        Err(e) => internal(e.to_string()),
     }
 }
 
@@ -1448,7 +1487,7 @@ async fn add_favorite(
             );
             ok(json!({ "track_id": body.track_id })).into_response()
         }
-        Err(e) => err(StatusCode::INTERNAL_SERVER_ERROR, e.to_string()),
+        Err(e) => internal(e.to_string()),
     }
 }
 
@@ -1473,7 +1512,7 @@ async fn remove_favorite(
             );
             ok(json!({ "track_id": id })).into_response()
         }
-        Err(e) => err(StatusCode::INTERNAL_SERVER_ERROR, e.to_string()),
+        Err(e) => internal(e.to_string()),
     }
 }
 
@@ -1485,7 +1524,7 @@ async fn list_playlists(
     let account_id = account_or_err!(&state, &headers, &aq);
     match state.db.list_playlists(&account_id) {
         Ok(v) => ok(v).into_response(),
-        Err(e) => err(StatusCode::INTERNAL_SERVER_ERROR, e.to_string()),
+        Err(e) => internal(e.to_string()),
     }
 }
 
@@ -1503,7 +1542,7 @@ async fn create_playlist(
     let account_id = account_or_err!(&state, &headers, &aq);
     let name = body.name.trim();
     if name.is_empty() {
-        return err(StatusCode::BAD_REQUEST, "name required");
+        return err_code(StatusCode::BAD_REQUEST, "name_required", "name required");
     }
     match state.db.create_playlist(&account_id, name) {
         Ok(p) => {
@@ -1519,7 +1558,7 @@ async fn create_playlist(
             );
             ok(p).into_response()
         }
-        Err(e) => err(StatusCode::INTERNAL_SERVER_ERROR, e.to_string()),
+        Err(e) => internal(e.to_string()),
     }
 }
 
@@ -1540,12 +1579,16 @@ async fn get_playlist(
                     .map(|pls| pls.iter().any(|p| p.id == id))
                     .unwrap_or(false);
                 if !owned {
-                    return err(StatusCode::NOT_FOUND, "playlist not found");
+                    return err_code(
+                        StatusCode::NOT_FOUND,
+                        "playlist_not_found",
+                        "playlist not found",
+                    );
                 }
             }
             ok(json!({ "id": id, "tracks": tracks })).into_response()
         }
-        Err(e) => err(StatusCode::INTERNAL_SERVER_ERROR, e.to_string()),
+        Err(e) => internal(e.to_string()),
     }
 }
 
@@ -1571,8 +1614,12 @@ async fn rename_playlist(
             );
             ok(json!({ "id": id, "name": body.name })).into_response()
         }
-        Ok(false) => err(StatusCode::NOT_FOUND, "playlist not found"),
-        Err(e) => err(StatusCode::INTERNAL_SERVER_ERROR, e.to_string()),
+        Ok(false) => err_code(
+            StatusCode::NOT_FOUND,
+            "playlist_not_found",
+            "playlist not found",
+        ),
+        Err(e) => internal(e.to_string()),
     }
 }
 
@@ -1597,8 +1644,12 @@ async fn delete_playlist(
             );
             ok(json!({ "id": id })).into_response()
         }
-        Ok(false) => err(StatusCode::NOT_FOUND, "playlist not found"),
-        Err(e) => err(StatusCode::INTERNAL_SERVER_ERROR, e.to_string()),
+        Ok(false) => err_code(
+            StatusCode::NOT_FOUND,
+            "playlist_not_found",
+            "playlist not found",
+        ),
+        Err(e) => internal(e.to_string()),
     }
 }
 
@@ -1615,9 +1666,9 @@ async fn add_playlist_track(
         Err(e) => {
             let msg = e.to_string();
             if msg.contains("not found") {
-                err(StatusCode::NOT_FOUND, msg)
+                err_code(StatusCode::NOT_FOUND, "not_found", msg)
             } else {
-                err(StatusCode::INTERNAL_SERVER_ERROR, msg)
+                internal(msg)
             }
         }
     }
@@ -1642,11 +1693,11 @@ async fn reorder_playlist_tracks(
         Err(e) => {
             let msg = e.to_string();
             if msg.contains("not found") {
-                err(StatusCode::NOT_FOUND, msg)
+                err_code(StatusCode::NOT_FOUND, "not_found", msg)
             } else if msg.contains("does not match") || msg.contains("duplicate") {
-                err(StatusCode::CONFLICT, msg)
+                err_code(StatusCode::CONFLICT, "playlist_tracks_mismatch", msg)
             } else {
-                err(StatusCode::INTERNAL_SERVER_ERROR, msg)
+                internal(msg)
             }
         }
     }
@@ -1677,9 +1728,9 @@ async fn remove_playlist_track(
         Err(e) => {
             let msg = e.to_string();
             if msg.contains("not found") {
-                err(StatusCode::NOT_FOUND, msg)
+                err_code(StatusCode::NOT_FOUND, "not_found", msg)
             } else {
-                err(StatusCode::INTERNAL_SERVER_ERROR, msg)
+                internal(msg)
             }
         }
     }
@@ -1712,21 +1763,25 @@ async fn get_entity_info(
         cfg.music_root.clone()
     };
     let Some(root) = root else {
-        return err(StatusCode::SERVICE_UNAVAILABLE, "music root not configured");
+        return err_code(
+            StatusCode::SERVICE_UNAVAILABLE,
+            "music_root_not_set",
+            "music root not configured",
+        );
     };
     let album = q.album.as_deref().filter(|s| !s.trim().is_empty());
     match entity_info::get_entity_info(&root, &q.artist, album) {
         Ok(bundle) => ok(bundle).into_response(),
         Err(e) => {
             let msg = e.to_string();
-            let status = if msg.contains("not found") {
-                StatusCode::NOT_FOUND
+            let (status, code) = if msg.contains("not found") {
+                (StatusCode::NOT_FOUND, "entity_info_not_found")
             } else if msg.contains("invalid") {
-                StatusCode::BAD_REQUEST
+                (StatusCode::BAD_REQUEST, "invalid_request")
             } else {
-                StatusCode::INTERNAL_SERVER_ERROR
+                (StatusCode::INTERNAL_SERVER_ERROR, "internal_error")
             };
-            err(status, msg)
+            err_code(status, code, msg)
         }
     }
 }
@@ -1768,8 +1823,8 @@ async fn download_backup(
             }
             res
         }
-        Ok(Err(e)) => err(StatusCode::INTERNAL_SERVER_ERROR, e.to_string()),
-        Err(e) => err(StatusCode::INTERNAL_SERVER_ERROR, e.to_string()),
+        Ok(Err(e)) => internal(e.to_string()),
+        Err(e) => internal(e.to_string()),
     }
 }
 
@@ -1806,8 +1861,8 @@ async fn download_theme_export(
             }
             res
         }
-        Ok(Err(e)) => err(StatusCode::INTERNAL_SERVER_ERROR, e.to_string()),
-        Err(e) => err(StatusCode::INTERNAL_SERVER_ERROR, e.to_string()),
+        Ok(Err(e)) => internal(e.to_string()),
+        Err(e) => internal(e.to_string()),
     }
 }
 
@@ -1876,22 +1931,36 @@ async fn upload_restore(
             match field.chunk().await {
                 Ok(Some(chunk)) => {
                     if buf.len() + chunk.len() > max_bytes {
-                        return err(StatusCode::PAYLOAD_TOO_LARGE, "Archive is too large");
+                        return err_code(
+                            StatusCode::PAYLOAD_TOO_LARGE,
+                            "file_too_large",
+                            "Archive is too large",
+                        );
                     }
                     buf.extend_from_slice(&chunk);
                 }
                 Ok(None) => break,
-                Err(e) => return err(StatusCode::BAD_REQUEST, e.to_string()),
+                Err(e) => {
+                    return err_code(StatusCode::BAD_REQUEST, "invalid_request", e.to_string())
+                }
             }
         }
         file_bytes = Some(buf);
         break;
     }
     let Some(bytes) = file_bytes else {
-        return err(StatusCode::BAD_REQUEST, "missing multipart file field");
+        return err_code(
+            StatusCode::BAD_REQUEST,
+            "file_required",
+            "missing multipart file field",
+        );
     };
     if bytes.len() < 4 || &bytes[..2] != b"PK" {
-        return err(StatusCode::BAD_REQUEST, "file is not a zip archive");
+        return err_code(
+            StatusCode::BAD_REQUEST,
+            "not_a_zip",
+            "file is not a zip archive",
+        );
     }
 
     // Theme package? Apply only theme settings to the current account (legacy parity).
@@ -1904,20 +1973,21 @@ async fn upload_restore(
         .unwrap_or_else(|e| Err(anyhow::anyhow!(e.to_string())));
         return match imported {
             Ok(Some(report)) => ok(report).into_response(),
-            Ok(None) => err(
+            Ok(None) => err_code(
                 StatusCode::BAD_REQUEST,
+                "not_a_theme_archive",
                 "Not a RE-KORD theme archive (missing rekord-theme.json)",
             ),
             Err(e) => {
                 let msg = e.to_string();
-                let status = if msg.contains("too large") {
-                    StatusCode::PAYLOAD_TOO_LARGE
+                let (status, code) = if msg.contains("too large") {
+                    (StatusCode::PAYLOAD_TOO_LARGE, "file_too_large")
                 } else if msg.contains("Invalid theme") || msg.contains("Unsupported image") {
-                    StatusCode::BAD_REQUEST
+                    (StatusCode::BAD_REQUEST, "invalid_theme")
                 } else {
-                    StatusCode::INTERNAL_SERVER_ERROR
+                    (StatusCode::INTERNAL_SERVER_ERROR, "internal_error")
                 };
-                err(status, msg)
+                err_code(status, code, msg)
             }
         };
     }
@@ -1967,18 +2037,18 @@ async fn upload_restore(
         Err(e) => {
             let msg = e.to_string();
             job.fail(msg.clone());
-            let status = if msg.contains("unsupported")
+            let (status, code) = if msg.contains("unsupported")
                 || msg.contains("missing")
                 || msg.contains("not a directory")
                 || msg.contains("no music_root")
             {
-                StatusCode::BAD_REQUEST
+                (StatusCode::BAD_REQUEST, "restore_invalid")
             } else if msg.contains("scan already") || msg.contains("could not start scan") {
-                StatusCode::CONFLICT
+                (StatusCode::CONFLICT, "scan_in_progress")
             } else {
-                StatusCode::INTERNAL_SERVER_ERROR
+                (StatusCode::INTERNAL_SERVER_ERROR, "internal_error")
             };
-            err(status, msg)
+            err_code(status, code, msg)
         }
     }
 }
@@ -2005,12 +2075,12 @@ async fn patch_my_library_selection(
     let dir = data_dir(&state);
     let cur = match selection::read_library_selection(&dir, &account_id) {
         Ok(s) => s,
-        Err(e) => return err(StatusCode::INTERNAL_SERVER_ERROR, e.to_string()),
+        Err(e) => return internal(e.to_string()),
     };
     let (artists, albums) = match (state.db.list_artists(), state.db.list_albums()) {
         (Ok(a), Ok(b)) => (a, b),
         (Err(e), _) | (_, Err(e)) => {
-            return err(StatusCode::INTERNAL_SERVER_ERROR, e.to_string());
+            return internal(e.to_string());
         }
     };
     let keys = CatalogKeys::from_albums_and_artists(&artists, &albums);
@@ -2028,14 +2098,14 @@ async fn patch_my_library_selection(
             );
             ok(saved).into_response()
         }
-        Err(e) => err(StatusCode::INTERNAL_SERVER_ERROR, e.to_string()),
+        Err(e) => internal(e.to_string()),
     }
 }
 
 async fn list_accounts(State(state): State<AppState>) -> impl IntoResponse {
     match accounts::get_accounts_snapshot(&data_dir(&state)) {
         Ok(snap) => ok(snap).into_response(),
-        Err(e) => err(StatusCode::INTERNAL_SERVER_ERROR, e.to_string()),
+        Err(e) => internal(e.to_string()),
     }
 }
 
@@ -2186,22 +2256,22 @@ async fn export_account_profile(
     let dir = data_dir(&state);
     let snap = match accounts::get_accounts_snapshot(&dir) {
         Ok(s) => s,
-        Err(e) => return err(StatusCode::INTERNAL_SERVER_ERROR, e.to_string()),
+        Err(e) => return internal(e.to_string()),
     };
     let Some(account) = snap.accounts.iter().find(|a| a.id == id) else {
         return err(StatusCode::NOT_FOUND, "account_not_found");
     };
     let selection = match selection::read_library_selection(&dir, &id) {
         Ok(s) => s,
-        Err(e) => return err(StatusCode::INTERNAL_SERVER_ERROR, e.to_string()),
+        Err(e) => return internal(e.to_string()),
     };
     let favorites = match state.db.export_favorite_rel_paths(&id) {
         Ok(v) => v,
-        Err(e) => return err(StatusCode::INTERNAL_SERVER_ERROR, e.to_string()),
+        Err(e) => return internal(e.to_string()),
     };
     let playlists = match state.db.export_playlists_backup(&id) {
         Ok(v) => v,
-        Err(e) => return err(StatusCode::INTERNAL_SERVER_ERROR, e.to_string()),
+        Err(e) => return internal(e.to_string()),
     };
 
     let manifest = json!({
@@ -2261,7 +2331,7 @@ async fn export_account_profile(
             }
             res
         }
-        Err(e) => err(StatusCode::INTERNAL_SERVER_ERROR, e.to_string()),
+        Err(e) => internal(e.to_string()),
     }
 }
 
@@ -2284,6 +2354,6 @@ async fn get_catalog(
         .filter(|s| !s.is_empty());
     match state.db.build_catalog(summary, artist_id) {
         Ok(cat) => ok(cat).into_response(),
-        Err(e) => err(StatusCode::INTERNAL_SERVER_ERROR, e.to_string()),
+        Err(e) => internal(e.to_string()),
     }
 }

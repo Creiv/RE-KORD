@@ -271,6 +271,11 @@ describe("hub errors", () => {
 
   test("known hub codes", () => {
     assert.deepEqual(hubErrorKey(409, "scan already in progress", true), { key: "errors.scanBusy" });
+    // 5.3 hubs answer stable codes instead of text.
+    assert.deepEqual(hubErrorKey(409, "scan_in_progress", true), { key: "errors.scanBusy" });
+    assert.deepEqual(hubErrorKey(400, "music_root_not_set", true), { key: "errors.musicRootNotSet" });
+    assert.deepEqual(hubErrorKey(400, "music_root_not_directory", true), { key: "errors.musicRootMissing" });
+    assert.deepEqual(hubErrorKey(413, "file_too_large", true), { key: "errors.tooLarge" });
     assert.deepEqual(hubErrorKey(400, "music_root not set", true), { key: "errors.musicRootNotSet" });
     assert.equal(hubErrorKey(400, "something else", true), null);
   });
