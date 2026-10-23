@@ -183,6 +183,35 @@ fn compression_layer() -> tower_http::compression::CompressionLayer<
 /// Cache policy of the served UIs: Vite's hashed `/assets/*` never change
 /// (cache for a year), `index.html` / `sw.js` (and SPA fallbacks) are always
 /// revalidated so a new build is picked up at once.
+/// The `/api/*` routes without `v1` are aliases kept for RE-KORD 4 clients.
+/// They are deprecated: answers carry `Deprecation: true` and a `Link` to the
+/// `/api/v1` successor, and the first use is logged once. Removed in 6.0.
+async fn legacy_alias_headers(req: Request<Body>, next: axum::middleware::Next) -> Response {
+    let path = req.uri().path();
+    let legacy = path
+        .strip_prefix("/api/")
+        .filter(|rest| !rest.is_empty() && *rest != "v1" && !rest.starts_with("v1/"))
+        .map(str::to_string);
+    let mut res = next.run(req).await;
+    if let Some(rest) = legacy {
+        static WARNED: std::sync::atomic::AtomicBool = std::sync::atomic::AtomicBool::new(false);
+        if !WARNED.swap(true, std::sync::atomic::Ordering::Relaxed) {
+            warn!(
+                path = %format!("/api/{rest}"),
+                "a client used a legacy /api/* alias: these routes are deprecated and go away in 6.0 (use /api/v1/...)"
+            );
+        }
+        let headers = res.headers_mut();
+        headers.insert("deprecation", axum::http::HeaderValue::from_static("true"));
+        if let Ok(link) = axum::http::HeaderValue::from_str(&format!(
+            "</api/v1/{rest}>; rel=\"successor-version\""
+        )) {
+            headers.insert(axum::http::header::LINK, link);
+        }
+    }
+    res
+}
+
 async fn static_cache_headers(req: Request<Body>, next: axum::middleware::Next) -> Response {
     use axum::http::{header, HeaderValue};
     let path = req.uri().path().to_string();
@@ -298,6 +327,7 @@ pub fn build_router(state: AppState, ui: UiDirs) -> Router {
         power::api::activity_layer,
     ))
     .layer(DefaultBodyLimit::max(DEFAULT_BODY_LIMIT))
+    .layer(axum::middleware::from_fn(legacy_alias_headers))
     .layer(axum::middleware::from_fn(static_cache_headers))
     .layer(compression_layer())
     .layer(axum::middleware::from_fn_with_state(

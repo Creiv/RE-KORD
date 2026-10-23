@@ -22,6 +22,13 @@ one version number covers the hub, the clients and the packages.
 
 ### Changed
 
+- **Legacy `/api/*` aliases are deprecated.** The routes without `v1` (36 of them, kept for
+  RE-KORD 4 clients) now answer with `Deprecation: true` and a `Link` to their `/api/v1`
+  twin, and the hub logs their first use. They will be removed in 6.0; the RE-KORD 5
+  clients never used them.
+- **Hub robustness.** A panic while holding one of the hub's locks no longer turns every
+  later request into a 500 until restart: the lock is recovered. *Analyse folders*
+  (`POST /api/v1/library/probe`) is now a machine operation like the layout it feeds.
 - **yt-dlp's JavaScript engine: the bundled QuickJS comes first** (GitHub issue #103, the
   Node.js security releases of 21 October 2026). An installed Deno, Node.js or Bun is used
   only when there is no bundled runtime (source builds, `--no-tools` packages) or when

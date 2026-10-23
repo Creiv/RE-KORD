@@ -13,6 +13,14 @@ Envelope (JSON):
 
 ## Endpoints
 
+**Deprecated aliases.** Every `/api/<path>` route without `v1` (`/api/health`,
+`/api/accounts`, `/api/config`, `/api/download`, `/api/catalog…`, `/api/fs/…`,
+`/api/artwork/…`, `/api/album-info/…`, `/api/track-info/…`, `/api/entity-info…`,
+`/api/discogs/…`, `/api/backup/…`, `/api/network/public-ip`, …) is an alias of its
+`/api/v1/<path>` twin kept for RE-KORD 4 clients. Aliases answer with `Deprecation: true`
+and `Link: </api/v1/<path>>; rel="successor-version"`, the hub logs their first use, and
+they are removed in 6.0. The RE-KORD 5 clients use `/api/v1` only.
+
 | Method | Path | Description |
 |--------|------|-------------|
 | GET | `/api/v1/health` | Service health → `{ ok, service: "RE-KORD", version, apiVersion: 1, minClientVersion: "5.0.0", transcode, modules, scanning, accessKey }` (see [Versioning](#versioning-and-client-compatibility); minimal body without the [access key](#access-key)) |
