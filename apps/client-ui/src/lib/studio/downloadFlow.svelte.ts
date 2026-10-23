@@ -18,7 +18,10 @@ import {
   type StudioDownloadScope,
 } from "../studioDownloadDest";
 import { looksLikeSupportedDownloadUrl } from "../youtubeUrl";
+import { api } from "../api";
+import { session } from "../session.svelte";
 import { studioDownloads as dl } from "./downloadStore.svelte";
+import { missingReleaseTracks, type MissingTrack } from "./missingTracks";
 import { studioCodeText, studioErrorText } from "./errors";
 import type { LibraryHit } from "./libraryMatch";
 
@@ -56,11 +59,25 @@ export type CountState = "none" | "counting" | "known" | "unknown";
 export type DestIssue = "pickDest" | "singleNeedsAlbum" | null;
 export type FlowResult = "started" | "cancelled" | "pickDest" | "busy";
 
+/**
+ * Release in the library already: which of its tracks the album folder lacks
+ * (`known`), being compared (`checking`), or not readable (`unknown`).
+ */
+export type MissingState = {
+  state: "none" | "checking" | "known" | "unknown";
+  tracks: MissingTrack[];
+  /** Tracks on the release page. */
+  total: number;
+  /** Library folder the missing tracks would go to. */
+  folder: string;
+};
+
 export type ConfirmState = {
   id: number;
   ask: DownloadAsk;
   count: CountState;
   trackCount: number | null;
+  missing: MissingState;
   destIssue: DestIssue;
   /** Output folder the job will write to. */
   outputDir: string;
@@ -80,18 +97,34 @@ class DownloadFlow {
   pendingUrl = $state<string | null>(null);
 
   private seq = 0;
-  private resolveFn: ((r: "download" | "cancel" | "pickDest") => void) | null = null;
+  private resolveFn: ((r: "download" | "missing" | "cancel" | "pickDest") => void) | null = null;
   private countAbort: AbortController | null = null;
+  private missingAbort: AbortController | null = null;
 
   get open(): boolean {
     return this.current != null;
   }
 
+  /** The missing list of the request being settled (read before `settle` clears it). */
+  private lastMissingSnapshot: { id: number; tracks: MissingTrack[]; folder: string } | null = null;
+
+  private lastMissing(id: number): { tracks: MissingTrack[]; folder: string } | null {
+    const snap = this.lastMissingSnapshot;
+    return snap && snap.id === id && snap.tracks.length ? snap : null;
+  }
+
   /** Answer the dialog (ignored when it is not the open one). */
-  settle(id: number, result: "download" | "cancel" | "pickDest") {
+  settle(id: number, result: "download" | "missing" | "cancel" | "pickDest") {
     if (!this.current || this.current.id !== id) return;
     this.countAbort?.abort();
     this.countAbort = null;
+    this.missingAbort?.abort();
+    this.missingAbort = null;
+    this.lastMissingSnapshot = {
+      id,
+      tracks: this.current.missing.state === "known" ? this.current.missing.tracks : [],
+      folder: this.current.missing.folder,
+    };
     this.current = null;
     const r = this.resolveFn;
     this.resolveFn = null;
@@ -128,6 +161,41 @@ class DownloadFlow {
     this.current = { ...cur, count: n != null ? "known" : "unknown", trackCount: n };
   }
 
+  /** Compare the release page with the library album folder (issue #100). */
+  private async findMissing(id: number, url: string, folder: string) {
+    const ctrl = new AbortController();
+    this.missingAbort = ctrl;
+    const timer = setTimeout(() => ctrl.abort(), COUNT_TIMEOUT_MS);
+    let result: Pick<MissingState, "state" | "tracks" | "total"> = { state: "unknown", tracks: [], total: 0 };
+    try {
+      const key = folder.toLowerCase();
+      const album =
+        session.allAlbums.find((a) => a.folder_key === folder) ??
+        session.allAlbums.find((a) => a.folder_key.toLowerCase() === key);
+      if (album) {
+        const [release, tracks] = await Promise.all([
+          api.catalogWebTracks(url, { signal: ctrl.signal, timeoutMs: COUNT_TIMEOUT_MS + 5000 }),
+          api.albumTracks(album.id, { signal: ctrl.signal }),
+        ]);
+        if (release.tracks.length) {
+          result = {
+            state: "known",
+            tracks: missingReleaseTracks(release.tracks, tracks),
+            total: release.tracks.length,
+          };
+        }
+      }
+    } catch {
+      /* closed dialog, timeout or hub error: the row says "unknown" */
+    } finally {
+      clearTimeout(timer);
+      if (this.missingAbort === ctrl) this.missingAbort = null;
+    }
+    const cur = this.current;
+    if (!cur || cur.id !== id) return;
+    this.current = { ...cur, missing: { ...cur.missing, ...result } };
+  }
+
   /**
    * Ask, then start. Throws (translated) when the URL itself is unusable; a
    * missing or wrong destination is shown in the dialog instead.
@@ -146,9 +214,11 @@ class DownloadFlow {
         : !relPathLooksLikeAlbumFolderDest(outputDir);
     const id = ++this.seq;
     const counting = ask.scope === "playlist" && !destIssue;
+    const libraryFolder = ask.scope === "playlist" && ask.library?.kind === "album" ? ask.library.folder ?? "" : "";
+    const checking = !!libraryFolder && !destIssue;
     this.pendingUrl = url;
     try {
-      const answer = new Promise<"download" | "cancel" | "pickDest">((resolve) => {
+      const answer = new Promise<"download" | "missing" | "cancel" | "pickDest">((resolve) => {
         this.resolveFn = resolve;
       });
       this.current = {
@@ -156,13 +226,26 @@ class DownloadFlow {
         ask: { ...ask, url, destPath: dest },
         count: counting ? "counting" : "none",
         trackCount: null,
+        missing: { state: checking ? "checking" : "none", tracks: [], total: 0, folder: libraryFolder },
         destIssue,
         outputDir,
         artistFolderTarget,
       };
       if (counting) void this.count(id, url);
+      if (checking) void this.findMissing(id, url, libraryFolder);
       const r = await answer;
       if (r === "pickDest") return "pickDest";
+      if (r === "missing" && !destIssue) {
+        // Only the tracks the library album lacks, one by one, into its folder.
+        const todo = this.lastMissing(id);
+        if (!todo) return "cancelled";
+        void (async () => {
+          for (const m of todo.tracks) {
+            await dl.runSingle(m.url, studioDownloadKindForScope("single"), todo.folder, m.title);
+          }
+        })();
+        return "started";
+      }
       if (r !== "download" || destIssue) return "cancelled";
       // The job owns the busy state from here on; the flow is free again.
       // Status card title: the release / track name, not a bare link.

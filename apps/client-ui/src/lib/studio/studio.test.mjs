@@ -19,6 +19,7 @@ import {
   signInHintKeys,
   summaryFromEvent,
 } from "./downloadSummary.ts";
+import { missingReleaseTracks } from "./missingTracks.ts";
 import { classicModeForUrl, urlMatchesStudioDlMode } from "../youtubeUrl.ts";
 
 test("il filtro tiene solo le righe d'errore, una volta sola", () => {
@@ -82,6 +83,23 @@ test("cartelle pianificate: già in libreria, ordinate, senza doppioni", () => {
     { path: "Artista/Alfa", exists: false },
     { path: "Artista/Zeta", exists: true },
   ]);
+});
+
+test("brani mancanti: confronto per titolo piegato, numerazione e feat. ignorati (issue #100)", () => {
+  const release = [
+    { title: "Intro", url: "u1" },
+    { title: "Song Two (feat. Someone)", url: "u2" },
+    { title: "Third Song", url: "u3" },
+    { title: "Outro - Live", url: "u4" },
+  ];
+  const library = [
+    { title: "01 - Intro", track_number: 1 },
+    { title: "Song Two", track_number: 2 },
+    { title: "Outro (Live)", track_number: 4 },
+  ];
+  assert.deepEqual(missingReleaseTracks(release, library), [{ index: 3, title: "Third Song", url: "u3" }]);
+  assert.deepEqual(missingReleaseTracks(release, release.map((r) => ({ title: r.title }))), []);
+  assert.equal(missingReleaseTracks(release, []).length, 4);
 });
 
 test("cartelle pianificate: la punteggiatura non conta (issue #100)", () => {

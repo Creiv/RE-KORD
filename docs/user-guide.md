@@ -454,6 +454,11 @@ A switch between **"Local"** and **"Web"**.
 
 ### Download
 
+**Missing tracks.** When a release is already in the library, the download dialog compares
+its track list with the album folder on disk and lists the tracks that are missing, by
+number and name. **Download only the missing** fetches just those into that folder;
+**Download anyway** takes the whole release as before.
+
 Downloads use yt-dlp on the hub. Only download content you have the rights to.
 
 1. **Choose the save folder** ("Save folder (under Music)"): browse, search or create a

@@ -13,6 +13,9 @@
   const kindLabel = $derived(
     req?.ask.scope === "playlist" ? t("studio.dl.kind.playlist") : t("studio.dl.kind.single"),
   );
+  const missing = $derived(req?.missing ?? null);
+  const missingKnown = $derived(!!missing && missing.state === "known" && missing.tracks.length > 0);
+  const MISSING_SHOWN = 8;
 </script>
 
 {#if req}
@@ -59,6 +62,31 @@
               {t("studio.dl.confirm.changeDest")}
             </button>
           </dd>
+          {#if missing && missing.state !== "none"}
+            <dt>{t("studio.dl.confirm.missing")}</dt>
+            <dd class="studio-dl-confirm__missing" aria-live="polite">
+              {#if missing.state === "checking"}
+                <span class="studio-spinner studio-spinner--sm" aria-hidden="true"></span>
+                <span class="studio-dl-confirm__muted">{t("studio.dl.confirm.missingChecking")}</span>
+              {:else if missing.state === "unknown"}
+                <span class="studio-dl-confirm__muted">{t("studio.dl.confirm.missingUnknown")}</span>
+              {:else if missing.tracks.length === 0}
+                <span>{t("studio.dl.confirm.missingNone", { total: missing.total })}</span>
+              {:else}
+                <span>{t("studio.dl.confirm.missingLead", { n: missing.tracks.length, total: missing.total })}</span>
+                <ol class="studio-dl-confirm__missing-list">
+                  {#each missing.tracks.slice(0, MISSING_SHOWN) as m (m.url)}
+                    <li value={m.index}>{m.title}</li>
+                  {/each}
+                </ol>
+                {#if missing.tracks.length > MISSING_SHOWN}
+                  <span class="studio-dl-confirm__muted">
+                    {tp("studio.dl.confirm.missingMore", missing.tracks.length - MISSING_SHOWN)}
+                  </span>
+                {/if}
+              {/if}
+            </dd>
+          {/if}
           {#if req.count !== "none"}
             <dt>{t("studio.dl.confirm.tracks")}</dt>
             <dd class="studio-dl-confirm__count" aria-live="polite">
@@ -98,6 +126,13 @@
         {#if req.destIssue}
           <Button variant="primary" onclick={() => downloadFlow.settle(req.id, "pickDest")}>
             {t("studio.dl.confirm.pickDest")}
+          </Button>
+        {:else if missingKnown && missing}
+          <Button variant="secondary" onclick={() => downloadFlow.settle(req.id, "download")}>
+            {t("studio.dl.confirm.downloadAnyway")}
+          </Button>
+          <Button variant="primary" data-autofocus="" onclick={() => downloadFlow.settle(req.id, "missing")}>
+            {t("studio.dl.confirm.downloadMissing", { n: missing.tracks.length })}
           </Button>
         {:else}
           <Button
@@ -184,6 +219,20 @@
     flex-wrap: wrap;
     align-items: center;
     gap: var(--rk-space-xs) var(--rk-space-sm);
+  }
+
+  .studio-dl-confirm__missing {
+    display: flex;
+    flex-direction: column;
+    gap: var(--rk-space-xs);
+  }
+
+  .studio-dl-confirm__missing-list {
+    margin: 0;
+    padding-left: 1.6rem;
+    max-height: 9.5rem;
+    overflow-y: auto;
+    font-size: var(--rk-fs-sm);
   }
 
   .studio-dl-confirm__count {

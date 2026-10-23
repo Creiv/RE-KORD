@@ -55,6 +55,11 @@ one version number covers the hub, the clients and the packages.
   and their code is not loaded; on by default, saved with the account and synced like the
   theme.
 
+- **Studio › Download finds the tracks an album is missing** (GitHub issue #100): when a
+  release is already in the library, the download dialog compares its track list with the
+  library folder and lists what is missing, by number and name; **Download only the
+  missing** fetches just those into that folder, **Download anyway** still takes the whole
+  release.
 - **Achievements show their progress** (GitHub issue #100): every locked badge carries a
   bar and "12 of 30", a tooltip repeats it with the description, and a *Next up* panel
   lists the six closest badges. Badges that measure the library now need a library big
