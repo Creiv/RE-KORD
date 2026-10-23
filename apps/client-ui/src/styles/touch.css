@@ -101,16 +101,31 @@
    transient indicator: the classic scrollbar is only a strip of wasted width
    down the page (and the `scrollbar-gutter` reserved for it). Hidden on every
    scroll area — page, sheets, lists, horizontal rows — while scrolling itself
-   (touch, momentum, scrollIntoView, restored positions) is untouched. A mouse
-   (`pointer: fine`) keeps its scrollbars at any width. `!important` because
-   scroll areas style their bar with a class (`.rk-scroll`, component styles):
-   this is a platform rule, not one more look to win against. */
+   (touch, momentum, scrollIntoView, restored positions) is untouched.
+   `!important` because scroll areas style their bar with a class (`.rk-scroll`,
+   component styles): this is a platform rule, not one more look to win against. */
 @media (pointer: coarse) {
   * {
     scrollbar-width: none !important;
   }
 
   *::-webkit-scrollbar {
+    display: none !important;
+    width: 0 !important;
+    height: 0 !important;
+  }
+}
+
+/* With a mouse the page itself has no scrollbar either (GitHub issue #100): the
+   wheel, the keys and the thumb-less scroll work as before, and the content
+   keeps the full width. Only the areas that ask for a bar (`.rk-scroll`: logs,
+   long lists, tables, dialogs) and the Plectr lists keep theirs. */
+@media (pointer: fine) {
+  *:not(.rk-scroll):not(.plectr-side):not(.plectr-device__screen) {
+    scrollbar-width: none !important;
+  }
+
+  *:not(.rk-scroll):not(.plectr-side):not(.plectr-device__screen)::-webkit-scrollbar {
     display: none !important;
     width: 0 !important;
     height: 0 !important;
