@@ -20,7 +20,7 @@ anyhow = "1"
 axum = { version = "0.8", features = ["multipart"] }
 chrono = { version = "0.4", features = ["serde"] }
 clap = { version = "4", features = ["derive", "env"] }
-dirs = "6"
+dirs = "7"
 mime_guess = "2"
 rusqlite = { version = "0.32", features = ["bundled"] }
 serde = { version = "1", features = ["derive"] }
