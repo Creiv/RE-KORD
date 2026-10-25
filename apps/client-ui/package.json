@@ -13,13 +13,13 @@
   "dependencies": {
     "@rekord/ui": "workspace:*",
     "@tauri-apps/api": "^2",
-    "@tauri-apps/plugin-barcode-scanner": "^2.4.5"
+    "@tauri-apps/plugin-barcode-scanner": "^2.5.3"
   },
   "devDependencies": {
     "@sveltejs/vite-plugin-svelte": "^5.0.3",
-    "svelte": "^5.19.0",
+    "svelte": "^5.57.2",
     "svelte-check": "^4",
     "typescript": "^5.7.3",
-    "vite": "^6.0.7"
+    "vite": "^6.4.5"
   }
 }
