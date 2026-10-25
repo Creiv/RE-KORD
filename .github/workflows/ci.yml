@@ -28,8 +28,8 @@ jobs:
     name: Version consistency
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
         with:
           node-version: ${{ env.NODE_VERSION }}
       - run: node scripts/version.mjs check
@@ -38,7 +38,7 @@ jobs:
     name: Rust (fmt, clippy, test)
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       - uses: dtolnay/rust-toolchain@stable
         with:
           components: rustfmt, clippy
@@ -58,11 +58,11 @@ jobs:
     name: Web UI (check, test, build)
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
-      - uses: pnpm/action-setup@v4
+      - uses: actions/checkout@v7
+      - uses: pnpm/action-setup@v6
         with:
           package_json_file: package.json
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@v7
         with:
           node-version: ${{ env.NODE_VERSION }}
           cache: pnpm
@@ -71,7 +71,7 @@ jobs:
       - run: pnpm -r --if-present check
       - run: pnpm -r --if-present test
       - run: pnpm build:ui
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         with:
           name: ui-dist
           path: |
@@ -84,7 +84,7 @@ jobs:
     runs-on: ubuntu-22.04
     needs: [web]
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       - name: System libraries for Tauri 2
         run: |
           sudo apt-get update
@@ -98,10 +98,10 @@ jobs:
       - uses: Swatinem/rust-cache@v2
         with:
           key: tauri-linux
-      - uses: pnpm/action-setup@v4
+      - uses: pnpm/action-setup@v6
         with:
           package_json_file: package.json
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@v7
         with:
           node-version: ${{ env.NODE_VERSION }}
           cache: pnpm
@@ -114,7 +114,7 @@ jobs:
           cargo clippy -p rekord-client --features hub --locked -- -D warnings
       - name: Bundle (deb)
         run: pnpm --filter @rekord/client-shell exec tauri build --bundles deb
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         with:
           name: rekord-client-linux-deb
           path: target/release/bundle/deb/*.deb
@@ -127,8 +127,8 @@ jobs:
     env:
       NDK_VERSION: 28.2.13676358
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-java@v4
+      - uses: actions/checkout@v7
+      - uses: actions/setup-java@v6
         with:
           distribution: temurin
           java-version: "17"
@@ -146,10 +146,10 @@ jobs:
       - uses: Swatinem/rust-cache@v2
         with:
           key: android
-      - uses: pnpm/action-setup@v4
+      - uses: pnpm/action-setup@v6
         with:
           package_json_file: package.json
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@v7
         with:
           node-version: ${{ env.NODE_VERSION }}
           cache: pnpm
@@ -157,7 +157,7 @@ jobs:
       - run: pnpm install --frozen-lockfile
       - name: Build debug APK (arm64)
         run: pnpm android:build
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         with:
           name: rekord-client-android-debug
           path: apps/client-shell/src-tauri/gen/android/app/build/outputs/apk/**/*.apk
@@ -170,17 +170,17 @@ jobs:
     # the job turns red so it gets looked at.
     continue-on-error: true
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       - uses: dtolnay/rust-toolchain@stable
       - uses: Swatinem/rust-cache@v2
       - name: cargo audit
         run: |
           cargo install --locked cargo-audit
           cargo audit --deny warnings
-      - uses: pnpm/action-setup@v4
+      - uses: pnpm/action-setup@v6
         with:
           package_json_file: package.json
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@v7
         with:
           node-version: ${{ env.NODE_VERSION }}
           cache: pnpm
@@ -194,9 +194,9 @@ jobs:
     runs-on: ubuntu-latest
     needs: [rust, web]
     steps:
-      - uses: actions/checkout@v4
-      - uses: docker/setup-buildx-action@v3
-      - uses: docker/build-push-action@v6
+      - uses: actions/checkout@v7
+      - uses: docker/setup-buildx-action@v4
+      - uses: docker/build-push-action@v7
         with:
           context: .
           file: Dockerfile
