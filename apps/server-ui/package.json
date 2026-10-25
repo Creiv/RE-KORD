@@ -14,7 +14,7 @@
     "@rekord/ui": "workspace:*"
   },
   "devDependencies": {
-    "@sveltejs/vite-plugin-svelte": "^5.0.3",
+    "@sveltejs/vite-plugin-svelte": "^7.3.1",
     "svelte": "^5.19.0",
     "svelte-check": "^4",
     "typescript": "^5.7.3",
