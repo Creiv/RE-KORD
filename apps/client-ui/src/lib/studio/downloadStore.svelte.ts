@@ -20,6 +20,7 @@ import {
 } from "../api/studio";
 import { t, tp } from "../i18n.svelte";
 import { session } from "../session.svelte";
+import { randomUuid } from "../uuid";
 import type { DlVideoMode } from "../youtubeUrl";
 import {
   batchCounts,
@@ -342,7 +343,7 @@ class StudioDownloads {
 
   /** One yt-dlp job; never throws (failures are logged and returned). */
   private async runJob(url: string, kind: string, outputDir: string): Promise<JobResult> {
-    const id = crypto.randomUUID();
+    const id = randomUuid();
     this.activeId = id;
     this.progress = null;
     const controller = new AbortController();

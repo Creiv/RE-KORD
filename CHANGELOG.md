@@ -3,6 +3,15 @@
 All notable changes to RE-KORD. Versions follow [semantic versioning](https://semver.org);
 one version number covers the hub, the clients and the packages.
 
+## Unreleased
+
+### Fixed
+
+- **Studio downloads from a hub opened over plain HTTP** (`http://<lan-ip>:7420`): the
+  client built the download id with `crypto.randomUUID`, which browsers only offer on
+  HTTPS and localhost, so *Download* failed silently and nothing reached the hub. The id
+  now falls back to `crypto.getRandomValues`.
+
 ## 5.3.0 — 2026-10-25
 
 Everything from GitHub issue #100, the optional access key contributed by @mrsalvaa, a
