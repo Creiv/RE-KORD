@@ -7,6 +7,10 @@ one version number covers the hub, the clients and the packages.
 
 ### Fixed
 
+- **Studio downloads from a hub opened over plain HTTP** (`http://<lan-ip>:7420`): the
+  client built the download id with `crypto.randomUUID`, which browsers only offer on
+  HTTPS and localhost, so *Download* failed silently and nothing reached the hub. The id
+  now falls back to `crypto.getRandomValues`.
 - **Studio › Listen on a portrait phone**: the detail rows (artist · album · length, date,
   genre) go back beside the cover right under the title, so the stage reads as one block
   instead of leaving the cover alone with the rows below it.
