@@ -230,6 +230,9 @@ The hub reports `version`, `apiVersion` and `minClientVersion` in `/api/v1/healt
      notification controls, Cast to a Chromecast.
    - Desktop client against a hub on another LAN machine over plain HTTP, to rule out
      mixed-content blocking (see [upgrading-from-legacy.md](upgrading-from-legacy.md#known-issue-desktop-apps-and-plain-http-hubs)).
+   - Web client from another LAN machine at `http://<lan-ip>:7420` (not a secure context:
+     `crypto.randomUUID` and other HTTPS-only APIs are missing): play a track and start a
+     Studio download.
    - `docker compose up -d --build`, health check green.
 6. Verify the release signing key (`apksigner verify --print-certs`) is the same as the
    previous release.
