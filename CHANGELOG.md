@@ -5,6 +5,16 @@ one version number covers the hub, the clients and the packages.
 
 ## Unreleased
 
+### Changed
+
+- **Dependencies brought up to date** (every patch and minor release, the first pass of
+  the new Dependabot setup): Tauri 2.12 (crates and npm packages together: the two halves
+  must share a minor version, which is why Dependabot's separate pull requests #115 and
+  #116 could not build), tokio 1.54, zip 2.6, uuid 1.29, clap 4.6.7, svelte 5.57,
+  svelte-check 4.7.7, vite 6.4.5. The security advisories `cargo audit` reported on
+  `quinn-proto` (RUSTSEC-2026-0338 to 0342) and `rustls` (RUSTSEC-2026-0346) are gone with
+  quinn-proto 0.11.19 and rustls 0.23.46.
+
 ### Fixed
 
 - **Studio downloads from a hub opened over plain HTTP** (`http://<lan-ip>:7420`, by
