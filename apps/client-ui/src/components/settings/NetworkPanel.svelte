@@ -6,6 +6,7 @@
   import { api } from "../../lib/api";
   import { getServerBaseUrl } from "../../lib/config";
   import { confirmDialog } from "../../lib/confirm.svelte";
+  import { copyText } from "../../lib/clipboard";
   import { connectGate } from "../../lib/connect.svelte";
   import { hubEvents } from "../../lib/hubEvents.svelte";
   import { t } from "../../lib/i18n.svelte";
@@ -182,20 +183,7 @@
     const value = url.trim();
     if (!value) return;
     try {
-      if (navigator.clipboard?.writeText) {
-        await navigator.clipboard.writeText(value);
-      } else {
-        const ta = document.createElement("textarea");
-        ta.value = value;
-        ta.setAttribute("readonly", "");
-        ta.style.position = "fixed";
-        ta.style.left = "-9999px";
-        document.body.appendChild(ta);
-        ta.select();
-        const ok = document.execCommand("copy");
-        document.body.removeChild(ta);
-        if (!ok) throw new Error("copy failed");
-      }
+      if (!(await copyText(value))) throw new Error("copy failed");
       if (remoteUrlCopyTimer != null) clearTimeout(remoteUrlCopyTimer);
       remoteUrlCopyOk = t("settings.remoteUrlCopied");
       remoteUrlCopyTimer = setTimeout(() => {

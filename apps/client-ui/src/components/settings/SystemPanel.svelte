@@ -2,6 +2,7 @@
   import { onMount, untrack } from "svelte";
   import { ActionRow, Button, Panel, Select, TextInput } from "@rekord/ui";
   import { api, type Track } from "../../lib/api";
+  import { copyText } from "../../lib/clipboard";
   import { connectGate } from "../../lib/connect.svelte";
   import { hubActivityMsg, hubKind } from "../../lib/hubText";
   import { fmtDate, t, tp } from "../../lib/i18n.svelte";
@@ -626,7 +627,7 @@
           null,
           2,
         );
-        void navigator.clipboard.writeText(report);
+        void copyText(report);
       }}>{t("settings.copyReport")}</Button
     >
   </ActionRow>

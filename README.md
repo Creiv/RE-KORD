@@ -299,6 +299,8 @@ upgrading, deployment, architecture, API, Android, development.
   inspired by his [PR #95](https://github.com/Creiv/RE-KORD/pull/95).
 - Optional access key by [@mrsalvaa](https://github.com/mrsalvaa)
   ([PR #102](https://github.com/Creiv/RE-KORD/pull/102)).
+- Studio downloads over plain HTTP fixed by [@cestols](https://github.com/cestols)
+  ([PR #118](https://github.com/Creiv/RE-KORD/pull/118)).
 - Built on [Tauri](https://tauri.app), [Svelte](https://svelte.dev),
   [axum](https://github.com/tokio-rs/axum), [SQLite](https://sqlite.org) and
   [lofty](https://github.com/Serial-ATA/lofty-rs); the Server packages bundle
