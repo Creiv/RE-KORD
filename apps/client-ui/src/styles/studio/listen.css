@@ -490,6 +490,18 @@
   }
 }
 
+/* Portrait phone: the detail rows go back beside the cover, right under the
+   title, so the stage reads as one block; the last row takes the space left. */
+@media (max-width: 899.98px) and (orientation: portrait) {
+  .listen-page .listen-stage__head {
+    grid-template-areas:
+      "art lead"
+      "art title"
+      "art meta";
+    grid-template-rows: auto auto 1fr;
+  }
+}
+
 /* Sleep timer — parity with src/styles/views/listen.css (layout; colors via --rk-*) */
 .listen-sleep-timer {
   margin: 0;

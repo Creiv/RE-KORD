@@ -3,6 +3,14 @@
 All notable changes to RE-KORD. Versions follow [semantic versioning](https://semver.org);
 one version number covers the hub, the clients and the packages.
 
+## Unreleased
+
+### Fixed
+
+- **Studio › Listen on a portrait phone**: the detail rows (artist · album · length, date,
+  genre) go back beside the cover right under the title, so the stage reads as one block
+  instead of leaving the cover alone with the rows below it.
+
 ## 5.3.0 — 2026-10-25
 
 Everything from GitHub issue #100, the optional access key contributed by @mrsalvaa, a
