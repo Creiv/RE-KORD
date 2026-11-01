@@ -30,7 +30,7 @@
   "devDependencies": {
     "@sveltejs/vite-plugin-svelte": "^5.0.3",
     "@types/qrcode": "^1.5.5",
-    "svelte": "^5.19.0",
+    "svelte": "^5.57.3",
     "svelte-check": "^4",
     "typescript": "^5.7.3"
   },
