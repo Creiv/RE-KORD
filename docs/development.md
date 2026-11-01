@@ -213,7 +213,7 @@ pnpm version:check        # verify (also in CI and at the start of every pack)
 `versionCode` derives from it (5.0.0 becomes 5000000).
 
 The hub reports `version`, `apiVersion` and `minClientVersion` in `/api/v1/health`.
-`API_VERSION` and `MIN_CLIENT_VERSION` are in `crates/core/src/api.rs`: raise
+`API_VERSION` and `MIN_CLIENT_VERSION` are in `crates/core/src/api/mod.rs`: raise
 `MIN_CLIENT_VERSION` only when older native clients can no longer work with the hub.
 
 ## Release checklist
