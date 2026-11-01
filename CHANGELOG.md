@@ -15,6 +15,10 @@ one version number covers the hub, the clients and the packages.
   `quinn-proto` (RUSTSEC-2026-0338 to 0342) and `rustls` (RUSTSEC-2026-0346) are gone with
   quinn-proto 0.11.19 and rustls 0.23.46.
 
+- **Hub code: the API module is split by domain** (`crates/core/src/api/`: library,
+  personal data, accounts, backup, system, with the router and the shared helpers in
+  `mod.rs`). No route, answer or permission changed; the HTTP tests cover every one.
+
 ### Fixed
 
 - **Studio downloads from a hub opened over plain HTTP** (`http://<lan-ip>:7420`, by

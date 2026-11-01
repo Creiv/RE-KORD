@@ -58,7 +58,7 @@ desktop app runs it on its own thread and runtime, so the window never waits for
 
 | Area | Modules | Notes |
 |---|---|---|
-| API and routing | `api.rs`, `studio.rs` | JSON envelope `{ ok, data }` / `{ ok: false, error, message? }`, stable error codes. See [API.md](API.md). |
+| API and routing | `api/` (`mod.rs` router and shared helpers; `library.rs`, `personal.rs`, `accounts.rs`, `backup.rs`, `system.rs`), `studio.rs` | JSON envelope `{ ok, data }` / `{ ok: false, error, message? }`, stable error codes. See [API.md](API.md). |
 | Security | `origin.rs`, `perm.rs` | Browser origin policy, local vs remote requests, library and machine operations. See [SECURITY.md](../SECURITY.md). |
 | Library database | `db/` | SQLite (bundled `rusqlite`), WAL, one writer plus a small pool of read-only connections for queries, schema migrations via `PRAGMA user_version`, FTS search, curated vs tag values, normalised genres. |
 | Scanner | `scan.rs`, `layout.rs`, `watcher.rs`, `embedded/` | Folder-first incremental scan, layout detection, embedded tags and covers for every format (one read per file, Studio values win), the resumable embedded-tags backfill job, exact MP3 durations, filesystem watcher with coalesced rescans. |
