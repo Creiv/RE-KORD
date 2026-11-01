@@ -209,8 +209,12 @@ pnpm version:sync 5.0.1   # write the version everywhere
 pnpm version:check        # verify (also in CI and at the start of every pack)
 ```
 
-`tauri.conf.json` has no version: Tauri reads it from `Cargo.toml`, and the Android
-`versionCode` derives from it (5.0.0 becomes 5000000).
+`tauri.conf.json` has no version: Tauri reads it from `Cargo.toml`. The Android project
+reads `versionName` and `versionCode` from the generated, git-ignored
+`gen/android/app/tauri.properties`, which the Tauri CLI writes at `android init` only:
+`scripts/android-build.sh` rewrites it from the workspace version before every build
+(`versionCode` = major × 1000000 + minor × 1000 + patch, 5.3.0 becomes 5003000) and
+`pnpm version:check` verifies it when the file exists.
 
 The hub reports `version`, `apiVersion` and `minClientVersion` in `/api/v1/health`.
 `API_VERSION` and `MIN_CLIENT_VERSION` are in `crates/core/src/api/mod.rs`: raise

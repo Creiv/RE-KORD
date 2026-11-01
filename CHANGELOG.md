@@ -21,6 +21,11 @@ one version number covers the hub, the clients and the packages.
 
 ### Fixed
 
+- **Android package version**: the 5.2 and 5.3 APKs still declared 5.1.0 (versionCode
+  5001000), because the Tauri CLI writes `gen/android/app/tauri.properties` at
+  `android init` only and the build never updated it. The build script now writes it from
+  the workspace version before every build and `pnpm version:check` verifies it, so the
+  next APK (5.4.0, versionCode 5004000) installs as a real update over the old ones.
 - **Studio downloads from a hub opened over plain HTTP** (`http://<lan-ip>:7420`, by
   [@cestols](https://github.com/cestols), PR #118): the
   client built the download id with `crypto.randomUUID`, which browsers only offer on

@@ -14,6 +14,9 @@
  *   - apps/client-shell/src-tauri/tauri.conf.json `version`, if present (normally
  *     absent: Tauri takes it from Cargo.toml)
  *   - apps/client-ui/src/lib/version.ts `APP_VERSION`
+ *   - apps/client-shell/src-tauri/gen/android/app/tauri.properties (git-ignored, written
+ *     by `tauri android init` and never updated by the Tauri CLI afterwards: versionName
+ *     and versionCode = major * 1000000 + minor * 1000 + patch, 5.3.0 → 5003000)
  *
  * `check` exits with code 1 on any mismatch: CI uses it (next.yml).
  * No dependencies: runs with plain node.
@@ -26,6 +29,12 @@ const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const SEMVER = /^\d+\.\d+\.\d+(?:-[0-9A-Za-z.-]+)?(?:\+[0-9A-Za-z.-]+)?$/;
 
 const rel = (p) => path.relative(ROOT, p) || p;
+
+/** Tauri's Android versionCode for a version: 5.3.0 → 5003000 (pre-release tags ignored). */
+export function androidVersionCode(version) {
+  const [major, minor, patch] = version.split(/[-+]/)[0].split(".").map(Number);
+  return major * 1_000_000 + minor * 1_000 + patch;
+}
 const read = (p) => readFileSync(p, "utf8");
 
 function packageJsonFiles() {
@@ -115,6 +124,27 @@ function locations() {
     label: "client-ui/src/lib/version.ts",
     get: (src) => /APP_VERSION\s*=\s*"([^"]*)"/.exec(src)?.[1] ?? null,
     set: (src, v) => src.replace(/(APP_VERSION\s*=\s*")[^"]*(")/, `$1${v}$2`),
+  });
+
+  // The Android project takes versionName/versionCode from this generated file
+  // (build.gradle.kts). The Tauri CLI writes it at `android init` only, so without
+  // this entry every later APK keeps the first version (5.3.0 shipped as 5.1.0).
+  // android-build.sh rewrites it before each build; this keeps `check` honest.
+  const tauriProps = path.join(ROOT, "apps/client-shell/src-tauri/gen/android/app/tauri.properties");
+  const propName = /^(tauri\.android\.versionName=)(.*)$/m;
+  const propCode = /^(tauri\.android\.versionCode=)(\d*)$/m;
+  list.push({
+    file: tauriProps,
+    label: "gen/android/app/tauri.properties",
+    optional: true,
+    get: (src) => {
+      const name = propName.exec(src)?.[2]?.trim();
+      const code = propCode.exec(src)?.[2];
+      if (!name || code == null) return null;
+      return code === String(androidVersionCode(name)) ? name : `${name} (versionCode ${code})`;
+    },
+    set: (src, v) =>
+      src.replace(propName, `$1${v}`).replace(propCode, `$1${androidVersionCode(v)}`),
   });
 
   return list;

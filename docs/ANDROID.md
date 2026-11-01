@@ -597,8 +597,9 @@ WebView resume in `MainActivity.onPause` is the place to look.
   address has to be typed, which the first-launch screen allows anyway. `R8` keeps the
   plugin: `app/tauri/barcodescanner/BarcodeScannerPlugin` and the ML Kit registrars are in
   `classes.dex` of the minified build.
-- `app.rekord.client`, versionCode from the version Tauri reads from `Cargo.toml` (the
-  workspace version; `tauri.conf.json` no longer carries one — 5.0.0 → 5000000), minSdk 26,
+- `app.rekord.client`, versionName and versionCode from `app/tauri.properties`, which
+  `scripts/android-build.sh` writes from the workspace version before every build (the
+  Tauri CLI only writes it at `android init`; 5.3.0 → 5003000), minSdk 26,
   targetSdk 36, `usesCleartextTraffic=true` in debug and release, signed release verified
   with `apksigner verify --print-certs`.
 - The WebView's origin is `http://tauri.localhost` (Android) and the hub is another origin:
